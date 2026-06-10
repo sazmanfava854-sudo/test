@@ -1,9 +1,67 @@
 # Energy Consumption Dataset — Wireless Technologies
 
-**Date compiled:** 2026-06-10  
-**Excel source file:** `1داده اصلی.xlsx` — **not present in workspace** (searched `/workspace`, attachments, and git history). All Excel fields are **No / N/A** unless noted otherwise.
+**Date compiled:** 2026-06-10 (updated after Excel screenshot review)  
+**Excel source file:** `1داده اصلی.xlsx` — reviewed from user-provided screenshot (file binary not in workspace).
 
-**Method:** Excel-first rule applied; missing Excel values filled only from official standards/alliances, vendor datasheets, operator/industrial documentation, or (last resort) peer-reviewed measurements where no official numeric value exists.
+### Excel inspection summary
+
+| Item | Finding |
+|------|---------|
+| **Energy Consumption column** | **Not present** in the visible spreadsheet. No numeric power/energy values (W, mW, mA, PoE, etc.) appear in any column. |
+| **Visible columns** | Technology / Standard, Annual Mandatory Connectivity OPEX, Connectivity hardware CAPEX (module-level), Cellular Support, Modulation Scheme, Spectrum Type, Frequency Band, Channel Bandwidth, Transmission Range, Security Mechanism, Link Budget, Technology / Standard (formal), Data Rate, Duplex Type, Latency, Maximum Network Size |
+| **Technologies in Excel** | 16 rows (Wi-Fi 7 through UWB) — see row map below |
+| **Not in Excel screenshot** | WirelessHART, 5G Private (NPN), DECT NR+ (5G Mesh) |
+| **Mostly empty rows** | ISA100.11a (row 15), IO-Link Wireless (row 16), UWB (row 17 — only CAPEX filled) |
+
+**Excel row map (Technology / Standard column):**
+
+| Row | Technology |
+|-----|------------|
+| 2 | Wi-Fi 7 (802.11be) |
+| 3 | Wi-Fi 6 (802.11ax) |
+| 4 | Wi-Fi HaLow (802.11ah) |
+| 5 | 5G RedCap (NR-Light) |
+| 6 | NB-IoT (Cat-NB2) |
+| 7 | LTE-M (Cat-M1) |
+| 8 | LoRaWAN |
+| 9 | Sigfox |
+| 10 | Bluetooth 5.4 (BLE) |
+| 11 | Zigbee 3.0 |
+| 12 | Thread (1.3) |
+| 13 | Z-Wave Long Range |
+| 14 | Smart Ubiquitous Network (Wi-SUN FAN) |
+| 15 | ISA100.11a |
+| 16 | IO-Link Wireless |
+| 17 | UWB (Ultra-Wideband) |
+
+**Method:** Excel-first rule applied. Because the Energy Consumption column is absent/empty in the provided Excel, all energy values are sourced externally per source-priority rules.
+
+---
+
+## Excel non-energy fields (from screenshot, for cross-reference)
+
+Values below are **not** energy metrics; they document what the Excel file actually contains.
+
+| Row | Technology | CAPEX (module) | Cellular | Modulation | Spectrum | Freq. | Ch. BW | Range (km) | Link Budget (dB) | Data Rate | Latency (ms) | Max Nodes |
+|-----|------------|----------------|----------|------------|----------|-------|--------|------------|------------------|-----------|--------------|-----------|
+| 2 | Wi-Fi 7 | 8,080,000 | No | 4K-QAM | Unlicensed | 2.4 GHz | 320 MHz | 0.175 | 73 | 5800 Mbps | 1 | 1200 |
+| 3 | Wi-Fi 6 | (visible) | No | OFDM | Unlicensed | 2.4/5 GHz | 160 MHz | 40 | 113 | 9600 Mbps | — | — |
+| 4 | Wi-Fi HaLow | — | No | OFDM | ISM | Sub-1 GHz | — | 1 | — | 78 Mbps | — | 8191 |
+| 5 | 5G RedCap | — | Yes | QPSK | Licensed | Licensed Bands | 10000 kHz | — | 144 | 150 Mbps | — | — |
+| 6 | NB-IoT | 1,323,000 ★OPEX | Yes | QPSK | Licensed | Licensed Bands | 200 kHz | — | 151 | 0.25 Mbps | — | — |
+| 7 | LTE-M | ★OPEX | Yes | QPSK | Licensed | Licensed Bands | 1400 kHz | — | 146 | 0.128 Mbps | — | — |
+| 8 | LoRaWAN | — | No | CSS | ISM | ISM Bands | — | 15 | 154 | 0.027 Mbps | — | — |
+| 9 | Sigfox | ★OPEX | No | BPSK | ISM | ISM Bands | 0.6 kHz | 50 | 159 | 0.0006 Mbps | 60000 | 1,000,000 |
+| 10 | Bluetooth 5.4 | — | No | GFSK | Unlicensed | 2.4 GHz | — | 0.15 | — | 2–1 Mbps | 30 | — |
+| 11 | Zigbee 3.0 | — | No | DSSS | ISM | ISM | — | 0.01 | — | 0.25 Mbps | 60 | — |
+| 12 | Thread (1.3) | — | No | OQPSK | Unlicensed/ISM | — | — | 1.2 | — | 250 kbps | — | — |
+| 13 | Z-Wave LR | — | No | — | ISM | ISM | — | <30 | 101 | 9.6–100 kbps | — | — |
+| 14 | Wi-SUN FAN | — | No | — | Unlicensed | — | — | 7 | 111.3 | — | — | — |
+| 15 | ISA100.11a | — | — | — | — | — | — | — | — | — | — | — |
+| 16 | IO-Link Wireless | — | — | — | — | — | — | — | — | — | — | — |
+| 17 | UWB | 4,133,500 | — | — | — | — | — | — | — | — | — | — |
+
+★ = blue-star icon in OPEX column (NB-IoT, LTE-M, Sigfox).
 
 ---
 
@@ -36,8 +94,8 @@
 ## Detailed Source List
 
 ### Wi-Fi 7 (802.11be)
-- **Excel row reference:** N/A — file not found in workspace
-- **Excel cell content:** N/A
+- **Excel row reference:** Row 2 — `Technology / Standard`
+- **Excel cell content:** No Energy Consumption column in Excel; row contains CAPEX 8,080,000, range 0.175 km, data rate 5800 Mbps, latency 1 ms, link budget 73 dB
 - **External source title:** UniFi U7 Pro — Tech Specs
 - **URL:** https://techspecs.ui.com/unifi/wifi/u7-pro
 - **Source type:** Official vendor technical specification
@@ -324,7 +382,7 @@
 
 ## Notes on Comparability
 
-1. **Excel file unavailable:** Re-upload `1داده اصلی.xlsx` to the repository or attach to the issue to populate Excel-first values (e.g., AP power figures such as 39 W, 10 W, 19.9 W, PoE).
+1. **Excel Energy Consumption column missing:** The provided `1داده اصلی.xlsx` screenshot shows performance/CAPEX columns but **no Energy Consumption column and no W/mW/mA values**. If energy data exists in another sheet or off-screen column, share that portion to apply Excel-first values.
 2. **Device class mixing:** Wi-Fi rows reflect **access point** infrastructure power (watts). Most IoT rows reflect **module/SoC** current (mA) at stated voltage. LoRaWAN/Sigfox distinguish **end-node radio** vs **gateway** where possible.
 3. **5G RedCap:** Public module specs often publish sleep/idle mA but not always peak TX mA; Quectel RG255C idle used as best documented comparable module metric.
 4. **WirelessHART / 5G Private:** Infrastructure gateway/small-cell watts are documented; universal battery-powered endpoint TX mA was **not** found in acceptable official sources for a single representative value.
