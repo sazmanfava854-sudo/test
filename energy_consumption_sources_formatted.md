@@ -28,7 +28,7 @@
 
 | Field | Final value | Source ID |
 |-------|-------------|-----------|
-| Energy Consumption (module-level active RX) | 70.95 mW (21.5 mA @ 3.3 V) | #2 |
+| Energy Consumption (module-level active RX) | 5.22 mA (Not normalized) | #2 |
 
 ### Sigfox
 
@@ -106,11 +106,11 @@
 
 ### Source #2 (Energy Consumption — LoRaWAN)
 
-- **Title:** Murata CMWX1ZZABZ — LoRaWAN Module Data Sheet (Type ABZ)
-- **URL/DOI:** https://pim.murata.com/asset/pim4/loRaWANModule/TYPEABZ_PDF_LORAWANMODULE
-- **Exact location:** Section 8.2 — LoRa Receiver Specification — Table IDDR_L
-- **Verbatim quote:** `Supply current in receiver LoRa mode, LnaBoost off` — `Band 1, BW = 125 kHz` — `21.5 mA` (conditions: `Supply voltage = 3.3 V`)
-- **Classification rationale:** منبع رسمی **ماژول** LoRaWAN موراتا است. جریان در حالت receiver LoRa mode گزارش شده (active RX). ولتاژ 3.3 V در همان بخش مشخص است. نرمال‌سازی: 21.5 × 3.3 = **70.95 mW**. یادداشت: footnote ماژول states total current includes MCU in active.
+- **Title:** RAK3172 WisDuo LPWAN Module Datasheet
+- **URL/DOI:** https://docs.rakwireless.com/product-categories/wisduo/rak3172-module/datasheet/
+- **Exact location:** Electrical Characteristics — Operating Current table — RX Mode
+- **Verbatim quote:** `Operating Current` — `RX Mode` — `5.22 mA`
+- **Classification rationale:** منبع رسمی **ماژول** LoRaWAN شرکت RAKwireless است. جدول Operating Current حالت RX Mode را به‌صورت جریان دریافت فعال ماژول گزارش می‌کند. ولتاژ تست در همان سطر RX ذکر نشده (ولتاژ تیپیک 3.3 V در جدول جداگانه Operating Voltage آمده است)؛ بنابراین مقدار **5.22 mA** بدون نرمال‌سازی حفظ شده (**Not normalized**). سطح اندازه‌گیری: **module**.
 
 ### Source #3 (Energy Consumption — Sigfox)
 

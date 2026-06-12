@@ -12,7 +12,7 @@ Energy Consumption for this criterion means **only**:
 
 > typical RX current or RX power at active receive state, **measured at module level**
 
-**Accepted measurement level:** certified **module** / **SiP module** datasheet figures where the entire RF subsystem is integrated in the module product (e.g., Morse Micro MM6108, Murata CMWX1ZZABZ, u-blox NINA-B40, Silicon Labs MGM210P/MGM240P, Digi XBee).
+**Accepted measurement level:** certified **module** / **SiP module** datasheet figures where the entire RF subsystem is integrated in the module product (e.g., Morse Micro MM6108, RAKwireless RAK3172, u-blox NINA-B40, Silicon Labs MGM210P/MGM240P, Digi XBee).
 
 **Rejected levels (never in final accepted table):** SoC, radio IC, FEM, platform, end-device total, gateway/AP/base station.
 
@@ -30,7 +30,7 @@ Energy Consumption for this criterion means **only**:
 | 5G RedCap (NR-Light) | — (idle only) | #4 | module | NOT_RX_COMPARABLE | **Reject** | NOT_ACTIVE_RX | No | — | — | — | N/A | RG255C: sleep/idle only |
 | NB-IoT (Cat-NB2) | 50 mA (BC95-G proxy) | #5 | module | EXPLICIT_TYPICAL | **Reject** | NO_ACCEPTABLE_MODULE_SOURCE | No | — | — | — | N/A | In-scope BC92 has no RX row; BC95-G is Cat-NB1 proxy |
 | LTE-M (Cat-M1) | — | #6 | module | NOT_RX_COMPARABLE | **Reject** | NOT_ACTIVE_RX | No | — | — | — | N/A | BG95: no isolated Radio Reception |
-| LoRaWAN | 4.6 mA | #7 | radio IC | RX_NOT_EXPLICITLY_TYPICAL | **Reject** | RADIO_IC_ONLY | **Yes** | 21.5 | mA | 70.95 | #2 | Murata CMWX1ZZABZ module replaces SX1262 IC |
+| LoRaWAN | 4.6 mA | #7 | radio IC | RX_NOT_EXPLICITLY_TYPICAL | **Reject** | RADIO_IC_ONLY | **Yes** | 5.22 | mA | Not normalized | #2 | RAKwireless RAK3172 module replaces SX1262 IC |
 | Sigfox | 13 mA | #8 | module | CONTINUOUS_RX | **Accept** | — | — | 13 | mA | Not normalized | #3 | ON Semi AX-SIGFOX module |
 | Bluetooth 5.4 (BLE) | 3.4 mA @ 3 V | #9 | SoC | RX_NOT_EXPLICITLY_TYPICAL | **Reject** | SOC_ONLY | **Yes** | 6.0 | mA | 18.0 | #4 | u-blox NINA-B40 module replaces nRF54L15 SoC |
 | Zigbee 3.0 | 6.9 mA @ 3 V | #10 | SoC | RX_NOT_EXPLICITLY_TYPICAL | **Reject** | SOC_ONLY | **Yes** | 9.4 | mA | 28.2 | #5 | Silicon Labs MGM210P module replaces CC2652R SoC |
@@ -64,7 +64,7 @@ Energy Consumption for this criterion means **only**:
 | 5G RedCap (NR-Light) | N/A | N/A |
 | NB-IoT (Cat-NB2) | N/A | N/A |
 | LTE-M (Cat-M1) | N/A | N/A |
-| LoRaWAN | 70.95 mW (21.5 mA @ 3.3 V) | #2 |
+| LoRaWAN | 5.22 mA (Not normalized) | #2 |
 | Sigfox | 13 mA (Not normalized) | #3 |
 | Bluetooth 5.4 (BLE) | 18.0 mW (6.0 mA @ 3.0 V) | #4 |
 | Zigbee 3.0 | 28.2 mW (9.4 mA @ 3.0 V) | #5 |
@@ -83,7 +83,7 @@ Energy Consumption for this criterion means **only**:
 | Technology | Selected value | Unit | Voltage (if stated) | Final normalized value (mW) | RX typology | Source ID |
 |------------|----------------|------|---------------------|----------------------------|-------------|-----------|
 | Wi-Fi HaLow (802.11ah) | 35 | mA | 3.3 V | 115.5 | RX_NOT_EXPLICITLY_TYPICAL | #1 |
-| LoRaWAN | 21.5 | mA | 3.3 V | 70.95 | RX_NOT_EXPLICITLY_TYPICAL | #2 |
+| LoRaWAN | 5.22 | mA | — | Not normalized | RX_NOT_EXPLICITLY_TYPICAL | #2 |
 | Sigfox | 13 | mA | — | Not normalized | CONTINUOUS_RX | #3 |
 | Bluetooth 5.4 (BLE) | 6.0 | mA | 3.0 V | 18.0 | RX_NOT_EXPLICITLY_TYPICAL | #4 |
 | Zigbee 3.0 | 9.4 | mA | 3.0 V | 28.2 | PACKET_RX | #5 |
@@ -93,7 +93,7 @@ Energy Consumption for this criterion means **only**:
 | ISA100.11a | 18 | mA | — | Not normalized | RX_NOT_EXPLICITLY_TYPICAL | #9 |
 | WirelessHART | 4.5 | mA | — | Not normalized | PACKET_RX | #10 |
 
-**TOPSIS note:** Use only the 10 rows above. For **Not normalized** entries (Sigfox, ISA100, WirelessHART), retain mA in a documented sensitivity case or exclude from primary mW ranking — do not impute voltage.
+**TOPSIS note:** Use only the 10 rows above. For **Not normalized** entries (LoRaWAN, Sigfox, ISA100, WirelessHART), retain mA in a documented sensitivity case or exclude from primary mW ranking — do not impute voltage.
 
 ---
 
@@ -107,11 +107,11 @@ Energy Consumption for this criterion means **only**:
 - **Classification rationale:** Official Wi-Fi HaLow **module** datasheet with labeled receive power consumption table; active RX at 3.3 V; mid-range 35 mA selected from stated range — not labeled “typical” in quote (RX_NOT_EXPLICITLY_TYPICAL). Normalization: 35 × 3.3 = **115.5 mW**.
 
 ### Source #2 (Energy Consumption)
-- **Title:** Murata CMWX1ZZABZ — LoRaWAN Module Data Sheet (Type ABZ)
-- **URL/DOI:** https://pim.murata.com/asset/pim4/loRaWANModule/TYPEABZ_PDF_LORAWANMODULE
-- **Exact location:** Section 8.2 — LoRa Receiver Specification — IDDR_L
-- **Verbatim quote:** `Supply current in receiver LoRa mode, LnaBoost off` — `Band 1, BW = 125 kHz` — `21.5 mA` @ `Supply voltage = 3.3 V`
-- **Classification rationale:** Official Murata **LoRaWAN module** datasheet; active module RX current in LoRa receive mode (includes MCU active per footnote). Normalization: 21.5 × 3.3 = **70.95 mW**.
+- **Title:** RAK3172 WisDuo LPWAN Module Datasheet
+- **URL/DOI:** https://docs.rakwireless.com/product-categories/wisduo/rak3172-module/datasheet/
+- **Exact location:** Electrical Characteristics — Operating Current table — RX Mode
+- **Verbatim quote:** `Operating Current` — `RX Mode` — `5.22 mA`
+- **Classification rationale:** Official RAKwireless **LoRaWAN module** datasheet; dedicated module-level RX Mode current in active receive state. Supply typical is 3.3 V in a separate Operating Voltage table (same section) — voltage is **not** stated on the RX row itself; **Not normalized**, 5.22 mA retained.
 
 ### Source #3 (Energy Consumption)
 - **Title:** ON Semiconductor AX-SIGFOX Module Data Sheet
@@ -207,7 +207,7 @@ Energy Consumption for this criterion means **only**:
 - **Rejected original value:** 4.6 mA (#7, Semtech SX1262 radio IC)
 - **Rejection reason:** RADIO_IC_ONLY
 - **Why no module-level accepted value was used:** SX1262 is a radio IC, not a module.
-- **Better replacement found?** Yes — Murata CMWX1ZZABZ module 21.5 mA @ 3.3 V (**Source #2**)
+- **Better replacement found?** Yes — RAKwireless RAK3172 module RX Mode 5.22 mA (**Source #2**)
 
 ### Bluetooth 5.4 (BLE) (prior SoC value)
 - **Rejected original value:** 3.4 mA @ 3 V (#9, Nordic nRF54L15 SoC)
@@ -271,7 +271,7 @@ The following legacy sources were reviewed and rejected or superseded under the 
 | #4 | 5G RedCap | module (no RX) | Rejected — NOT_ACTIVE_RX |
 | #5 | NB-IoT | module (proxy) | Rejected — NO_ACCEPTABLE_MODULE_SOURCE |
 | #6 | LTE-M | module (no RX) | Rejected — NOT_ACTIVE_RX |
-| #7 | LoRaWAN | radio IC | Rejected — replaced by Source #2 (Murata module) |
+| #7 | LoRaWAN | radio IC | Rejected — replaced by Source #2 (RAK3172 module) |
 | #8 | Sigfox | module | **Accepted → new Source #3** |
 | #9 | BLE | SoC | Rejected — replaced by Source #4 (NINA-B40 module) |
 | #10 | Zigbee | SoC | Rejected — replaced by Source #5 (MGM210P module) |
