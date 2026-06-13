@@ -1,0 +1,54 @@
+{
+  "profile": "core",
+  "label_fa": "۸ معیار پایه (مطابق پروپوزال)",
+  "criteria": [
+    "capex_usd",
+    "energy_mw",
+    "link_budget_db",
+    "latency_ms",
+    "data_rate_mbps",
+    "transmission_range_km",
+    "max_network_size",
+    "channel_bandwidth_khz"
+  ],
+  "criteria_labels_fa": {
+    "capex_usd": "هزینه سخت‌افزار (CAPEX)",
+    "energy_mw": "مصرف انرژی",
+    "link_budget_db": "بودجه لینک",
+    "latency_ms": "تأخیر",
+    "data_rate_mbps": "نرخ داده",
+    "transmission_range_km": "برد ارسال",
+    "max_network_size": "حداکثر اندازه شبکه",
+    "channel_bandwidth_khz": "پهنای باند کانال"
+  },
+  "criteria_direction": {
+    "capex_usd": "cost",
+    "energy_mw": "cost",
+    "link_budget_db": "benefit",
+    "latency_ms": "cost",
+    "data_rate_mbps": "benefit",
+    "transmission_range_km": "benefit",
+    "max_network_size": "benefit",
+    "channel_bandwidth_khz": "benefit"
+  },
+  "metadata_columns": [
+    "main_application",
+    "test_conditions",
+    "modulation_scheme",
+    "spectrum_type"
+  ],
+  "issues": [
+    {
+      "technology": "NB-IoT",
+      "problems": [
+        "برد اشتباه در منبع → 15 km"
+      ]
+    },
+    {
+      "technology": "LoRaWAN",
+      "problems": [
+        "تأخیر 60000ms اشتباه → 1500ms (مرجع LoRaWAN)"
+      ]
+    }
+  ]
+}
