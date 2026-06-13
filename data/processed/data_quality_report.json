@@ -1,0 +1,192 @@
+{
+  "issues": [
+    {
+      "technology": "NB-IoT (Cat-NB2)",
+      "problems": [
+        "مقدار transmission_range_km خالی یا قابل پارس نیست"
+      ]
+    },
+    {
+      "technology": "NB-IoT",
+      "problems": [
+        "برد اشتباه (kilobytes/s) → مقدار مرجع 15 km جایگزین شد"
+      ]
+    }
+  ],
+  "dropped_columns": [
+    "annual_opex_raw",
+    "cellular_support",
+    "modulation_scheme",
+    "spectrum_type",
+    "frequency_band",
+    "security_mechanism",
+    "duplex_type",
+    "main_application",
+    "test_conditions"
+  ],
+  "kept_criteria": [
+    "capex_usd",
+    "energy_mw",
+    "link_budget_db",
+    "latency_ms",
+    "data_rate_mbps",
+    "transmission_range_km",
+    "max_network_size",
+    "channel_bandwidth_khz"
+  ],
+  "criteria_direction": {
+    "capex_usd": "cost",
+    "energy_mw": "cost",
+    "link_budget_db": "benefit",
+    "latency_ms": "cost",
+    "data_rate_mbps": "benefit",
+    "transmission_range_km": "benefit",
+    "max_network_size": "benefit",
+    "channel_bandwidth_khz": "benefit"
+  },
+  "rows": [
+    {
+      "technology": "Wi-Fi 7 (802.11be)",
+      "capex_usd": 134.66666666666666,
+      "energy_mw": 39000.0,
+      "link_budget_db": 73.0,
+      "latency_ms": 1.0,
+      "data_rate_mbps": 5800.0,
+      "transmission_range_km": 0.175,
+      "max_network_size": 1200.0,
+      "channel_bandwidth_khz": 320000.0
+    },
+    {
+      "technology": "Wi-Fi 6 (802.11ax)",
+      "capex_usd": 4.65,
+      "energy_mw": 14950.0,
+      "link_budget_db": 113.0,
+      "latency_ms": 9.77,
+      "data_rate_mbps": 9600.0,
+      "transmission_range_km": 0.04,
+      "max_network_size": 8191.0,
+      "channel_bandwidth_khz": 20000.0
+    },
+    {
+      "technology": "Wi-Fi HaLow (802.11ah)",
+      "capex_usd": 21.060000000000002,
+      "energy_mw": 115.5,
+      "link_budget_db": 114.5,
+      "latency_ms": 14.0,
+      "data_rate_mbps": 78.0,
+      "transmission_range_km": 1.0,
+      "max_network_size": 1600.0,
+      "channel_bandwidth_khz": 16000.0
+    },
+    {
+      "technology": "5G RedCap (NR-Light)",
+      "capex_usd": 123.12,
+      "energy_mw": 366.3,
+      "link_budget_db": 144.0,
+      "latency_ms": 10.0,
+      "data_rate_mbps": 150.0,
+      "transmission_range_km": 250.0,
+      "max_network_size": 1000.0,
+      "channel_bandwidth_khz": 10000.0
+    },
+    {
+      "technology": "NB-IoT (Cat-NB2)",
+      "capex_usd": 22.05,
+      "energy_mw": 87.0,
+      "link_budget_db": 151.0,
+      "latency_ms": 5500.0,
+      "data_rate_mbps": 0.25,
+      "transmission_range_km": NaN,
+      "max_network_size": 1000.0,
+      "channel_bandwidth_khz": 200000000.0
+    },
+    {
+      "technology": "LTE-M (Cat-M1)",
+      "capex_usd": 70.48998333333333,
+      "energy_mw": 391.49999999999994,
+      "link_budget_db": 146.0,
+      "latency_ms": 20.0,
+      "data_rate_mbps": 0.128,
+      "transmission_range_km": 22.0,
+      "max_network_size": 1000.0,
+      "channel_bandwidth_khz": 1400.0
+    },
+    {
+      "technology": "LoRaWAN",
+      "capex_usd": 386.8143333333333,
+      "energy_mw": 102.3,
+      "link_budget_db": 154.0,
+      "latency_ms": 60000.0,
+      "data_rate_mbps": 0.05,
+      "transmission_range_km": 0.5,
+      "max_network_size": 65536.0,
+      "channel_bandwidth_khz": 125.0
+    },
+    {
+      "technology": "Sigfox",
+      "capex_usd": 10.066333333333333,
+      "energy_mw": 33.0,
+      "link_budget_db": 159.0,
+      "latency_ms": 600.0,
+      "data_rate_mbps": 0.027,
+      "transmission_range_km": 15.0,
+      "max_network_size": 60000.0,
+      "channel_bandwidth_khz": 100.0
+    },
+    {
+      "technology": "Bluetooth 5.4 (BLE)",
+      "capex_usd": 14.495833333333334,
+      "energy_mw": 18.0,
+      "link_budget_db": 117.1,
+      "latency_ms": 30.0,
+      "data_rate_mbps": 1.0,
+      "transmission_range_km": 0.15,
+      "max_network_size": 32640.0,
+      "channel_bandwidth_khz": 2000.0
+    },
+    {
+      "technology": "Zigbee 3.0",
+      "capex_usd": 3.75,
+      "energy_mw": 28.2,
+      "link_budget_db": 119.5,
+      "latency_ms": 60.0,
+      "data_rate_mbps": 0.25,
+      "transmission_range_km": 10.0,
+      "max_network_size": 100.0,
+      "channel_bandwidth_khz": 5000.0
+    },
+    {
+      "technology": "Thread (1.3)",
+      "capex_usd": 3.69,
+      "energy_mw": 15.9,
+      "link_budget_db": 124.9,
+      "latency_ms": 30.0,
+      "data_rate_mbps": 0.25,
+      "transmission_range_km": 0.15,
+      "max_network_size": 100.0,
+      "channel_bandwidth_khz": 2000.0
+    },
+    {
+      "technology": "Z-Wave Long Range",
+      "capex_usd": 33.395833333333336,
+      "energy_mw": 15.18,
+      "link_budget_db": 101.0,
+      "latency_ms": 400.0,
+      "data_rate_mbps": 0.05,
+      "transmission_range_km": 30.0,
+      "max_network_size": 4000.0,
+      "channel_bandwidth_khz": 100.0
+    },
+    {
+      "technology": "Smart Ubiquitous Network-Wi-SUN (FAN)",
+      "capex_usd": 99.225,
+      "energy_mw": 40.26,
+      "link_budget_db": 111.3,
+      "latency_ms": 1860.0,
+      "data_rate_mbps": 0.05,
+      "transmission_range_km": 7.0,
+      "max_network_size": 250.0,
+      "channel_bandwidth_khz": 1200.0
+    }
+  ]
+}
