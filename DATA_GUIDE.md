@@ -6,22 +6,32 @@
 
 ```
 data/
-  raw/iot_technologies_raw.csv          ← داده خام (همان جدول شما)
-  processed/iot_technologies_clean.csv  ← ۸ معیار عددی پاک‌شده
-  processed/iot_technologies_normalized.csv ← بعد از log1p + StandardScaler
-  processed/data_quality_report.json    ← گزارش مشکلات
+  criteria_config.json                  ← تعریف پروفایل‌های معیار
+  raw/iot_technologies_raw.csv
+  processed/iot_technologies_clean_core.csv
+  processed/iot_technologies_clean_extended.csv
+  processed/iot_technologies_normalized_core.csv
+  processed/iot_technologies_normalized_extended.csv
 scripts/
-  clean_and_normalize.py                ← اسکریپت اصلی
+  clean_and_normalize.py
+CRITERIA_GUIDE.md                       ← راهنمای کامل معیارها
 ```
 
 ## اجرا
 
 ```bash
 pip install -r requirements.txt
-python3 scripts/clean_and_normalize.py
+python3 scripts/clean_and_normalize.py --profile all
 ```
 
-## ۸ معیار نگه‌داشته‌شده (مطابق پروپوزال)
+پروفایل‌ها:
+- `core` — ۸ معیار (مطابق پروپوزال)
+- `extended` — ۱۴ معیار (توسعه‌یافته)
+- `all` — هر دو (پیش‌فرض)
+
+جزئیات معیارها: [CRITERIA_GUIDE.md](CRITERIA_GUIDE.md)
+
+## ۸ معیار پایه (پروفایل core)
 
 | معیار | واحد نهایی | جهت (TOPSIS) |
 |--------|------------|--------------|

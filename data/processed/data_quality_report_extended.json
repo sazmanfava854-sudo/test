@@ -1,35 +1,53 @@
 {
-  "profile": "core",
-  "label_fa": "۸ معیار پایه (مطابق پروپوزال)",
+  "profile": "extended",
+  "label_fa": "۱۴ معیار توسعه‌یافته",
   "criteria": [
     "capex_usd",
+    "annual_opex_usd",
     "energy_mw",
     "link_budget_db",
     "latency_ms",
     "data_rate_mbps",
     "transmission_range_km",
     "max_network_size",
-    "channel_bandwidth_khz"
+    "channel_bandwidth_khz",
+    "cellular_support",
+    "security_score",
+    "duplex_score",
+    "spectral_efficiency_score",
+    "frequency_center_ghz"
   ],
   "criteria_labels_fa": {
     "capex_usd": "هزینه سخت‌افزار (CAPEX)",
+    "annual_opex_usd": "هزینه عملیاتی سالانه (OPEX)",
     "energy_mw": "مصرف انرژی",
     "link_budget_db": "بودجه لینک",
     "latency_ms": "تأخیر",
     "data_rate_mbps": "نرخ داده",
     "transmission_range_km": "برد ارسال",
     "max_network_size": "حداکثر اندازه شبکه",
-    "channel_bandwidth_khz": "پهنای باند کانال"
+    "channel_bandwidth_khz": "پهنای باند کانال",
+    "cellular_support": "پشتیبانی شبکه سلولی",
+    "security_score": "سطح امنیت",
+    "duplex_score": "قابلیت دوبلکس",
+    "spectral_efficiency_score": "کارایی طیفی (مدولاسیون)",
+    "frequency_center_ghz": "فرکانس مرکزی عملیاتی"
   },
   "criteria_direction": {
     "capex_usd": "cost",
+    "annual_opex_usd": "cost",
     "energy_mw": "cost",
     "link_budget_db": "benefit",
     "latency_ms": "cost",
     "data_rate_mbps": "benefit",
     "transmission_range_km": "benefit",
     "max_network_size": "benefit",
-    "channel_bandwidth_khz": "benefit"
+    "channel_bandwidth_khz": "benefit",
+    "cellular_support": "benefit",
+    "security_score": "benefit",
+    "duplex_score": "benefit",
+    "spectral_efficiency_score": "benefit",
+    "frequency_center_ghz": "cost"
   },
   "metadata_columns": [
     "main_application",
