@@ -20,7 +20,7 @@ class IoTSelector:
 
     def __init__(self):
         self.criteria_names = ["هزینه", "مصرف انرژی", "بودجه لینک",
-                               "تاخیر", "دوطرفه بودن", "سلولی", "میزان داده", "برد"]
+                               "تاخیر", "سلولی", "میزان داده", "برد"]
         self.technologies = np.array([
             "Wi-Fi 7 (802.11be)",
             "Wi-Fi 6 (802.11ax)",
@@ -37,21 +37,21 @@ class IoTSelector:
             "Wi-SUN (FAN)",
         ])
         # [هزینه(CAPEX), مصرف انرژی(mW), بودجه لینک(dB), تاخیر(ms),
-        #  دوطرفه بودن, سلولی, میزان داده(Mbps), برد(m)]
+        #  سلولی, میزان داده(Mbps), برد(m)]
         self.decision_matrix = np.array([
-            [46.393, 39000,   73,    1,      1,   0, 23059,    30],
-            [4.650,  1495,    113,   20,     1,   0, 9600,     35],
-            [22.617, 115.5,   114.5, 47.885, 1,   0, 78,       1000],
-            [132.220, 366.3,  144,   14,     1,   1, 150,      30],
-            [13.000, 87,      151,   5800,   1,   1, 0.25,     22000],
-            [30.000, 294.75,  146,   15,     1,   1, 0.128,    5000],
-            [10.000, 102.3,   154,   1200,   1,   0, 0.05,     20000],
-            [3.468,  33,      159,   60000,  0.2, 0, 0.0001,   25000],
-            [4.97,   18,      117.1, 30,     0.8, 0, 5,        150],
-            [3.750,  28.2,    119.5, 60,     1,   0, 0.25,     55],
-            [3.700,  15.9,    124.9, 75,     1,   0, 0.25,     20],
-            [11.45,  15.18,   101,   400,    1,   0, 0.0548,   30],
-            [37.160, 40.26,   111.3, 1860,   1,   0, 2.4,      1.4],
+            [46.393, 39000,   73,    1,      0, 23059,    30],
+            [4.650,  1495,    113,   20,     0, 9600,     35],
+            [22.617, 115.5,   114.5, 47.885, 0, 78,       1000],
+            [132.220, 366.3,  144,   14,     1, 150,      30],
+            [13.000, 87,      151,   5800,   1, 0.25,     22000],
+            [30.000, 294.75,  146,   15,     1, 0.128,    5000],
+            [10.000, 102.3,   154,   1200,   0, 0.05,     20000],
+            [3.468,  33,      159,   60000,  0, 0.0001,   25000],
+            [4.97,   18,      117.1, 30,     0, 5,        150],
+            [3.750,  28.2,    119.5, 60,     0, 0.25,     55],
+            [3.700,  15.9,    124.9, 75,     0, 0.25,     20],
+            [11.45,  15.18,   101,   400,    0, 0.0548,   30],
+            [37.160, 40.26,   111.3, 1860,   0, 2.4,      1000],
         ], dtype=float)
 
         # ================== قوانین تضاد (با پیام) ==================
@@ -92,10 +92,6 @@ class IoTSelector:
              "effect_on_pcm": lambda pcm, c: pcm.__setitem__((c.index('میزان داده'), c.index('تاخیر')), pcm[c.index('میزان داده'), c.index('تاخیر')]*1.7)},
             {"id": "Data_low", "conditions": lambda ans: ans.get('hajm_dadeh') == 'کم',
              "effect_on_pcm": lambda pcm, c: pcm.__setitem__((c.index('میزان داده'), c.index('تاخیر')), pcm[c.index('میزان داده'), c.index('تاخیر')]*0.7)},
-            {"id": "Mobile_strong", "conditions": lambda ans: ans.get('pooshesh_mobile') == 'پوشش قوی',
-             "effect_on_pcm": lambda pcm, c: pcm.__setitem__((c.index('سلولی'), c.index('دوطرفه بودن')), pcm[c.index('سلولی'), c.index('دوطرفه بودن')]*1.5)},
-            {"id": "Mobile_weak", "conditions": lambda ans: ans.get('pooshesh_mobile') == 'پوشش ضعیف',
-             "effect_on_pcm": lambda pcm, c: pcm.__setitem__((c.index('سلولی'), c.index('دوطرفه بودن')), pcm[c.index('سلولی'), c.index('دوطرفه بودن')]*0.5)},
             {"id": "S1", "conditions": lambda ans: ans.get('internet_nazdik') == "بله" and ans.get('budjeh_avalieh') == "انعطاف‌پذیر",
              "effect_on_pcm": lambda pcm, c: set_pcm_value(pcm, c.index('سلولی'), c.index('هزینه'), 3)},
             {"id": "S2", "conditions": lambda ans: ans.get('internet_nazdik') == "بله" and ans.get('budjeh_avalieh') == "محدود" and ans.get('hazine_amaliati') != "بسیار محدود",
@@ -113,10 +109,10 @@ class IoTSelector:
         indices = [i for i, t in enumerate(self.technologies) if t in tech_names]
         subset = self.decision_matrix[indices]
 
-        avg_range = subset[:, 7].mean()
-        avg_data = subset[:, 6].mean()
+        avg_range = subset[:, 6].mean()
+        avg_data = subset[:, 5].mean()
         avg_energy = subset[:, 1].mean()
-        cellular_ratio = subset[:, 5].mean()
+        cellular_ratio = subset[:, 4].mean()
 
         traits = []
         if avg_range >= 5000:
@@ -479,14 +475,13 @@ class IoTSelector:
         n = len(criteria)
 
         pcm = np.array([
-            [1,    7,    5,    5,    5,    5,    5,    7],
-            [1/7,  1,    3,    3,    3,    5,    5,    5],
-            [1/5,  1/3,  1,    3,    3,    3,    3,    5],
-            [1/5,  1/3,  1/3,  1,    3,    3,    3,    3],
-            [1/5,  1/3,  1/3,  1/3,  1,    3,    3,    3],
-            [1/5,  1/5,  1/3,  1/3,  1/3,  1,    3,    3],
-            [1/5,  1/5,  1/3,  1/3,  1/3,  1/3,  1,    3],
-            [1/7,  1/5,  1/5,  1/3,  1/3,  1/3,  1/3,  1]
+            [1,    7,    5,    5,    5,    5,    7],
+            [1/7,  1,    3,    3,    5,    5,    5],
+            [1/5,  1/3,  1,    3,    3,    3,    5],
+            [1/5,  1/3,  1/3,  1,    3,    3,    3],
+            [1/5,  1/5,  1/3,  1/3,  1,    3,    3],
+            [1/5,  1/5,  1/3,  1/3,  1/3,  1,    3],
+            [1/7,  1/5,  1/5,  1/3,  1/3,  1/3,  1]
         ], dtype=float)
 
         for rule in self.adjustment_rules:
@@ -530,7 +525,7 @@ class IoTSelector:
 
         criteria_types = {
             'هزینه': False, 'مصرف انرژی': False, 'بودجه لینک': True, 'تاخیر': False,
-            'دوطرفه بودن': True, 'سلولی': True, 'میزان داده': True, 'برد': True
+            'سلولی': True, 'میزان داده': True, 'برد': True
         }
         is_benefit = np.array([criteria_types[c] for c in self.criteria_names])
         weights_array = np.array([normalized_weights[c] for c in self.criteria_names])
