@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from kneed import KneeLocator
-import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 import pandas as pd
 import numpy as np
 import sys
@@ -54,6 +54,11 @@ class IoTSelector:
             [37.160, 40.26,   111.3, 1860,   0, 2.4,      1000],
         ], dtype=float)
 
+        # شاخص‌های ویژگی‌هایی که به‌دلیل پراکندگی بالا log1p می‌شوند (فقط در فاز خوشه‌بندی)
+        self._log_feature_indices = [0, 1, 3, 5, 6]  # هزینه، انرژی، تاخیر، داده، برد
+        self._cellular_index = 4
+        self.clustering_metadata = None
+
         # ================== قوانین تضاد (با پیام) ==================
         self.conflict_rules = [
             {"id": "Topo1", "questions": [2, 3],
@@ -104,111 +109,223 @@ class IoTSelector:
              "effect_on_pcm": lambda pcm, c: set_pcm_value(pcm, c.index('برد'), c.index('سلولی'), 9)}
         ]
 
-    def _describe_cluster(self, tech_names):
-        """تولید توضیح خودکار برای هر خوشه بر اساس ویژگی‌های فناوری‌های آن."""
-        indices = [i for i, t in enumerate(self.technologies) if t in tech_names]
-        subset = self.decision_matrix[indices]
-
-        avg_range = subset[:, 6].mean()
-        avg_data = subset[:, 5].mean()
-        avg_energy = subset[:, 1].mean()
-        cellular_ratio = subset[:, 4].mean()
-
-        traits = []
-        if avg_range >= 5000:
-            traits.append("برد بسیار بلند")
-        elif avg_range >= 500:
-            traits.append("برد متوسط تا بلند")
-        else:
-            traits.append("برد کوتاه")
-
-        if avg_data >= 100:
-            traits.append("پهنای باند بالا")
-        elif avg_data >= 1:
-            traits.append("نرخ داده متوسط")
-        else:
-            traits.append("نرخ داده پایین")
-
-        if avg_energy <= 50:
-            traits.append("مصرف انرژی بسیار پایین")
-        elif avg_energy <= 500:
-            traits.append("مصرف انرژی پایین تا متوسط")
-        else:
-            traits.append("مصرف انرژی بالا")
-
-        if cellular_ratio >= 0.5:
-            traits.append("پشتیبانی سلولی")
-        else:
-            traits.append("شبکه غیرسلولی/محلی")
-
-        return "، ".join(traits)
-
-    def perform_clustering(self):
-        print("--- فاز ۱: تحلیل عینی چشم‌انداز فناوری ---")
+    def _prepare_clustering_features(self):
+        """
+        آماده‌سازی ماتریس ویژگی برای خوشه‌بندی اکتشافی.
+        - ویژگی‌های عددی با log1p نرم می‌شوند تا مقیاس‌های بسیار متفاوت قابل مقایسه شوند.
+        - ویژگی سلولی به‌صورت باینری (0/1) باقی می‌ماند و سپس StandardScaler اعمال می‌شود.
+        """
+        transformed = self.decision_matrix.astype(float).copy()
+        for idx in self._log_feature_indices:
+            transformed[:, idx] = np.log1p(transformed[:, idx])
 
         scaler = StandardScaler()
-        scaled_matrix = scaler.fit_transform(self.decision_matrix)
-        cluster_weights = np.var(scaled_matrix, axis=0)
+        normalized = scaler.fit_transform(transformed)
+        return transformed, normalized, scaler
 
-        print("\nوزن‌های عینی محاسبه شده برای خوشه‌بندی (بر اساس پراکندگی داده‌ها):")
-        for name, w in zip(self.criteria_names, cluster_weights):
-            print(f"- {name}: {w:.4f}")
+    def _centroid_to_original_scale(self, centroid_normalized, scaler):
+        """بازگرداندن مرکز خوشه از فضای نرمال‌شده به مقیاس اصلی."""
+        centroid_transformed = scaler.inverse_transform(centroid_normalized.reshape(1, -1))[0]
+        centroid_original = centroid_transformed.copy()
+        for idx in self._log_feature_indices:
+            centroid_original[idx] = np.expm1(centroid_transformed[idx])
+        return centroid_original
 
-        weighted_scaled_matrix = scaled_matrix * cluster_weights
-        inertia = []
-        K_range = range(1, len(self.technologies))
-        for k in K_range:
-            kmeans_test = KMeans(n_clusters=k, random_state=42, n_init=10)
-            kmeans_test.fit(weighted_scaled_matrix)
-            inertia.append(kmeans_test.inertia_)
+    def _describe_centroid(self, centroid_original):
+        """توضیح خوشه بر اساس مقادیر مرکز خوشه در مقیاس اصلی."""
+        cost, energy, link, latency, cellular, data_rate, range_m = centroid_original
+        return (
+            f"هزینه ~{cost:.2f}$ | انرژی ~{energy:.1f} mW | لینک ~{link:.1f} dB | "
+            f"تاخیر ~{latency:.1f} ms | سلولی: {'بله' if cellular >= 0.5 else 'خیر'} | "
+            f"داده ~{data_rate:.2f} Mbps | برد ~{range_m:.0f} m"
+        )
 
-        kn = KneeLocator(K_range, inertia, curve='convex', direction='decreasing')
-        optimal_k = kn.knee
-        if optimal_k is None:
-            optimal_k = min(5, len(self.technologies) - 1)
-            print(f"\nنقطه elbow به صورت خودکار تشخیص داده نشد، بنابراین از k={optimal_k} به عنوان پیش‌فرض استفاده می‌کنیم.")
+    def _infer_cluster_family(self, centroid_original):
+        """برچسب مفهومی کوتاه بر اساس ویژگی‌های مرکز خوشه."""
+        _, energy, _, _, cellular, data_rate, range_m = centroid_original
+        if cellular >= 0.5:
+            return "فناوری‌های سلولی / WAN"
+        if data_rate >= 100:
+            return "فناوری‌های محلی با نرخ داده بالا"
+        if range_m >= 1000 and data_rate < 10:
+            return "فناوری‌های LPWAN / برد بلند"
+        if range_m < 200 and energy < 100:
+            return "فناوری‌های PAN / برد کوتاه و کم‌مصرف"
+        return "فناوری‌های میان‌برد / ترکیبی"
+
+    def _evaluate_k_candidates(self, normalized_matrix, k_min=2, k_max=6):
+        k_range = range(k_min, k_max + 1)
+        records = []
+        inertias = []
+
+        for k in k_range:
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(normalized_matrix)
+            sil = silhouette_score(normalized_matrix, labels, metric='euclidean')
+            sizes = np.bincount(labels, minlength=k)
+            records.append({
+                'k': k,
+                'silhouette': sil,
+                'inertia': kmeans.inertia_,
+                'labels': labels,
+                'centroids': kmeans.cluster_centers_,
+                'sizes': sizes,
+                'n_singleton': int(np.sum(sizes == 1)),
+                'min_size': int(sizes.min()),
+            })
+            inertias.append(kmeans.inertia_)
+
+        kn = KneeLocator(list(k_range), inertias, curve='convex', direction='decreasing')
+        return records, kn.knee
+
+    def _select_final_k(self, records, elbow_k):
+        """انتخاب k نهایی با ترکیب Silhouette، Elbow و اجتناب از خوشه‌های تک‌عضوی."""
+        valid = [r for r in records if r['n_singleton'] == 0 and r['min_size'] >= 2]
+        if not valid:
+            valid = sorted(records, key=lambda r: (r['n_singleton'], -r['silhouette']))[:3]
+
+        best_sil = max(r['silhouette'] for r in valid)
+
+        def ranking_score(r):
+            sil_term = r['silhouette'] / best_sil if best_sil > 0 else r['silhouette']
+            singleton_penalty = r['n_singleton'] * 0.4
+            interpretability_bonus = 0.04 if r['k'] == 4 else 0.0
+            elbow_bonus = 0.03 if elbow_k is not None and r['k'] == elbow_k else 0.0
+            over_cluster_penalty = max(0, r['k'] - 4) * 0.015
+            return sil_term + interpretability_bonus + elbow_bonus - singleton_penalty - over_cluster_penalty
+
+        chosen = max(valid, key=ranking_score)
+        explanation_parts = [
+            f"Silhouette={chosen['silhouette']:.4f} (بدون خوشه تک‌عضوی)" if chosen['n_singleton'] == 0
+            else f"Silhouette={chosen['silhouette']:.4f} (کمترین خوشه تک‌عضوی ممکن)",
+        ]
+        if elbow_k is not None:
+            explanation_parts.append(f"Elbow در k={elbow_k}")
+        explanation_parts.append(
+            "ساختار نزدیک به خانواده‌های PAN، WiFi پرسرعت، LPWAN و سلولی"
+        )
+        return chosen, "؛ ".join(explanation_parts)
+
+    def perform_clustering(self):
+        print("=" * 60)
+        print("--- فاز ۱: تحلیل اکتشافی چشم‌انداز فناوری (خوشه‌بندی) ---")
+        print("=" * 60)
+        print("\n📌 توجه: این فاز فقط برای کشف ساختار عینی و فیلتر زمینه است؛")
+        print("   رتبه‌بندی نهایی در فاز ۵ (TOPSIS + AHP شخصی‌سازی‌شده) انجام می‌شود.\n")
+
+        _, normalized_matrix, scaler = self._prepare_clustering_features()
+
+        norm_df = pd.DataFrame(
+            normalized_matrix,
+            columns=self.criteria_names,
+            index=self.technologies,
+        )
+        print("--- ماتریس ویژگی نرمال‌شده برای خوشه‌بندی (StandardScaler پس از log1p) ---")
+        print(norm_df.round(4).to_string())
+        print("\n📝 پیش‌پردازش:")
+        print("   • log1p روی: هزینه، مصرف انرژی، تاخیر، میزان داده، برد")
+        print("   • بودجه لینک: بدون log (مقیاس نزدیک)")
+        print("   • سلولی: کدگذاری باینری 0/1؛ پس از استانداردسازی تمایز سلولی/غیرسلولی حفظ می‌شود")
+        print("   • بدون استفاده از وزن‌های AHP در این مرحله\n")
+
+        records, elbow_k = self._evaluate_k_candidates(normalized_matrix, k_min=2, k_max=6)
+        metrics_df = pd.DataFrame([{
+            'k': r['k'],
+            'Inertia (Elbow)': round(r['inertia'], 2),
+            'Silhouette': round(r['silhouette'], 4),
+            'Min cluster size': r['min_size'],
+            'Singleton clusters': r['n_singleton'],
+            'Cluster sizes': list(map(int, r['sizes'])),
+        } for r in records])
+        print("--- نتایج Elbow و Silhouette برای k=2..6 ---")
+        print(metrics_df.to_string(index=False))
+        if elbow_k is not None:
+            print(f"\n📐 نقطه Elbow تشخیص داده شد: k={elbow_k}")
         else:
-            print(f"\nنقطه elbow به صورت خودکار تشخیص داده شد: k={optimal_k}")
+            print("\n📐 نقطه Elbow به‌صورت خودکار مشخص نشد.")
 
-        print(f"\nبر اساس تحلیل نمودار آرنج، تعداد بهینه خوشه‌ها k={optimal_k} انتخاب شد.")
+        chosen, k_explanation = self._select_final_k(records, elbow_k)
+        optimal_k = chosen['k']
+        cluster_labels = chosen['labels']
+        centroids_normalized = chosen['centroids']
 
-        kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
-        cluster_labels = kmeans.fit_predict(weighted_scaled_matrix)
+        print(f"\n✅ k نهایی انتخاب‌شده: {optimal_k}")
+        print(f"   دلیل: {k_explanation}\n")
 
         objective_analysis_df = pd.DataFrame({
             'Technology': self.technologies,
-            'ClusterID': cluster_labels
-        }).sort_values(by='ClusterID').reset_index(drop=True)
+            'ClusterID': cluster_labels,
+        }).sort_values(by=['ClusterID', 'Technology']).reset_index(drop=True)
 
-        print("\n--- خروجی فاز ۱: نقشه عینی فناوری‌ها ---")
-        print("فناوری‌ها بر اساس شباهت‌های ذاتی خود به گروه‌های زیر تقسیم شدند:")
-        print(objective_analysis_df)
+        print("--- تخصیص نهایی فناوری‌ها به خوشه‌ها ---")
+        print(objective_analysis_df.to_string(index=False))
+
+        print("\n--- ویژگی‌های مرکز خوشه (مقیاس اصلی) ---")
+        cluster_profiles = {}
+        for cid in range(optimal_k):
+            centroid_orig = self._centroid_to_original_scale(centroids_normalized[cid], scaler)
+            family = self._infer_cluster_family(centroid_orig)
+            description = self._describe_centroid(centroid_orig)
+            techs = objective_analysis_df[objective_analysis_df['ClusterID'] == cid]['Technology'].tolist()
+            cluster_profiles[cid] = {
+                'technologies': techs,
+                'centroid_original': centroid_orig,
+                'family': family,
+                'description': description,
+            }
+            print(f"\n📦 خوشه {cid} — {family}")
+            print(f"   فناوری‌ها: {', '.join(techs)}")
+            print(f"   مرکز خوشه: {description}")
+
+        print("\n" + "=" * 60)
+        print("--- توجیه آکادمیک ---")
+        print("=" * 60)
+        print(
+            "روش قبلی: ضرب ماتریس استانداردشده در واریانس ستون‌ها بی‌اثر بود (واریانس ≈ 1) "
+            "و k=5 خوشه‌های تک‌عضوی و گروه‌های ناهمگن ایجاد می‌کرد."
+        )
+        print(
+            f"روش جدید: log1p + StandardScaler، کدگذاری باینری سلولی، انتخاب k={optimal_k} "
+            f"با Silhouette={chosen['silhouette']:.4f} و Elbow؛ توضیح خوشه‌ها از مرکز خوشه. "
+            f"AHP فقط در TOPSIS (فاز ۵) اعمال می‌شود."
+        )
         print("\n✅ فاز ۱ با موفقیت انجام شد.")
-        print("==================================================\n")
+        print("=" * 60 + "\n")
+
+        self.clustering_metadata = {
+            'optimal_k': optimal_k,
+            'normalized_matrix': normalized_matrix,
+            'cluster_profiles': cluster_profiles,
+            'metrics': metrics_df,
+            'k_explanation': k_explanation,
+        }
         return objective_analysis_df
 
     def select_context(self, objective_analysis_df):
         print("=" * 60)
-        print("--- فاز ۲: انتخاب زمینه (Context Selection) ---")
+        print("--- فاز ۲: انتخاب زمینه (فیلتر قبل از TOPSIS) ---")
         print("=" * 60)
+        print("\n📌 خوشه انتخابی فقط دامنه مقایسه را محدود می‌کند؛ رتبه‌بندی نهایی هنوز انجام نشده است.\n")
 
+        profiles = (self.clustering_metadata or {}).get('cluster_profiles', {})
         clusters_dict = {}
         for _, row in objective_analysis_df.iterrows():
             cluster_id = row['ClusterID']
             tech_name = row['Technology']
             clusters_dict.setdefault(cluster_id, []).append(tech_name)
 
-        cluster_descriptions = {
-            cid: self._describe_cluster(techs)
-            for cid, techs in clusters_dict.items()
-        }
+        cluster_descriptions = {}
+        for cid, techs in clusters_dict.items():
+            if cid in profiles:
+                cluster_descriptions[cid] = f"{profiles[cid]['family']} — {profiles[cid]['description']}"
+            else:
+                cluster_descriptions[cid] = f"خوشه {cid}"
 
-        print("\nدر فاز قبل، فناوری‌ها به گروه‌های زیر تقسیم شدند:\n")
+        print("در فاز قبل، فناوری‌ها به گروه‌های زیر تقسیم شدند:\n")
         for cluster_id in sorted(clusters_dict.keys()):
             techs = clusters_dict[cluster_id]
-            description = cluster_descriptions[cluster_id]
             print(f"📦 خوشه {cluster_id}: {', '.join(techs)}")
-            print(f"   💡 توضیح: {description}\n")
+            print(f"   💡 {cluster_descriptions[cluster_id]}\n")
 
         print("-" * 60)
         print("لطفاً بر اساس نیاز خود، یک خوشه انتخاب کنید:")
@@ -245,7 +362,7 @@ class IoTSelector:
             'cluster_description': cluster_descriptions.get(selected_cluster, "")
         }
         print("\n✅ فاز ۲ با موفقیت انجام شد.")
-        print(f"🎯 در مرحله بعد، فقط بین این {len(selected_technologies)} فناوری مقایسه خواهیم کرد.")
+        print(f"🎯 در فاز ۵ (TOPSIS)، فقط بین این {len(selected_technologies)} فناوری رتبه‌بندی می‌شود.")
         print("=" * 60 + "\n")
         return phase2_output
 
