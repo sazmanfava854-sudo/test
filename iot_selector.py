@@ -58,6 +58,11 @@ class IoTSelector:
         self._log_feature_indices = [0, 1, 3, 5, 6]  # هزینه، انرژی، تاخیر، داده، برد
         self._cellular_index = 4
         self.clustering_metadata = None
+        self._CLUSTERING_DISCLAIMER = (
+            "یادآوری پژوهشی: خوشه‌ها گروه‌بندی‌های توصیفی و داده‌محور هستند، نه طبقه‌بندی "
+            "قطعی پروتکل‌ها؛ صرفاً به‌عنوان گام گروه‌بندی زمینه‌ای پیش از TOPSIS / پیش‌انتخاب "
+            "استفاده می‌شوند."
+        )
 
         # ================== قوانین تضاد (با پیام) ==================
         self.conflict_rules = [
@@ -131,27 +136,55 @@ class IoTSelector:
             centroid_original[idx] = np.expm1(centroid_transformed[idx])
         return centroid_original
 
-    def _describe_centroid(self, centroid_original):
-        """توضیح خوشه بر اساس مقادیر مرکز خوشه در مقیاس اصلی."""
-        cost, energy, link, latency, cellular, data_rate, range_m = centroid_original
+    def _member_cellular_fraction(self, tech_names):
+        indices = [i for i, t in enumerate(self.technologies) if t in tech_names]
+        return float(self.decision_matrix[indices, self._cellular_index].mean())
+
+    def _describe_cellularity(self, cellular_frac):
+        if cellular_frac == 0.0:
+            return "عمدتاً غیرسلولی"
+        if cellular_frac == 1.0:
+            return "عمدتاً سلولی"
+        if cellular_frac >= 0.67:
+            return "عمدتاً سلولی"
+        if cellular_frac <= 0.33:
+            return "عمدتاً غیرسلولی، با حضور محدود سلولی"
+        return "سلولی بودن ترکیبی"
+
+    def _describe_centroid(self, centroid_original, cellular_frac):
+        """توضیح خوشه بر اساس مرکز خوشه و ترکیب سلولی واقعی اعضا."""
+        cost, energy, link, latency, _, data_rate, range_m = centroid_original
+        cell_phrase = self._describe_cellularity(cellular_frac)
         return (
             f"هزینه ~{cost:.2f}$ | انرژی ~{energy:.1f} mW | لینک ~{link:.1f} dB | "
-            f"تاخیر ~{latency:.1f} ms | سلولی: {'بله' if cellular >= 0.5 else 'خیر'} | "
+            f"تاخیر ~{latency:.1f} ms | سلولی بودن اعضا: {cell_phrase} | "
             f"داده ~{data_rate:.2f} Mbps | برد ~{range_m:.0f} m"
         )
 
-    def _infer_cluster_family(self, centroid_original):
-        """برچسب مفهومی کوتاه بر اساس ویژگی‌های مرکز خوشه."""
-        _, energy, _, _, cellular, data_rate, range_m = centroid_original
-        if cellular >= 0.5:
-            return "فناوری‌های سلولی / WAN"
-        if data_rate >= 100:
-            return "فناوری‌های محلی با نرخ داده بالا"
-        if range_m >= 1000 and data_rate < 10:
-            return "فناوری‌های LPWAN / برد بلند"
-        if range_m < 200 and energy < 100:
-            return "فناوری‌های PAN / برد کوتاه و کم‌مصرف"
-        return "فناوری‌های میان‌برد / ترکیبی"
+    def _infer_cluster_family(self, centroid_original, cellular_frac):
+        """برچسب توصیفی خنثی از پروفایل مرکز خوشه (نه طبقه‌بندی ثابت پروتکل)."""
+        _, energy, _, latency, _, data_rate, range_m = centroid_original
+
+        if data_rate >= 100 and range_m < 200:
+            label = "WLAN برد کوتاه با توان داده بالا"
+        elif cellular_frac >= 0.67 and data_rate >= 1:
+            label = "فناوری‌های برد گسترده سلولی با نرخ داده نسبتاً بالا"
+        elif range_m >= 1000 and data_rate < 10 and latency > 500:
+            label = "فناوری‌های بردبلند با نرخ داده پایین"
+        elif energy < 150 and range_m < 1000 and cellular_frac < 0.5:
+            label = "شبکه‌های محلی/میدانی کم‌مصرف، عمدتاً غیرسلولی"
+        elif cellular_frac >= 0.67:
+            label = "فناوری‌های برد گسترده، عمدتاً سلولی"
+        elif range_m >= 1000:
+            label = "فناوری‌های بردبلند با نرخ داده پایین تا متوسط"
+        elif data_rate >= 10:
+            label = "فناوری‌های با نرخ داده نسبتاً بالا و برد محدود"
+        else:
+            label = "گروه با پروفایل ترکیبی برد، داده و مصرف انرژی"
+
+        if 0 < cellular_frac < 1:
+            label = f"{label} ({self._describe_cellularity(cellular_frac)})"
+        return label
 
     def _evaluate_k_candidates(self, normalized_matrix, k_min=2, k_max=6):
         k_range = range(k_min, k_max + 1)
@@ -202,7 +235,7 @@ class IoTSelector:
         if elbow_k is not None:
             explanation_parts.append(f"Elbow در k={elbow_k}")
         explanation_parts.append(
-            "ساختار نزدیک به خانواده‌های PAN، WiFi پرسرعت، LPWAN و سلولی"
+            "برچسب خوشه‌ها از پروفایل مرکز خوشه استخراج می‌شود (نه طبقه‌بندی ثابت پروتکل)"
         )
         return chosen, "؛ ".join(explanation_parts)
 
@@ -211,7 +244,8 @@ class IoTSelector:
         print("--- فاز ۱: تحلیل اکتشافی چشم‌انداز فناوری (خوشه‌بندی) ---")
         print("=" * 60)
         print("\n📌 توجه: این فاز فقط برای کشف ساختار عینی و فیلتر زمینه است؛")
-        print("   رتبه‌بندی نهایی در فاز ۵ (TOPSIS + AHP شخصی‌سازی‌شده) انجام می‌شود.\n")
+        print("   رتبه‌بندی نهایی در فاز ۵ (TOPSIS + AHP شخصی‌سازی‌شده) انجام می‌شود.")
+        print(f"   {self._CLUSTERING_DISCLAIMER}\n")
 
         _, normalized_matrix, scaler = self._prepare_clustering_features()
 
@@ -264,18 +298,20 @@ class IoTSelector:
         cluster_profiles = {}
         for cid in range(optimal_k):
             centroid_orig = self._centroid_to_original_scale(centroids_normalized[cid], scaler)
-            family = self._infer_cluster_family(centroid_orig)
-            description = self._describe_centroid(centroid_orig)
             techs = objective_analysis_df[objective_analysis_df['ClusterID'] == cid]['Technology'].tolist()
+            cellular_frac = self._member_cellular_fraction(techs)
+            family = self._infer_cluster_family(centroid_orig, cellular_frac)
+            description = self._describe_centroid(centroid_orig, cellular_frac)
             cluster_profiles[cid] = {
                 'technologies': techs,
                 'centroid_original': centroid_orig,
                 'family': family,
                 'description': description,
+                'cellular_frac': cellular_frac,
             }
             print(f"\n📦 خوشه {cid} — {family}")
             print(f"   فناوری‌ها: {', '.join(techs)}")
-            print(f"   مرکز خوشه: {description}")
+            print(f"   مرکز خوشه (توصیفی): {description}")
 
         print("\n" + "=" * 60)
         print("--- توجیه آکادمیک ---")
@@ -285,10 +321,12 @@ class IoTSelector:
             "و k=5 خوشه‌های تک‌عضوی و گروه‌های ناهمگن ایجاد می‌کرد."
         )
         print(
-            f"روش جدید: log1p + StandardScaler، کدگذاری باینری سلولی، انتخاب k={optimal_k} "
-            f"با Silhouette={chosen['silhouette']:.4f} و Elbow؛ توضیح خوشه‌ها از مرکز خوشه. "
+            f"روش فعلی: log1p + StandardScaler، انتخاب k={optimal_k} "
+            f"با Silhouette={chosen['silhouette']:.4f} و Elbow؛ برچسب‌ها توصیفی و مبتنی بر "
+            f"مرکز خوشه و ترکیب اعضا هستند، نه طبقه‌بندی قطعی پروتکل. "
             f"AHP فقط در TOPSIS (فاز ۵) اعمال می‌شود."
         )
+        print(f"\n{self._CLUSTERING_DISCLAIMER}")
         print("\n✅ فاز ۱ با موفقیت انجام شد.")
         print("=" * 60 + "\n")
 
@@ -305,7 +343,8 @@ class IoTSelector:
         print("=" * 60)
         print("--- فاز ۲: انتخاب زمینه (فیلتر قبل از TOPSIS) ---")
         print("=" * 60)
-        print("\n📌 خوشه انتخابی فقط دامنه مقایسه را محدود می‌کند؛ رتبه‌بندی نهایی هنوز انجام نشده است.\n")
+        print("\n📌 خوشه انتخابی فقط دامنه مقایسه را محدود می‌کند؛ رتبه‌بندی نهایی هنوز انجام نشده است.")
+        print(f"   {self._CLUSTERING_DISCLAIMER}\n")
 
         profiles = (self.clustering_metadata or {}).get('cluster_profiles', {})
         clusters_dict = {}
