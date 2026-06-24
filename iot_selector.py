@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from kneed import KneeLocator
 from sklearn.preprocessing import StandardScaler
@@ -35,6 +35,7 @@ CI = CRITERIA_INDEX
 MAX_QUESTION_RETRIES = 2
 CR_MEANINGFUL_INCREASE = 0.005
 CR_ACCEPTABLE_THRESHOLD = 0.10
+CRITICAL_CONFLICT_IDS = frozenset({"Net_conflict1"})
 
 QUESTION_NUM_TO_KEY: Dict[int, str] = {
     1: "masahat_zamin", 2: "topography", 3: "manae_fiziki",
@@ -58,22 +59,6 @@ QUESTION_KEY_LABELS: Dict[str, str] = {
     "ghabeliat_gostaresh": "قابلیت گسترش",
 }
 
-# question_id → affected criterion indices (0-based)
-QUESTION_AHP_MAPPING: Dict[int, Dict[str, Any]] = {
-    1: {"key": "masahat_zamin", "affected_criteria": [CI["cost"], CI["energy"], CI["range"]]},
-    2: {"key": "topography", "affected_criteria": [CI["link_budget"], CI["range"], CI["cost"]]},
-    3: {"key": "manae_fiziki", "affected_criteria": [CI["link_budget"], CI["range"]]},
-    4: {"key": "dastresi_bargh", "affected_criteria": [CI["energy"], CI["cost"]]},
-    5: {"key": "internet_nazdik", "affected_criteria": [CI["cellular"], CI["cost"], CI["latency"], CI["data_rate"]]},
-    6: {"key": "pooshesh_mobile", "affected_criteria": [CI["cellular"], CI["range"]]},
-    7: {"key": "tedad_sensor", "affected_criteria": [CI["cost"], CI["data_rate"], CI["latency"]]},
-    8: {"key": "tarakom_sensor", "affected_criteria": [CI["range"], CI["cost"], CI["latency"]]},
-    9: {"key": "hajm_dadeh", "affected_criteria": [CI["data_rate"], CI["latency"]]},
-    10: {"key": "budjeh_avalieh", "affected_criteria": [CI["cost"], CI["cellular"], CI["range"]]},
-    11: {"key": "hazine_amaliati", "affected_criteria": [CI["cost"], CI["cellular"], CI["energy"]]},
-    12: {"key": "ghabeliat_gostaresh", "affected_criteria": [CI["range"], CI["data_rate"], CI["cost"]]},
-}
-
 AHP_RULE_DESCRIPTIONS: Dict[str, str] = {
     "Q1_kochak": "مساحت کوچک → برد نسبت به هزینه کم‌اهمیت‌تر",
     "Q1_motavaset": "مساحت متوسط → برد نسبت به هزینه کمی مهم‌تر",
@@ -89,7 +74,7 @@ AHP_RULE_DESCRIPTIONS: Dict[str, str] = {
     "Q4_none": "عدم دسترسی برق → مصرف انرژی نسبت به هزینه بسیار مهم‌تر",
     "Q5_bale": "اینترنت ثابت → تاخیر نسبت به میزان داده کم‌اهمیت‌تر",
     "Q5_kheir": "بدون اینترنت ثابت → برد نسبت به سلولی مهم‌تر",
-    "Q6/ghavi": "پوشش موبایل قوی → سلولی نسبت به برد مهم‌تر",
+    "Q6_ghavi": "پوشش موبایل قوی → سلولی نسبت به برد مهم‌تر",
     "Q6_motavaset": "پوشش موبایل متوسط → سلولی نسبت به برد کمی مهم‌تر",
     "Q6_zaeif": "پوشش موبایل ضعیف → برد نسبت به سلولی مهم‌تر",
     "Q7_kam": "سنسور کم → هزینه نسبت به میزان داده کم‌اهمیت‌تر",
@@ -112,9 +97,6 @@ AHP_RULE_DESCRIPTIONS: Dict[str, str] = {
     "Q12_bala": "گسترش بالا → برد و میزان داده مهم‌تر، هزینه کم‌اهمیت‌تر",
 }
 
-# Fix typo in key
-AHP_RULE_DESCRIPTIONS["Q6_ghavi"] = AHP_RULE_DESCRIPTIONS.pop("Q6/ghavi")
-
 
 @dataclass(frozen=True)
 class CriterionConfig:
@@ -132,6 +114,16 @@ def set_pcm_value(pcm: np.ndarray, i: int, j: int, value: float) -> None:
         raise ValueError(f"PCM value must be positive, got {value} at ({i},{j})")
     pcm[i, j] = value
     pcm[j, i] = 1.0 / value
+
+
+def _pcm_target_in_ref_direction(i: int, j: int, target: float) -> Tuple[Tuple[int, int], float]:
+    """Map a target for pcm[i,j] to reference orientation pcm[lo,hi] where lo < hi."""
+    if target <= 0:
+        raise ValueError(f"PCM target must be positive, got {target} at ({i},{j})")
+    lo, hi = (i, j) if i < j else (j, i)
+    if i < j:
+        return (lo, hi), target
+    return (lo, hi), 1.0 / target
 
 
 def build_criteria_config(include_cellular_in_clustering: bool = False) -> List[CriterionConfig]:
@@ -271,6 +263,35 @@ def build_adjustment_rules() -> List[Dict[str, Any]]:
          "adjustments": [_adj(R["range"], R["data_rate"], multiplier=1.5),
                          _adj(R["cost"], R["range"], multiplier=0.75)]},
     ]
+
+
+def build_question_ahp_mapping() -> Dict[int, Dict[str, Any]]:
+    """Derive question → criteria/cell mapping from adjustment rules."""
+    mapping: Dict[int, Dict[str, Any]] = {}
+    for rule in build_adjustment_rules():
+        qid = rule["question_id"]
+        if qid not in mapping:
+            mapping[qid] = {
+                "key": QUESTION_NUM_TO_KEY[qid],
+                "affected_criteria": set(),
+                "pcm_cells": set(),
+            }
+        for adj in rule["adjustments"]:
+            i, j = int(adj["i"]), int(adj["j"])
+            mapping[qid]["affected_criteria"].update((i, j))
+            lo, hi = (i, j) if i < j else (j, i)
+            mapping[qid]["pcm_cells"].add((lo, hi))
+    return {
+        qid: {
+            "key": info["key"],
+            "affected_criteria": sorted(info["affected_criteria"]),
+            "pcm_cells": sorted(info["pcm_cells"]),
+        }
+        for qid, info in mapping.items()
+    }
+
+
+QUESTION_AHP_MAPPING = build_question_ahp_mapping()
 
 
 class IoTSelector:
@@ -647,8 +668,6 @@ class IoTSelector:
         return result
 
     # ------------------------------------------------------------------ Phase 3: Questionnaire
-    QUESTION_SPECS: Dict[int, Tuple[str, List[str], Dict[str, str], str, str]] = {}
-
     def _question_specs(self) -> Dict[int, Tuple[str, List[str], Dict[str, str], str, str]]:
         return {
             1: ("مساحت زمین شما چقدر است؟", ["a", "b", "c"],
@@ -714,15 +733,41 @@ class IoTSelector:
     def _active_conflicts(self, user_answers: Dict[str, str]) -> List[Dict[str, Any]]:
         return [r for r in self.conflict_rules if r["conditions"](user_answers)]
 
+    def _is_critical_conflict(self, conflict: Dict[str, Any]) -> bool:
+        return conflict["id"] in CRITICAL_CONFLICT_IDS
+
+    def _ensure_no_blocking_conflicts(self, user_answers: Dict[str, str]) -> Dict[str, str]:
+        """Block pipeline until critical conflicts (e.g. Net_conflict1) are resolved."""
+        while True:
+            remaining = self._find_logical_contradictions(user_answers)
+            critical = [c for c in remaining if self._is_critical_conflict(c)]
+            if not critical:
+                for item in remaining:
+                    print(f"⚠️  {item['message']} (هشدار — ادامه مجاز)")
+                return user_answers
+
+            print("\n" + "=" * 60)
+            print("🚫 تضاد بحرانی — امکان ادامه وجود ندارد")
+            print("=" * 60)
+            for item in critical:
+                print(f"   {item['message']}")
+            print("\nلطفاً پاسخ‌های مرتبط را اصلاح کنید.")
+            qnums = sorted({q for c in critical for q in c["questions"]})
+            user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+
     def get_user_priorities(self) -> Dict[str, str]:
         print("=" * 60)
         print("--- فاز ۳: پرسشنامه ۱۲سواله → تولید قوانین تعدیل ---")
         print("=" * 60)
         print("\nلطفاً به سوالات زیر پاسخ دهید.\n")
-        print("--- جدول mapping: question_id → affected_criteria_indices ---")
+        print("--- جدول mapping: question_id → affected_criteria_indices / pcm_cells ---")
         for qid, info in QUESTION_AHP_MAPPING.items():
             crit_labels = [self.criteria_config[i].internal_name for i in info["affected_criteria"]]
-            print(f"   Q{qid:2d} ({info['key']}) → indices {info['affected_criteria']} ({', '.join(crit_labels)})")
+            cells = ", ".join(f"({lo},{hi})" for lo, hi in info["pcm_cells"])
+            print(
+                f"   Q{qid:2d} ({info['key']}) → criteria {info['affected_criteria']} "
+                f"({', '.join(crit_labels)}) | cells [{cells}]"
+            )
         print()
 
         user_answers: Dict[str, str] = {}
@@ -753,8 +798,10 @@ class IoTSelector:
                 requeued = True
 
             if not requeued:
-                print("⚠️ تضادها با حداکثر تلاش رفع نشد؛ ادامه با پاسخ‌های فعلی.")
+                print("⚠️ تضادها با حداکثر تلاش رفع نشد؛ بررسی نهایی انجام می‌شود.")
 
+        self._validate_questionnaire_answers(user_answers)
+        user_answers = self._ensure_no_blocking_conflicts(user_answers)
         self._validate_questionnaire_answers(user_answers)
         print("\n" + "=" * 60)
         print("✅ پرسشنامه تکمیل شد!")
@@ -781,15 +828,14 @@ class IoTSelector:
     def _apply_pcm_adjustments(
         self, base_pcm: np.ndarray, applied_rules: List[Dict[str, Any]],
     ) -> np.ndarray:
-        """Combine adjustments via geometric mean per cell; maintain reciprocity."""
+        """Combine adjustments via geometric mean per PCM pair; preserve direction."""
         cell_targets: Dict[Tuple[int, int], List[float]] = defaultdict(list)
         for rule in applied_rules:
             for adj in rule["adjustments"]:
                 i, j = int(adj["i"]), int(adj["j"])
                 if i == j:
                     continue
-                lo, hi = (i, j) if i < j else (j, i)
-                base_val = base_pcm[lo, hi]
+                base_val = base_pcm[i, j]
                 if base_val <= 0:
                     continue
                 if "multiplier" in adj:
@@ -798,8 +844,10 @@ class IoTSelector:
                     target = float(adj["absolute"])
                 else:
                     continue
-                if target > 0 and np.isfinite(target):
-                    cell_targets[(lo, hi)].append(target)
+                if target <= 0 or not np.isfinite(target):
+                    continue
+                ref_pair, ref_val = _pcm_target_in_ref_direction(i, j, target)
+                cell_targets[ref_pair].append(ref_val)
 
         pcm = base_pcm.copy()
         for (lo, hi), targets in cell_targets.items():
@@ -817,19 +865,32 @@ class IoTSelector:
             for r in self.conflict_rules if r["conditions"](user_answers)
         ]
 
-    def _prompt_cr_action(self, cr: float) -> str:
+    def _prompt_cr_action(self, cr: float, allow_retry: bool = True) -> str:
         print("\n" + "=" * 60)
         print(f"⚠️  ناسازگاری قضاوت‌ها: CR = {cr:.4f}  ({self._interpret_cr(cr)})")
         print("=" * 60)
-        print("  [r]etry — بازپرسش سوال‌های مشکل‌دار (پیش‌فرض)")
+        if allow_retry:
+            print("  [r]etry — بازپرسش سوال‌های مشکل‌دار (پیش‌فرض)")
+        else:
+            print("  (حداکثر بازپرسش انجام شد — فقط c یا d مجاز است)")
         print("  [c]ontinue — ادامه با وزن‌های فعلی")
         print("  [d]efault — بازگشت به ماتریس خبره")
         print("  [e]xit — خروج")
+        default = "r" if allow_retry else "c"
         while True:
-            choice = input("\n👉 انتخاب [r/c/d/e] (پیش‌فرض=r): ").strip().lower() or "r"
-            if choice in ("r", "retry", "c", "continue", "d", "default", "e", "exit"):
-                return choice[0]
-            print("❌ لطفاً یکی از r, c, d, e را وارد کنید.")
+            choice = input(f"\n👉 انتخاب [{'r/c/d/e' if allow_retry else 'c/d/e'}] (پیش‌فرض={default}): ").strip().lower() or default
+            if allow_retry and choice in ("r", "retry"):
+                return "r"
+            if choice in ("c", "continue"):
+                return "c"
+            if choice in ("d", "default"):
+                return "d"
+            if choice in ("e", "exit"):
+                return "e"
+            if not allow_retry and choice in ("r", "retry"):
+                print("❌ حداکثر بازپرسش انجام شد؛ فقط c یا d را وارد کنید.")
+                continue
+            print("❌ گزینه نامعتبر.")
 
     def _retry_questionnaire_answers(
         self, user_answers: Dict[str, str], question_nums: List[int],
@@ -848,17 +909,35 @@ class IoTSelector:
 
         base_pcm = self._base_pcm()
         _, base_cr, _ = self._compute_ahp_weights(base_pcm)
+        logical_retry_counts: Dict[int, int] = defaultdict(int)
+        cr_retry_count = 0
 
         while True:
             logical = self._find_logical_contradictions(user_answers)
             if logical:
-                print("\n⚠️  تضاد منطقی بین پاسخ‌ها باید رفع شود.")
-                qnums: set = set()
+                critical = [c for c in logical if self._is_critical_conflict(c)]
+                if critical:
+                    print("\n🚫 تضاد بحرانی در فاز ۴ — باید رفع شود.")
+                    for item in critical:
+                        print(f"   {item['message']}")
+                    qnums = sorted({q for c in critical for q in c["questions"]})
+                    user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+                    continue
+
+                qnums = sorted({q for item in logical for q in item["questions"]})
+                retriable = [q for q in qnums if logical_retry_counts[q] < MAX_QUESTION_RETRIES]
+                if retriable:
+                    print("\n⚠️  تضاد منطقی بین پاسخ‌ها باید رفع شود.")
+                    for item in logical:
+                        print(f"  {item['message']}")
+                    for q in retriable:
+                        logical_retry_counts[q] += 1
+                    user_answers = self._retry_questionnaire_answers(user_answers, retriable)
+                    continue
+
+                print("\n⚠️  تضاد منطقی پس از حداکثر بازپرسش — ادامه با پاسخ‌های فعلی.")
                 for item in logical:
                     print(f"  {item['message']}")
-                    qnums.update(item["questions"])
-                user_answers = self._retry_questionnaire_answers(user_answers, sorted(qnums))
-                continue
 
             applied_rules = self._collect_applied_rules(user_answers)
             pcm = self._apply_pcm_adjustments(base_pcm, applied_rules)
@@ -912,8 +991,13 @@ class IoTSelector:
                 rule = next(r for r in self.adjustment_rules if r["id"] == rid)
                 inflating_qnums.add(rule["question_id"])
 
-            action = self._prompt_cr_action(cr)
+            allow_cr_retry = cr_retry_count < MAX_QUESTION_RETRIES
+            action = self._prompt_cr_action(cr, allow_retry=allow_cr_retry)
             if action == "r":
+                if not allow_cr_retry:
+                    print("❌ حداکثر بازپرسش CR انجام شد؛ فقط c یا d مجاز است.")
+                    continue
+                cr_retry_count += 1
                 if inflating_qnums:
                     user_answers = self._retry_questionnaire_answers(
                         user_answers, sorted(inflating_qnums),
