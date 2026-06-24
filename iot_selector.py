@@ -676,17 +676,125 @@ class IoTSelector:
     return False, sorted(list(questions_to_reask))
 
   # ------------------------------------------------------------------ AHP
+  BASE_MATRIX = np.array([
+    [1,    7,    5,    5,    5,    5,    7],
+    [1/7,  1,    3,    3,    5,    5,    5],
+    [1/5,  1/3,  1,    3,    3,    3,    5],
+    [1/5,  1/3,  1/3,  1,    3,    3,    3],
+    [1/5,  1/5,  1/3,  1/3,  1,    3,    3],
+    [1/5,  1/5,  1/3,  1/3,  1/3,  1,    3],
+    [1/7,  1/5,  1/5,  1/3,  1/3,  1/3,  1],
+  ], dtype=float)
+
   def _base_pcm(self) -> np.ndarray:
-    n = len(self.criteria_config)
-    return np.array([
-      [1,    7,    5,    5,    5,    5,    7],
-      [1/7,  1,    3,    3,    5,    5,    5],
-      [1/5,  1/3,  1,    3,    3,    3,    5],
-      [1/5,  1/3,  1/3,  1,    3,    3,    3],
-      [1/5,  1/5,  1/3,  1/3,  1,    3,    3],
-      [1/5,  1/5,  1/3,  1/3,  1/3,  1,    3],
-      [1/7,  1/5,  1/5,  1/3,  1/3,  1/3,  1],
-    ], dtype=float)
+    return self.BASE_MATRIX.copy()
+
+  @staticmethod
+  def _parse_saaty_value(raw: str) -> float:
+    """Parse Saaty scale input such as 7, 3, 1/5, 0.333."""
+    text = raw.strip().replace(',', '.')
+    if '/' in text:
+      num, den = text.split('/', 1)
+      value = float(num) / float(den)
+    else:
+      value = float(text)
+    if not (1 / 7 <= value <= 7):
+      raise ValueError("value must be between 1/7 and 7")
+    return value
+
+  def _pairwise_comparison_pairs(self) -> List[Tuple[int, int]]:
+    n = len(self.criteria_names)
+    return [(i, j) for i in range(n) for j in range(i + 1, n)]
+
+  def _collect_pairwise_comparisons(self) -> np.ndarray:
+    """Ask user for all upper-triangle pairwise comparisons (Saaty 1–7)."""
+    n = len(self.criteria_names)
+    pcm = np.ones((n, n), dtype=float)
+    pairs = self._pairwise_comparison_pairs()
+
+    print("\n" + "-" * 60)
+    print("مقایسات زوجی معیارها (مقیاس ساعتی)")
+    print("-" * 60)
+    print("مقدار >1 یعنی معیار اول مهم‌تر؛ مقدار <1 یعنی معیار دوم مهم‌تر.")
+    print("مثال: 7 = بسیار مهم‌تر | 3 = کمی مهم‌تر | 1 = برابر | 1/3 = کمی کم‌اهم‌تر")
+    print(f"تعداد مقایسه‌ها: {len(pairs)}\n")
+
+    for step, (i, j) in enumerate(pairs, 1):
+      a, b = self.criteria_names[i], self.criteria_names[j]
+      while True:
+        print(f"[{step}/{len(pairs)}] «{a}» نسبت به «{b}» چقدر مهم‌تر است؟")
+        raw = input("   نسبت (۱ تا ۷ یا کسر مثل 1/7): ").strip()
+        try:
+          value = self._parse_saaty_value(raw)
+          pcm[i, j] = value
+          pcm[j, i] = 1 / value
+          break
+        except ValueError:
+          print("   ❌ مقدار نامعتبر. عدد بین 1/7 تا 7 وارد کنید.")
+
+    return pcm
+
+  def _prompt_cr_action(self, cr: float) -> str:
+    print("\n" + "=" * 60)
+    print(f"⚠️  ناسازگاری قضاوت‌ها: CR = {cr:.4f}  ({self._interpret_cr(cr)})")
+    print("=" * 60)
+    print("قضاوت‌های زوجی شما با هم سازگار نیستند. یکی از گزینه‌ها را انتخاب کنید:\n")
+    print("  [r]etry     — مقایسات زوجی را از ابتدا دوباره وارد کنید")
+    print("  [c]ontinue  — با همین وزن‌های ناسازگار ادامه دهید")
+    print("  [d]efault   — استفاده از ماتریس پایه BASE_MATRIX (بدون مقایسات شما)")
+    print("  [e]xit      — خروج از برنامه")
+    while True:
+      choice = input("\n👉 انتخاب شما [r/c/d/e]: ").strip().lower()
+      if choice in ('r', 'retry', 'c', 'continue', 'd', 'default', 'e', 'exit'):
+        if choice in ('retry',):
+          return 'r'
+        if choice in ('continue',):
+          return 'c'
+        if choice in ('default',):
+          return 'd'
+        if choice in ('exit',):
+          return 'e'
+        return choice
+      print("❌ لطفاً یکی از r, c, d, e را وارد کنید.")
+
+  def get_user_preferences(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Interactive AHP pairwise comparisons with CR check and retry loop.
+    Questionnaire rules may further adjust PCM after user judgments.
+    """
+    print("\n--- مقایسات زوجی AHP (شخصی‌سازی وزن معیارها) ---")
+
+    while True:
+      user_pcm = self._collect_pairwise_comparisons()
+      weights, result = self._run_ahp_once(
+        user_answers, pcm=user_pcm, use_base_only=False, source="user_pairwise",
+      )
+      cr = result['cr']
+      print(f"\n📊 CR محاسبه‌شده: {cr:.4f} — {result['cr_status']}")
+
+      if cr <= 0.10:
+        print("✅ سازگاری قابل قبول است (CR ≤ 0.10).")
+        result['input_mode'] = 'user_pairwise'
+        return result
+
+      action = self._prompt_cr_action(cr)
+      if action == 'r':
+        print("\n🔄 شروع مجدد مقایسات زوجی از ابتدا...\n")
+        continue
+      if action == 'c':
+        print("⚠️  ادامه با وزن‌های ناسازگار (CR > 0.10).")
+        result['input_mode'] = 'user_pairwise_inconsistent'
+        return result
+      if action == 'd':
+        print("↩️  بازگشت به BASE_MATRIX (ماتریس پایه).")
+        _, result = self._run_ahp_once(
+          user_answers, use_base_only=True, source="base_matrix",
+        )
+        result['reset_to_base'] = True
+        result['input_mode'] = 'base_matrix'
+        return result
+      print("👋 خروج از برنامه.")
+      sys.exit(0)
 
   def _compute_ahp_weights(self, pcm: np.ndarray) -> Tuple[Dict[str, float], float, float]:
     n = pcm.shape[0]
@@ -709,37 +817,22 @@ class IoTSelector:
       return "مرزی — نیاز به بررسی (0.10 < CR ≤ 0.20)"
     return "نامطلوب — بازنگری پاسخ‌ها توصیه می‌شود (CR > 0.20)"
 
-  def _handle_cr_decision(self, user_answers: Dict[str, str]) -> Tuple[Dict[str, float], Dict[str, Any]]:
-    """CR gate: accept / warn+confirm / strong warn+optional reset to base PCM."""
-    weights, result = self._run_ahp_once(user_answers, use_base_only=False)
-    cr = result['cr']
-
-    if cr <= 0.10:
-      return weights, result
-
-    if cr <= 0.20:
-      print(f"\n⚠️  CR={cr:.4f} — {self._interpret_cr(cr)}")
-      ans = input("ادامه با این وزن‌ها؟ (y/n) [y]: ").strip().lower()
-      if ans == 'n':
-        print("↩️  بازگشت به ماتریس پایه AHP (بدون قوانین پرسشنامه).")
-        weights, result = self._run_ahp_once(user_answers, use_base_only=True)
-      return weights, result
-
-    print(f"\n🚨 CR={cr:.4f} — {self._interpret_cr(cr)}")
-    print("پیشنهاد: پاسخ‌ها را بازبینی کنید یا ماتریس پایه را بپذیرید.")
-    ans = input("ادامه با وزن‌های فعلی؟ (y) / بازنشانی به پایه (r) / لغو (n) [r]: ").strip().lower()
-    if ans == 'y':
-      return weights, result
-    weights, result = self._run_ahp_once(user_answers, use_base_only=True)
-    result['reset_to_base'] = True
-    return weights, result
-
   def _run_ahp_once(
-    self, user_answers: Dict[str, str], use_base_only: bool = False,
+    self,
+    user_answers: Dict[str, str],
+    pcm: Optional[np.ndarray] = None,
+    use_base_only: bool = False,
+    source: str = "base_matrix",
   ) -> Tuple[Dict[str, float], Dict[str, Any]]:
-    pcm = self._base_pcm()
+    if use_base_only:
+      pcm = self._base_pcm()
+    elif pcm is None:
+      pcm = self._base_pcm()
+    else:
+      pcm = pcm.copy()
+
     applied_rules: List[str] = []
-    if not use_base_only:
+    if not use_base_only and source != "base_matrix":
       for rule in self.adjustment_rules:
         if rule["conditions"](user_answers):
           rule["effect_on_pcm"](pcm, self._labels())
@@ -761,6 +854,7 @@ class IoTSelector:
       'rule_explanations': rule_explanations,
       'used_base_only': use_base_only,
       'pcm': pcm,
+      'source': source,
     }
     return weights, result
 
@@ -768,9 +862,9 @@ class IoTSelector:
     print("=" * 60)
     print("--- فاز ۴: شخصی‌سازی وزن معیارها با AHP ---")
     print("=" * 60)
-    print("\nماتریس زوجی پایه + قوانین پرسشنامه → وزن‌های نهایی\n")
 
-    weights, ahp_result = self._handle_cr_decision(user_answers)
+    ahp_result = self.get_user_preferences(user_answers)
+    weights = ahp_result['weights']
 
     print("\n--- قوانین AHP اعمال‌شده ---")
     if ahp_result['rule_explanations']:
