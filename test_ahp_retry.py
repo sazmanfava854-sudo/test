@@ -36,7 +36,7 @@ def main():
   print("=" * 60)
 
   with patch("builtins.input", side_effect=INPUTS):
-    result = selector.get_user_preferences(user_answers)
+    result = selector.get_user_preferences_pairwise(user_answers)
 
   print("\n" + "=" * 60)
   print("TEST RESULT")

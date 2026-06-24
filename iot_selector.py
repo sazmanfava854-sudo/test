@@ -38,6 +38,38 @@ AHP_RULE_DESCRIPTIONS: Dict[str, str] = {
     "S5": "پوشش موبایل ضعیف + بودجه انعطاف‌پذیر → برد نسبت به سلولی ترجیح داده شد",
 }
 
+# سوالات مرتبط با هر قانون AHP (برای بازپرسش هدفمند)
+AHP_RULE_QUESTIONS: Dict[str, List[int]] = {
+    "Size_big": [1], "Size_small": [1],
+    "Obstacles_high": [3], "Obstacles_low": [3],
+    "Power_none": [4], "Power_full": [4],
+    "Data_high": [9], "Data_low": [9],
+    "S1": [5, 10], "S2": [5, 10, 11], "S3": [10, 11],
+    "S4": [5, 10, 11], "S5": [6, 10],
+}
+
+QUESTION_KEY_LABELS: Dict[str, str] = {
+    "masahat_zamin": "مساحت زمین",
+    "topography": "توپوگرافی",
+    "manae_fiziki": "موانع فیزیکی",
+    "dastresi_bargh": "دسترسی به برق",
+    "internet_nazdik": "اینترنت ثابت",
+    "pooshesh_mobile": "پوشش موبایل",
+    "tedad_sensor": "تعداد سنسور",
+    "tarakom_sensor": "تراکم سنسورها",
+    "hajm_dadeh": "حجم داده",
+    "budjeh_avalieh": "بودجه اولیه",
+    "hazine_amaliati": "هزینه عملیاتی",
+    "ghabeliat_gostaresh": "قابلیت گسترش",
+}
+
+QUESTION_NUM_TO_KEY: Dict[int, str] = {
+    1: 'masahat_zamin', 2: 'topography', 3: 'manae_fiziki',
+    4: 'dastresi_bargh', 5: 'internet_nazdik', 6: 'pooshesh_mobile',
+    7: 'tedad_sensor', 8: 'tarakom_sensor', 9: 'hajm_dadeh',
+    10: 'budjeh_avalieh', 11: 'hazine_amaliati', 12: 'ghabeliat_gostaresh',
+}
+
 
 @dataclass(frozen=True)
 class CriterionConfig:
@@ -738,31 +770,111 @@ class IoTSelector:
     print("\n" + "=" * 60)
     print(f"⚠️  ناسازگاری قضاوت‌ها: CR = {cr:.4f}  ({self._interpret_cr(cr)})")
     print("=" * 60)
-    print("قضاوت‌های زوجی شما با هم سازگار نیستند. یکی از گزینه‌ها را انتخاب کنید:\n")
-    print("  [r]etry     — مقایسات زوجی را از ابتدا دوباره وارد کنید")
+    print("پاسخ‌های پرسشنامه شما ماتریس AHP را به‌شکل ناسازگار تغییر داده‌اند.")
+    print("یکی از گزینه‌ها را انتخاب کنید:\n")
+    print("  [r]etry     — همان سوال‌های متضاد را دوباره بپرسید (توصیه‌شده)")
     print("  [c]ontinue  — با همین وزن‌های ناسازگار ادامه دهید")
-    print("  [d]efault   — استفاده از ماتریس پایه BASE_MATRIX (بدون مقایسات شما)")
+    print("  [d]efault   — فقط ماتریس پایه BASE_MATRIX (بدون قوانین پرسشنامه)")
     print("  [e]xit      — خروج از برنامه")
     while True:
       choice = input("\n👉 انتخاب شما [r/c/d/e]: ").strip().lower()
-      if choice in ('r', 'retry', 'c', 'continue', 'd', 'default', 'e', 'exit'):
-        if choice in ('retry',):
-          return 'r'
-        if choice in ('continue',):
-          return 'c'
-        if choice in ('default',):
-          return 'd'
-        if choice in ('exit',):
-          return 'e'
+      if choice in ('r', 'retry'):
+        return 'r'
+      if choice in ('c', 'continue'):
+        return 'c'
+      if choice in ('d', 'default'):
+        return 'd'
+      if choice in ('e', 'exit'):
+        return 'e'
+      if choice in ('r', 'c', 'd', 'e'):
         return choice
       print("❌ لطفاً یکی از r, c, d, e را وارد کنید.")
 
+  def _print_ahp_conflict_guide(
+    self, applied_rules: List[str], user_answers: Dict[str, str],
+  ) -> List[int]:
+    """Show which questionnaire answers drove AHP rules; return question nums to re-ask."""
+    print("\n" + "-" * 60)
+    print("--- پاسخ‌های متضاد / مؤثر در ناسازگاری AHP ---")
+    print("-" * 60)
+
+    questions_to_reask: set = set()
+    if not applied_rules:
+      print("هیچ قانون پرسشنامه‌ای فعال نشد؛ با این حال CR بالاست.")
+      print("پیشنهاد: کل پرسشنامه (فاز ۳) را بازبینی کنید.")
+      return list(range(1, 13))
+
+    print("این پاسخ‌ها باعث تغییر ماتریس AHP شدند و احتمالاً با هم در تضادند:\n")
+    shown_keys: set = set()
+    for rid in applied_rules:
+      qnums = AHP_RULE_QUESTIONS.get(rid, [])
+      questions_to_reask.update(qnums)
+      for qnum in qnums:
+        key = QUESTION_NUM_TO_KEY[qnum]
+        if key in shown_keys:
+          continue
+        shown_keys.add(key)
+        label = QUESTION_KEY_LABELS.get(key, key)
+        value = user_answers.get(key, "؟")
+        print(f"  ❗ سوال {qnum} — {label}: «{value}»")
+        print(f"     ↳ قانون {rid}: {AHP_RULE_DESCRIPTIONS.get(rid, rid)}")
+    print("\n💡 با [r]etry همین سوال‌ها دوباره پرسیده می‌شوند تا پاسخ سازگارتری بدهید.")
+    return sorted(questions_to_reask)
+
+  def _retry_questionnaire_answers(
+    self, user_answers: Dict[str, str], question_nums: List[int],
+  ) -> Dict[str, str]:
+    """Clear and re-ask selected questionnaire items."""
+    for qnum in question_nums:
+      key = QUESTION_NUM_TO_KEY[qnum]
+      user_answers.pop(key, None)
+    for qnum in question_nums:
+      self.ask_question(qnum, user_answers)
+    return user_answers
+
   def get_user_preferences(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
     """
-    Interactive AHP pairwise comparisons with CR check and retry loop.
-    Questionnaire rules may further adjust PCM after user judgments.
+    AHP from BASE_MATRIX + questionnaire rules, with CR retry on conflicting answers.
     """
-    print("\n--- مقایسات زوجی AHP (شخصی‌سازی وزن معیارها) ---")
+    print("\n--- AHP: ماتریس پایه + قوانین پرسشنامه ---")
+
+    while True:
+      weights, result = self._run_ahp_once(
+        user_answers, use_base_only=False, source="questionnaire",
+      )
+      cr = result['cr']
+      print(f"\n📊 CR محاسبه‌شده: {cr:.4f} — {result['cr_status']}")
+
+      if cr <= 0.10:
+        print("✅ سازگاری قابل قبول است (CR ≤ 0.10).")
+        result['input_mode'] = 'questionnaire'
+        return result
+
+      qnums = self._print_ahp_conflict_guide(result['applied_rules'], user_answers)
+      action = self._prompt_cr_action(cr)
+
+      if action == 'r':
+        print("\n🔄 بازپرسش سوال‌های مرتبط با ناسازگاری...\n")
+        user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+        continue
+      if action == 'c':
+        print("⚠️  ادامه با وزن‌های ناسازگار (CR > 0.10).")
+        result['input_mode'] = 'questionnaire_inconsistent'
+        return result
+      if action == 'd':
+        print("↩️  استفاده از BASE_MATRIX بدون قوانین پرسشنامه.")
+        _, result = self._run_ahp_once(
+          user_answers, use_base_only=True, source="base_matrix",
+        )
+        result['reset_to_base'] = True
+        result['input_mode'] = 'base_matrix'
+        return result
+      print("👋 خروج از برنامه.")
+      sys.exit(0)
+
+  def get_user_preferences_pairwise(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
+    """Optional: interactive Saaty pairwise comparisons (for advanced / test use)."""
+    print("\n--- مقایسات زوجی AHP (مقیاس ساعتی) ---")
 
     while True:
       user_pcm = self._collect_pairwise_comparisons()
@@ -782,18 +894,15 @@ class IoTSelector:
         print("\n🔄 شروع مجدد مقایسات زوجی از ابتدا...\n")
         continue
       if action == 'c':
-        print("⚠️  ادامه با وزن‌های ناسازگار (CR > 0.10).")
         result['input_mode'] = 'user_pairwise_inconsistent'
         return result
       if action == 'd':
-        print("↩️  بازگشت به BASE_MATRIX (ماتریس پایه).")
         _, result = self._run_ahp_once(
           user_answers, use_base_only=True, source="base_matrix",
         )
         result['reset_to_base'] = True
         result['input_mode'] = 'base_matrix'
         return result
-      print("👋 خروج از برنامه.")
       sys.exit(0)
 
   def _compute_ahp_weights(self, pcm: np.ndarray) -> Tuple[Dict[str, float], float, float]:
@@ -832,7 +941,7 @@ class IoTSelector:
       pcm = pcm.copy()
 
     applied_rules: List[str] = []
-    if not use_base_only and source != "base_matrix":
+    if not use_base_only and source not in ("base_matrix", "user_pairwise"):
       for rule in self.adjustment_rules:
         if rule["conditions"](user_answers):
           rule["effect_on_pcm"](pcm, self._labels())
@@ -862,6 +971,8 @@ class IoTSelector:
     print("=" * 60)
     print("--- فاز ۴: شخصی‌سازی وزن معیارها با AHP ---")
     print("=" * 60)
+    print("ماتریس پایه + قوانین پرسشنامه → وزن‌های نهایی")
+    print("در صورت CR > 0.10، پاسخ‌های متضاد نمایش داده می‌شود و [r] همان سوال‌ها را دوباره می‌پرسد.\n")
 
     ahp_result = self.get_user_preferences(user_answers)
     weights = ahp_result['weights']
