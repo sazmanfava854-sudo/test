@@ -70,6 +70,43 @@ QUESTION_NUM_TO_KEY: Dict[int, str] = {
     10: 'budjeh_avalieh', 11: 'hazine_amaliati', 12: 'ghabeliat_gostaresh',
 }
 
+# ترکیب قوانینی که معمولاً باعث تضاد در PCM و افزایش CR می‌شوند
+AHP_RULE_CONFLICTS: List[Dict[str, Any]] = [
+    {
+        "rules": {"S1", "S3"},
+        "questions": [5, 10, 11],
+        "explanation": (
+            "تضاد: «اینترنت نزدیک» + «بودجه انعطاف‌پذیر» (قانون S1) سلولی را تقویت می‌کند، "
+            "اما «هزینه عملیاتی بسیار محدود» (قانون S3) هزینه/سلولی را تقویت می‌کند."
+        ),
+    },
+    {
+        "rules": {"S1", "S4"},
+        "questions": [5, 10, 11],
+        "explanation": (
+            "تضاد: S1 سلولی را نسبت به هزینه ترجیح می‌دهد، اما S4 (بودجه محدود + OPEX بسیار محدود) "
+            "هزینه را نسبت به سلولی بسیار تقویت می‌کند."
+        ),
+    },
+    {
+        "rules": {"S2", "S3"},
+        "questions": [5, 10, 11],
+        "explanation": (
+            "تضاد: S2 با وجود اینترنت، سلولی را ترجیح می‌دهد؛ S3 هزینه را بر سلولی مقدم می‌دارد."
+        ),
+    },
+    {
+        "rules": {"S5", "S2"},
+        "questions": [6, 10, 5],
+        "explanation": (
+            "تضاد: S5 با پوشش موبایل ضعیف برد را بر سلولی ترجیح می‌دهد؛ "
+            "S2 در حضور اینترنت سلولی را تقویت می‌کند."
+        ),
+    },
+]
+
+CR_ACCEPTABLE_THRESHOLD = 0.10
+
 
 @dataclass(frozen=True)
 class CriterionConfig:
@@ -527,9 +564,10 @@ class IoTSelector:
     self, objective_analysis_df: pd.DataFrame, user_answers: Dict[str, str],
   ) -> Dict[str, Any]:
     print("=" * 60)
-    print("--- فاز ۲: انتخاب زمینه (فیلتر قبل از TOPSIS) ---")
+    print("--- فاز ۵: انتخاب خوشه (پس از تایید AHP) ---")
     print("=" * 60)
-    print(f"\n📌 خوشه فقط دامنه مقایسه را محدود می‌کند.\n   {CLUSTERING_DISCLAIMER}\n")
+    print("وزن‌های AHP نهایی شدند؛ اکنون خوشه مناسب پیشنهاد می‌شود.\n")
+    print(f"   {CLUSTERING_DISCLAIMER}\n")
 
     profiles = (self.clustering_metadata or {}).get('cluster_profiles', {})
     clusters_dict: Dict[int, List[str]] = {}
@@ -707,7 +745,7 @@ class IoTSelector:
       return True, None
     return False, sorted(list(questions_to_reask))
 
-  # ------------------------------------------------------------------ AHP
+  # ------------------------------------------------------------------ AHP (expert base PCM + questionnaire rules only)
   BASE_MATRIX = np.array([
     [1,    7,    5,    5,    5,    5,    7],
     [1/7,  1,    3,    3,    5,    5,    5],
@@ -719,65 +757,51 @@ class IoTSelector:
   ], dtype=float)
 
   def _base_pcm(self) -> np.ndarray:
+    """Expert-derived base pairwise comparison matrix (not user-filled)."""
     return self.BASE_MATRIX.copy()
 
-  @staticmethod
-  def _parse_saaty_value(raw: str) -> float:
-    """Parse Saaty scale input such as 7, 3, 1/5, 0.333."""
-    text = raw.strip().replace(',', '.')
-    if '/' in text:
-      num, den = text.split('/', 1)
-      value = float(num) / float(den)
-    else:
-      value = float(text)
-    if not (1 / 7 <= value <= 7):
-      raise ValueError("value must be between 1/7 and 7")
-    return value
+  def _expert_baseline_ahp(self) -> Tuple[Dict[str, float], float]:
+    """Weights and CR from expert BASE_MATRIX before questionnaire rules."""
+    pcm = self._base_pcm()
+    weights, cr, _ = self._compute_ahp_weights(pcm)
+    return weights, cr
 
-  def _pairwise_comparison_pairs(self) -> List[Tuple[int, int]]:
-    n = len(self.criteria_names)
-    return [(i, j) for i in range(n) for j in range(i + 1, n)]
+  def _pcm_change_report(self, modified_pcm: np.ndarray, applied_rules: List[str]) -> None:
+    """Show which PCM cells changed most strongly after rule application."""
+    base = self.BASE_MATRIX
+    labels = self.criteria_names
+    deltas: List[Tuple[float, int, int, float, float]] = []
+    n = base.shape[0]
+    for i in range(n):
+      for j in range(i + 1, n):
+        if not np.isclose(base[i, j], modified_pcm[i, j], rtol=0, atol=1e-9):
+          delta = abs(np.log(modified_pcm[i, j] / base[i, j]))
+          deltas.append((delta, i, j, base[i, j], modified_pcm[i, j]))
+    deltas.sort(reverse=True)
 
-  def _collect_pairwise_comparisons(self) -> np.ndarray:
-    """Ask user for all upper-triangle pairwise comparisons (Saaty 1–7)."""
-    n = len(self.criteria_names)
-    pcm = np.ones((n, n), dtype=float)
-    pairs = self._pairwise_comparison_pairs()
-
-    print("\n" + "-" * 60)
-    print("مقایسات زوجی معیارها (مقیاس ساعتی)")
-    print("-" * 60)
-    print("مقدار >1 یعنی معیار اول مهم‌تر؛ مقدار <1 یعنی معیار دوم مهم‌تر.")
-    print("مثال: 7 = بسیار مهم‌تر | 3 = کمی مهم‌تر | 1 = برابر | 1/3 = کمی کم‌اهم‌تر")
-    print(f"تعداد مقایسه‌ها: {len(pairs)}\n")
-
-    for step, (i, j) in enumerate(pairs, 1):
-      a, b = self.criteria_names[i], self.criteria_names[j]
-      while True:
-        print(f"[{step}/{len(pairs)}] «{a}» نسبت به «{b}» چقدر مهم‌تر است؟")
-        raw = input("   نسبت (۱ تا ۷ یا کسر مثل 1/7): ").strip()
-        try:
-          value = self._parse_saaty_value(raw)
-          pcm[i, j] = value
-          pcm[j, i] = 1 / value
-          break
-        except ValueError:
-          print("   ❌ مقدار نامعتبر. عدد بین 1/7 تا 7 وارد کنید.")
-
-    return pcm
+    print("\n--- تغییرات مهم در ماتریس زوجی (PCM) نسبت به ماتریس خبره ---")
+    if not deltas:
+      print("   • تغییر عددی در PCM دیده نشد (قوانین فعال نشده‌اند).")
+      return
+    for delta, i, j, old_v, new_v in deltas[:5]:
+      print(
+        f"   • {labels[i]} / {labels[j]}: {old_v:.3g} → {new_v:.3g} "
+        f"(قوانین: {', '.join(applied_rules)})"
+      )
+    print("   این تغییرات مستقیماً بر وزن‌ها و CR اثر می‌گذارند.")
 
   def _prompt_cr_action(self, cr: float) -> str:
     print("\n" + "=" * 60)
     print(f"⚠️  ناسازگاری قضاوت‌ها: CR = {cr:.4f}  ({self._interpret_cr(cr)})")
     print("=" * 60)
-    print("پاسخ‌های پرسشنامه شما ماتریس AHP را به‌شکل ناسازگار تغییر داده‌اند.")
-    print("یکی از گزینه‌ها را انتخاب کنید:\n")
-    print("  [r]etry     — همان سوال‌های متضاد را دوباره بپرسید (توصیه‌شده)")
-    print("  [c]ontinue  — با همین وزن‌های ناسازگار ادامه دهید")
-    print("  [d]efault   — فقط ماتریس پایه BASE_MATRIX (بدون قوانین پرسشنامه)")
-    print("  [e]xit      — خروج از برنامه")
+    print("پاسخ‌های پرسشنامه، ماتریس خبره AHP را شخصی‌سازی کرده‌اند اما سازگاری از دست رفته است.")
+    print("لطفاً فقط پاسخ‌های متضاد را اصلاح کنید (نیازی به پر کردن AHP دستی نیست):\n")
+    print("  [r]etry     — بازپرسش سوال‌های مشکل‌دار (پیش‌فرض، Enter)")
+    print("  [c]ontinue  — ادامه با وزن‌های فعلی (CR بالا)")
+    print("  [d]efault   — بازگشت به ماتریس خبره بدون قوانین پرسشنامه")
+    print("  [e]xit      — خروج")
     while True:
-      choice = input("\n👉 انتخاب شما [r/c/d/e]: ").strip().lower()
+      choice = input("\n👉 انتخاب [r/c/d/e] (پیش‌فرض=r): ").strip().lower() or 'r'
       if choice in ('r', 'retry'):
         return 'r'
       if choice in ('c', 'continue'):
@@ -791,25 +815,45 @@ class IoTSelector:
       print("❌ لطفاً یکی از r, c, d, e را وارد کنید.")
 
   def _print_ahp_conflict_guide(
-    self, applied_rules: List[str], user_answers: Dict[str, str],
+    self, result: Dict[str, Any], user_answers: Dict[str, str],
   ) -> List[int]:
-    """Show which questionnaire answers drove AHP rules; return question nums to re-ask."""
+    """Persian inconsistency report; return question numbers to re-ask."""
+    applied_rules = result['applied_rules']
+    applied_set = set(applied_rules)
+
     print("\n" + "-" * 60)
     print("--- پاسخ‌های متضاد / مؤثر در ناسازگاری AHP ---")
     print("-" * 60)
 
+    _, base_cr = self._expert_baseline_ahp()
+    print(f"\n📊 CR ماتریس خبره (قبل از قوانین): {base_cr:.4f}")
+    print(f"📊 CR پس از اعمال پاسخ‌های شما: {result['cr']:.4f}")
+    if result['cr'] > base_cr:
+      print("   ↳ قوانین پرسشنامه CR را افزایش داده‌اند؛ پاسخ‌های زیر را بازبینی کنید.")
+
+    self._pcm_change_report(result['pcm'], applied_rules)
+
     questions_to_reask: set = set()
+    found_conflict = False
+    print("\n--- تضادهای شناسایی‌شده بین پاسخ‌ها ---")
+    for conflict in AHP_RULE_CONFLICTS:
+      if conflict["rules"].issubset(applied_set):
+        found_conflict = True
+        print(f"  ⚠️  {conflict['explanation']}")
+        questions_to_reask.update(conflict["questions"])
+
+    if not found_conflict and applied_rules:
+      print("  • تضاد مشخص بین قوانین شناخته‌شده نیست، اما چند قانون هم‌زمان PCM را تغییر داده‌اند.")
+
+    print("\n--- پاسخ‌های مؤثر در تغییر PCM ---")
     if not applied_rules:
-      print("هیچ قانون پرسشنامه‌ای فعال نشد؛ با این حال CR بالاست.")
-      print("پیشنهاد: کل پرسشنامه (فاز ۳) را بازبینی کنید.")
+      print("  • هیچ قانونی فعال نشد؛ با این حال CR از آستانه بالاتر است.")
       return list(range(1, 13))
 
-    print("این پاسخ‌ها باعث تغییر ماتریس AHP شدند و احتمالاً با هم در تضادند:\n")
     shown_keys: set = set()
     for rid in applied_rules:
-      qnums = AHP_RULE_QUESTIONS.get(rid, [])
-      questions_to_reask.update(qnums)
-      for qnum in qnums:
+      for qnum in AHP_RULE_QUESTIONS.get(rid, []):
+        questions_to_reask.add(qnum)
         key = QUESTION_NUM_TO_KEY[qnum]
         if key in shown_keys:
           continue
@@ -818,8 +862,9 @@ class IoTSelector:
         value = user_answers.get(key, "؟")
         print(f"  ❗ سوال {qnum} — {label}: «{value}»")
         print(f"     ↳ قانون {rid}: {AHP_RULE_DESCRIPTIONS.get(rid, rid)}")
-    print("\n💡 با [r]etry همین سوال‌ها دوباره پرسیده می‌شوند تا پاسخ سازگارتری بدهید.")
-    return sorted(questions_to_reask)
+
+    print("\n💡 فقط همین سوال‌ها دوباره پرسیده می‌شوند؛ سایر پاسخ‌ها حفظ می‌شوند.")
+    return sorted(questions_to_reask) if questions_to_reask else list(range(1, 13))
 
   def _retry_questionnaire_answers(
     self, user_answers: Dict[str, str], question_nums: List[int],
@@ -832,77 +877,55 @@ class IoTSelector:
       self.ask_question(qnum, user_answers)
     return user_answers
 
-  def get_user_preferences(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
+  def _personalize_ahp_from_questionnaire(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
     """
-    AHP from BASE_MATRIX + questionnaire rules, with CR retry on conflicting answers.
+    Expert BASE_MATRIX + rule-based PCM adjustments from 12 questionnaire answers.
+    End user never fills AHP pairwise comparisons directly.
     """
-    print("\n--- AHP: ماتریس پایه + قوانین پرسشنامه ---")
+    print("\n--- شخصی‌سازی AHP: ماتریس خبره + قوانین پرسشنامه ---")
+    print("وزن‌های اولیه از قضاوت خبره (BASE_MATRIX) استخراج می‌شوند؛")
+    print("پاسخ‌های شما فقط PCM را از طریق قوانین تعدیل می‌کنند.\n")
 
     while True:
       weights, result = self._run_ahp_once(
         user_answers, use_base_only=False, source="questionnaire",
       )
       cr = result['cr']
-      print(f"\n📊 CR محاسبه‌شده: {cr:.4f} — {result['cr_status']}")
+      print(f"\n📊 CR = {cr:.4f} — {result['cr_status']}")
 
-      if cr <= 0.10:
-        print("✅ سازگاری قابل قبول است (CR ≤ 0.10).")
-        result['input_mode'] = 'questionnaire'
+      if cr <= CR_ACCEPTABLE_THRESHOLD:
+        print("✅ سازگاری قابل قبول است؛ ادامه به پیشنهاد خوشه.")
+        result['input_mode'] = 'expert_base_plus_rules'
         return result
 
-      qnums = self._print_ahp_conflict_guide(result['applied_rules'], user_answers)
+      if not result['applied_rules']:
+        print(
+          "✅ هیچ قانون پرسشنامه PCM خبره را تغییر نداد؛ "
+          "وزن‌های پایه خبره بدون شخصی‌سازی استفاده می‌شوند."
+        )
+        result['input_mode'] = 'expert_base_only'
+        return result
+
+      qnums = self._print_ahp_conflict_guide(result, user_answers)
       action = self._prompt_cr_action(cr)
 
       if action == 'r':
-        print("\n🔄 بازپرسش سوال‌های مرتبط با ناسازگاری...\n")
+        print("\n🔄 بازپرسش سوال‌های مشکل‌دار (سایر پاسخ‌ها حفظ می‌شوند)...\n")
         user_answers = self._retry_questionnaire_answers(user_answers, qnums)
         continue
       if action == 'c':
-        print("⚠️  ادامه با وزن‌های ناسازگار (CR > 0.10).")
-        result['input_mode'] = 'questionnaire_inconsistent'
+        print("⚠️  ادامه با CR بالاتر از آستانه (مسیر override).")
+        result['input_mode'] = 'expert_base_plus_rules_override'
         return result
       if action == 'd':
-        print("↩️  استفاده از BASE_MATRIX بدون قوانین پرسشنامه.")
+        print("↩️  استفاده از ماتریس خبره بدون قوانین پرسشنامه.")
         _, result = self._run_ahp_once(
           user_answers, use_base_only=True, source="base_matrix",
         )
         result['reset_to_base'] = True
-        result['input_mode'] = 'base_matrix'
+        result['input_mode'] = 'expert_base_only'
         return result
       print("👋 خروج از برنامه.")
-      sys.exit(0)
-
-  def get_user_preferences_pairwise(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
-    """Optional: interactive Saaty pairwise comparisons (for advanced / test use)."""
-    print("\n--- مقایسات زوجی AHP (مقیاس ساعتی) ---")
-
-    while True:
-      user_pcm = self._collect_pairwise_comparisons()
-      weights, result = self._run_ahp_once(
-        user_answers, pcm=user_pcm, use_base_only=False, source="user_pairwise",
-      )
-      cr = result['cr']
-      print(f"\n📊 CR محاسبه‌شده: {cr:.4f} — {result['cr_status']}")
-
-      if cr <= 0.10:
-        print("✅ سازگاری قابل قبول است (CR ≤ 0.10).")
-        result['input_mode'] = 'user_pairwise'
-        return result
-
-      action = self._prompt_cr_action(cr)
-      if action == 'r':
-        print("\n🔄 شروع مجدد مقایسات زوجی از ابتدا...\n")
-        continue
-      if action == 'c':
-        result['input_mode'] = 'user_pairwise_inconsistent'
-        return result
-      if action == 'd':
-        _, result = self._run_ahp_once(
-          user_answers, use_base_only=True, source="base_matrix",
-        )
-        result['reset_to_base'] = True
-        result['input_mode'] = 'base_matrix'
-        return result
       sys.exit(0)
 
   def _compute_ahp_weights(self, pcm: np.ndarray) -> Tuple[Dict[str, float], float, float]:
@@ -941,7 +964,7 @@ class IoTSelector:
       pcm = pcm.copy()
 
     applied_rules: List[str] = []
-    if not use_base_only and source not in ("base_matrix", "user_pairwise"):
+    if not use_base_only and source == "questionnaire":
       for rule in self.adjustment_rules:
         if rule["conditions"](user_answers):
           rule["effect_on_pcm"](pcm, self._labels())
@@ -969,12 +992,11 @@ class IoTSelector:
 
   def generate_dynamic_weights(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
     print("=" * 60)
-    print("--- فاز ۴: شخصی‌سازی وزن معیارها با AHP ---")
+    print("--- فاز ۴: شخصی‌سازی وزن‌ها با AHP (ماتریس خبره + پرسشنامه) ---")
     print("=" * 60)
-    print("ماتریس پایه + قوانین پرسشنامه → وزن‌های نهایی")
-    print("در صورت CR > 0.10، پاسخ‌های متضاد نمایش داده می‌شود و [r] همان سوال‌ها را دوباره می‌پرسد.\n")
+    print("کاربر AHP را مستقیم پر نمی‌کند؛ فقط ۱۲ پاسخ پرسشنامه PCM خبره را تعدیل می‌کند.\n")
 
-    ahp_result = self.get_user_preferences(user_answers)
+    ahp_result = self._personalize_ahp_from_questionnaire(user_answers)
     weights = ahp_result['weights']
 
     print("\n--- قوانین AHP اعمال‌شده ---")
@@ -1049,7 +1071,7 @@ class IoTSelector:
 
   def apply_topsis(self, phase2_output: Dict[str, Any], ahp_result: Dict[str, Any]) -> pd.DataFrame:
     print("=" * 60)
-    print("--- فاز ۵: رتبه‌بندی TOPSIS (فقط فناوری‌های خوشه انتخابی) ---")
+    print("--- فاز ۶: رتبه‌بندی TOPSIS (فقط فناوری‌های خوشه انتخابی) ---")
     print("=" * 60)
 
     filtered_matrix = phase2_output['filtered_matrix']
@@ -1085,7 +1107,7 @@ class IoTSelector:
       print(f"   C* = {row['Closeness']:.4f}  [{bar}]")
 
     print(f"\n🎯 بر اساس TOPSIS + وزن‌های AHP شخصی‌سازی‌شده، «{best}» بالاترین C* را دارد.")
-    print("   (فقط در میان فناوری‌های خوشه انتخاب‌شده در فاز ۲)")
+    print("   (فقط در میان فناوری‌های خوشه انتخاب‌شده در فاز ۵)")
     print("=" * 60)
 
     self.topsis_result = ranking_df
@@ -1096,6 +1118,6 @@ if __name__ == "__main__":
   selector = IoTSelector(include_cellular_in_clustering=False)
   cluster_df = selector.perform_clustering()
   user_answers = selector.get_user_priorities()
-  phase2 = selector.select_context(cluster_df, user_answers)
   ahp_result = selector.generate_dynamic_weights(user_answers)
+  phase2 = selector.select_context(cluster_df, user_answers)
   selector.apply_topsis(phase2, ahp_result)

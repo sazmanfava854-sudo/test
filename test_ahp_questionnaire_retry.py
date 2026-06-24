@@ -25,10 +25,12 @@ def main():
   high = {
     'cr': 0.35, 'applied_rules': ['S1', 'S3'],
     'cr_status': 'نامطلوب', 'rule_explanations': [], 'weights': {},
+    'pcm': selector.BASE_MATRIX.copy(),
   }
   low = {
     'cr': 0.05, 'applied_rules': [],
     'cr_status': 'قابل قبول', 'rule_explanations': [], 'weights': {'هزینه': 0.2},
+    'pcm': selector.BASE_MATRIX.copy(),
   }
 
   with patch.object(selector, 'ask_question', side_effect=track_ask):
@@ -37,10 +39,11 @@ def main():
       ({'هزینه': 0.2}, low),
     ]):
       with patch('builtins.input', return_value='r'):
-        result = selector.get_user_preferences(ANSWERS.copy())
+        result = selector._personalize_ahp_from_questionnaire(ANSWERS.copy())
 
   assert reasked, "Retry must re-ask conflicting questions"
   assert result['cr'] <= 0.10
+  assert result.get('input_mode') == 'expert_base_plus_rules'
   print("reasked questions:", reasked)
   print("✅ Questionnaire retry test PASSED")
 
