@@ -532,9 +532,10 @@ class IoTSelector:
     self, objective_analysis_df: pd.DataFrame, user_answers: Dict[str, str],
   ) -> Dict[str, Any]:
     print("=" * 60)
-    print("--- فاز ۵: انتخاب خوشه (پس از تایید AHP) ---")
+    print("--- فاز ۵: پیشنهاد خودکار خوشه (بر اساس پاسخ‌های شما) ---")
     print("=" * 60)
-    print("وزن‌های AHP نهایی شدند؛ اکنون خوشه مناسب پیشنهاد می‌شود.\n")
+    print("پس از پرسشنامه و AHP، سیستم خوشه مناسب را پیشنهاد می‌دهد؛")
+    print("شما فقط پیشنهاد را تایید می‌کنید یا در صورت نیاز آن را تغییر می‌دهید.\n")
     print(f"   {CLUSTERING_DISCLAIMER}\n")
 
     profiles = (self.clustering_metadata or {}).get('cluster_profiles', {})
@@ -549,51 +550,69 @@ class IoTSelector:
       else:
         cluster_descriptions[cid] = f"خوشه {cid}"
 
-    print("گروه‌های کشف‌شده:\n")
-    for cluster_id in sorted(clusters_dict.keys()):
-      print(f"📦 خوشه {cluster_id}: {', '.join(clusters_dict[cluster_id])}")
-      print(f"   💡 {cluster_descriptions[cluster_id]}\n")
-
     recommendation = self.recommend_cluster(user_answers)
     rec_id = recommendation['recommended_cluster']
+
     print("=" * 60)
-    print("--- پیشنهاد خودکار خوشه (قوانین شفاف) ---")
+    print("--- نتیجه پیشنهاد سیستم ---")
     print("=" * 60)
-    print(f"⭐ خوشه پیشنهادی: {rec_id} — {cluster_descriptions.get(rec_id, '')}")
-    print("دلایل:")
+    print(f"⭐ خوشه پیشنهادی: {rec_id}")
+    print(f"   {cluster_descriptions.get(rec_id, '')}")
+    print(f"   فناوری‌ها: {', '.join(clusters_dict[rec_id])}")
+    print("\nدلایل پیشنهاد:")
     for r in recommendation['explanation']:
       print(f"   • {r}")
-    print("\nامتیاز خوشه‌ها:")
+    print("\nامتیاز خوشه‌ها (فقط برای شفافیت):")
     for cid in sorted(recommendation['scores']):
-      print(f"   خوشه {cid}: {recommendation['scores'][cid]:.2f}")
+      marker = " ← پیشنهاد" if cid == rec_id else ""
+      print(f"   خوشه {cid}: {recommendation['scores'][cid]:.2f}{marker}")
+
+    print("\n--- سایر خوشه‌های کشف‌شده (اطلاعاتی) ---")
+    for cluster_id in sorted(clusters_dict.keys()):
+      if cluster_id == rec_id:
+        continue
+      print(f"   خوشه {cluster_id}: {', '.join(clusters_dict[cluster_id])}")
+      print(f"      {cluster_descriptions[cluster_id]}")
 
     valid_clusters = list(clusters_dict.keys())
     print("\n" + "-" * 60)
-    print(f"پیشنهاد: خوشه {rec_id} — برای تایید Enter بزنید یا شماره دیگری وارد کنید:")
+    print(f"✅ پیشنهاد سیستم: خوشه {rec_id}")
+    print("برای پذیرش پیشنهاد Enter بزنید؛ برای انتخاب خوشه دیگر «o» وارد کنید.")
+    print("-" * 60)
     while True:
-      raw = input(f"👉 ({'/'.join(map(str, valid_clusters))}) [پیش‌فرض={rec_id}]: ").strip()
-      if raw == "":
+      raw = input("👉 [Enter=پذیرش پیشنهاد / o=تغییر خوشه]: ").strip().lower()
+      if raw in ("", "y", "yes", "بله", "ب"):
         selected_cluster = rec_id
+        print(f"✅ خوشه پیشنهادی {rec_id} پذیرفته شد.")
         break
-      try:
-        selected_cluster = int(raw)
-        if selected_cluster in valid_clusters:
-          break
-        print(f"❌ یکی از {valid_clusters} را وارد کنید.")
-      except ValueError:
-        print("❌ عدد صحیح وارد کنید.")
-
-    if selected_cluster != rec_id:
-      print(f"ℹ️  شما پیشنهاد خودکار (خوشه {rec_id}) را با خوشه {selected_cluster} جایگزین کردید.")
-    else:
-      print(f"✅ خوشه پیشنهادی {rec_id} تایید شد.")
+      if raw in ("o", "override", "تغییر", "خیر", "n", "no"):
+        while True:
+          override_raw = input(
+            f"👉 شماره خوشه جایگزین ({'/'.join(map(str, valid_clusters))}): ",
+          ).strip()
+          try:
+            selected_cluster = int(override_raw)
+            if selected_cluster in valid_clusters:
+              break
+            print(f"❌ یکی از {valid_clusters} را وارد کنید.")
+          except ValueError:
+            print("❌ عدد صحیح وارد کنید.")
+        if selected_cluster != rec_id:
+          print(
+            f"ℹ️  پیشنهاد خودکار (خوشه {rec_id}) با خوشه {selected_cluster} "
+            "جایگزین شد."
+          )
+        else:
+          print(f"✅ خوشه پیشنهادی {rec_id} پذیرفته شد.")
+        break
+      print("❌ Enter برای پذیرش یا o برای تغییر خوشه.")
 
     selected_technologies = clusters_dict[selected_cluster]
     selected_indices = [i for i, tech in enumerate(self.technologies) if tech in selected_technologies]
     filtered_matrix = self.decision_matrix[selected_indices]
 
     print("\n" + "=" * 60)
-    print(f"✅ خوشه {selected_cluster} انتخاب شد: {', '.join(selected_technologies)}")
+    print(f"✅ خوشه نهایی {selected_cluster}: {', '.join(selected_technologies)}")
     print("=" * 60 + "\n")
 
     return {
