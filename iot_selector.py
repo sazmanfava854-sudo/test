@@ -390,6 +390,14 @@ class IoTSelector:
             {"id": "Net_conflict1", "questions": [5, 6],
              "conditions": lambda ans: ans.get("internet_nazdik") == "خیر" and ans.get("pooshesh_mobile") == "پوشش ضعیف",
              "message": "⚠️ بدون اینترنت ثابت و پوشش موبایل ضعیف → ارتباط ممکن نیست."},
+            {"id": "PowerNet_conflict1", "questions": [4, 5],
+             "conditions": lambda ans: ans.get("dastresi_bargh") == "عدم دسترسی"
+             and ans.get("internet_nazdik") == "بله",
+             "message": (
+                 "⚠️ عدم دسترسی برق در محل استقرار با داشتن اینترنت ثابت نزدیک زمین "
+                 "هم‌خوان نیست؛ اگر اینترنت از نقطه برق‌دار مجاور (ساختمان/گیت‌وی) تأمین "
+                 "می‌شود «دسترسی محدود» را انتخاب کنید، وگرنه پاسخ اینترنت را اصلاح کنید."
+             )},
         ]
 
     # ------------------------------------------------------------------ Phase 1: KMeans (unchanged logic)
