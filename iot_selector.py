@@ -35,7 +35,7 @@ CI = CRITERIA_INDEX
 MAX_QUESTION_RETRIES = 2
 CR_MEANINGFUL_INCREASE = 0.005
 CR_ACCEPTABLE_THRESHOLD = 0.10
-CRITICAL_CONFLICT_IDS = frozenset({"Net_conflict1"})
+CRITICAL_CONFLICT_IDS = frozenset({"Net_conflict1", "PowerNet_conflict1"})
 MAX_CRITICAL_CONFLICT_RETRIES = 3
 
 # Expert PCM tuned for CR <= 0.10; priority: cost > energy > link > latency > cellular > data > range
@@ -749,7 +749,7 @@ class IoTSelector:
         return conflict["id"] in CRITICAL_CONFLICT_IDS
 
     def _prompt_critical_conflict_action(self) -> str:
-        print("\n  [r]etry — یک بازپرسش نهایی Q5/Q6")
+        print("\n  [r]etry — بازپرسش نهایی سوال‌های مرتبط")
         print("  [e]xit — خروج از برنامه")
         while True:
             choice = input("\n👉 انتخاب [r/e]: ").strip().lower() or "r"
@@ -760,7 +760,7 @@ class IoTSelector:
             print("❌ فقط r یا e مجاز است.")
 
     def _ensure_no_blocking_conflicts(self, user_answers: Dict[str, str]) -> Dict[str, str]:
-        """Block pipeline until critical conflicts (e.g. Net_conflict1) are resolved."""
+        """Block pipeline until critical conflicts (e.g. Net_conflict1, PowerNet_conflict1) are resolved."""
         critical_retries = 0
         while True:
             remaining = self._find_logical_contradictions(user_answers)
