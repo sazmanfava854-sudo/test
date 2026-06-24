@@ -36,6 +36,18 @@ MAX_QUESTION_RETRIES = 2
 CR_MEANINGFUL_INCREASE = 0.005
 CR_ACCEPTABLE_THRESHOLD = 0.10
 CRITICAL_CONFLICT_IDS = frozenset({"Net_conflict1"})
+MAX_CRITICAL_CONFLICT_RETRIES = 3
+
+# Expert PCM tuned for CR <= 0.10; priority: cost > energy > link > latency > cellular > data > range
+EXPERT_BASE_MATRIX = np.array([
+    [1,    5,    4,    4,    3,    3,    5],
+    [1/5,  1,    3,    3,    3,    3,    4],
+    [1/4,  1/3,  1,    2,    2,    2,    3],
+    [1/4,  1/3,  1/2,  1,    2,    2,    3],
+    [1/3,  1/3,  1/2,  1/2,  1,    2,    2],
+    [1/3,  1/3,  1/2,  1/2,  1/2,  1,    2],
+    [1/5,  1/4,  1/3,  1/3,  1/2,  1/2,  1],
+], dtype=float)
 
 QUESTION_NUM_TO_KEY: Dict[int, str] = {
     1: "masahat_zamin", 2: "topography", 3: "manae_fiziki",
@@ -138,13 +150,13 @@ def build_criteria_config(include_cellular_in_clustering: bool = False) -> List[
     ]
 
 
-def _adj(i: int, j: int, multiplier: Optional[float] = None, absolute: Optional[float] = None) -> Dict[str, Any]:
-    entry: Dict[str, Any] = {"i": i, "j": j}
-    if multiplier is not None:
-        entry["multiplier"] = multiplier
-    if absolute is not None:
-        entry["absolute"] = absolute
-    return entry
+def _adj(i: int, j: int, multiplier: float) -> Dict[str, Any]:
+    return {"i": i, "j": j, "multiplier": multiplier}
+
+
+def _rule_mult(i: int, j: int, target_ij: float) -> float:
+    """Multiplier so base_pcm[i,j] becomes target_ij after adjustment."""
+    return target_ij / EXPERT_BASE_MATRIX[i, j]
 
 
 def build_adjustment_rules() -> List[Dict[str, Any]]:
@@ -192,7 +204,7 @@ def build_adjustment_rules() -> List[Dict[str, Any]]:
         {"id": "Q5_bale", "question_id": 5,
          "conditions": lambda a: a.get("internet_nazdik") == "بله",
          "adjustments": [_adj(R["latency"], R["data_rate"], multiplier=0.75),
-                         _adj(R["cellular"], R["cost"], absolute=3.0)]},
+                         _adj(R["cellular"], R["cost"], multiplier=_rule_mult(R["cellular"], R["cost"], 3.0))]},
         {"id": "Q5_kheir", "question_id": 5,
          "conditions": lambda a: a.get("internet_nazdik") == "خیر",
          "adjustments": [_adj(R["range"], R["cellular"], multiplier=1.4)]},
@@ -242,7 +254,7 @@ def build_adjustment_rules() -> List[Dict[str, Any]]:
          "adjustments": [_adj(R["cost"], R["range"], multiplier=1.1)]},
         {"id": "Q10_enflex", "question_id": 10,
          "conditions": lambda a: a.get("budjeh_avalieh") == "انعطاف‌پذیر",
-         "adjustments": [_adj(R["cellular"], R["cost"], absolute=3.0)]},
+         "adjustments": [_adj(R["cellular"], R["cost"], multiplier=_rule_mult(R["cellular"], R["cost"], 3.0))]},
         {"id": "Q11_bisyar", "question_id": 11,
          "conditions": lambda a: a.get("hazine_amaliati") == "بسیار محدود",
          "adjustments": [_adj(R["cost"], R["cellular"], multiplier=1.8)]},
@@ -251,7 +263,7 @@ def build_adjustment_rules() -> List[Dict[str, Any]]:
          "adjustments": [_adj(R["energy"], R["cost"], multiplier=1.05)]},
         {"id": "Q11_enflex", "question_id": 11,
          "conditions": lambda a: a.get("hazine_amaliati") == "انعطاف‌پذیر",
-         "adjustments": [_adj(R["cellular"], R["cost"], absolute=2.5)]},
+         "adjustments": [_adj(R["cellular"], R["cost"], multiplier=_rule_mult(R["cellular"], R["cost"], 2.5))]},
         {"id": "Q12_kam", "question_id": 12,
          "conditions": lambda a: a.get("ghabeliat_gostaresh") == "اهمیت کم",
          "adjustments": [_adj(R["range"], R["cost"], multiplier=0.9)]},
@@ -298,15 +310,7 @@ class IoTSelector:
 
     EXPECTED_CRITERIA_COUNT = 7
 
-    BASE_MATRIX = np.array([
-        [1,    7,    5,    5,    5,    5,    7],
-        [1/7,  1,    3,    3,    5,    5,    5],
-        [1/5,  1/3,  1,    3,    3,    3,    5],
-        [1/5,  1/3,  1/3,  1,    3,    3,    3],
-        [1/5,  1/5,  1/3,  1/3,  1,    3,    3],
-        [1/5,  1/5,  1/3,  1/3,  1/3,  1,    3],
-        [1/7,  1/5,  1/5,  1/3,  1/3,  1/3,  1],
-    ], dtype=float)
+    BASE_MATRIX = EXPERT_BASE_MATRIX
 
     def __init__(self, include_cellular_in_clustering: bool = False):
         self.include_cellular_in_clustering = include_cellular_in_clustering
@@ -736,8 +740,20 @@ class IoTSelector:
     def _is_critical_conflict(self, conflict: Dict[str, Any]) -> bool:
         return conflict["id"] in CRITICAL_CONFLICT_IDS
 
+    def _prompt_critical_conflict_action(self) -> str:
+        print("\n  [r]etry — یک بازپرسش نهایی Q5/Q6")
+        print("  [e]xit — خروج از برنامه")
+        while True:
+            choice = input("\n👉 انتخاب [r/e]: ").strip().lower() or "r"
+            if choice in ("r", "retry"):
+                return "r"
+            if choice in ("e", "exit"):
+                return "e"
+            print("❌ فقط r یا e مجاز است.")
+
     def _ensure_no_blocking_conflicts(self, user_answers: Dict[str, str]) -> Dict[str, str]:
         """Block pipeline until critical conflicts (e.g. Net_conflict1) are resolved."""
+        critical_retries = 0
         while True:
             remaining = self._find_logical_contradictions(user_answers)
             critical = [c for c in remaining if self._is_critical_conflict(c)]
@@ -746,8 +762,24 @@ class IoTSelector:
                     print(f"⚠️  {item['message']} (هشدار — ادامه مجاز)")
                 return user_answers
 
+            if critical_retries >= MAX_CRITICAL_CONFLICT_RETRIES:
+                print("\n" + "=" * 60)
+                print("🚫 حداکثر تلاش برای رفع تضاد بحرانی رسید")
+                print("=" * 60)
+                for item in critical:
+                    print(f"   {item['message']}")
+                action = self._prompt_critical_conflict_action()
+                if action == "e":
+                    print("👋 خروج از برنامه.")
+                    sys.exit(0)
+                qnums = sorted({q for c in critical for q in c["questions"]})
+                user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+                critical_retries = 0
+                continue
+
+            critical_retries += 1
             print("\n" + "=" * 60)
-            print("🚫 تضاد بحرانی — امکان ادامه وجود ندارد")
+            print(f"🚫 تضاد بحرانی — امکان ادامه وجود ندارد ({critical_retries}/{MAX_CRITICAL_CONFLICT_RETRIES})")
             print("=" * 60)
             for item in critical:
                 print(f"   {item['message']}")
@@ -838,12 +870,9 @@ class IoTSelector:
                 base_val = base_pcm[i, j]
                 if base_val <= 0:
                     continue
-                if "multiplier" in adj:
-                    target = base_val * float(adj["multiplier"])
-                elif "absolute" in adj:
-                    target = float(adj["absolute"])
-                else:
+                if "multiplier" not in adj:
                     continue
+                target = base_val * float(adj["multiplier"])
                 if target <= 0 or not np.isfinite(target):
                     continue
                 ref_pair, ref_val = _pcm_target_in_ref_direction(i, j, target)
@@ -902,6 +931,34 @@ class IoTSelector:
         self._validate_questionnaire_answers(user_answers)
         return user_answers
 
+    def _cr_with_applied_rule_ids(
+        self, user_answers: Dict[str, str], rule_ids: Optional[set] = None,
+    ) -> float:
+        rules = [
+            r for r in self.adjustment_rules
+            if r["conditions"](user_answers) and (rule_ids is None or r["id"] in rule_ids)
+        ]
+        pcm = self._apply_pcm_adjustments(self._base_pcm(), rules)
+        _, cr, _ = self._compute_ahp_weights(pcm)
+        return cr
+
+    def _rules_that_inflated_cr(
+        self,
+        user_answers: Dict[str, str],
+        applied_ids: List[str],
+        full_cr: float,
+        base_cr: float,
+    ) -> List[str]:
+        if full_cr <= base_cr + CR_MEANINGFUL_INCREASE:
+            return []
+        applied_set = set(applied_ids)
+        inflating: List[str] = []
+        for rid in applied_ids:
+            cr_without = self._cr_with_applied_rule_ids(user_answers, applied_set - {rid})
+            if cr_without < full_cr - CR_MEANINGFUL_INCREASE:
+                inflating.append(rid)
+        return inflating
+
     def apply_ahp_adjustments(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
         print("=" * 60)
         print("--- فاز ۴: اعمال تعدیل‌های پرسشنامه روی ماتریس AHP ---")
@@ -910,6 +967,7 @@ class IoTSelector:
         base_pcm = self._base_pcm()
         _, base_cr, _ = self._compute_ahp_weights(base_pcm)
         logical_retry_counts: Dict[int, int] = defaultdict(int)
+        critical_retry_counts = 0
         cr_retry_count = 0
 
         while True:
@@ -917,7 +975,20 @@ class IoTSelector:
             if logical:
                 critical = [c for c in logical if self._is_critical_conflict(c)]
                 if critical:
-                    print("\n🚫 تضاد بحرانی در فاز ۴ — باید رفع شود.")
+                    if critical_retry_counts >= MAX_CRITICAL_CONFLICT_RETRIES:
+                        print("\n🚫 حداکثر تلاش برای تضاد بحرانی در فاز ۴.")
+                        for item in critical:
+                            print(f"   {item['message']}")
+                        action = self._prompt_critical_conflict_action()
+                        if action == "e":
+                            print("👋 خروج از برنامه.")
+                            sys.exit(0)
+                        qnums = sorted({q for c in critical for q in c["questions"]})
+                        user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+                        critical_retry_counts = 0
+                        continue
+                    critical_retry_counts += 1
+                    print(f"\n🚫 تضاد بحرانی در فاز ۴ — باید رفع شود ({critical_retry_counts}/{MAX_CRITICAL_CONFLICT_RETRIES}).")
                     for item in critical:
                         print(f"   {item['message']}")
                     qnums = sorted({q for c in critical for q in c["questions"]})
@@ -986,8 +1057,12 @@ class IoTSelector:
                 self.ahp_result = result
                 return result
 
+            inflating_rules = self._rules_that_inflated_cr(
+                user_answers, applied_ids, cr, base_cr,
+            )
             inflating_qnums: set = set()
-            for rid in applied_ids:
+            rules_for_retry = inflating_rules if inflating_rules else applied_ids
+            for rid in rules_for_retry:
                 rule = next(r for r in self.adjustment_rules if r["id"] == rid)
                 inflating_qnums.add(rule["question_id"])
 
@@ -999,6 +1074,8 @@ class IoTSelector:
                     continue
                 cr_retry_count += 1
                 if inflating_qnums:
+                    label = "مؤثر در CR" if inflating_rules else "اعمال‌شده"
+                    print(f"\n🔄 بازپرسش سوال‌های {label}: {sorted(inflating_qnums)}")
                     user_answers = self._retry_questionnaire_answers(
                         user_answers, sorted(inflating_qnums),
                     )
@@ -1038,6 +1115,8 @@ class IoTSelector:
             range_m = c[self._cidx("range")]
             data_rate = c[self._cidx("data_rate")]
             energy = c[self._cidx("energy")]
+            link_budget = c[self._cidx("link_budget")]
+            cost = c[self._cidx("cost")]
             cell_frac = profile["cellular_frac"]
 
             if user_answers.get("masahat_zamin") == "بزرگ" or user_answers.get("tarakom_sensor") == "تراکم پایین":
@@ -1065,6 +1144,34 @@ class IoTSelector:
             if user_answers.get("internet_nazdik") == "بله" and user_answers.get("hajm_dadeh") == "زیاد":
                 score += min(np.log1p(data_rate) / 10.0, 1.0) * 1.5
                 reason_parts.append("اینترنت ثابت + داده زیاد → WLAN پرسرعت")
+
+            topo = user_answers.get("topography")
+            if topo == "ناهموار":
+                score += min(link_budget / 150.0, 1.0) * 1.2 + min(range_m / 3000.0, 1.0) * 0.8
+                reason_parts.append("توپوگرافی ناهموار → لینک و برد مهم‌تر")
+            elif topo == "کمی شیب‌دار":
+                score += min(link_budget / 150.0, 1.0) * 0.5
+
+            obstacles = user_answers.get("manae_fiziki")
+            if obstacles == "موانع زیاد":
+                score += min(link_budget / 150.0, 1.0) * 1.0 + min(range_m / 4000.0, 1.0) * 1.0
+                reason_parts.append("موانع زیاد → بودجه لینک و برد")
+            elif obstacles == "موانع متوسط":
+                score += min(link_budget / 150.0, 1.0) * 0.4
+
+            sensors = user_answers.get("tedad_sensor")
+            if sensors == "زیاد":
+                score += min(data_rate / 100.0, 1.0) * 1.0 + (1.0 - min(cost / 50.0, 1.0)) * 0.8
+                reason_parts.append("سنسور زیاد → داده بالاتر، هزینه پایین‌تر")
+            elif sensors == "متوسط":
+                score += min(data_rate / 50.0, 1.0) * 0.5
+
+            growth = user_answers.get("ghabeliat_gostaresh")
+            if growth == "اهمیت بالا":
+                score += min(range_m / 5000.0, 1.0) * 1.2 + min(data_rate / 20.0, 1.0) * 1.0
+                reason_parts.append("گسترش بالا → برد و ظرفیت داده")
+            elif growth == "اهمیت متوسط":
+                score += min(range_m / 5000.0, 1.0) * 0.5
 
             scores[cid] = score
             reasons[cid] = reason_parts or ["تطابق عمومی پروفایل فنی"]
