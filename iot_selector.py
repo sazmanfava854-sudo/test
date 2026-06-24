@@ -70,40 +70,8 @@ QUESTION_NUM_TO_KEY: Dict[int, str] = {
     10: 'budjeh_avalieh', 11: 'hazine_amaliati', 12: 'ghabeliat_gostaresh',
 }
 
-# ترکیب قوانینی که معمولاً باعث تضاد در PCM و افزایش CR می‌شوند
-AHP_RULE_CONFLICTS: List[Dict[str, Any]] = [
-    {
-        "rules": {"S1", "S3"},
-        "questions": [5, 10, 11],
-        "explanation": (
-            "تضاد: «اینترنت نزدیک» + «بودجه انعطاف‌پذیر» (قانون S1) سلولی را تقویت می‌کند، "
-            "اما «هزینه عملیاتی بسیار محدود» (قانون S3) هزینه/سلولی را تقویت می‌کند."
-        ),
-    },
-    {
-        "rules": {"S1", "S4"},
-        "questions": [5, 10, 11],
-        "explanation": (
-            "تضاد: S1 سلولی را نسبت به هزینه ترجیح می‌دهد، اما S4 (بودجه محدود + OPEX بسیار محدود) "
-            "هزینه را نسبت به سلولی بسیار تقویت می‌کند."
-        ),
-    },
-    {
-        "rules": {"S2", "S3"},
-        "questions": [5, 10, 11],
-        "explanation": (
-            "تضاد: S2 با وجود اینترنت، سلولی را ترجیح می‌دهد؛ S3 هزینه را بر سلولی مقدم می‌دارد."
-        ),
-    },
-    {
-        "rules": {"S5", "S2"},
-        "questions": [6, 10, 5],
-        "explanation": (
-            "تضاد: S5 با پوشش موبایل ضعیف برد را بر سلولی ترجیح می‌دهد؛ "
-            "S2 در حضور اینترنت سلولی را تقویت می‌کند."
-        ),
-    },
-]
+# افزایش CR کمتر از این آستانه، ناسازگاری معنی‌دار محسوب نمی‌شود
+CR_MEANINGFUL_INCREASE = 0.005
 
 CR_ACCEPTABLE_THRESHOLD = 0.10
 
@@ -725,11 +693,8 @@ class IoTSelector:
   def check_conflicts_after_answer(
     self, user_answers: Dict[str, str], last_q_num: int,
   ) -> Tuple[bool, Optional[List[int]]]:
-    key_map = {
-      1: 'masahat_zamin', 2: 'topography', 3: 'manae_fiziki', 4: 'dastresi_bargh',
-      5: 'internet_nazdik', 6: 'pooshesh_mobile', 7: 'tedad_sensor', 8: 'tarakom_sensor',
-      9: 'hajm_dadeh', 10: 'budjeh_avalieh', 11: 'hazine_amaliati', 12: 'ghabeliat_gostaresh',
-    }
+    """همان منطق مرجع: فقط تضادهای منطقی واقعی در حین پرسشنامه."""
+    key_map = QUESTION_NUM_TO_KEY
     relevant = [r for r in self.conflict_rules if last_q_num in r["questions"]]
     if not relevant:
       return True, None
@@ -744,6 +709,81 @@ class IoTSelector:
     if not questions_to_reask:
       return True, None
     return False, sorted(list(questions_to_reask))
+
+  def _find_logical_contradictions(self, user_answers: Dict[str, str]) -> List[Dict[str, Any]]:
+    """تضادهای منطقی واقعی (مطابق conflict_rules مرجع) — نه محدودیت‌های همزمان."""
+    found: List[Dict[str, Any]] = []
+    for rule in self.conflict_rules:
+      if rule["conditions"](user_answers):
+        found.append({
+          "id": rule["id"],
+          "message": rule["message"],
+          "questions": list(rule["questions"]),
+        })
+    return found
+
+  def _is_restrictive_valid_profile(self, user_answers: Dict[str, str]) -> bool:
+    """
+    ترکیب‌های محدودکننده اما منطقی — مثلاً بدون اینترنت ثابت + بودجه محدود + OPEX کم.
+    این‌ها تضاد نیستند؛ فقط فضای انتخاب فناوری را محدود می‌کنند.
+    """
+    if self._find_logical_contradictions(user_answers):
+      return False
+    restrictive_flags = [
+      user_answers.get('internet_nazdik') == 'خیر',
+      user_answers.get('budjeh_avalieh') == 'محدود',
+      user_answers.get('hazine_amaliati') == 'بسیار محدود',
+      user_answers.get('hajm_dadeh') == 'کم',
+      user_answers.get('dastresi_bargh') == 'عدم دسترسی',
+      user_answers.get('pooshesh_mobile') == 'پوشش ضعیف',
+    ]
+    return sum(1 for f in restrictive_flags if f) >= 2
+
+  def _compute_cr_for_rule_ids(
+    self, user_answers: Dict[str, str], rule_ids: Optional[set] = None,
+  ) -> float:
+    """CR پس از اعمال زیرمجموعه‌ای از قوانین تعدیل PCM."""
+    pcm = self._base_pcm()
+    labels = self._labels()
+    for rule in self.adjustment_rules:
+      if rule_ids is not None and rule["id"] not in rule_ids:
+        continue
+      if rule["conditions"](user_answers):
+        rule["effect_on_pcm"](pcm, labels)
+    n = pcm.shape[0]
+    for i in range(n):
+      for j in range(i + 1, n):
+        pcm[j, i] = 1 / pcm[i, j]
+    _, cr, _ = self._compute_ahp_weights(pcm)
+    return cr
+
+  def _rules_that_inflated_cr(
+    self, user_answers: Dict[str, str], applied_rules: List[str],
+    full_cr: float, base_cr: float,
+  ) -> List[str]:
+    """قوانینی که واقعاً CR را نسبت به ماتریس خبره افزایش داده‌اند."""
+    if full_cr <= base_cr + CR_MEANINGFUL_INCREASE:
+      return []
+    inflating: List[str] = []
+    applied_set = set(applied_rules)
+    for rid in applied_rules:
+      cr_without = self._compute_cr_for_rule_ids(
+        user_answers, rule_ids=applied_set - {rid},
+      )
+      if cr_without < full_cr - CR_MEANINGFUL_INCREASE:
+        inflating.append(rid)
+    return inflating
+
+  def _print_logical_contradiction_report(self, contradictions: List[Dict[str, Any]]) -> List[int]:
+    print("\n" + "-" * 60)
+    print("--- تضادهای منطقی واقعی بین پاسخ‌ها ---")
+    print("-" * 60)
+    questions_to_reask: set = set()
+    for item in contradictions:
+      print(f"  ⚠️  {item['message']}")
+      questions_to_reask.update(item["questions"])
+    print("\n💡 فقط سوال‌های مرتبط با این تضادها دوباره پرسیده می‌شوند.")
+    return sorted(questions_to_reask)
 
   # ------------------------------------------------------------------ AHP (expert base PCM + questionnaire rules only)
   BASE_MATRIX = np.array([
@@ -814,44 +854,54 @@ class IoTSelector:
         return choice
       print("❌ لطفاً یکی از r, c, d, e را وارد کنید.")
 
-  def _print_ahp_conflict_guide(
-    self, result: Dict[str, Any], user_answers: Dict[str, str],
+  def _print_ahp_inconsistency_guide(
+    self,
+    result: Dict[str, Any],
+    user_answers: Dict[str, str],
+    base_cr: float,
+    inflating_rules: List[str],
   ) -> List[int]:
-    """Persian inconsistency report; return question numbers to re-ask."""
+    """
+    گزارش ناسازگاری AHP — تفکیک تضاد منطقی، محدودیت معتبر، و قوانین مؤثر در CR.
+  """
     applied_rules = result['applied_rules']
-    applied_set = set(applied_rules)
+    questions_to_reask: set = set()
 
     print("\n" + "-" * 60)
-    print("--- پاسخ‌های متضاد / مؤثر در ناسازگاری AHP ---")
+    print("--- پاسخ‌های مؤثر در ناسازگاری AHP ---")
     print("-" * 60)
 
-    _, base_cr = self._expert_baseline_ahp()
     print(f"\n📊 CR ماتریس خبره (قبل از قوانین): {base_cr:.4f}")
     print(f"📊 CR پس از اعمال پاسخ‌های شما: {result['cr']:.4f}")
-    if result['cr'] > base_cr:
-      print("   ↳ قوانین پرسشنامه CR را افزایش داده‌اند؛ پاسخ‌های زیر را بازبینی کنید.")
+    cr_delta = result['cr'] - base_cr
+    if cr_delta > CR_MEANINGFUL_INCREASE:
+      print(f"   ↳ افزایش CR: +{cr_delta:.4f} — قوانین زیر PCM را ناسازگارتر کرده‌اند.")
+    else:
+      print("   ↳ CR نسبت به ماتریس خبره به‌طور معنی‌دار افزایش نیافته است.")
+
+    if self._is_restrictive_valid_profile(user_answers):
+      print("\n--- محدودیت‌های همزمان (معتبر، نه تضاد) ---")
+      print(
+        "  ℹ️  پاسخ‌های شما محدودیت پروژه را نشان می‌دهند "
+        "(مثلاً بدون اینترنت ثابت، بودجه محدود، OPEX کم، حجم داده کم). "
+        "این ترکیب منطقی است و فقط گزینه‌های فناوری را محدود می‌کند."
+      )
+
+    logical = self._find_logical_contradictions(user_answers)
+    if logical:
+      qnums = self._print_logical_contradiction_report(logical)
+      questions_to_reask.update(qnums)
 
     self._pcm_change_report(result['pcm'], applied_rules)
 
-    questions_to_reask: set = set()
-    found_conflict = False
-    print("\n--- تضادهای شناسایی‌شده بین پاسخ‌ها ---")
-    for conflict in AHP_RULE_CONFLICTS:
-      if conflict["rules"].issubset(applied_set):
-        found_conflict = True
-        print(f"  ⚠️  {conflict['explanation']}")
-        questions_to_reask.update(conflict["questions"])
-
-    if not found_conflict and applied_rules:
-      print("  • تضاد مشخص بین قوانین شناخته‌شده نیست، اما چند قانون هم‌زمان PCM را تغییر داده‌اند.")
-
-    print("\n--- پاسخ‌های مؤثر در تغییر PCM ---")
-    if not applied_rules:
-      print("  • هیچ قانونی فعال نشد؛ با این حال CR از آستانه بالاتر است.")
-      return list(range(1, 13))
+    print("\n--- قوانین مؤثر در افزایش ناسازگاری PCM ---")
+    rules_to_show = inflating_rules or applied_rules
+    if not rules_to_show:
+      print("  • قانونی که CR را افزایش داده باشد شناسایی نشد.")
+      return sorted(questions_to_reask) if questions_to_reask else []
 
     shown_keys: set = set()
-    for rid in applied_rules:
+    for rid in rules_to_show:
       for qnum in AHP_RULE_QUESTIONS.get(rid, []):
         questions_to_reask.add(qnum)
         key = QUESTION_NUM_TO_KEY[qnum]
@@ -863,8 +913,8 @@ class IoTSelector:
         print(f"  ❗ سوال {qnum} — {label}: «{value}»")
         print(f"     ↳ قانون {rid}: {AHP_RULE_DESCRIPTIONS.get(rid, rid)}")
 
-    print("\n💡 فقط همین سوال‌ها دوباره پرسیده می‌شوند؛ سایر پاسخ‌ها حفظ می‌شوند.")
-    return sorted(questions_to_reask) if questions_to_reask else list(range(1, 13))
+    print("\n💡 فقط سوال‌های بالا (در صورت نیاز) دوباره پرسیده می‌شوند؛ سایر پاسخ‌ها حفظ می‌شوند.")
+    return sorted(questions_to_reask) if questions_to_reask else []
 
   def _retry_questionnaire_answers(
     self, user_answers: Dict[str, str], question_nums: List[int],
@@ -886,7 +936,16 @@ class IoTSelector:
     print("وزن‌های اولیه از قضاوت خبره (BASE_MATRIX) استخراج می‌شوند؛")
     print("پاسخ‌های شما فقط PCM را از طریق قوانین تعدیل می‌کنند.\n")
 
+    _, base_cr = self._expert_baseline_ahp()
+
     while True:
+      logical = self._find_logical_contradictions(user_answers)
+      if logical:
+        print("\n⚠️  قبل از ادامه AHP، تضاد منطقی بین پاسخ‌ها باید رفع شود.")
+        qnums = self._print_logical_contradiction_report(logical)
+        user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+        continue
+
       weights, result = self._run_ahp_once(
         user_answers, use_base_only=False, source="questionnaire",
       )
@@ -906,10 +965,45 @@ class IoTSelector:
         result['input_mode'] = 'expert_base_only'
         return result
 
-      qnums = self._print_ahp_conflict_guide(result, user_answers)
+      cr_delta = cr - base_cr
+      if cr_delta <= CR_MEANINGFUL_INCREASE:
+        print(
+          "✅ قوانین پرسشنامه اعمال شدند اما ناسازگاری AHP به‌طور معنی‌دار "
+          "افزایش نیافت؛ ادامه با وزن‌های شخصی‌سازی‌شده."
+        )
+        if self._is_restrictive_valid_profile(user_answers):
+          print(
+            "   ℹ️  پاسخ‌های محدودکننده شما معتبرند و فقط توصیه فناوری را "
+            "محدود می‌کنند، نه تضاد منطقی."
+          )
+        result['input_mode'] = 'expert_base_plus_rules'
+        return result
+
+      inflating_rules = self._rules_that_inflated_cr(
+        user_answers, result['applied_rules'], cr, base_cr,
+      )
+      if not inflating_rules and self._is_restrictive_valid_profile(user_answers):
+        print(
+          "✅ پروفایل محدود اما منطقی؛ CR از آستانه کمی بالاتر است اما "
+          "قانونی آن را به‌طور معنی‌دار افزایش نداده — ادامه به پیشنهاد خوشه."
+        )
+        result['input_mode'] = 'expert_base_plus_rules_constrained'
+        return result
+
+      qnums = self._print_ahp_inconsistency_guide(
+        result, user_answers, base_cr, inflating_rules,
+      )
+      if not qnums:
+        print(
+          "ℹ️  ناسازگاری مشخصی برای بازپرسش هدفمند یافت نشد؛ "
+          "می‌توانید ادامه دهید یا ماتریس خبره را انتخاب کنید."
+        )
       action = self._prompt_cr_action(cr)
 
       if action == 'r':
+        if not qnums:
+          print("⚠️  سوال مشخصی برای بازپرسش نیست؛ از [c]ontinue یا [d]efault استفاده کنید.")
+          continue
         print("\n🔄 بازپرسش سوال‌های مشکل‌دار (سایر پاسخ‌ها حفظ می‌شوند)...\n")
         user_answers = self._retry_questionnaire_answers(user_answers, qnums)
         continue
