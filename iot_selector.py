@@ -101,6 +101,88 @@ CRITERIA: Tuple[CriterionConfig, ...] = (
 
 
 # ---------------------------------------------------------------------------
+# Technology catalog (source measurements → decision matrix columns)
+# Column mapping to criteria order:
+#   هزینه = CAPEX (module) + OPEX (annual connectivity)
+#   مصرف انرژی = Energy Consumption (mW)
+#   بودجه لینک = Link Budget (dB)
+#   تاخیر = RTT Latency (ms)
+#   دوطرفه بودن = not in source table; neutral default (1.0) for all
+#   سلولی = Cellular Support (1=Yes, 0=No)
+#   میزان داده = Data Rate (Mbps)
+#   برد = Transmission Range (m)
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class TechnologyRecord:
+    name: str
+    range_m: float
+    cellular: bool
+    data_rate_mbps: float
+    link_budget_db: float
+    latency_ms: float
+    energy_mw: float
+    opex_annual: float
+    capex_hardware: float
+    bidirectional: float = 1.0
+
+
+TECHNOLOGY_CATALOG: Tuple[TechnologyRecord, ...] = (
+    TechnologyRecord("Wi-Fi 7 (802.11be)", 30, False, 23059, 73, 1, 39000, 0, 46.393),
+    TechnologyRecord("Wi-Fi 6 (802.11ax)", 35, False, 9600, 113, 20, 1495, 0, 4.650),
+    TechnologyRecord("Wi-Fi HaLow (802.11ah)", 1000, False, 78, 114.5, 47.885, 115.5, 0, 22.617),
+    TechnologyRecord("5G RedCap (NR-Light)", 30, True, 150, 144, 14, 366.3, 0, 132.220),
+    TechnologyRecord("NB-IoT (Cat-NB2)", 22000, True, 0.25, 151, 5800, 87, 0, 13.000),
+    TechnologyRecord("LTE-M (Cat-M1)", 5000, True, 0.128, 146, 15, 294.75, 0, 30.000),
+    TechnologyRecord("LoRaWAN", 20000, False, 0.05, 154, 1200, 102.3, 0, 10.000),
+    TechnologyRecord("Sigfox", 25000, False, 0.0001, 159, 60000, 33, 0, 3.468),
+    TechnologyRecord("Bluetooth 5.4 (BLE)", 150, False, 5, 117.1, 30, 18, 0, 4.970),
+    TechnologyRecord("Zigbee 3.0", 20, False, 0.25, 119.5, 60, 28.2, 0, 3.750),
+    TechnologyRecord("Thread (1.3)", 20, False, 0.25, 124.9, 75, 15.9, 0, 3.700),
+    TechnologyRecord("Z-Wave Long Range", 30, False, 0.0548, 101, 400, 15.18, 0, 11.450),
+    TechnologyRecord("Wi-SUN (FAN)", 1000, False, 1.225, 111.3, 1860, 40.26, 0, 37.160),
+)
+
+
+def build_technology_dataset(
+    catalog: Sequence[TechnologyRecord],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Build technology names and decision matrix from the measurement catalog."""
+    names: List[str] = []
+    rows: List[List[float]] = []
+    for tech in catalog:
+        names.append(tech.name)
+        total_cost = tech.capex_hardware + tech.opex_annual
+        rows.append(
+            [
+                total_cost,
+                tech.energy_mw,
+                tech.link_budget_db,
+                tech.latency_ms,
+                tech.bidirectional,
+                1.0 if tech.cellular else 0.0,
+                tech.data_rate_mbps,
+                tech.range_m,
+            ]
+        )
+    return np.array(names), np.array(rows, dtype=float)
+
+
+def compute_recommendation_thresholds(
+    decision_matrix: np.ndarray,
+    criteria: Sequence[CriterionConfig],
+) -> Dict[str, float]:
+    """Data-driven percentile thresholds for cluster recommendation rules."""
+    label_to_col = {c.persian_label: i for i, c in enumerate(criteria)}
+    return {
+        "range_high": float(np.percentile(decision_matrix[:, label_to_col["برد"]], 66)),
+        "range_low": float(np.percentile(decision_matrix[:, label_to_col["برد"]], 33)),
+        "data_rate_high": float(np.percentile(decision_matrix[:, label_to_col["میزان داده"]], 66)),
+        "data_rate_low": float(np.percentile(decision_matrix[:, label_to_col["میزان داده"]], 33)),
+        "energy_low": float(np.percentile(decision_matrix[:, label_to_col["مصرف انرژی"]], 33)),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Centralized Persian user-facing messages
 # ---------------------------------------------------------------------------
 class Messages:
@@ -438,20 +520,12 @@ class IoTSelector:
             c.persian_label: c for c in self.criteria
         }
 
-        self.technologies = np.array(
-            ["NB IoT", "LTE M", "LoRaWAN", "Wi-Fi", "Bluetooth", "Zigbee"]
+        self.technologies, self.decision_matrix = build_technology_dataset(TECHNOLOGY_CATALOG)
+        self._recommendation_thresholds = compute_recommendation_thresholds(
+            self.decision_matrix, self.criteria
         )
-        self.decision_matrix = np.array(
-            [
-                [22, 22.5, 164, 3000, 1, 1, 250, 10000],
-                [20, 0.076, 155.7, 15, 1, 1, 1000, 10000],
-                [4, 0.03, 154, 2370, 1, 0, 5.47, 15000],
-                [69.5, 3.7, 115, 100, 1, 0.8, 11000, 100],
-                [5.7, 0.3, 109, 20, 1, 0.2, 2000, 10],
-                [15, 0.075, 97.5, 40, 1, 0, 625, 100],
-            ],
-            dtype=float,
-        )
+        if self.decision_matrix.shape[0] != len(TECHNOLOGY_CATALOG):
+            raise ValueError("تعداد فناوری‌ها با کاتالوگ منبع همخوانی ندارد.")
         if self.decision_matrix.shape[1] != len(self.criteria):
             raise ValueError("تعداد ستون‌های ماتریس تصمیم با تعداد معیارها همخوانی ندارد.")
 
@@ -687,6 +761,7 @@ class IoTSelector:
     # ------------------------------------------------------------------
     def perform_clustering(self, show_plot: bool = True) -> pd.DataFrame:
         print(Messages.PHASE1_TITLE)
+        print(f"\n📊 تعداد فناوری‌های ارزیابی‌شده: {len(self.technologies)}")
 
         cluster_matrix, cluster_feature_names = build_clustering_matrix(
             self.decision_matrix,
@@ -806,6 +881,7 @@ class IoTSelector:
             raise RuntimeError("ابتدا perform_clustering() را اجرا کنید.")
 
         profiles = self._clustering_result["cluster_profiles"]
+        thresholds = self._recommendation_thresholds
         scores: Dict[int, float] = {int(cid): 0.0 for cid in profiles}
         reasons: Dict[int, List[str]] = {int(cid): [] for cid in profiles}
 
@@ -818,17 +894,20 @@ class IoTSelector:
             reasons[cid].append(f"-{points:.1f}: {reason}")
 
         for cid, profile in profiles.items():
-            if user_answers.get("masahat_zamin") == "بزرگ" and profile["mean_range"] > 1000:
+            if user_answers.get("masahat_zamin") == "بزرگ" and profile["mean_range"] >= thresholds["range_high"]:
                 add(cid, 2.0, "مساحت بزرگ → تمایل به برد بالاتر در این گروه")
-            if user_answers.get("masahat_zamin") == "کوچک" and profile["mean_range"] < 500:
+            if user_answers.get("masahat_zamin") == "کوچک" and profile["mean_range"] <= thresholds["range_low"]:
                 add(cid, 2.0, "مساحت کوچک → تمایل به برد کوتاه‌تر در این گروه")
 
-            if user_answers.get("hajm_dadeh") == "زیاد" and profile["mean_data_rate"] > 500:
+            if user_answers.get("hajm_dadeh") == "زیاد" and profile["mean_data_rate"] >= thresholds["data_rate_high"]:
                 add(cid, 2.5, "نیاز به داده زیاد → تمایل به نرخ داده بالاتر")
-            if user_answers.get("hajm_dadeh") == "کم" and profile["mean_data_rate"] < 100:
+            if user_answers.get("hajm_dadeh") == "کم" and profile["mean_data_rate"] <= thresholds["data_rate_low"]:
                 add(cid, 1.5, "داده کم → تمایل به گروه با نرخ داده پایین‌تر")
 
-            if user_answers.get("dastresi_bargh") == "عدم دسترسی" and profile["mean_energy"] < 1.0:
+            if (
+                user_answers.get("dastresi_bargh") == "عدم دسترسی"
+                and profile["mean_energy"] <= thresholds["energy_low"]
+            ):
                 add(cid, 2.0, "عدم برق → تمایل به مصرف انرژی پایین‌تر در گروه")
 
             if user_answers.get("pooshesh_mobile") == "پوشش ضعیف" and profile["mean_cellular"] > 0.5:
@@ -841,7 +920,7 @@ class IoTSelector:
                 user_answers.get("internet_nazdik") == "خیر"
                 and user_answers.get("pooshesh_mobile") == "پوشش ضعیف"
                 and profile["mean_cellular"] < 0.3
-                and profile["mean_range"] > 1000
+                and profile["mean_range"] >= thresholds["range_high"]
             ):
                 add(cid, 2.0, "بدون اینترنت ثابت و پوشش ضعیف → گروه بردبلند غیرسلولی")
 
