@@ -38,6 +38,12 @@ CR_ACCEPTABLE_THRESHOLD = 0.10
 CRITICAL_CONFLICT_IDS = frozenset({"Net_conflict1", "PowerNet_conflict1"})
 MAX_CRITICAL_CONFLICT_RETRIES = 3
 
+# k-selection heuristics (documented bias toward interpretable k=4 when Silhouette is close)
+K_SELECTION_TARGET = 4
+K_SELECTION_INTERPRETABILITY_BONUS = 0.04
+K_SELECTION_ELBOW_BONUS = 0.03
+K_SELECTION_OVER_CLUSTER_PENALTY = 0.015
+
 # Expert PCM tuned for CR <= 0.10; priority: cost > energy > link > latency > cellular > data > range
 EXPERT_BASE_MATRIX = np.array([
     [1,    5,    4,    4,    3,    3,    5],
@@ -277,10 +283,12 @@ def build_adjustment_rules() -> List[Dict[str, Any]]:
     ]
 
 
-def build_question_ahp_mapping() -> Dict[int, Dict[str, Any]]:
+def build_question_ahp_mapping(
+    rules: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[int, Dict[str, Any]]:
     """Derive question → criteria/cell mapping from adjustment rules."""
     mapping: Dict[int, Dict[str, Any]] = {}
-    for rule in build_adjustment_rules():
+    for rule in rules or build_adjustment_rules():
         qid = rule["question_id"]
         if qid not in mapping:
             mapping[qid] = {
@@ -303,7 +311,8 @@ def build_question_ahp_mapping() -> Dict[int, Dict[str, Any]]:
     }
 
 
-QUESTION_AHP_MAPPING = build_question_ahp_mapping()
+ADJUSTMENT_RULES = build_adjustment_rules()
+QUESTION_AHP_MAPPING = build_question_ahp_mapping(ADJUSTMENT_RULES)
 
 
 class IoTSelector:
@@ -351,7 +360,7 @@ class IoTSelector:
         self.topsis_result: Optional[pd.DataFrame] = None
 
         self.conflict_rules = self._build_conflict_rules()
-        self.adjustment_rules = build_adjustment_rules()
+        self.adjustment_rules = ADJUSTMENT_RULES
 
     def _validate_criteria_setup(self) -> None:
         if len(self.criteria_config) != self.EXPECTED_CRITERIA_COUNT:
@@ -398,6 +407,21 @@ class IoTSelector:
                  "هم‌خوان نیست؛ اگر اینترنت از نقطه برق‌دار مجاور (ساختمان/گیت‌وی) تأمین "
                  "می‌شود «دسترسی محدود» را انتخاب کنید، وگرنه پاسخ اینترنت را اصلاح کنید."
              )},
+            {"id": "Budget_conflict1", "questions": [10, 11],
+             "conditions": lambda ans: ans.get("budjeh_avalieh") == "محدود"
+             and ans.get("hazine_amaliati") == "انعطاف‌پذیر",
+             "message": "⚠️ بودجه اولیه محدود با هزینه عملیاتی انعطاف‌پذیر هم‌خوان نیست."},
+            {"id": "Data_conflict1", "questions": [7, 9],
+             "conditions": lambda ans: ans.get("hajm_dadeh") == "زیاد"
+             and ans.get("tedad_sensor") == "کم",
+             "message": "⚠️ حجم داده زیاد با تعداد سنسور کم معمولاً هم‌خوان نیست."},
+            {"id": "Net_conflict2", "questions": [5, 6],
+             "conditions": lambda ans: ans.get("internet_nazdik") == "بله"
+             and ans.get("pooshesh_mobile") == "پوشش ضعیف",
+             "message": (
+                 "⚠️ اینترنت ثابت نزدیک زمین با پوشش موبایل ضعیف — "
+                 "دسترسی میدانی محدود است؛ پاسخ‌ها را بازبینی کنید."
+             )},
         ]
 
     # ------------------------------------------------------------------ Phase 1: KMeans (unchanged logic)
@@ -435,6 +459,11 @@ class IoTSelector:
         for local_i, global_i in enumerate(self._clustering_indices):
             full[global_i] = centroid_local[local_i]
         return full
+
+    def _cluster_member_centroid(self, tech_names: List[str], criterion: str) -> float:
+        """Cluster-specific mean for a criterion (used when excluded from KMeans features)."""
+        indices = [i for i, t in enumerate(self.technologies) if t in tech_names]
+        return float(self.decision_matrix[indices, self._cidx(criterion)].mean())
 
     def _member_cellular_fraction(self, tech_names: List[str]) -> float:
         indices = [i for i, t in enumerate(self.technologies) if t in tech_names]
@@ -518,15 +547,23 @@ class IoTSelector:
         def ranking_score(r: Dict[str, Any]) -> float:
             sil_term = r["silhouette"] / best_sil if best_sil > 0 else r["silhouette"]
             singleton_penalty = r["n_singleton"] * 0.4
-            interpretability_bonus = 0.04 if r["k"] == 4 else 0.0
-            elbow_bonus = 0.03 if elbow_k is not None and r["k"] == elbow_k else 0.0
-            over_cluster_penalty = max(0, r["k"] - 4) * 0.015
+            interpretability_bonus = (
+                K_SELECTION_INTERPRETABILITY_BONUS if r["k"] == K_SELECTION_TARGET else 0.0
+            )
+            elbow_bonus = (
+                K_SELECTION_ELBOW_BONUS if elbow_k is not None and r["k"] == elbow_k else 0.0
+            )
+            over_cluster_penalty = max(0, r["k"] - K_SELECTION_TARGET) * K_SELECTION_OVER_CLUSTER_PENALTY
             return sil_term + interpretability_bonus + elbow_bonus - singleton_penalty - over_cluster_penalty
 
         chosen = max(valid, key=ranking_score)
         parts = [
             f"Silhouette={chosen['silhouette']:.4f}",
             f"Elbow در k={elbow_k}" if elbow_k else "Elbow نامشخص",
+            (
+                f"بونوس تفسیرپذیری k={K_SELECTION_TARGET} "
+                f"(+{K_SELECTION_INTERPRETABILITY_BONUS}) در صورت نزدیکی Silhouette"
+            ),
             "برچسب‌ها توصیفی و مبتنی بر مرکز خوشه",
         ]
         return chosen, "؛ ".join(parts)
@@ -588,6 +625,8 @@ class IoTSelector:
         for cid in range(optimal_k):
             centroid_full = self._centroid_to_full_original(centroids_normalized[cid], scaler, log_local_indices)
             techs = objective_analysis_df[objective_analysis_df["ClusterID"] == cid]["Technology"].tolist()
+            if not self.include_cellular_in_clustering:
+                centroid_full[self._cidx("cellular")] = self._cluster_member_centroid(techs, "cellular")
             cellular_frac = self._member_cellular_fraction(techs)
             label = self._infer_cluster_label(centroid_full, cellular_frac)
             description = self._describe_centroid(centroid_full, cellular_frac)
@@ -649,8 +688,21 @@ class IoTSelector:
         if not np.isfinite(cr) or cr < 0:
             cr = 0.0
 
-        weight_dict = {self.criteria_names[i]: float(weights[i]) for i in range(n)}
+        weight_dict = {
+            self.criteria_config[i].internal_name: float(weights[i]) for i in range(n)
+        }
         return weight_dict, float(cr), float(ci)
+
+    def _print_weight_table(self, weights: Dict[str, float], title: str) -> None:
+        print(title)
+        for cfg in self.criteria_config:
+            w = weights[cfg.internal_name]
+            print(f"   {cfg.label_fa:<20} {w:>8.4f} ({w * 100:.2f}%)")
+
+    def _print_answer_summary(self, user_answers: Dict[str, str], title: str = "خلاصه پروفایل") -> None:
+        print(f"\n--- {title} ---")
+        for idx, key in enumerate(QUESTION_NUM_TO_KEY.values(), 1):
+            print(f"{idx:2d}. {QUESTION_KEY_LABELS.get(key, key):20s}: {user_answers.get(key, '؟')}")
 
     def _interpret_cr(self, cr: float) -> str:
         if cr <= 0.10:
@@ -672,8 +724,7 @@ class IoTSelector:
             "input_mode": "expert_base_only",
         }
         print("\n--- وزن‌های پایه خبره ---")
-        for label, w in weights.items():
-            print(f"   {label:<20} {w:>8.4f} ({w * 100:.2f}%)")
+        self._print_weight_table(weights, "")
         print(f"\n   CR = {cr:.4f} — {result['cr_status']}")
         print("\n✅ فاز ۲ انجام شد.\n" + "=" * 60 + "\n")
         self.ahp_base_result = result
@@ -781,7 +832,9 @@ class IoTSelector:
                     print("👋 خروج از برنامه.")
                     sys.exit(0)
                 qnums = sorted({q for c in critical for q in c["questions"]})
-                user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+                user_answers = self._retry_questionnaire_answers(
+                    user_answers, qnums, resolve_critical=False,
+                )
                 critical_retries = 0
                 continue
 
@@ -793,7 +846,9 @@ class IoTSelector:
                 print(f"   {item['message']}")
             print("\nلطفاً پاسخ‌های مرتبط را اصلاح کنید.")
             qnums = sorted({q for c in critical for q in c["questions"]})
-            user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+            user_answers = self._retry_questionnaire_answers(
+                user_answers, qnums, resolve_critical=False,
+            )
 
     def get_user_priorities(self) -> Dict[str, str]:
         print("=" * 60)
@@ -820,6 +875,16 @@ class IoTSelector:
 
             conflicts = [c for c in self._active_conflicts(user_answers) if q_num in c["questions"]]
             if not conflicts:
+                continue
+
+            critical_conflicts = [c for c in conflicts if self._is_critical_conflict(c)]
+            if critical_conflicts:
+                for conflict in critical_conflicts:
+                    print(f"\n{conflict['message']}\nلطفاً پاسخ‌های مرتبط را اصلاح کنید.")
+                user_answers = self._ensure_no_blocking_conflicts(user_answers)
+                for rq in sorted({q for c in critical_conflicts for q in c["questions"]}):
+                    if QUESTION_NUM_TO_KEY[rq] not in user_answers:
+                        pending.insert(0, rq)
                 continue
 
             to_reask: set = set()
@@ -930,13 +995,19 @@ class IoTSelector:
             print("❌ گزینه نامعتبر.")
 
     def _retry_questionnaire_answers(
-        self, user_answers: Dict[str, str], question_nums: List[int],
+        self,
+        user_answers: Dict[str, str],
+        question_nums: List[int],
+        *,
+        resolve_critical: bool = True,
     ) -> Dict[str, str]:
         for qnum in question_nums:
             user_answers.pop(QUESTION_NUM_TO_KEY[qnum], None)
         for qnum in question_nums:
             self.ask_question(qnum, user_answers)
         self._validate_questionnaire_answers(user_answers)
+        if resolve_critical:
+            return self._ensure_no_blocking_conflicts(user_answers)
         return user_answers
 
     def _cr_with_applied_rule_ids(
@@ -977,6 +1048,7 @@ class IoTSelector:
         logical_retry_counts: Dict[int, int] = defaultdict(int)
         critical_retry_counts = 0
         cr_retry_count = 0
+        answers_changed_in_phase = False
 
         while True:
             logical = self._find_logical_contradictions(user_answers)
@@ -992,15 +1064,21 @@ class IoTSelector:
                             print("👋 خروج از برنامه.")
                             sys.exit(0)
                         qnums = sorted({q for c in critical for q in c["questions"]})
-                        user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+                        user_answers = self._retry_questionnaire_answers(
+                            user_answers, qnums, resolve_critical=False,
+                        )
                         critical_retry_counts = 0
+                        answers_changed_in_phase = True
                         continue
                     critical_retry_counts += 1
                     print(f"\n🚫 تضاد بحرانی در فاز ۴ — باید رفع شود ({critical_retry_counts}/{MAX_CRITICAL_CONFLICT_RETRIES}).")
                     for item in critical:
                         print(f"   {item['message']}")
                     qnums = sorted({q for c in critical for q in c["questions"]})
-                    user_answers = self._retry_questionnaire_answers(user_answers, qnums)
+                    user_answers = self._retry_questionnaire_answers(
+                        user_answers, qnums, resolve_critical=False,
+                    )
+                    answers_changed_in_phase = True
                     continue
 
                 qnums = sorted({q for item in logical for q in item["questions"]})
@@ -1012,6 +1090,7 @@ class IoTSelector:
                     for q in retriable:
                         logical_retry_counts[q] += 1
                     user_answers = self._retry_questionnaire_answers(user_answers, retriable)
+                    answers_changed_in_phase = True
                     continue
 
                 print("\n⚠️  تضاد منطقی پس از حداکثر بازپرسش — ادامه با پاسخ‌های فعلی.")
@@ -1035,8 +1114,7 @@ class IoTSelector:
                 print("   • هیچ قانونی فعال نشد")
 
             print("\n--- وزن‌های شخصی‌سازی‌شده ---")
-            for label, w in weights.items():
-                print(f"   {label:<20} {w:>8.4f} ({w * 100:.2f}%)")
+            self._print_weight_table(weights, "")
             print(f"\n   CR = {cr:.4f} — {self._interpret_cr(cr)}")
             print(f"   CR پایه خبره = {base_cr:.4f}")
 
@@ -1047,10 +1125,13 @@ class IoTSelector:
                 "rule_explanations": rule_explanations,
                 "pcm": pcm,
                 "input_mode": "expert_base_plus_rules",
+                "personalize_cluster": True,
             }
 
             if cr <= CR_ACCEPTABLE_THRESHOLD:
                 print("\n✅ سازگاری قابل قبول است.")
+                if answers_changed_in_phase:
+                    self._print_answer_summary(user_answers, "پروفایل به‌روزشده پس از بازپرسش")
                 print("✅ فاز ۴ انجام شد.\n" + "=" * 60 + "\n")
                 self.ahp_result = result
                 return result
@@ -1087,6 +1168,7 @@ class IoTSelector:
                     user_answers = self._retry_questionnaire_answers(
                         user_answers, sorted(inflating_qnums),
                     )
+                    answers_changed_in_phase = True
                     continue
                 print("⚠️ سوال مشخصی نیست؛ [c] یا [d] را انتخاب کنید.")
                 continue
@@ -1102,19 +1184,74 @@ class IoTSelector:
                     "applied_rules": [], "rule_explanations": [],
                     "pcm": base_pcm, "input_mode": "expert_base_only",
                     "reset_to_base": True,
+                    "personalize_cluster": False,
                 }
+                print(
+                    "\nℹ️  بازگشت به ماتریس خبره — پیشنهاد خوشه در فاز ۵ "
+                    "فقط بر اساس ساختار عینی KMeans خواهد بود."
+                )
                 self.ahp_result = result
                 return result
             print("👋 خروج از برنامه.")
             sys.exit(0)
 
     # ------------------------------------------------------------------ Phase 5 & 6: Cluster recommendation + confirmation
-    def recommend_cluster(self, user_answers: Dict[str, str]) -> Dict[str, Any]:
+    def _recommend_cluster_objective(self) -> Dict[str, Any]:
+        """Objective cluster pick when questionnaire heuristics are disabled ([d] in phase 4)."""
+        if not self.clustering_metadata:
+            raise RuntimeError("perform_clustering() must run first")
+        profiles = self.clustering_metadata["cluster_profiles"]
+        normalized = self.clustering_metadata["normalized_matrix"]
+        scores: Dict[int, float] = {}
+        reasons: Dict[int, List[str]] = {}
+        for cid, profile in profiles.items():
+            techs = profile["technologies"]
+            indices = [i for i, t in enumerate(self.technologies) if t in techs]
+            members = normalized[indices]
+            centroid = members.mean(axis=0)
+            compactness = 1.0 / (1.0 + float(np.mean(np.linalg.norm(members - centroid, axis=1))))
+            cost_score = 1.0 / (1.0 + profile["centroid_full"][self._cidx("cost")])
+            scores[cid] = compactness + cost_score
+            reasons[cid] = [
+                "پیشنهاد عینی — بدون heuristics پرسشنامه",
+                "فشردگی خوشه در فضای نرمال‌شده فاز ۱",
+                "اولویت هزینه پایین‌تر (ماتریس خبره)",
+            ]
+        recommended = max(scores, key=scores.get)
+        return {
+            "recommended_cluster": recommended,
+            "scores": scores,
+            "reasons": reasons,
+            "explanation": reasons[recommended],
+            "mode": "objective",
+        }
+
+    def _ahp_weight(self, weights: Optional[Dict[str, float]], name: str) -> float:
+        if not weights:
+            return 1.0 / len(self.criteria_config)
+        return float(weights.get(name, 1.0 / len(self.criteria_config)))
+
+    def recommend_cluster(
+        self,
+        user_answers: Dict[str, str],
+        *,
+        personalize: bool = True,
+        ahp_weights: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Any]:
+        if not personalize:
+            return self._recommend_cluster_objective()
         if not self.clustering_metadata:
             raise RuntimeError("perform_clustering() must run first")
         profiles = self.clustering_metadata["cluster_profiles"]
         scores: Dict[int, float] = {}
         reasons: Dict[int, List[str]] = {}
+
+        w_range = self._ahp_weight(ahp_weights, "range")
+        w_data = self._ahp_weight(ahp_weights, "data_rate")
+        w_energy = self._ahp_weight(ahp_weights, "energy")
+        w_cell = self._ahp_weight(ahp_weights, "cellular")
+        w_cost = self._ahp_weight(ahp_weights, "cost")
+        w_link = self._ahp_weight(ahp_weights, "link_budget")
 
         for cid, profile in profiles.items():
             c = profile["centroid_full"]
@@ -1128,58 +1265,58 @@ class IoTSelector:
             cell_frac = profile["cellular_frac"]
 
             if user_answers.get("masahat_zamin") == "بزرگ" or user_answers.get("tarakom_sensor") == "تراکم پایین":
-                score += min(range_m / 5000.0, 1.0) * 2.0
+                score += min(range_m / 5000.0, 1.0) * 2.0 * w_range * 7
                 reason_parts.append("نیاز برد بالاتر (مساحت/تراکم)")
             if user_answers.get("masahat_zamin") == "کوچک" or user_answers.get("tarakom_sensor") == "تراکم بالا":
-                score += (1.0 - min(range_m / 500.0, 1.0)) * 2.0
+                score += (1.0 - min(range_m / 500.0, 1.0)) * 2.0 * w_range * 7
                 reason_parts.append("نیاز برد کوتاه‌تر (مساحت/تراکم)")
             if user_answers.get("hajm_dadeh") == "زیاد":
-                score += min(np.log1p(data_rate) / 10.0, 1.0) * 2.0
+                score += min(np.log1p(data_rate) / 10.0, 1.0) * 2.0 * w_data * 7
                 reason_parts.append("نیاز نرخ داده بالاتر")
             elif user_answers.get("hajm_dadeh") == "کم":
-                score += (1.0 - min(data_rate / 10.0, 1.0)) * 1.0
+                score += (1.0 - min(data_rate / 10.0, 1.0)) * 1.0 * w_data * 7
                 reason_parts.append("نیاز نرخ داده پایین‌تر")
             if user_answers.get("dastresi_bargh") == "عدم دسترسی":
-                score += (1.0 - min(energy / 500.0, 1.0)) * 2.0
+                score += (1.0 - min(energy / 500.0, 1.0)) * 2.0 * w_energy * 7
                 reason_parts.append("نیاز مصرف انرژی پایین‌تر")
             mobile = user_answers.get("pooshesh_mobile")
             if mobile == "پوشش قوی" and user_answers.get("budjeh_avalieh") != "محدود":
-                score += cell_frac * 1.5
+                score += cell_frac * 1.5 * w_cell * 7
                 reason_parts.append("پوشش موبایل مناسب برای گزینه‌های سلولی")
             if mobile == "پوشش ضعیف" or user_answers.get("hazine_amaliati") == "بسیار محدود":
-                score += (1.0 - cell_frac) * 1.5
+                score += (1.0 - cell_frac) * 1.5 * w_cell * 7
                 reason_parts.append("ترجیح گزینه‌های غیرسلولی/بردبلند")
             if user_answers.get("internet_nazdik") == "بله" and user_answers.get("hajm_dadeh") == "زیاد":
-                score += min(np.log1p(data_rate) / 10.0, 1.0) * 1.5
+                score += min(np.log1p(data_rate) / 10.0, 1.0) * 1.5 * w_data * 7
                 reason_parts.append("اینترنت ثابت + داده زیاد → WLAN پرسرعت")
 
             topo = user_answers.get("topography")
             if topo == "ناهموار":
-                score += min(link_budget / 150.0, 1.0) * 1.2 + min(range_m / 3000.0, 1.0) * 0.8
+                score += (min(link_budget / 150.0, 1.0) * 1.2 + min(range_m / 3000.0, 1.0) * 0.8) * w_link * 7
                 reason_parts.append("توپوگرافی ناهموار → لینک و برد مهم‌تر")
             elif topo == "کمی شیب‌دار":
-                score += min(link_budget / 150.0, 1.0) * 0.5
+                score += min(link_budget / 150.0, 1.0) * 0.5 * w_link * 7
 
             obstacles = user_answers.get("manae_fiziki")
             if obstacles == "موانع زیاد":
-                score += min(link_budget / 150.0, 1.0) * 1.0 + min(range_m / 4000.0, 1.0) * 1.0
+                score += (min(link_budget / 150.0, 1.0) * 1.0 + min(range_m / 4000.0, 1.0) * 1.0) * w_link * 7
                 reason_parts.append("موانع زیاد → بودجه لینک و برد")
             elif obstacles == "موانع متوسط":
-                score += min(link_budget / 150.0, 1.0) * 0.4
+                score += min(link_budget / 150.0, 1.0) * 0.4 * w_link * 7
 
             sensors = user_answers.get("tedad_sensor")
             if sensors == "زیاد":
-                score += min(data_rate / 100.0, 1.0) * 1.0 + (1.0 - min(cost / 50.0, 1.0)) * 0.8
+                score += (min(data_rate / 100.0, 1.0) * 1.0 + (1.0 - min(cost / 50.0, 1.0)) * 0.8) * w_data * 7
                 reason_parts.append("سنسور زیاد → داده بالاتر، هزینه پایین‌تر")
             elif sensors == "متوسط":
-                score += min(data_rate / 50.0, 1.0) * 0.5
+                score += min(data_rate / 50.0, 1.0) * 0.5 * w_data * 7
 
             growth = user_answers.get("ghabeliat_gostaresh")
             if growth == "اهمیت بالا":
-                score += min(range_m / 5000.0, 1.0) * 1.2 + min(data_rate / 20.0, 1.0) * 1.0
+                score += (min(range_m / 5000.0, 1.0) * 1.2 + min(data_rate / 20.0, 1.0) * 1.0) * w_range * 7
                 reason_parts.append("گسترش بالا → برد و ظرفیت داده")
             elif growth == "اهمیت متوسط":
-                score += min(range_m / 5000.0, 1.0) * 0.5
+                score += min(range_m / 5000.0, 1.0) * 0.5 * w_range * 7
 
             scores[cid] = score
             reasons[cid] = reason_parts or ["تطابق عمومی پروفایل فنی"]
@@ -1190,15 +1327,30 @@ class IoTSelector:
             "scores": scores,
             "reasons": reasons,
             "explanation": reasons[recommended],
+            "mode": "personalized",
         }
 
     def show_cluster_recommendation(
-        self, objective_analysis_df: pd.DataFrame, user_answers: Dict[str, str],
+        self,
+        objective_analysis_df: pd.DataFrame,
+        user_answers: Dict[str, str],
+        ahp_result: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         print("=" * 60)
         print("--- فاز ۵: پیشنهاد خوشه توسط سیستم ---")
         print("=" * 60)
         print(f"   {CLUSTERING_DISCLAIMER}\n")
+
+        personalize = True
+        if ahp_result is not None:
+            personalize = ahp_result.get("personalize_cluster", True)
+        if not personalize:
+            print(
+                "   ℹ️  ماتریس AHP به حالت خبره بازگشته — "
+                "پیشنهاد خوشه فقط از ساختار عینی KMeans است.\n"
+            )
+        else:
+            print("   ℹ️  امتیاز خوشه با heuristics پرسشنامه × وزن‌های AHP شخصی‌سازی‌شده.\n")
 
         profiles = (self.clustering_metadata or {}).get("cluster_profiles", {})
         clusters_dict: Dict[int, List[str]] = {}
@@ -1212,7 +1364,11 @@ class IoTSelector:
             else:
                 cluster_descriptions[cid] = f"خوشه {cid}"
 
-        recommendation = self.recommend_cluster(user_answers)
+        recommendation = self.recommend_cluster(
+            user_answers,
+            personalize=personalize,
+            ahp_weights=(ahp_result or {}).get("weights"),
+        )
         rec_id = recommendation["recommended_cluster"]
 
         print(f"⭐ خوشه پیشنهادی: {rec_id}")
@@ -1254,7 +1410,7 @@ class IoTSelector:
         print("برای پذیرش Enter بزنید؛ برای تغییر «o» وارد کنید.")
         while True:
             raw = input("👉 [Enter=پذیرش / o=تغییر خوشه]: ").strip().lower()
-            if raw in ("", "y", "yes", "بله", "ب"):
+            if raw in ("", "y", "yes", "بله", "ب") or raw == str(rec_id):
                 selected_cluster = rec_id
                 print(f"✅ خوشه پیشنهادی {rec_id} پذیرفته شد.")
                 break
@@ -1297,6 +1453,15 @@ class IoTSelector:
             c.criterion_type == "benefit" for c in self.criteria_config if c.used_in_topsis
         ])
 
+    def _prepare_topsis_matrix(self, matrix: np.ndarray) -> np.ndarray:
+        """Apply the same per-criterion transforms used before KMeans scaling."""
+        prepared = matrix.astype(float).copy()
+        for cfg in self.criteria_config:
+            if cfg.used_in_topsis:
+                idx = self._cidx(cfg.internal_name)
+                prepared[:, idx] = self._apply_transform(prepared[:, idx], cfg.transform)
+        return prepared
+
     def _validate_topsis_inputs(
         self, filtered_matrix: np.ndarray, weights: Dict[str, float],
     ) -> np.ndarray:
@@ -1307,7 +1472,9 @@ class IoTSelector:
             raise ValueError(
                 f"filtered_matrix has {filtered_matrix.shape[1]} columns, expected {n_criteria}"
             )
-        w = np.array([weights[c.label_fa] for c in self.criteria_config if c.used_in_topsis])
+        w = np.array([
+            weights[cfg.internal_name] for cfg in self.criteria_config if cfg.used_in_topsis
+        ])
         if not np.isclose(w.sum(), 1.0, atol=1e-6):
             raise ValueError(f"Weights must sum to 1, got {w.sum():.6f}")
         return w
@@ -1317,14 +1484,15 @@ class IoTSelector:
     ) -> np.ndarray:
         weights_array = self._validate_topsis_inputs(filtered_matrix, weights)
         is_benefit = self._is_benefit_array()
-        col_norms = np.sqrt((filtered_matrix ** 2).sum(axis=0))
+        transformed = self._prepare_topsis_matrix(filtered_matrix)
+        col_norms = np.sqrt((transformed ** 2).sum(axis=0))
         topsis_labels = [c.label_fa for c in self.criteria_config if c.used_in_topsis]
         zero_cols = col_norms == 0
         if np.any(zero_cols):
             constant = [topsis_labels[i] for i, z in enumerate(zero_cols) if z]
             print(f"   ⚠️ معیارهای بدون پراکندگی: {', '.join(constant)}")
         col_norms = np.where(col_norms == 0, 1.0, col_norms)
-        norm_matrix = filtered_matrix / col_norms
+        norm_matrix = transformed / col_norms
         weighted = norm_matrix * weights_array
         ideal_best = np.where(is_benefit, weighted.max(axis=0), weighted.min(axis=0))
         ideal_worst = np.where(is_benefit, weighted.min(axis=0), weighted.max(axis=0))
@@ -1344,6 +1512,12 @@ class IoTSelector:
         weights = ahp_result["weights"]
 
         print("\nمعیارها و نوع:")
+        log_labels = [
+            c.label_fa for c in self.criteria_config
+            if c.used_in_topsis and c.transform == "log1p"
+        ]
+        if log_labels:
+            print(f"   پیش‌پردازش TOPSIS: log1p روی {', '.join(log_labels)}")
         for c in self.criteria_config:
             if c.used_in_topsis:
                 kind = "سودی" if c.criterion_type == "benefit" else "هزینه‌ای"
@@ -1382,7 +1556,9 @@ def main() -> None:
     selector.run_base_ahp()                            # Phase 2
     user_answers = selector.get_user_priorities()        # Phase 3
     ahp_result = selector.apply_ahp_adjustments(user_answers)  # Phase 4
-    recommendation = selector.show_cluster_recommendation(cluster_df, user_answers)  # Phase 5
+    recommendation = selector.show_cluster_recommendation(
+        cluster_df, user_answers, ahp_result,
+    )  # Phase 5
     phase_context = selector.confirm_cluster_selection(recommendation)   # Phase 6
     selector.apply_topsis(phase_context, ahp_result)     # Phase 7
 
