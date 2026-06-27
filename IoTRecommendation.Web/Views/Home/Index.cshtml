@@ -1,0 +1,99 @@
+﻿@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="text-center mb-4">
+            <h1 class="h2 fw-bold">Smart IoT Network Recommendation System</h1>
+            <p class="text-muted">A multi-criteria decision support tool for selecting the optimal IoT communication technology.</p>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <h5 class="card-title">Four-Phase Workflow</h5>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <div class="d-flex">
+                            <div class="me-3 mt-1">
+                                <span class="badge bg-primary rounded-circle" style="width:28px;height:28px;line-height:18px;">1</span>
+                            </div>
+                            <div>
+                                <strong>Technology Clustering</strong>
+                                <p class="text-muted small mb-0">K-Means groups technologies by objective technical features — without AHP weights.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex">
+                            <div class="me-3 mt-1">
+                                <span class="badge bg-primary rounded-circle" style="width:28px;height:28px;line-height:18px;">2</span>
+                            </div>
+                            <div>
+                                <strong>AHP (Multi-Expert)</strong>
+                                <p class="text-muted small mb-0">Geometric-mean aggregation of expert pairwise comparison matrices produces base weights.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex">
+                            <div class="me-3 mt-1">
+                                <span class="badge bg-primary rounded-circle" style="width:28px;height:28px;line-height:18px;">3</span>
+                            </div>
+                            <div>
+                                <strong>Adaptive Weight Adjustment</strong>
+                                <p class="text-muted small mb-0">A 13-question site assessment shifts weights via an exponential formula (α configurable).</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex">
+                            <div class="me-3 mt-1">
+                                <span class="badge bg-primary rounded-circle" style="width:28px;height:28px;line-height:18px;">4</span>
+                            </div>
+                            <div>
+                                <strong>TOPSIS Ranking</strong>
+                                <p class="text-muted small mb-0">Ranks only the technologies in the selected cluster using adaptive weights.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="card-title text-muted text-uppercase small">Criteria Evaluated</h6>
+                <div class="row g-2 mt-1">
+                    @foreach (var c in new[] {
+                        ("Transmission Range","m","Benefit"),
+                        ("Cellular Support","0/1","Benefit"),
+                        ("Data Rate","Mbps","Benefit"),
+                        ("Link Budget","dB","Benefit"),
+                        ("RTT Latency","ms","Cost"),
+                        ("Energy Consumption","mW","Cost"),
+                        ("Annual Connectivity OPEX","USD/yr","Cost"),
+                        ("Hardware CAPEX","USD","Cost")
+                    })
+                    {
+                        <div class="col-md-3 col-6">
+                            <span class="badge @(c.Item3 == "Benefit" ? "bg-success-subtle text-success-emphasis" : "bg-danger-subtle text-danger-emphasis") border d-block text-start px-2 py-1">
+                                @c.Item1
+                                <span class="fw-normal text-muted small d-block">@c.Item2 · @c.Item3</span>
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <form asp-controller="Workflow" asp-action="RunClustering" method="post">
+                <button type="submit" class="btn btn-primary btn-lg px-5">
+                    Start Analysis
+                </button>
+            </form>
+            <p class="text-muted small mt-2">This runs Phase 1 (Clustering) and Phase 2 (AHP) automatically.</p>
+        </div>
+    </div>
+</div>

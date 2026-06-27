@@ -1,0 +1,127 @@
+@model ClusteringViewModel?
+@{
+    ViewData["Title"] = "Phase 1 – Technology Clustering";
+}
+
+<div class="page-header d-flex align-items-center gap-2">
+    <h2 class="h4 mb-0">Phase 1 – Technology Clustering</h2>
+    <span class="badge bg-primary step-badge">K-Means</span>
+</div>
+
+@if (Model is null)
+{
+    <div class="alert alert-info">No clustering result yet.</div>
+}
+else
+{
+    var result = Model.Result;
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="value text-primary">@result.OptimalK</div>
+                <div class="text-muted small">Optimal k</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-box">
+                @{
+                    var bestMetrics = result.KMetrics.FirstOrDefault(m => m.K == result.OptimalK);
+                }
+                <div class="value text-success">@(bestMetrics?.SilhouetteScore.ToString("F4") ?? "–")</div>
+                <div class="text-muted small">Silhouette Score</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="value">@(result.ElbowK?.ToString() ?? "–")</div>
+                <div class="text-muted small">Elbow k</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-box">
+                <div class="value">@Model.ClusteringCriteriaKeys.Count</div>
+                <div class="text-muted small">Clustering Features</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-secondary small">
+        <strong>Note:</strong> Clustering uses only objective technical features and does not use AHP weights.
+        Clusters are descriptive groupings, not definitive classifications.
+    </div>
+
+    <h5>k Evaluation Metrics</h5>
+    <div class="card mb-4">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead>
+                    <tr>
+                        <th>k</th>
+                        <th>Inertia (WCSS)</th>
+                        <th>Silhouette Score</th>
+                        <th>Min Cluster Size</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in result.KMetrics.OrderBy(m => m.K))
+                    {
+                        bool isChosen = m.K == result.OptimalK;
+                        bool isElbow = result.ElbowK.HasValue && m.K == result.ElbowK.Value;
+                        <tr class="@(isChosen ? "table-primary fw-bold" : "")">
+                            <td>@m.K @(isChosen ? "✓" : "")</td>
+                            <td>@m.Inertia.ToString("F2")</td>
+                            <td>@m.SilhouetteScore.ToString("F4")</td>
+                            <td>@m.MinClusterSize</td>
+                            <td>@(isElbow ? "← Elbow" : "")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h5>Cluster Assignments</h5>
+    <div class="row g-3 mb-4">
+        @foreach (var cluster in result.Clusters.OrderBy(c => c.ClusterId))
+        {
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Cluster @cluster.ClusterId</strong>
+                        <span class="badge bg-secondary">@cluster.TechnologyNames.Count technologies</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2 fst-italic">@cluster.Label</p>
+                        <ul class="list-unstyled mb-2">
+                            @foreach (var t in cluster.TechnologyNames)
+                            {
+                                <li><span class="text-primary">›</span> @t</li>
+                            }
+                        </ul>
+                        @if (cluster.CentroidValues.Any())
+                        {
+                            <details>
+                                <summary class="small text-muted">Centroid values</summary>
+                                <table class="table table-sm table-borderless mt-1 small">
+                                    @foreach (var kvp in cluster.CentroidValues)
+                                    {
+                                        <tr><td class="text-muted pe-2">@kvp.Key</td><td>@kvp.Value.ToString("G4")</td></tr>
+                                    }
+                                </table>
+                            </details>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <p class="text-muted small"><em>Selection rationale: @result.SelectionRationale</em></p>
+
+    <div class="d-flex gap-2">
+        <a asp-action="Ahp" class="btn btn-outline-primary">View AHP Results →</a>
+        <a asp-action="SelectCluster" class="btn btn-primary">Select a Cluster for TOPSIS →</a>
+    </div>
+}

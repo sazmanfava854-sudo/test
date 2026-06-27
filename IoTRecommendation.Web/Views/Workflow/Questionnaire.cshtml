@@ -1,0 +1,72 @@
+@model QuestionnaireViewModel
+@{
+    ViewData["Title"] = "Phase 3 – Site Assessment Questionnaire";
+}
+
+<div class="page-header">
+    <h2 class="h4 mb-0">Phase 3 – Site Assessment Questionnaire</h2>
+</div>
+
+<p class="text-muted mb-3">
+    Answer the following @Model.Questions.Count questions about your deployment site.
+    Each answer adjusts the importance of specific criteria for your context.
+</p>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        { <div>@e.ErrorMessage</div> }
+    </div>
+}
+
+<form asp-action="Questionnaire" method="post" id="questionnaireForm">
+    <div class="row g-3">
+        @for (int i = 0; i < Model.Questions.Count; i++)
+        {
+            var q = Model.Questions[i];
+            string savedOptionId = Model.SelectedOptions.GetValueOrDefault(q.Id, "");
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header small fw-semibold text-muted">
+                        Question @(i + 1) of @Model.Questions.Count
+                    </div>
+                    <div class="card-body">
+                        <p class="fw-semibold mb-3">@q.Text</p>
+                        @foreach (var opt in q.Options)
+                        {
+                            bool isSelected = savedOptionId == opt.Id;
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio"
+                                       name="selectedOptions[@q.Id]"
+                                       id="@(q.Id)_@opt.Id"
+                                       value="@opt.Id"
+                                       @(isSelected ? "checked" : "")
+                                       required />
+                                <label class="form-check-label" for="@(q.Id)_@opt.Id">
+                                    @opt.Text
+                                    @if (opt.Effects.Any())
+                                    {
+                                        <small class="d-block text-muted mt-1">
+                                            @foreach (var ef in opt.Effects)
+                                            {
+                                                string sign = ef.Delta > 0 ? "+" : "";
+                                                string cls = ef.Delta > 0 ? "text-danger" : "text-success";
+                                                <span class="@cls me-2">@ef.CriterionKey @sign@ef.Delta</span>
+                                            }
+                                        </small>
+                                    }
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        <a asp-action="SelectCluster" class="btn btn-outline-secondary">← Back</a>
+        <button type="submit" class="btn btn-primary">Calculate Adaptive Weights & Run TOPSIS →</button>
+    </div>
+</form>

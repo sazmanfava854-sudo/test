@@ -1,0 +1,57 @@
+@model ClusterSelectionViewModel
+@{
+    ViewData["Title"] = "Select Cluster";
+}
+
+<div class="page-header">
+    <h2 class="h4 mb-0">Select Cluster for TOPSIS</h2>
+</div>
+
+<p class="text-muted">
+    Choose the cluster that best matches your deployment context. TOPSIS will rank only
+    the technologies within this cluster.
+</p>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        { <div>@e.ErrorMessage</div> }
+    </div>
+}
+
+<form asp-action="SelectCluster" method="post">
+    <div class="row g-3 mb-4">
+        @foreach (var cluster in Model.Clusters.OrderBy(c => c.ClusterId))
+        {
+            bool isSelected = Model.PreselectedClusterId == cluster.ClusterId;
+            <div class="col-md-6">
+                <label class="card h-100 @(isSelected ? "border-primary" : "") cursor-pointer"
+                       style="cursor:pointer">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="radio" name="selectedClusterId" value="@cluster.ClusterId"
+                                   @(isSelected ? "checked" : "") class="form-check-input mt-0" />
+                            <strong>Cluster @cluster.ClusterId</strong>
+                        </div>
+                        <span class="badge bg-secondary">@cluster.TechnologyNames.Count nodes</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="fst-italic text-muted small mb-2">@cluster.Label</p>
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var t in cluster.TechnologyNames)
+                            {
+                                <li class="small"><span class="text-primary">›</span> @t</li>
+                            }
+                        </ul>
+                    </div>
+                </label>
+            </div>
+        }
+    </div>
+
+    <div class="d-flex gap-2">
+        <a asp-action="Ahp" class="btn btn-outline-secondary">← AHP Results</a>
+        <button type="submit" class="btn btn-primary">Proceed to Questionnaire →</button>
+    </div>
+</form>

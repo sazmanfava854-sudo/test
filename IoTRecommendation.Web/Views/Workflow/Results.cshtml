@@ -1,0 +1,112 @@
+@model ResultsViewModel
+@{
+    ViewData["Title"] = "Phase 4 – TOPSIS Results";
+}
+
+<div class="page-header d-flex align-items-center gap-2">
+    <h2 class="h4 mb-0">Phase 4 – TOPSIS Results</h2>
+    <span class="badge bg-info text-dark step-badge">Cluster @Model.SelectedCluster.ClusterId</span>
+</div>
+
+<div class="winner-badge mb-4 d-inline-flex align-items-center gap-2">
+    <span class="fs-4">🏆</span>
+    <span><strong>Recommended Technology:</strong> @Model.TopsisResult.WinnerName</span>
+</div>
+
+<div class="row g-4">
+
+    @* TOPSIS Ranking Table *@
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><strong>Technology Ranking (Closeness Coefficient C*)</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Technology</th>
+                            <th>C*</th>
+                            <th>D+</th>
+                            <th>D−</th>
+                            <th>Bar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.TopsisResult.Ranking)
+                        {
+                            bool isWinner = entry.Rank == 1;
+                            <tr class="@(isWinner ? "table-success fw-bold" : "")">
+                                <td>@entry.Rank</td>
+                                <td>@entry.TechnologyName @(isWinner ? "🥇" : entry.Rank == 2 ? "🥈" : entry.Rank == 3 ? "🥉" : "")</td>
+                                <td class="font-monospace">@entry.ClosenessCoefficient.ToString("F4")</td>
+                                <td class="font-monospace text-muted small">@entry.DistanceToBestIdeal.ToString("F5")</td>
+                                <td class="font-monospace text-muted small">@entry.DistanceToWorstIdeal.ToString("F5")</td>
+                                <td style="min-width:100px">
+                                    @{int barW = (int)(entry.ClosenessCoefficient * 100);}
+                                    <div class="@(isWinner ? "bg-success" : "bg-primary")"
+                                         style="height:12px;width:@barW%;border-radius:3px;"></div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @* Adaptive Weights Panel *@
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header"><strong>Adaptive vs. Base Weights</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Criterion</th>
+                            <th>Base</th>
+                            <th>Si</th>
+                            <th>Adaptive</th>
+                            <th>Δ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var def in Model.CriteriaDefinitions)
+                        {
+                            double base_ = Model.AdaptiveWeightResult.BaseWeights.GetValueOrDefault(def.Key, 0);
+                            double adapt = Model.AdaptiveWeightResult.AdaptiveWeights.GetValueOrDefault(def.Key, 0);
+                            int si = Model.AdaptiveWeightResult.AdjustmentScores.GetValueOrDefault(def.Key, 0);
+                            double delta = (adapt - base_) * 100;
+                            string deltaCls = delta > 0.001 ? "text-danger" : delta < -0.001 ? "text-success" : "text-muted";
+                            <tr>
+                                <td class="small">@def.DisplayName</td>
+                                <td class="font-monospace small">@base_.ToString("F4")</td>
+                                <td class="text-center @(si > 0 ? "text-danger fw-bold" : si < 0 ? "text-success fw-bold" : "text-muted")">@(si > 0 ? "+" : "")@si</td>
+                                <td class="font-monospace small fw-bold">@adapt.ToString("F4")</td>
+                                <td class="small @deltaCls">@(delta > 0 ? "+" : "")@delta.ToString("F2")%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body small">
+                <strong>Selected Cluster:</strong> @Model.SelectedCluster.ClusterId — @Model.SelectedCluster.Label<br />
+                <strong>Technologies evaluated:</strong> @Model.SelectedCluster.TechnologyNames.Count<br />
+                <hr class="my-2" />
+                <strong>Adaptive formula:</strong>
+                W'<sub>i</sub> = W<sub>i</sub> · exp(α · S<sub>i</sub>), then normalised.<br />
+                Si = PositiveCount − NegativeCount per criterion.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="mt-4 d-flex gap-2">
+    <a asp-action="Questionnaire" class="btn btn-outline-secondary">← Revise Questionnaire</a>
+    <form asp-action="Reset" method="post" class="d-inline">
+        <button type="submit" class="btn btn-outline-danger">Start Over</button>
+    </form>
+</div>

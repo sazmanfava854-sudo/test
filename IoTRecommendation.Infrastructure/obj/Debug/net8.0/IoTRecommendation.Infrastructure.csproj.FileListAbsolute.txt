@@ -1,0 +1,16 @@
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.csproj.AssemblyReference.cache
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.AssemblyInfoInputs.cache
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.AssemblyInfo.cs
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.csproj.CoreCompileInputs.cache
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.sourcelink.json
+/workspace/IoTRecommendation.Infrastructure/bin/Debug/net8.0/IoTRecommendation.Infrastructure.deps.json
+/workspace/IoTRecommendation.Infrastructure/bin/Debug/net8.0/IoTRecommendation.Infrastructure.dll
+/workspace/IoTRecommendation.Infrastructure/bin/Debug/net8.0/IoTRecommendation.Infrastructure.pdb
+/workspace/IoTRecommendation.Infrastructure/bin/Debug/net8.0/IoTRecommendation.Core.dll
+/workspace/IoTRecommendation.Infrastructure/bin/Debug/net8.0/IoTRecommendation.Core.pdb
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.csproj.CopyComplete
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.dll
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/refint/IoTRecommendation.Infrastructure.dll
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/IoTRecommendation.Infrastructure.pdb
+/workspace/IoTRecommendation.Infrastructure/obj/Debug/net8.0/ref/IoTRecommendation.Infrastructure.dll

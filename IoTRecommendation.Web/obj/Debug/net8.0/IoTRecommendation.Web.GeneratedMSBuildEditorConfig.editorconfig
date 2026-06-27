@@ -1,0 +1,75 @@
+is_global = true
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = IoTRecommendation.Web
+build_property.RootNamespace = IoTRecommendation.Web
+build_property.ProjectDir = /workspace/IoTRecommendation.Web/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = /workspace/IoTRecommendation.Web
+build_property._RazorSourceGeneratorDebug = 
+
+[/workspace/IoTRecommendation.Web/Views/Home/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvSG9tZS9JbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Home/Privacy.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvSG9tZS9Qcml2YWN5LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Shared/Error.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL0Vycm9yLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Shared/_ValidationScriptsPartial.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL19WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Shared/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL19WaWV3SW1wb3J0cy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Shared/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL19WaWV3U3RhcnQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Workflow/Ahp.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvV29ya2Zsb3cvQWhwLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Workflow/Clustering.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvV29ya2Zsb3cvQ2x1c3RlcmluZy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Workflow/Questionnaire.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvV29ya2Zsb3cvUXVlc3Rpb25uYWlyZS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Workflow/Results.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvV29ya2Zsb3cvUmVzdWx0cy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Workflow/SelectCluster.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvV29ya2Zsb3cvU2VsZWN0Q2x1c3Rlci5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/_ViewImports.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvX1ZpZXdJbXBvcnRzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/_ViewStart.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvX1ZpZXdTdGFydC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/workspace/IoTRecommendation.Web/Views/Shared/_Layout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3MvU2hhcmVkL19MYXlvdXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = b-6vz4ix9ezv

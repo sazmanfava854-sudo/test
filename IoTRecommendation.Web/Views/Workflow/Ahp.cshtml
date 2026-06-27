@@ -1,0 +1,134 @@
+@model AhpViewModel
+@{
+    ViewData["Title"] = "Phase 2 – AHP Base Weights";
+}
+
+<div class="page-header d-flex align-items-center gap-2">
+    <h2 class="h4 mb-0">Phase 2 – AHP Base Weights</h2>
+    <span class="badge @(Model.Result.IsConsistent ? "bg-success" : "bg-warning text-dark") step-badge">
+        CR = @Model.Result.ConsistencyRatio.ToString("F4")
+    </span>
+</div>
+
+@if (!Model.Result.IsConsistent)
+{
+    <div class="alert alert-warning">
+        <strong>Warning:</strong> The aggregated Consistency Ratio (CR = @Model.Result.ConsistencyRatio.ToString("F4"))
+        exceeds 0.10. Consider revising the expert matrices in <code>Data/Experts/</code>.
+    </div>
+}
+else
+{
+    <div class="alert alert-success">
+        CR = @Model.Result.ConsistencyRatio.ToString("F4") — Judgements are consistent (CR ≤ 0.10). ✓
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="metric-box">
+            <div class="value">@Model.Result.ExpertConsistencies.Count</div>
+            <div class="text-muted small">Experts</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-box">
+            <div class="value">@Model.Result.LambdaMax.ToString("F4")</div>
+            <div class="text-muted small">λmax</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-box">
+            <div class="value">@Model.Result.ConsistencyIndex.ToString("F4")</div>
+            <div class="text-muted small">CI</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="metric-box">
+            <div class="value">@Model.Result.RandomIndex.ToString("F4")</div>
+            <div class="text-muted small">RI</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header"><strong>Priority Weights (Aggregated)</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr><th>Criterion</th><th>Weight</th><th>%</th><th>Bar</th></tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var ordered = Model.Result.Weights
+                                .OrderByDescending(w => w.Value)
+                                .ToList();
+                            double maxWeight = ordered.FirstOrDefault().Value;
+                        }
+                        @foreach (var kvp in ordered)
+                        {
+                            double pct = kvp.Value * 100;
+                            int barWidth = maxWeight > 0 ? (int)(kvp.Value / maxWeight * 100) : 0;
+                            var def = Model.CriteriaDefinitions.FirstOrDefault(c => c.Key == kvp.Key);
+                            <tr>
+                                <td>@(def?.DisplayName ?? kvp.Key)</td>
+                                <td class="font-monospace">@kvp.Value.ToString("F5")</td>
+                                <td class="font-monospace">@pct.ToString("F2")%</td>
+                                <td style="width:140px">
+                                    <div class="bg-primary" style="height:12px;width:@barWidth%;border-radius:3px;"></div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header"><strong>Per-Expert Consistency</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr><th>Expert</th><th>CR</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ec in Model.Result.ExpertConsistencies)
+                        {
+                            <tr>
+                                <td>@ec.ExpertName</td>
+                                <td class="font-monospace">@ec.ConsistencyRatio.ToString("F4")</td>
+                                <td>
+                                    @if (ec.IsConsistent)
+                                    {
+                                        <span class="badge bg-success">OK</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">Review</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body small text-muted">
+                <strong>Method:</strong> Expert PCMs are aggregated using element-wise geometric mean
+                (Saaty 1980). Priority vector is computed via power iteration on the aggregated matrix.
+                CR = CI / RI; acceptable threshold = 0.10.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4 d-flex gap-2">
+    <a asp-action="Clustering" class="btn btn-outline-secondary">← Clustering</a>
+    <a asp-action="SelectCluster" class="btn btn-primary">Select Cluster →</a>
+</div>
