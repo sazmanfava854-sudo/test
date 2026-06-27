@@ -60,17 +60,11 @@ public sealed class WorkflowController : Controller
         var result = await _clusteringService.RunAsync();
         var session = HttpContext.Session.GetWorkflowSession();
         session.ClusteringResult = result;
+        session.AhpResult = await _ahpService.RunAsync();
         session.CurrentStep = WorkflowStep.Ahp;
         HttpContext.Session.SetWorkflowSession(session);
 
-        var settings = await _settingsRepository.GetAsync();
-        var vm = new ClusteringViewModel
-        {
-            Result = result,
-            ClusteringCriteriaKeys = settings.CriteriaDefinitions
-                .Where(c => c.UsedInClustering).Select(c => c.Key).ToList()
-        };
-        return View("Clustering", vm);
+        return RedirectToAction(nameof(Ahp));
     }
 
     // ──────────────────────────────────────────────────────── Phase 2: AHP
