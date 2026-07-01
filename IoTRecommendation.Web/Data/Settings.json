@@ -6,6 +6,7 @@
   "kMeansRandomSeed": 42,
   "kMeansMaxIterations": 300,
   "kMeansRestarts": 10,
+  "vikorV": 0.5,
   "criteriaDefinitions": [
     {
       "key": "TransmissionRange",

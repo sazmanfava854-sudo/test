@@ -9,8 +9,7 @@
         "text": "Small – less than 1 hectare",
         "effects": [
           { "criterionKey": "TransmissionRange",       "delta": -1 },
-          { "criterionKey": "LinkBudget",               "delta": -1 },
-          { "criterionKey": "HardwareCAPEX",            "delta": -1 }
+          { "criterionKey": "LinkBudget",               "delta": -1 }
         ]
       },
       {
@@ -23,8 +22,7 @@
         "text": "Large – more than 10 hectares",
         "effects": [
           { "criterionKey": "TransmissionRange",       "delta": 1 },
-          { "criterionKey": "LinkBudget",               "delta": 1 },
-          { "criterionKey": "EnergyConsumption",        "delta": 1 }
+          { "criterionKey": "LinkBudget",               "delta": 1 }
         ]
       }
     ]
@@ -38,8 +36,7 @@
         "id": "Q02_A",
         "text": "Flat",
         "effects": [
-          { "criterionKey": "LinkBudget",               "delta": -1 },
-          { "criterionKey": "TransmissionRange",       "delta": -1 }
+          { "criterionKey": "LinkBudget",               "delta": -1 }
         ]
       },
       {
@@ -53,8 +50,7 @@
         "id": "Q02_C",
         "text": "Mountainous / rugged",
         "effects": [
-          { "criterionKey": "LinkBudget",               "delta": 1 },
-          { "criterionKey": "TransmissionRange",       "delta": 1 }
+          { "criterionKey": "LinkBudget",               "delta": 1 }
         ]
       }
     ]
@@ -82,8 +78,7 @@
         "id": "Q03_C",
         "text": "High – dense obstacles",
         "effects": [
-          { "criterionKey": "LinkBudget",               "delta": 1 },
-          { "criterionKey": "TransmissionRange",       "delta": 1 }
+          { "criterionKey": "LinkBudget",               "delta": 1 }
         ]
       }
     ]
@@ -111,8 +106,7 @@
         "id": "Q04_C",
         "text": "No access to power (battery/solar only)",
         "effects": [
-          { "criterionKey": "EnergyConsumption",        "delta": 1 },
-          { "criterionKey": "HardwareCAPEX",            "delta": 1 }
+          { "criterionKey": "EnergyConsumption",        "delta": 1 }
         ]
       }
     ]
@@ -172,7 +166,7 @@
         "id": "Q06_C",
         "text": "Poor coverage or cellular not possible",
         "effects": [
-          { "criterionKey": "CellularSupport",          "delta": 1 }
+          { "criterionKey": "CellularSupport",          "delta": -1 }
         ]
       }
     ]
@@ -198,7 +192,6 @@
         "id": "Q07_C",
         "text": "High – more than 100 nodes",
         "effects": [
-          { "criterionKey": "DataRate",                 "delta": 1 },
           { "criterionKey": "HardwareCAPEX",            "delta": 1 },
           { "criterionKey": "AnnualConnectivityOPEX",   "delta": 1 }
         ]
@@ -255,7 +248,8 @@
         "text": "High – frequent large messages",
         "effects": [
           { "criterionKey": "DataRate",                 "delta": 1 },
-          { "criterionKey": "RTTLatency",               "delta": 1 }
+          { "criterionKey": "RTTLatency",               "delta": 1 },
+          { "criterionKey": "EnergyConsumption",        "delta": 1 }
         ]
       }
     ]
@@ -333,8 +327,7 @@
         "id": "Q12_C",
         "text": "More than 3 years",
         "effects": [
-          { "criterionKey": "EnergyConsumption",        "delta": 1 },
-          { "criterionKey": "HardwareCAPEX",            "delta": 1 }
+          { "criterionKey": "EnergyConsumption",        "delta": 1 }
         ]
       }
     ]
@@ -348,8 +341,7 @@
         "id": "Q13_A",
         "text": "Non-real-time (delay of minutes is acceptable)",
         "effects": [
-          { "criterionKey": "RTTLatency",               "delta": -1 },
-          { "criterionKey": "DataRate",                 "delta": -1 }
+          { "criterionKey": "RTTLatency",               "delta": -1 }
         ]
       },
       {
@@ -363,8 +355,7 @@
         "id": "Q13_C",
         "text": "Fully real-time",
         "effects": [
-          { "criterionKey": "RTTLatency",               "delta": 1 },
-          { "criterionKey": "DataRate",                 "delta": 1 }
+          { "criterionKey": "RTTLatency",               "delta": 1 }
         ]
       }
     ]
