@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("IoTRecommendation.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e0e7cedbe469c8edf44c905c0dd01a27e225246e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1bddf7dc5df76c8238bf089db19d8ee9a552a4ad")]
 [assembly: System.Reflection.AssemblyProductAttribute("IoTRecommendation.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("IoTRecommendation.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
