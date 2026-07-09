@@ -2,6 +2,7 @@ using IoTRecommendation.Core.Algorithms.Ahp;
 using IoTRecommendation.Core.Algorithms.AdaptiveWeighting;
 using IoTRecommendation.Core.Algorithms.Clustering;
 using IoTRecommendation.Core.Algorithms.Topsis;
+using IoTRecommendation.Core.Algorithms.Vikor;
 using IoTRecommendation.Core.Interfaces;
 using IoTRecommendation.Core.Services;
 using IoTRecommendation.Infrastructure.Extensions;
@@ -52,6 +53,9 @@ builder.Services.AddSingleton<IAdaptiveWeightFormula>(sp =>
 // TOPSIS calculator
 builder.Services.AddSingleton<ITopsisCalculator, TopsisCalculator>();
 
+// VIKOR calculator — runs alongside TOPSIS on identical inputs for comparison
+builder.Services.AddSingleton<IVikorCalculator, VikorCalculator>();
+
 // ──────────────────────────────────────────────────────────────────────────
 // Domain services
 // ──────────────────────────────────────────────────────────────────────────
@@ -60,6 +64,8 @@ builder.Services.AddScoped<ClusteringService>();
 builder.Services.AddScoped<AhpService>();
 builder.Services.AddScoped<AdaptiveWeightingService>();
 builder.Services.AddScoped<TopsisService>();
+builder.Services.AddScoped<VikorService>();
+builder.Services.AddScoped<RankingComparisonService>();
 
 // ──────────────────────────────────────────────────────────────────────────
 // App

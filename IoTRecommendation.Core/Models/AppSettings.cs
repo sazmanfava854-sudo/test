@@ -22,6 +22,14 @@ public sealed class AppSettings
     public int KMeansMaxIterations { get; set; } = 300;
     public int KMeansRestarts { get; set; } = 10;
 
+    /// <summary>
+    /// VIKOR "weight of the strategy of majority of criteria" (v), in [0, 1].
+    /// v = 0.5 is the classical default (balances group utility S against
+    /// individual regret R). Increase v to favour group utility; decrease it
+    /// to favour minimising the worst-case criterion regret.
+    /// </summary>
+    public double VikorV { get; set; } = 0.5;
+
     /// <summary>Ordered list of all decision criteria (AHP + TOPSIS order).</summary>
     public List<CriterionDefinition> CriteriaDefinitions { get; set; } = new();
 }

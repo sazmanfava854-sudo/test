@@ -19,6 +19,8 @@ public sealed class WorkflowController : Controller
     private readonly AhpService _ahpService;
     private readonly AdaptiveWeightingService _adaptiveWeightingService;
     private readonly TopsisService _topsisService;
+    private readonly VikorService _vikorService;
+    private readonly RankingComparisonService _rankingComparisonService;
     private readonly ISettingsRepository _settingsRepository;
 
     public WorkflowController(
@@ -26,12 +28,16 @@ public sealed class WorkflowController : Controller
         AhpService ahpService,
         AdaptiveWeightingService adaptiveWeightingService,
         TopsisService topsisService,
+        VikorService vikorService,
+        RankingComparisonService rankingComparisonService,
         ISettingsRepository settingsRepository)
     {
         _clusteringService = clusteringService;
         _ahpService = ahpService;
         _adaptiveWeightingService = adaptiveWeightingService;
         _topsisService = topsisService;
+        _vikorService = vikorService;
+        _rankingComparisonService = rankingComparisonService;
         _settingsRepository = settingsRepository;
     }
 
@@ -181,14 +187,24 @@ public sealed class WorkflowController : Controller
         var adaptiveResult = await _adaptiveWeightingService.ComputeAsync(session.AhpResult, answers);
 
         var cluster = session.ClusteringResult!.Clusters.First(c => c.ClusterId == session.SelectedClusterId);
+
+        // TOPSIS and VIKOR run on identical inputs (same cluster + adaptive weights)
+        // so their rankings are directly comparable.
         var topsisResult = await _topsisService.RunAsync(
             cluster.TechnologyIds,
             adaptiveResult.AdaptiveWeights,
             session.SelectedClusterId!.Value);
+        var vikorResult = await _vikorService.RunAsync(
+            cluster.TechnologyIds,
+            adaptiveResult.AdaptiveWeights,
+            session.SelectedClusterId!.Value);
+        var comparison = _rankingComparisonService.Compare(topsisResult, vikorResult);
 
         session.Answers = answers;
         session.AdaptiveWeightResult = adaptiveResult;
         session.TopsisResult = topsisResult;
+        session.VikorResult = vikorResult;
+        session.RankingComparison = comparison;
         session.CurrentStep = WorkflowStep.Results;
         HttpContext.Session.SetWorkflowSession(session);
 
@@ -201,7 +217,7 @@ public sealed class WorkflowController : Controller
     public async Task<IActionResult> Results()
     {
         var session = HttpContext.Session.GetWorkflowSession();
-        if (session.TopsisResult is null)
+        if (session.TopsisResult is null || session.VikorResult is null || session.RankingComparison is null)
             return RedirectToAction(nameof(Questionnaire));
 
         var settings = await _settingsRepository.GetAsync();
@@ -211,6 +227,8 @@ public sealed class WorkflowController : Controller
         var vm = new ResultsViewModel
         {
             TopsisResult = session.TopsisResult,
+            VikorResult = session.VikorResult,
+            Comparison = session.RankingComparison,
             AdaptiveWeightResult = session.AdaptiveWeightResult!,
             SelectedCluster = selectedCluster,
             CriteriaDefinitions = settings.CriteriaDefinitions.Where(c => c.UsedInTopsis).ToList()

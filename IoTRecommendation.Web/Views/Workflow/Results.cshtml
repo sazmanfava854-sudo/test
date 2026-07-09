@@ -1,16 +1,34 @@
 @model ResultsViewModel
 @{
-    ViewData["Title"] = "Phase 4 – TOPSIS Results";
+    ViewData["Title"] = "Phase 4 – TOPSIS & VIKOR Results";
 }
 
 <div class="page-header d-flex align-items-center gap-2">
-    <h2 class="h4 mb-0">Phase 4 – TOPSIS Results</h2>
+    <h2 class="h4 mb-0">Phase 4 – TOPSIS &amp; VIKOR Results</h2>
     <span class="badge bg-info text-dark step-badge">Cluster @Model.SelectedCluster.ClusterId</span>
 </div>
 
-<div class="winner-badge mb-4 d-inline-flex align-items-center gap-2">
-    <span class="fs-4">🏆</span>
-    <span><strong>Recommended Technology:</strong> @Model.TopsisResult.WinnerName</span>
+<div class="d-flex flex-wrap gap-3 mb-4">
+    <div class="winner-badge d-inline-flex align-items-center gap-2">
+        <span class="fs-4">🏆</span>
+        <span><strong>TOPSIS Winner:</strong> @Model.TopsisResult.WinnerName</span>
+    </div>
+    <div class="winner-badge d-inline-flex align-items-center gap-2">
+        <span class="fs-4">🏆</span>
+        <span><strong>VIKOR Winner:</strong> @Model.VikorResult.WinnerName</span>
+    </div>
+    @if (Model.Comparison.WinnersAgree)
+    {
+        <div class="d-inline-flex align-items-center gap-2 px-3 rounded" style="background:#d1e7dd;border:1px solid #a3cfbb;">
+            <span>✅</span><span>Both methods agree on the winner</span>
+        </div>
+    }
+    else
+    {
+        <div class="d-inline-flex align-items-center gap-2 px-3 rounded" style="background:#fff3cd;border:1px solid #ffe69c;">
+            <span>⚠️</span><span>Methods disagree on the winner — see comparison below</span>
+        </div>
+    }
 </div>
 
 <div class="row g-4">
@@ -98,6 +116,118 @@
                 <strong>Adaptive formula:</strong>
                 W'<sub>i</sub> = W<sub>i</sub> · exp(α · S<sub>i</sub>), then normalised.<br />
                 Si = PositiveCount − NegativeCount per criterion.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row g-4 mt-1">
+
+    @* VIKOR Ranking Table *@
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>VIKOR Ranking (Index Q — lower is better)</strong>
+                <span class="badge bg-secondary">v = @Model.VikorResult.V.ToString("F2")</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Technology</th>
+                            <th>Q</th>
+                            <th>S</th>
+                            <th>R</th>
+                            <th>Bar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.VikorResult.Ranking)
+                        {
+                            bool isWinner = entry.Rank == 1;
+                            <tr class="@(isWinner ? "table-success fw-bold" : "")">
+                                <td>@entry.Rank</td>
+                                <td>@entry.TechnologyName @(isWinner ? "🥇" : entry.Rank == 2 ? "🥈" : entry.Rank == 3 ? "🥉" : "")</td>
+                                <td class="font-monospace">@entry.Q.ToString("F4")</td>
+                                <td class="font-monospace text-muted small">@entry.S.ToString("F4")</td>
+                                <td class="font-monospace text-muted small">@entry.R.ToString("F4")</td>
+                                <td style="min-width:100px">
+                                    @{int barW = (int)((1 - entry.Q) * 100);}
+                                    <div class="@(isWinner ? "bg-success" : "bg-primary")"
+                                         style="height:12px;width:@barW%;border-radius:3px;"></div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-body small text-muted border-top">
+                <strong>Compromise-solution check:</strong>
+                C1 (acceptable advantage):
+                @if (Model.VikorResult.AcceptableAdvantage)
+                { <span class="text-success">satisfied ✓</span> }
+                else
+                { <span class="text-danger">not satisfied ✗</span> }
+                &nbsp;·&nbsp;
+                C2 (acceptable stability):
+                @if (Model.VikorResult.AcceptableStability)
+                { <span class="text-success">satisfied ✓</span> }
+                else
+                { <span class="text-danger">not satisfied ✗</span> }
+                <br />
+                @if (Model.VikorResult.IsCompromiseSolutionStable)
+                {
+                    <span>The winner is a single, stable compromise solution.</span>
+                }
+                else
+                {
+                    <span>Proposed compromise set: @string.Join(", ", Model.VikorResult.Ranking.Where(e => Model.VikorResult.CompromiseSet.Contains(e.TechnologyId)).Select(e => e.TechnologyName)).</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* TOPSIS vs. VIKOR Comparison *@
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header"><strong>TOPSIS vs. VIKOR Comparison</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Technology</th>
+                            <th>TOPSIS Rank</th>
+                            <th>VIKOR Rank</th>
+                            <th>Δ Rank</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.Comparison.Entries)
+                        {
+                            string diffCls = entry.RankDifference == 0 ? "text-muted" : "text-warning fw-bold";
+                            <tr>
+                                <td class="small">@entry.TechnologyName</td>
+                                <td class="font-monospace small">@entry.TopsisRank</td>
+                                <td class="font-monospace small">@entry.VikorRank</td>
+                                <td class="small @diffCls">@(entry.RankDifference > 0 ? "+" : "")@entry.RankDifference</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body small">
+                <strong>Spearman's rank correlation (ρ):</strong>
+                <span class="font-monospace fw-bold">@Model.Comparison.SpearmanRankCorrelation.ToString("F4")</span>
+                <p class="text-muted mb-0 mt-1">
+                    ρ close to +1 means TOPSIS and VIKOR strongly agree on the ranking order;
+                    values near 0 or negative indicate the two methods disagree, which is useful
+                    evidence when discussing the robustness of the recommendation.
+                </p>
             </div>
         </div>
     </div>
