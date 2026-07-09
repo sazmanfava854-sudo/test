@@ -20,7 +20,9 @@ public sealed class WorkflowController : Controller
     private readonly AdaptiveWeightingService _adaptiveWeightingService;
     private readonly TopsisService _topsisService;
     private readonly VikorService _vikorService;
+    private readonly CoprasService _coprasService;
     private readonly RankingComparisonService _rankingComparisonService;
+    private readonly MultiMethodComparisonService _multiMethodComparisonService;
     private readonly ISettingsRepository _settingsRepository;
 
     public WorkflowController(
@@ -29,7 +31,9 @@ public sealed class WorkflowController : Controller
         AdaptiveWeightingService adaptiveWeightingService,
         TopsisService topsisService,
         VikorService vikorService,
+        CoprasService coprasService,
         RankingComparisonService rankingComparisonService,
+        MultiMethodComparisonService multiMethodComparisonService,
         ISettingsRepository settingsRepository)
     {
         _clusteringService = clusteringService;
@@ -37,7 +41,9 @@ public sealed class WorkflowController : Controller
         _adaptiveWeightingService = adaptiveWeightingService;
         _topsisService = topsisService;
         _vikorService = vikorService;
+        _coprasService = coprasService;
         _rankingComparisonService = rankingComparisonService;
+        _multiMethodComparisonService = multiMethodComparisonService;
         _settingsRepository = settingsRepository;
     }
 
@@ -188,8 +194,8 @@ public sealed class WorkflowController : Controller
 
         var cluster = session.ClusteringResult!.Clusters.First(c => c.ClusterId == session.SelectedClusterId);
 
-        // TOPSIS and VIKOR run on identical inputs (same cluster + adaptive weights)
-        // so their rankings are directly comparable.
+        // TOPSIS, VIKOR, and COPRAS all run on identical inputs (same cluster +
+        // adaptive weights) so their rankings are directly comparable.
         var topsisResult = await _topsisService.RunAsync(
             cluster.TechnologyIds,
             adaptiveResult.AdaptiveWeights,
@@ -198,13 +204,21 @@ public sealed class WorkflowController : Controller
             cluster.TechnologyIds,
             adaptiveResult.AdaptiveWeights,
             session.SelectedClusterId!.Value);
+        var coprasResult = await _coprasService.RunAsync(
+            cluster.TechnologyIds,
+            adaptiveResult.AdaptiveWeights,
+            session.SelectedClusterId!.Value);
+
         var comparison = _rankingComparisonService.Compare(topsisResult, vikorResult);
+        var multiMethodComparison = _multiMethodComparisonService.Compare(topsisResult, vikorResult, coprasResult);
 
         session.Answers = answers;
         session.AdaptiveWeightResult = adaptiveResult;
         session.TopsisResult = topsisResult;
         session.VikorResult = vikorResult;
+        session.CoprasResult = coprasResult;
         session.RankingComparison = comparison;
+        session.MultiMethodComparison = multiMethodComparison;
         session.CurrentStep = WorkflowStep.Results;
         HttpContext.Session.SetWorkflowSession(session);
 
@@ -217,7 +231,8 @@ public sealed class WorkflowController : Controller
     public async Task<IActionResult> Results()
     {
         var session = HttpContext.Session.GetWorkflowSession();
-        if (session.TopsisResult is null || session.VikorResult is null || session.RankingComparison is null)
+        if (session.TopsisResult is null || session.VikorResult is null || session.CoprasResult is null
+            || session.RankingComparison is null || session.MultiMethodComparison is null)
             return RedirectToAction(nameof(Questionnaire));
 
         var settings = await _settingsRepository.GetAsync();
@@ -228,12 +243,30 @@ public sealed class WorkflowController : Controller
         {
             TopsisResult = session.TopsisResult,
             VikorResult = session.VikorResult,
+            CoprasResult = session.CoprasResult,
             Comparison = session.RankingComparison,
+            MultiMethodComparison = session.MultiMethodComparison,
             AdaptiveWeightResult = session.AdaptiveWeightResult!,
             SelectedCluster = selectedCluster,
             CriteriaDefinitions = settings.CriteriaDefinitions.Where(c => c.UsedInTopsis).ToList()
         };
         return View("Results", vm);
+    }
+
+    /// <summary>
+    /// Returns the unified TOPSIS/VIKOR/COPRAS comparison (final scores, ranks,
+    /// and all three pairwise Spearman coefficients) as a single JSON payload,
+    /// for programmatic consumption (e.g. exporting for the thesis, or an
+    /// external chart/report tool).
+    /// </summary>
+    [HttpGet]
+    public IActionResult ComparisonJson()
+    {
+        var session = HttpContext.Session.GetWorkflowSession();
+        if (session.MultiMethodComparison is null)
+            return NotFound(new { message = "No comparison available yet. Complete the questionnaire first." });
+
+        return Json(session.MultiMethodComparison);
     }
 
     // ──────────────────────────────────────────────────────── Reset

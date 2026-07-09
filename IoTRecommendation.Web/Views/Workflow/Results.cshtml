@@ -1,14 +1,14 @@
 @model ResultsViewModel
 @{
-    ViewData["Title"] = "Phase 4 – TOPSIS & VIKOR Results";
+    ViewData["Title"] = "Phase 4 – TOPSIS, VIKOR & COPRAS Results";
 }
 
 <div class="page-header d-flex align-items-center gap-2">
-    <h2 class="h4 mb-0">Phase 4 – TOPSIS &amp; VIKOR Results</h2>
+    <h2 class="h4 mb-0">Phase 4 – TOPSIS, VIKOR &amp; COPRAS Results</h2>
     <span class="badge bg-info text-dark step-badge">Cluster @Model.SelectedCluster.ClusterId</span>
 </div>
 
-<div class="d-flex flex-wrap gap-3 mb-4">
+<div class="d-flex flex-wrap gap-3 mb-2">
     <div class="winner-badge d-inline-flex align-items-center gap-2">
         <span class="fs-4">🏆</span>
         <span><strong>TOPSIS Winner:</strong> @Model.TopsisResult.WinnerName</span>
@@ -17,16 +17,35 @@
         <span class="fs-4">🏆</span>
         <span><strong>VIKOR Winner:</strong> @Model.VikorResult.WinnerName</span>
     </div>
+    <div class="winner-badge d-inline-flex align-items-center gap-2">
+        <span class="fs-4">🏆</span>
+        <span><strong>COPRAS Winner:</strong> @Model.CoprasResult.WinnerName</span>
+    </div>
     @if (Model.Comparison.WinnersAgree)
     {
         <div class="d-inline-flex align-items-center gap-2 px-3 rounded" style="background:#d1e7dd;border:1px solid #a3cfbb;">
-            <span>✅</span><span>Both methods agree on the winner</span>
+            <span>✅</span><span>TOPSIS &amp; VIKOR agree on the winner</span>
         </div>
     }
     else
     {
         <div class="d-inline-flex align-items-center gap-2 px-3 rounded" style="background:#fff3cd;border:1px solid #ffe69c;">
-            <span>⚠️</span><span>Methods disagree on the winner — see comparison below</span>
+            <span>⚠️</span><span>TOPSIS &amp; VIKOR disagree on the winner</span>
+        </div>
+    }
+</div>
+
+<div class="d-flex flex-wrap gap-3 mb-4">
+    @if (Model.MultiMethodComparison.AllWinnersAgree)
+    {
+        <div class="d-inline-flex align-items-center gap-2 px-3 rounded" style="background:#d1e7dd;border:1px solid #a3cfbb;">
+            <span>✅</span><span>All three methods (TOPSIS, VIKOR, COPRAS) agree on the winner</span>
+        </div>
+    }
+    else
+    {
+        <div class="d-inline-flex align-items-center gap-2 px-3 rounded" style="background:#f8d7da;border:1px solid #f1aeb5;">
+            <span>⚠️</span><span>Not all three methods agree — see the three-method comparison below</span>
         </div>
     }
 </div>
@@ -228,6 +247,138 @@
                     values near 0 or negative indicate the two methods disagree, which is useful
                     evidence when discussing the robustness of the recommendation.
                 </p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row g-4 mt-1">
+
+    @* COPRAS Ranking Table *@
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><strong>COPRAS Ranking (Relative Significance Qᵢ — higher is better)</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Technology</th>
+                            <th>Qᵢ</th>
+                            <th>Nᵢ (%)</th>
+                            <th>S+</th>
+                            <th>S−</th>
+                            <th>Bar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.CoprasResult.Ranking)
+                        {
+                            bool isWinner = entry.Rank == 1;
+                            <tr class="@(isWinner ? "table-success fw-bold" : "")">
+                                <td>@entry.Rank</td>
+                                <td>@entry.TechnologyName @(isWinner ? "🥇" : entry.Rank == 2 ? "🥈" : entry.Rank == 3 ? "🥉" : "")</td>
+                                <td class="font-monospace">@entry.Q.ToString("F4")</td>
+                                <td class="font-monospace">@entry.N.ToString("F1")</td>
+                                <td class="font-monospace text-muted small">@entry.SPlus.ToString("F4")</td>
+                                <td class="font-monospace text-muted small">@entry.SMinus.ToString("F4")</td>
+                                <td style="min-width:100px">
+                                    @{int barW = (int)entry.N;}
+                                    <div class="@(isWinner ? "bg-success" : "bg-primary")"
+                                         style="height:12px;width:@barW%;border-radius:3px;"></div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-body small text-muted border-top">
+                <strong>Method:</strong> COPRAS ranks alternatives by relative significance
+                Qᵢ = S+ᵢ + (S−<sub>min</sub>·ΣS−) / (S−ᵢ·Σ(S−<sub>min</sub>/S−)), where S+ᵢ and S−ᵢ are the
+                weighted, sum-normalised contributions of benefit and cost criteria respectively.
+                Nᵢ expresses each alternative's utility as a percentage of the best (Q<sub>max</sub>).
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body small">
+                <strong>Why COPRAS is a useful third check:</strong>
+                <p class="text-muted mb-0 mt-1">
+                    COPRAS uses sum normalisation (r<sub>ij</sub> = x<sub>ij</sub> / Σx) — a third,
+                    independent normalisation scheme distinct from TOPSIS's vector normalisation
+                    and VIKOR's linear min-max normalisation. Agreement across all three methods
+                    is stronger evidence of a robust recommendation than agreement between any two.
+                </p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row g-4 mt-1">
+
+    @* Three-Method Comparison *@
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><strong>Three-Method Comparison — TOPSIS vs. VIKOR vs. COPRAS</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Technology</th>
+                            <th>TOPSIS Rank</th>
+                            <th>VIKOR Rank</th>
+                            <th>COPRAS Rank</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.MultiMethodComparison.Entries)
+                        {
+                            <tr class="@(entry.AllRanksAgree ? "table-success" : "")">
+                                <td class="small">@entry.TechnologyName</td>
+                                <td class="font-monospace small">@entry.TopsisRank</td>
+                                <td class="font-monospace small">@entry.VikorRank</td>
+                                <td class="font-monospace small">@entry.CoprasRank</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><strong>Pairwise Spearman's ρ</strong></div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr><th>Method pair</th><th>ρ</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="small">TOPSIS vs. VIKOR</td>
+                            <td class="font-monospace fw-bold">@Model.MultiMethodComparison.SpearmanTopsisVikor.ToString("F4")</td>
+                        </tr>
+                        <tr>
+                            <td class="small">TOPSIS vs. COPRAS</td>
+                            <td class="font-monospace fw-bold">@Model.MultiMethodComparison.SpearmanTopsisCopras.ToString("F4")</td>
+                        </tr>
+                        <tr>
+                            <td class="small">VIKOR vs. COPRAS</td>
+                            <td class="font-monospace fw-bold">@Model.MultiMethodComparison.SpearmanVikorCopras.ToString("F4")</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-body small text-muted border-top">
+                Values close to +1 indicate strong agreement between that pair of methods on the
+                overall ranking order; values near 0 or negative indicate disagreement.
+                <br /><br />
+                <a asp-action="ComparisonJson" target="_blank">View unified comparison as JSON →</a>
             </div>
         </div>
     </div>
