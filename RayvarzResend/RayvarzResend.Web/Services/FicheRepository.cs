@@ -1,0 +1,256 @@
+using Microsoft.Data.SqlClient;
+using RayvarzResend.Web.Models;
+
+namespace RayvarzResend.Web.Services;
+
+public class FicheRepository
+{
+    private readonly string _saraCs;
+    private readonly string _rayCs;
+
+    public FicheRepository(IConfiguration config)
+    {
+        _saraCs = config.GetConnectionString("Sara") ?? throw new InvalidOperationException("ConnectionStrings:Sara not set");
+        _rayCs = config.GetConnectionString("Rayvarz") ?? throw new InvalidOperationException("ConnectionStrings:Rayvarz not set");
+    }
+
+    public async Task<FicheHeaderDto?> LoadAsync(IdentifierType type, string value, CancellationToken ct = default)
+    {
+        var income = await TryLoadIncomeAsync(type, value, ct);
+        if (income != null) return income;
+        return await TryLoadDutyAsync(type, value, ct);
+    }
+
+    private async Task<FicheHeaderDto?> TryLoadIncomeAsync(IdentifierType type, string value, CancellationToken ct)
+    {
+        var where = type == IdentifierType.FicheNo
+            ? "f.FicheNo = @val"
+            : "f.BillID + f.PaymentID = @val";
+
+        var sql = $@"
+SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
+       ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
+       ISNULL(f.BankPaymentDate, f.PaymentDate) AS RowDate,
+       f.EumFicheStatus, f.CI_IncomeAccountGroup,
+       CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
+       CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
+       CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
+       CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
+       CAST(b.Apartment AS varchar) + '-' + CAST(b.Shop AS varchar) AS BnkAcntNo
+FROM dbo.Income_Fiche f
+JOIN dbo.Income i ON i.NidIncome = f.NidIncome
+JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
+JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
+WHERE {where}";
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@val", value.Trim());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+
+        var group = reader.GetInt32(reader.GetOrdinal("CI_IncomeAccountGroup"));
+        var docTyp = group == 150 ? 11 : 3;
+
+        var dto = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
+            BillId = reader.GetString(reader.GetOrdinal("BillID")),
+            PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
+            Payable = reader.GetDecimal(reader.GetOrdinal("Payable")),
+            NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
+            NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
+            PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
+            RowDate = reader.IsDBNull(reader.GetOrdinal("RowDate")) ? "" : reader.GetString(reader.GetOrdinal("RowDate")),
+            CurrentStatus = reader.GetByte(reader.GetOrdinal("EumFicheStatus")),
+            IncomeAccountGroup = group,
+            RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
+            BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
+            DocTyp = docTyp,
+            DocDsc = "اسناد شهرسازی"
+        };
+
+        dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+        return dto;
+    }
+
+    private async Task<List<IncmRowDto>> LoadIncomeRowsAsync(Guid nidIncome, CancellationToken ct)
+    {
+        const string sql = @"
+SELECT ic.CI_IncomeCalculation AS IncmNo,
+       COALESCE(ic.SysValue, ic.Value) AS Val,
+       ISNULL(c.Title, '') AS IncmRowDsc
+FROM dbo.Income_Calculation ic
+LEFT JOIN dbo.CI_IncomeCalculation c ON c.ID = ic.CI_IncomeCalculation
+WHERE ic.NidIncome = @nid";
+
+        var rows = new List<IncmRowDto>();
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidIncome);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var incmNo = reader.GetInt32(reader.GetOrdinal("IncmNo"));
+            if (IncomeExcludedCodes.Codes.Contains(incmNo)) continue;
+            var val = reader.GetDecimal(reader.GetOrdinal("Val"));
+            if (val == 0) continue;
+            rows.Add(new IncmRowDto
+            {
+                IncmNo = incmNo,
+                Val = val,
+                IncmRowDsc = reader.GetString(reader.GetOrdinal("IncmRowDsc"))
+            });
+        }
+
+        return rows;
+    }
+
+    private async Task<FicheHeaderDto?> TryLoadDutyAsync(IdentifierType type, string value, CancellationToken ct)
+    {
+        var where = type == IdentifierType.FicheNo
+            ? "d.FicheNo = @val"
+            : "d.BillID + d.PaymentID = @val";
+
+        var sql = $@"
+SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
+       ISNULL(CAST(d.ConfirmBankCode AS nvarchar(20)), '18') AS PaymentBranch,
+       ISNULL(d.BankPaymentDate, d.PaymentDate) AS RowDate,
+       d.EumDutyFicheStatus, d.CI_DutyFicheExportType,
+       d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)') AS BnkAcntNo
+FROM dbo.Duty_Fiche d
+WHERE {where}";
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@val", value.Trim());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+
+        var exportType = reader.IsDBNull(reader.GetOrdinal("CI_DutyFicheExportType"))
+            ? 0 : reader.GetInt32(reader.GetOrdinal("CI_DutyFicheExportType"));
+        var isSenfi = exportType == 14;
+
+        var dto = new FicheHeaderDto
+        {
+            Category = isSenfi ? FicheCategory.DutySenfi : FicheCategory.DutyNosazi,
+            FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
+            BillId = reader.GetString(reader.GetOrdinal("BillID")),
+            PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
+            Payable = reader.GetDecimal(reader.GetOrdinal("Payable")),
+            NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
+            PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
+            RowDate = reader.IsDBNull(reader.GetOrdinal("RowDate")) ? "" : reader.GetString(reader.GetOrdinal("RowDate")),
+            CurrentStatus = reader.GetByte(reader.GetOrdinal("EumDutyFicheStatus")),
+            DutyExportType = exportType,
+            BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
+            DocTyp = isSenfi ? 2 : 1,
+            DocDsc = isSenfi ? "اسناد صنفی" : "اسناد نوسازی"
+        };
+
+        dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, ct);
+        return dto;
+    }
+
+    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(Guid nidFiche, decimal payable, bool isSenfi, CancellationToken ct)
+    {
+        const string sql = @"
+SELECT CI_DutyFormula, CI_DutyFormulaFiche, Price
+FROM dbo.Duty_FicheSub
+WHERE NidFiche = @nid";
+
+        var subs = new List<(int Formula, int Fiche, decimal Price)>();
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidFiche);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            subs.Add((
+                reader.GetInt32(reader.GetOrdinal("CI_DutyFormula")),
+                reader.IsDBNull(reader.GetOrdinal("CI_DutyFormulaFiche")) ? 0 : reader.GetInt32(reader.GetOrdinal("CI_DutyFormulaFiche")),
+                reader.GetDecimal(reader.GetOrdinal("Price"))
+            ));
+        }
+
+        decimal Afzodeh = subs.Where(s => s.Formula == 3 && s.Fiche == 16).Sum(s => s.Price);
+        decimal Atash = subs.Where(s => s.Formula == 5 && s.Fiche == 0).Sum(s => s.Price)
+                      - subs.Where(s => s.Formula == 5 && s.Fiche != 0).Sum(s => s.Price);
+        decimal Garbage = subs.Where(s => s.Formula == 3 && s.Fiche == 0).Sum(s => s.Price)
+                        - subs.Where(s => s.Formula == 3 && s.Fiche != 0).Sum(s => s.Price);
+
+        var mainIncm = isSenfi ? 100062 : 2003;
+        var mainDsc = isSenfi ? "صنفی" : "نوسازی";
+        var mainPrice = payable - Atash - Garbage - Afzodeh;
+
+        var rows = new List<IncmRowDto>();
+        if (mainPrice != 0)
+            rows.Add(new IncmRowDto { IncmNo = mainIncm, Val = mainPrice, IncmRowDsc = mainDsc });
+        if (Atash != 0)
+            rows.Add(new IncmRowDto { IncmNo = 100002, Val = Atash, IncmRowDsc = "آتش نشانی" });
+        if (Garbage != 0)
+            rows.Add(new IncmRowDto { IncmNo = 100003, Val = Garbage, IncmRowDsc = "پسماند" });
+        if (Afzodeh != 0)
+            rows.Add(new IncmRowDto { IncmNo = 206098003, Val = Afzodeh, IncmRowDsc = "مالیات برارزش افزوده" });
+
+        return rows;
+    }
+
+    public async Task<bool> ExistsInRayvarzAsync(string ficheNo, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT TOP 1 1 FROM ray.incmdocsys
+WHERE Ref = @f OR RowDocNo = @f";
+
+        await using var conn = new SqlConnection(_rayCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result != null;
+    }
+
+    public async Task ResetStatusAsync(FicheHeaderDto fiche, CancellationToken ct = default)
+    {
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+
+        if (fiche.Category == FicheCategory.Income)
+        {
+            const string sql = @"UPDATE dbo.Income_Fiche SET EumFicheStatus = 2
+WHERE FicheNo = @f AND EumFicheStatus IN (5, 7)";
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@f", fiche.FicheNo);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        else
+        {
+            const string sql = @"UPDATE dbo.Duty_Fiche SET EumDutyFicheStatus = 1
+WHERE FicheNo = @f AND EumDutyFicheStatus = 4";
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@f", fiche.FicheNo);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+    }
+
+    public async Task<string?> GetDocNotSentErrorAsync(string ficheNo, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT TOP 1 Comment FROM dbo.Accounting_DocNotSent
+WHERE FicheNo = @f ORDER BY Uptime DESC";
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result as string;
+    }
+}

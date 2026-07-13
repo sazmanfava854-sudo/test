@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ارسال مجدد به رایورز — تست</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ارسال مجدد فیش به رایورز</h1>
+      <p class="subtitle">نسخه تست — ورود دستی فیش</p>
+      <div id="configBadge" class="badge">...</div>
+    </header>
+
+    <section class="card">
+      <h2>ورود فیش</h2>
+      <div class="form-grid">
+        <label>
+          نوع شناسه
+          <select id="identifierType">
+            <option value="FicheNo">شماره فیش (FicheNo)</option>
+            <option value="BillPaymentKey">BillID + PaymentID</option>
+          </select>
+        </label>
+        <label>
+          مقدار شناسه
+          <input id="identifierValue" type="text" placeholder="مثلاً 971030914186 یا 90004712516690002765712571" />
+        </label>
+        <label>
+          شعبه / منطقه
+          <select id="branch"></select>
+        </label>
+        <label>
+          تاریخ سند (شمسی)
+          <input id="docDate" type="text" placeholder="1405/03/23" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnLoad" class="btn primary">دریافت فیش</button>
+        <button id="btnPreview" class="btn" disabled>پیش‌نمایش XML</button>
+        <button id="btnSend" class="btn danger" disabled>ارسال به رایورز</button>
+      </div>
+    </section>
+
+    <section class="card" id="ficheSection" hidden>
+      <h2>اطلاعات فیش</h2>
+      <div id="ficheSummary" class="summary"></div>
+      <h3>ردیف‌های IncmNo (WrapperAccountNo)</h3>
+      <table id="rowsTable">
+        <thead>
+          <tr><th>#</th><th>IncmNo</th><th>شرح</th><th>Val</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card" id="resultSection" hidden>
+      <h2>نتیجه</h2>
+      <pre id="resultBox"></pre>
+    </section>
+
+    <section class="card" id="xmlSection" hidden>
+      <h2>XML</h2>
+      <pre id="xmlBox"></pre>
+    </section>
+  </div>
+  <script src="js/app.js"></script>
+</body>
+</html>
