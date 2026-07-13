@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Word document with native OMML equations for AHP priority vector steps 1-4."""
+"""Generate Word document with correct OMML equations for AHP priority vector steps 1-4."""
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -8,9 +8,8 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, Cm
 from pathlib import Path
 
-
-MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
-W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
 def set_rtl(paragraph):
@@ -33,16 +32,15 @@ def rtl_para(doc, text, bold=False, size=12):
     return p
 
 
-def add_omml_equation(doc, omml_inner: str, label: str = ""):
-    """Insert centered OMML equation paragraph."""
+def add_equation(doc, omml_math: str, label: str = ""):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    omath_para = parse_xml(
-        f'<m:oMathPara xmlns:m="{MATH_NS}" xmlns:w="{W_NS}">'
-        f"<m:oMath>{omml_inner}</m:oMath>"
+    xml = (
+        f'<m:oMathPara xmlns:m="{M}" xmlns:w="{W}">'
+        f"<m:oMath>{omml_math}</m:oMath>"
         f"</m:oMathPara>"
     )
-    p._p.append(omath_para)
+    p._p.append(parse_xml(xml))
     if label:
         lp = doc.add_paragraph()
         lp.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -50,37 +48,112 @@ def add_omml_equation(doc, omml_inner: str, label: str = ""):
         lr.font.name = "B Nazanin"
         lr.font.size = Pt(11)
         lr.italic = True
-    return p
 
 
-# OMML building blocks
-def frac(num, den):
-    return f'<m:f><m:num>{num}</m:num><m:den>{den}</m:den><m:fPr/></m:f>'
+def sum_limits(sub_text: str, sup_text: str, body: str) -> str:
+    """Summation with visible lower/upper limits."""
+    return f"""
+    <m:nary>
+      <m:naryPr>
+        <m:chr m:val="∑"/>
+        <m:limLoc m:val="undOvr"/>
+        <m:grow m:val="1"/>
+      </m:naryPr>
+      <m:sub><m:r><m:t>{sub_text}</m:t></m:r></m:sub>
+      <m:sup><m:r><m:t>{sup_text}</m:t></m:r></m:sup>
+      <m:e>{body}</m:e>
+    </m:nary>
+    """
 
 
-def sub(base, subscript):
-    return f"<m:sSub><m:e><m:r><m:t>{base}</m:t></m:r></m:e><m:sub><m:r><m:t>{subscript}</m:t></m:r></m:sub></m:sSub>"
+# Complete OMML equations (tested structure for Word)
+EQ_3_4_1 = """
+  <m:sSup>
+    <m:e><m:sSub><m:e><m:r><m:t>w</m:t></m:r></m:e><m:sub><m:r><m:t>i</m:t></m:r></m:sub></m:sSub></m:e>
+    <m:sup><m:r><m:t>(0)</m:t></m:r></m:sup>
+  </m:sSup>
+  <m:r><m:t xml:space="preserve"> = </m:t></m:r>
+  <m:f>
+    <m:num><m:r><m:t>1</m:t></m:r></m:num>
+    <m:den><m:r><m:t>n</m:t></m:r></m:den>
+  </m:f>
+"""
 
+EQ_3_4_2 = f"""
+  <m:sSub>
+    <m:e><m:r><m:t>w</m:t></m:r></m:e>
+    <m:sub><m:r><m:t>i</m:t></m:r></m:sub>
+  </m:sSub>
+  <m:r><m:t>′</m:t></m:r>
+  <m:r><m:t xml:space="preserve"> = </m:t></m:r>
+  {sum_limits("j=1", "n", """
+    <m:sSub>
+      <m:e><m:r><m:t>ā</m:t></m:r></m:e>
+      <m:sub><m:r><m:t>ij</m:t></m:r></m:sub>
+    </m:sSub>
+    <m:r><m:t> · </m:t></m:r>
+    <m:sSup>
+      <m:e><m:sSub><m:e><m:r><m:t>w</m:t></m:r></m:e><m:sub><m:r><m:t>j</m:t></m:r></m:sub></m:sSub></m:e>
+      <m:sup><m:r><m:t>(t)</m:t></m:r></m:sup>
+    </m:sSup>
+  """)}
+"""
 
-def sup(base, superscript):
-    return f"<m:sSup><m:e><m:r><m:t>{base}</m:t></m:r></m:e><m:sup><m:r><m:t>{superscript}</m:t></m:r></m:sup></m:sSup>"
+EQ_3_4_3 = f"""
+  <m:sSup>
+    <m:e><m:sSub><m:e><m:r><m:t>w</m:t></m:r></m:e><m:sub><m:r><m:t>i</m:t></m:r></m:sub></m:sSub></m:e>
+    <m:sup><m:r><m:t>(t+1)</m:t></m:r></m:sup>
+  </m:sSup>
+  <m:r><m:t xml:space="preserve"> = </m:t></m:r>
+  <m:f>
+    <m:num>
+      <m:sSub>
+        <m:e><m:r><m:t>w</m:t></m:r></m:e>
+        <m:sub><m:r><m:t>i</m:t></m:r></m:sub>
+      </m:sSub>
+      <m:r><m:t>′</m:t></m:r>
+    </m:num>
+    <m:den>
+      {sum_limits("k=1", "n", """
+        <m:sSub>
+          <m:e><m:r><m:t>w</m:t></m:r></m:e>
+          <m:sub><m:r><m:t>k</m:t></m:r></m:sub>
+        </m:sSub>
+        <m:r><m:t>′</m:t></m:r>
+      """)}
+    </m:den>
+  </m:f>
+"""
 
+EQ_3_4_4 = """
+  <m:sSub>
+    <m:e><m:r><m:t>max</m:t></m:r></m:e>
+    <m:sub><m:r><m:t>i</m:t></m:r></m:sub>
+  </m:sSub>
+  <m:r><m:t xml:space="preserve"> | </m:t></m:r>
+  <m:sSup>
+    <m:e><m:sSub><m:e><m:r><m:t>w</m:t></m:r></m:e><m:sub><m:r><m:t>i</m:t></m:r></m:sub></m:sSub></m:e>
+    <m:sup><m:r><m:t>(t+1)</m:t></m:r></m:sup>
+  </m:sSup>
+  <m:r><m:t xml:space="preserve"> − </m:t></m:r>
+  <m:sSup>
+    <m:e><m:sSub><m:e><m:r><m:t>w</m:t></m:r></m:e><m:sub><m:r><m:t>i</m:t></m:r></m:sub></m:sSub></m:e>
+    <m:sup><m:r><m:t>(t)</m:t></m:r></m:sup>
+  </m:sSup>
+  <m:r><m:t xml:space="preserve"> | </m:t></m:r>
+  <m:r><m:t> &lt; </m:t></m:r>
+  <m:r><m:t>ε</m:t></m:r>
+"""
 
-def text(t):
-    t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return f"<m:r><m:t xml:space=\"preserve\">{t}</m:t></m:r>"
-
-
-def sum_j(expr):
-    return (
-        "<m:nary>"
-        "<m:naryPr><m:chr m:val=\"∑\"/><m:limLoc m:val=\"subSup\"/>"
-        "<m:subHide m:val=\"1\"/><m:supHide m:val=\"1\"/></m:naryPr>"
-        "<m:sub><m:r><m:t>j=1</m:t></m:r></m:sub>"
-        "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>"
-        f"<m:e>{expr}</m:e>"
-        "</m:nary>"
-    )
+EQ_3_4_5 = f"""
+  {sum_limits("i=1", "n", """
+    <m:sSub>
+      <m:e><m:r><m:t>w</m:t></m:r></m:e>
+      <m:sub><m:r><m:t>i</m:t></m:r></m:sub>
+    </m:sSub>
+  """)}
+  <m:r><m:t xml:space="preserve"> = 1</m:t></m:r>
+"""
 
 
 def main():
@@ -98,69 +171,29 @@ def main():
     rtl_para(
         doc,
         "پس از تشکیل ماتریس تجمیع‌شده Ā، بردار اولویت معیارها با روش تکرار توان "
-        "(Power Iteration) محاسبه می‌شود. فرمول‌های مراحل ۱ تا ۴ به‌شرح زیر است:",
+        "(Power Iteration) محاسبه می‌شود. فرمول‌های مراحل ۱ تا ۴:",
     )
     doc.add_paragraph()
 
-    # Step 1
-    rtl_para(doc, "۱. مقداردهی اولیه", bold=True)
-    rtl_para(doc, "در گام نخست (t = 0):")
-    eq1 = sup(sub("w", "i"), "(0)") + " = " + frac("<m:r><m:t>1</m:t></m:r>", "<m:r><m:t>n</m:t></m:r>")
-    add_omml_equation(doc, eq1, "(۳-۴-۱)")
+    rtl_para(doc, "۱. مقداردهی اولیه (t = 0)", bold=True)
+    add_equation(doc, EQ_3_4_1, "(۳-۴-۱)")
 
-    # Step 2
     rtl_para(doc, "۲. ضرب ماتریسی", bold=True)
-    rtl_para(doc, "در هر تکرار t:")
-    w_j_t = sup(sub("w", "j"), "(t)")
-    a_ij = sub("ā", "ij")
-    eq2 = sub("w", "i") + text("′ = ") + sum_j(a_ij + text(" · ") + w_j_t)
-    add_omml_equation(doc, eq2, "(۳-۴-۲)")
+    add_equation(doc, EQ_3_4_2, "(۳-۴-۲)")
 
-    # Step 3
     rtl_para(doc, "۳. نرمال‌سازی", bold=True)
-    w_i_sup = sup(sub("w", "i"), "(t+1)")
-    w_i_pr = sub("w", "i") + text("′")
-    sum_w = sum_j(sub("w", "k") + text("′"))
-    eq3 = w_i_sup + " = " + frac(w_i_pr, sum_w)
-    add_omml_equation(doc, eq3, "(۳-۴-۳)")
+    add_equation(doc, EQ_3_4_3, "(۳-۴-۳)")
 
-    # Step 4
-    rtl_para(doc, "۴. سنجش همگرایی و شرط توقف", bold=True)
-    rtl_para(doc, "شرط توقف:")
-    w_i_t1 = sup(sub("w", "i"), "(t+1)")
-    w_i_t = sup(sub("w", "i"), "(t)")
-    eq4 = (
-        sub("max", "i")
-        + text(" | ")
-        + w_i_t1
-        + text(" - ")
-        + w_i_t
-        + text(" | &lt; ε")
-    )
-    add_omml_equation(doc, eq4, "(۳-۴-۴)")
-    rtl_para(doc, "که ε = 10⁻¹² (آستانه عددی همگرایی).")
+    rtl_para(doc, "۴. شرط همگرایی", bold=True)
+    add_equation(doc, EQ_3_4_4, "(۳-۴-۴)")
+    rtl_para(doc, "که در آن ε = 10⁻¹².")
 
-    # Final
-    rtl_para(doc, "بردار نهایی", bold=True)
-    eq5 = sum_j(sub("w", "i")) + text(" = 1")
-    # fix eq5 - sum over i not j
-    eq5 = (
-        "<m:nary>"
-        "<m:naryPr><m:chr m:val=\"∑\"/><m:limLoc m:val=\"subSup\"/>"
-        "<m:subHide m:val=\"1\"/><m:supHide m:val=\"1\"/></m:naryPr>"
-        "<m:sub><m:r><m:t>i=1</m:t></m:r></m:sub>"
-        "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>"
-        f"<m:e>{sub('w', 'i')}</m:e>"
-        "</m:nary>"
-        + text(" = 1")
-    )
-    add_omml_equation(doc, eq5, "(۳-۴-۵)")
+    rtl_para(doc, "قید نرمال‌سازی بردار نهایی", bold=True)
+    add_equation(doc, EQ_3_4_5, "(۳-۴-۵)")
 
     rtl_para(
         doc,
-        "بردار W = [w₁, w₂, …, wₙ]ᵀ تقریب بردار ویژه غالب ماتریس Ā است. "
-        "معیارها: برد انتقال، پشتیبانی سلولی، نرخ داده، بودجه پیوند، تأخیر RTT، "
-        "مصرف انرژی، هزینه اتصال سالانه، هزینه سخت‌افزار (n = 8).",
+        "بردار W = [w₁, w₂, …, wₙ]ᵀ تقریب بردار ویژه غالب ماتریس Ā است (n = 8).",
     )
 
     doc.save(out)
