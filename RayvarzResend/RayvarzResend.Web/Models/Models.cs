@@ -77,6 +77,7 @@ public class AppConfig
 {
     public string ServiceUrl { get; set; } = "";
     public string SoapAction { get; set; } = "";
+    public string SourceSystemId { get; set; } = "11111";
     public bool DryRun { get; set; }
     public int SendDelayMs { get; set; } = 2000;
 }

@@ -83,5 +83,5 @@ dotnet run
 |------|--------|
 | فیش یافت نشد | شناسه و connection string را چک کنید |
 | تکراری | فیش در incmdocsys هست — ارسال نمی‌شود |
-| RowGuid NULL | NidFiche در Id/SourceId پر می‌شود (در کد رعایت شده) |
+| RowGuid NULL | Id/SourceId از appsettings (`Rayvarz:SourceSystemId`) پر می‌شود — پیش‌فرض `11111` |
 | خطای شبکه | VPN / URL تست |

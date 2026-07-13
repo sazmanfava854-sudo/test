@@ -3,6 +3,13 @@ let config = null;
 
 const $ = (id) => document.getElementById(id);
 
+const categoryLabels = {
+  Income: 'درآمد',
+  DutyNosazi: 'نوسازی',
+  DutySenfi: 'صنفی',
+  Unknown: 'نامشخص'
+};
+
 function syncFundFromBranch() {
   const branchId = parseInt($('branch').value);
   const item = config.branches.find(b => b.id === branchId);
@@ -25,12 +32,91 @@ function getPayload(resetStatus) {
   };
 }
 
+function buildMappingRows(f) {
+  const branch = config.branches.find(b => b.id === parseInt($('branch').value));
+  const fund = $('fund').value;
+  const docDate = $('docDate').value;
+  const sourceId = config.sourceSystemId || '11111';
+
+  return [
+    { field: 'Id', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
+    { field: 'SourceId', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
+    { field: 'TransactionId', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
+    { field: 'Ref / RowDocNo / RefownrDsc', source: 'Income_Fiche / Duty_Fiche → FicheNo', value: f.ficheNo },
+    { field: 'Ref2', source: 'BillID', value: f.billId },
+    { field: 'Ref3', source: 'PaymentID', value: f.paymentId },
+    { field: 'BnkAcntNo', source: 'کد نوسازی (Base_NosaziCode یا OtherFields)', value: f.bnkAcntNo || '-' },
+    { field: 'Fund', source: 'انتخاب منطقه / dropdown', value: fund },
+    { field: 'branch', source: 'انتخاب شعبه / dropdown', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
+    { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند', value: docDate },
+    { field: 'RowDate', source: 'BankPaymentDate یا PaymentDate', value: f.rowDate || '-' },
+    { field: 'DocTyp', source: 'نوع فیش (درآمد/نوسازی/صنفی)', value: `${f.docTyp} — ${f.docDsc}` },
+    { field: 'IncmNo / Val', source: 'Income_Calculation یا Duty_FicheSub', value: `${(f.rows || []).length} ردیف` },
+    { field: 'Qty', source: 'Payable', value: Number(f.payable).toLocaleString() },
+    { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '-' },
+    { field: 'Bank', source: 'PaymentBranch / ConfirmBankCode', value: f.paymentBranch || '-' }
+  ];
+}
+
+function renderMappingTable(f) {
+  const rows = buildMappingRows(f);
+  $('mappingTable').innerHTML = rows.map(r => `
+    <div class="mapping-row">
+      <div class="mapping-field">${r.field}</div>
+      <div class="mapping-source">${r.source}</div>
+      <div class="mapping-value">${r.value}</div>
+    </div>
+  `).join('');
+}
+
+function renderFiche(f) {
+  $('ficheSection').hidden = false;
+  const statusClass = f.existsInRayvarz ? 'status-err' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn');
+
+  $('ficheSummary').innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">شماره فیش</span>
+      <span class="stat-value">${f.ficheNo}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">نوع</span>
+      <span class="stat-value">${categoryLabels[f.category] || f.category}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">مبلغ قابل پرداخت</span>
+      <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">کد نوسازی (BnkAcntNo)</span>
+      <span class="stat-value">${f.bnkAcntNo || '-'}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">وضعیت</span>
+      <span class="stat-value"><span class="status-pill ${statusClass}">${f.statusMessage}</span></span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">در رایورز</span>
+      <span class="stat-value">${f.existsInRayvarz ? 'بله — تکراری' : 'خیر'}</span>
+    </div>
+  `;
+
+  renderMappingTable(f);
+
+  const tbody = $('rowsTable').querySelector('tbody');
+  tbody.innerHTML = '';
+  (f.rows || []).forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td><td>${r.incmNo}</td><td>${r.incmRowDsc}</td><td>${Number(r.val).toLocaleString()}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
 async function init() {
   config = await fetch('/api/config').then(r => r.json());
   const badge = $('configBadge');
   badge.textContent = config.dryRun
-    ? `حالت DryRun فعال — ارسال واقعی نمی‌شود | ${config.serviceUrl}`
-    : `ارسال واقعی | ${config.serviceUrl}`;
+    ? `حالت DryRun — ارسال واقعی نمی‌شود | Id سامانه: ${config.sourceSystemId} | ${config.serviceUrl}`
+    : `ارسال واقعی | Id سامانه: ${config.sourceSystemId} | ${config.serviceUrl}`;
 
   const branchSel = $('branch');
   const fundSel = $('fund');
@@ -43,16 +129,16 @@ async function init() {
     const optFund = document.createElement('option');
     optFund.value = b.fund;
     optFund.textContent = `${b.fund} — ${b.name}`;
-    optFund.dataset.branch = b.id;
     fundSel.appendChild(optFund);
   });
 
-  branchSel.onchange = syncFundFromBranch;
-  fundSel.onchange = syncBranchFromFund;
+  branchSel.onchange = () => { syncFundFromBranch(); if (currentFiche) renderMappingTable(currentFiche); };
+  fundSel.onchange = () => { syncBranchFromFund(); if (currentFiche) renderMappingTable(currentFiche); };
+  $('docDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   syncFundFromBranch();
 
   const today = new Date();
-  $('docDate').value = `140${today.getFullYear() - 2020}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+  $('docDate').value = `140${today.getFullYear() - 2020}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
 }
 
 $('btnLoad').onclick = async () => {
@@ -75,7 +161,6 @@ $('btnLoad').onclick = async () => {
     if (!res.ok) throw new Error(data.error || data.title || 'خطا');
 
     currentFiche = data;
-    $('sourceId').value = data.nidFiche || '';
     renderFiche(data);
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
@@ -85,7 +170,6 @@ $('btnLoad').onclick = async () => {
   } catch (e) {
     alert(e.message);
     currentFiche = null;
-    $('sourceId').value = '';
     $('ficheSection').hidden = true;
     $('btnPreview').disabled = true;
     $('btnSend').disabled = true;
@@ -93,34 +177,6 @@ $('btnLoad').onclick = async () => {
     $('btnLoad').disabled = false;
   }
 };
-
-function renderFiche(f) {
-  $('ficheSection').hidden = false;
-  const cat = { Income: 'درآمد', DutyNosazi: 'نوسازی', DutySenfi: 'صنفی', Unknown: 'نامشخص' };
-  const statusClass = f.existsInRayvarz ? 'status-err' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn');
-
-  $('ficheSummary').innerHTML = `
-    <div><b>فیش:</b> ${f.ficheNo}</div>
-    <div><b>نوع:</b> ${cat[f.category] || f.category}</div>
-    <div><b>Id سامانه مبدا:</b> ${f.nidFiche}</div>
-    <div><b>Payable:</b> ${Number(f.payable).toLocaleString()}</div>
-    <div><b>BnkAcntNo:</b> ${f.bnkAcntNo || '-'}</div>
-    <div><b>BillID:</b> ${f.billId}</div>
-    <div><b>PaymentID:</b> ${f.paymentId}</div>
-    <div><b>DocTyp:</b> ${f.docTyp} — ${f.docDsc}</div>
-    <div><b>Fund انتخابی:</b> ${$('fund').value}</div>
-    <div><b>وضعیت:</b> <span class="${statusClass}">${f.statusMessage}</span></div>
-    <div><b>در رایورز:</b> ${f.existsInRayvarz ? 'بله' : 'خیر'}</div>
-  `;
-
-  const tbody = $('rowsTable').querySelector('tbody');
-  tbody.innerHTML = '';
-  (f.rows || []).forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td>${r.incmNo}</td><td>${r.incmRowDsc}</td><td>${Number(r.val).toLocaleString()}</td>`;
-    tbody.appendChild(tr);
-  });
-}
 
 $('btnPreview').onclick = async () => {
   if (!currentFiche) return;
@@ -132,6 +188,7 @@ $('btnPreview').onclick = async () => {
   const data = await res.json();
   $('xmlSection').hidden = false;
   $('xmlBox').textContent = data.xml;
+  $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 $('btnSend').onclick = async () => {
@@ -160,6 +217,7 @@ $('btnSend').onclick = async () => {
       $('xmlSection').hidden = false;
       $('xmlBox').textContent = data.soapResponse || data.previewXml;
     }
+    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     alert(e.message);
   } finally {

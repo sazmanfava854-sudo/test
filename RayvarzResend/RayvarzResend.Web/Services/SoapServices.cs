@@ -17,20 +17,20 @@ public class SoapBuilder
         var rowDateRay = DateHelper.ToRayvarzDate(fiche.RowDate);
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
-        var txnId = fiche.NidFiche.ToString();
+        var sourceId = _config["Rayvarz:SourceSystemId"] ?? "11111";
         var rows = NormalizeRows(fiche);
 
         var incmItems = string.Join("\n", rows.Select((r, i) => $@"
               <wcf:DocumentItemIncm>
                 <wcf:Due>{docDateRay}</wcf:Due>
-                <wcf:Id>{txnId}</wcf:Id>
+                <wcf:Id>{Escape(sourceId)}</wcf:Id>
                 <wcf:IncmNo>{r.IncmNo}</wcf:IncmNo>
                 <wcf:IncmRow>{i + 1}</wcf:IncmRow>
                 <wcf:IncmRowDsc>{Escape(r.IncmRowDsc)}</wcf:IncmRowDsc>
                 <wcf:Qty>{fiche.Payable:0}</wcf:Qty>
                 <wcf:Ref>{Escape(fiche.FicheNo)}</wcf:Ref>
                 <wcf:RefRowDocNo>0</wcf:RefRowDocNo>
-                <wcf:SourceId>{txnId}</wcf:SourceId>
+                <wcf:SourceId>{Escape(sourceId)}</wcf:SourceId>
                 <wcf:Val>{r.Val:0}</wcf:Val>
               </wcf:DocumentItemIncm>"));
 
@@ -72,7 +72,7 @@ public class SoapBuilder
             <wcf:VchrTyp>0</wcf:VchrTyp>
           </wcf:DocumentItem>
         </wcf:Items>
-        <wcf:TransactionId>{txnId}</wcf:TransactionId>
+        <wcf:TransactionId>{Escape(sourceId)}</wcf:TransactionId>
       </tem:doc>
     </tem:SaveDocument>
   </soap:Body>
