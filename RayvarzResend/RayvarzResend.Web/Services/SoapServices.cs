@@ -126,7 +126,7 @@ public class RayvarzClient
         var url = _config["Rayvarz:ServiceUrl"] ?? "";
         var action = _config["Rayvarz:SoapAction"] ?? "";
 
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpFactory.CreateClient();
         using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
         content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
 
