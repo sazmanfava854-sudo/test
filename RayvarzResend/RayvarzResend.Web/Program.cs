@@ -3,7 +3,6 @@ using RayvarzResend.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();

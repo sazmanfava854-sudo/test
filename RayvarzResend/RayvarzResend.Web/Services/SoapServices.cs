@@ -102,13 +102,8 @@ public class SoapBuilder
 public class RayvarzClient
 {
     private readonly IConfiguration _config;
-    private readonly IHttpClientFactory _httpFactory;
 
-    public RayvarzClient(IConfiguration config, IHttpClientFactory httpFactory)
-    {
-        _config = config;
-        _httpFactory = httpFactory;
-    }
+    public RayvarzClient(IConfiguration config) => _config = config;
 
     public async Task<SendResultDto> SendAsync(string soapXml, bool dryRun, CancellationToken ct = default)
     {
@@ -126,7 +121,7 @@ public class RayvarzClient
         var url = _config["Rayvarz:ServiceUrl"] ?? "";
         var action = _config["Rayvarz:SoapAction"] ?? "";
 
-        var client = _httpFactory.CreateClient();
+        using var client = new HttpClient();
         using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
         content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
 
