@@ -17,25 +17,21 @@ public class SoapBuilder
         var rowDateRay = DateHelper.ToRayvarzDate(fiche.RowDate);
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
-        var sourceId = _config["Rayvarz:SourceSystemId"] ?? "11111";
+
+        // Id سامانه مبدا — کد ثابت سامانه (مثلاً 11111)
+        var sourceSystemId = _config["Rayvarz:SourceSystemId"] ?? "11111";
+        // شناسه یکتای تراکنش/فیش — GUID فیش
+        var transactionId = fiche.NidFiche.ToString();
+
+        const int docRow = 1;
         var rows = NormalizeRows(fiche);
+        var docTypDsc = ResolveDocTypDsc(fiche.DocTyp);
 
-        var incmItems = string.Join("\n", rows.Select((r, i) => $@"
-              <wcf:DocumentItemIncm>
-                <wcf:Due>{docDateRay}</wcf:Due>
-                <wcf:Id>{Escape(sourceId)}</wcf:Id>
-                <wcf:IncmNo>{r.IncmNo}</wcf:IncmNo>
-                <wcf:IncmRow>{i + 1}</wcf:IncmRow>
-                <wcf:IncmRowDsc>{Escape(r.IncmRowDsc)}</wcf:IncmRowDsc>
-                <wcf:Qty>{fiche.Payable:0}</wcf:Qty>
-                <wcf:Ref>{Escape(fiche.FicheNo)}</wcf:Ref>
-                <wcf:RefRowDocNo>0</wcf:RefRowDocNo>
-                <wcf:SourceId>{Escape(sourceId)}</wcf:SourceId>
-                <wcf:Val>{r.Val:0}</wcf:Val>
-              </wcf:DocumentItemIncm>"));
+        var incmItems = string.Join("\n", rows.Select((r, i) => BuildIncmRow(
+            r, i + 1, docRow, docDateRay, fiche.FicheNo, transactionId, sourceSystemId)));
 
-        var refRecon = string.IsNullOrWhiteSpace(fiche.RefReconstructionNo)
-            ? "" : $"<wcf:RefreconstructionNo>{Escape(fiche.RefReconstructionNo)}</wcf:RefreconstructionNo>";
+        var refRecon = XmlOptional("RefreconstructionNo", fiche.RefReconstructionNo);
+        var bankXml = XmlOptional("Bank", fiche.BankCode);
 
         return $@"<soap:Envelope xmlns:soap=""http://www.w3.org/2003/05/soap-envelope""
   xmlns:tem=""http://tempuri.org/""
@@ -50,14 +46,15 @@ public class SoapBuilder
         <wcf:DocDate>{docDateRay}</wcf:DocDate>
         <wcf:DocDsc>{Escape(fiche.DocDsc)}</wcf:DocDsc>
         <wcf:DocTyp>{fiche.DocTyp}</wcf:DocTyp>
-        <wcf:DocTypDsc>عوارض سرا</wcf:DocTypDsc>
+        <wcf:DocTypDsc>{Escape(docTypDsc)}</wcf:DocTypDsc>
         <wcf:Items>
           <wcf:DocumentItem>
             <wcf:ActDate>{docDateRay}</wcf:ActDate>
             <wcf:ActTyp>3</wcf:ActTyp>
-            <wcf:Bank>{Escape(fiche.PaymentBranch)}</wcf:Bank>
+            {bankXml}
             <wcf:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</wcf:BnkAcntNo>
-            <wcf:DocRow>1</wcf:DocRow>
+            <wcf:DocRow>{docRow}</wcf:DocRow>
+            <wcf:DocTypDsc>{Escape(docTypDsc)}</wcf:DocTypDsc>
             <wcf:Fund>{fund}</wcf:Fund>
             <wcf:IncmMkrTyp>1</wcf:IncmMkrTyp>
             <wcf:Incms>{incmItems}
@@ -72,12 +69,44 @@ public class SoapBuilder
             <wcf:VchrTyp>0</wcf:VchrTyp>
           </wcf:DocumentItem>
         </wcf:Items>
-        <wcf:TransactionId>{Escape(sourceId)}</wcf:TransactionId>
+        <wcf:TransactionId>{Escape(transactionId)}</wcf:TransactionId>
       </tem:doc>
     </tem:SaveDocument>
   </soap:Body>
 </soap:Envelope>";
     }
+
+    private static string BuildIncmRow(
+        IncmRowDto row,
+        int incmRow,
+        int parentDocRow,
+        string docDateRay,
+        string ficheNo,
+        string transactionId,
+        string sourceSystemId) => $@"
+              <wcf:DocumentItemIncm>
+                <wcf:Due>{docDateRay}</wcf:Due>
+                <wcf:Id>{Escape(transactionId)}</wcf:Id>
+                <wcf:IncmNo>{row.IncmNo}</wcf:IncmNo>
+                <wcf:IncmRow>{incmRow}</wcf:IncmRow>
+                <wcf:IncmRowDsc>{Escape(row.IncmRowDsc)}</wcf:IncmRowDsc>
+                <wcf:Qty>1</wcf:Qty>
+                <wcf:Ref>{Escape(ficheNo)}</wcf:Ref>
+                <wcf:RefRowDocNo>{parentDocRow}</wcf:RefRowDocNo>
+                <wcf:SourceId>{Escape(sourceSystemId)}</wcf:SourceId>
+                <wcf:Val>{row.Val:0}</wcf:Val>
+              </wcf:DocumentItemIncm>";
+
+    private static string ResolveDocTypDsc(int docTyp) => docTyp switch
+    {
+        1 => "عوارض نوسازی",
+        2 => "عوارض صنفی",
+        11 => "عوارض سرا",
+        _ => "عوارض سرا"
+    };
+
+    private static string XmlOptional(string name, string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "" : $"<wcf:{name}>{Escape(value)}</wcf:{name}>";
 
     private static List<IncmRowDto> NormalizeRows(FicheHeaderDto fiche)
     {

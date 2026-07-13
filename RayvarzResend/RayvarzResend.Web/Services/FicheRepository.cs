@@ -30,7 +30,8 @@ public class FicheRepository
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
-       ISNULL(f.BankPaymentDate, f.PaymentDate) AS RowDate,
+       NULLIF(LTRIM(RTRIM(CAST(f.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
+       COALESCE(f.BankPaymentDate, f.PaymentDate, f.IssueDate) AS RowDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
@@ -64,7 +65,8 @@ WHERE {where}";
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
             PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
-            RowDate = reader.IsDBNull(reader.GetOrdinal("RowDate")) ? "" : reader.GetString(reader.GetOrdinal("RowDate")),
+            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
+            RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = reader.GetByte(reader.GetOrdinal("EumFicheStatus")),
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
@@ -118,8 +120,9 @@ WHERE ic.NidIncome = @nid";
 
         var sql = $@"
 SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
-       ISNULL(CAST(d.ConfirmBankCode AS nvarchar(20)), '18') AS PaymentBranch,
-       ISNULL(d.BankPaymentDate, d.PaymentDate) AS RowDate,
+       ISNULL(CAST(d.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
+       NULLIF(LTRIM(RTRIM(CAST(d.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
+       COALESCE(d.BankPaymentDate, d.PaymentDate, d.IssueDate) AS RowDate,
        d.EumDutyFicheStatus, d.CI_DutyFicheExportType,
        d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)') AS BnkAcntNo
 FROM dbo.Duty_Fiche d
@@ -146,7 +149,8 @@ WHERE {where}";
             Payable = reader.GetDecimal(reader.GetOrdinal("Payable")),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
-            RowDate = reader.IsDBNull(reader.GetOrdinal("RowDate")) ? "" : reader.GetString(reader.GetOrdinal("RowDate")),
+            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
+            RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = reader.GetByte(reader.GetOrdinal("EumDutyFicheStatus")),
             DutyExportType = exportType,
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
@@ -252,5 +256,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    private static string ReadRowDate(SqlDataReader reader, string column)
+    {
+        var ord = reader.GetOrdinal(column);
+        if (reader.IsDBNull(ord)) return "";
+        var value = reader.GetValue(ord);
+        return value switch
+        {
+            DateTime dt => dt.ToString("yyyyMMdd"),
+            _ => value.ToString() ?? ""
+        };
     }
 }

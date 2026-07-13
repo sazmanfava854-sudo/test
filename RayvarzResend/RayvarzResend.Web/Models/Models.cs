@@ -34,6 +34,7 @@ public class FicheHeaderDto
     public string BnkAcntNo { get; set; } = "";
     public string? RefReconstructionNo { get; set; }
     public string PaymentBranch { get; set; } = "18";
+    public string? BankCode { get; set; }
     public string RowDate { get; set; } = "";
     public int DocTyp { get; set; }
     public string DocDsc { get; set; } = "";

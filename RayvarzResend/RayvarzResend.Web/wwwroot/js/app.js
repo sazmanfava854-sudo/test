@@ -39,22 +39,25 @@ function buildMappingRows(f) {
   const sourceId = config.sourceSystemId || '11111';
 
   return [
-    { field: 'Id', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
-    { field: 'SourceId', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
-    { field: 'TransactionId', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
-    { field: 'Ref / RowDocNo / RefownrDsc', source: 'Income_Fiche / Duty_Fiche → FicheNo', value: f.ficheNo },
-    { field: 'Ref2', source: 'BillID', value: f.billId },
-    { field: 'Ref3', source: 'PaymentID', value: f.paymentId },
+    { field: 'TransactionId (سند)', source: 'Income_Fiche / Duty_Fiche → NidFiche (GUID)', value: f.nidFiche || '-' },
+    { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
+    { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
+    { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
+    { field: 'RefRowDocNo (دیتیل)', source: 'DocRow هدر (۱) — ارجاع به ردیف سند', value: '1' },
+    { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
+    { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo', source: 'کد نوسازی (Base_NosaziCode یا OtherFields)', value: f.bnkAcntNo || '-' },
-    { field: 'Fund', source: 'انتخاب منطقه / dropdown', value: fund },
-    { field: 'branch', source: 'انتخاب شعبه / dropdown', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
-    { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند', value: docDate },
-    { field: 'RowDate', source: 'BankPaymentDate یا PaymentDate', value: f.rowDate || '-' },
-    { field: 'DocTyp', source: 'نوع فیش (درآمد/نوسازی/صنفی)', value: `${f.docTyp} — ${f.docDsc}` },
-    { field: 'IncmNo / Val', source: 'Income_Calculation یا Duty_FicheSub', value: `${(f.rows || []).length} ردیف` },
-    { field: 'Qty', source: 'Payable', value: Number(f.payable).toLocaleString() },
-    { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '-' },
-    { field: 'Bank', source: 'PaymentBranch / ConfirmBankCode', value: f.paymentBranch || '-' }
+    { field: 'Fund', source: 'انتخاب منطقه', value: fund },
+    { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
+    { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند (فرم)', value: docDate },
+    { field: 'RowDate', source: 'BankPaymentDate → PaymentDate → IssueDate', value: f.rowDate || '-' },
+    { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
+    { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
+    { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
+    { field: 'Qty (دیتیل)', source: 'تعداد — مقدار ۱ برای هر ردیف', value: '1' },
+    { field: 'Val', source: 'Income_Calculation / Duty_FicheSub', value: Number(f.payable).toLocaleString() },
+    { field: 'Bank', source: 'ConfirmBankCode — فقط اگر پرداخت شده', value: f.bankCode || '(خالی — NULL)' },
+    { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '(NULL)' }
   ];
 }
 
