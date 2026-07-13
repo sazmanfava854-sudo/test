@@ -11,11 +11,12 @@ public class SoapBuilder
 
     public SoapBuilder(IConfiguration config) => _config = config;
 
-    public string Build(FicheHeaderDto fiche, int branch, string docDate)
+    public string Build(FicheHeaderDto fiche, int branch, int fund, string docDate)
     {
         var docDateRay = DateHelper.ToRayvarzDate(docDate);
         var rowDateRay = DateHelper.ToRayvarzDate(fiche.RowDate);
-        var fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
+        if (fund <= 0)
+            fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
         var txnId = fiche.NidFiche.ToString();
         var rows = NormalizeRows(fiche);
 

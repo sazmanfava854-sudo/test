@@ -17,13 +17,19 @@ app.MapGet("/api/config", (IConfiguration config) => new
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = config["Rayvarz:ServiceUrl"],
     branches = new[] {
-        new { id = 201, name = "منطقه 1" }, new { id = 202, name = "منطقه 2" },
-        new { id = 203, name = "منطقه 3" }, new { id = 204, name = "منطقه 4" },
-        new { id = 205, name = "منطقه 5" }, new { id = 206, name = "منطقه 6" },
-        new { id = 207, name = "منطقه 7" }, new { id = 208, name = "منطقه 8" },
-        new { id = 209, name = "منطقه 9" }, new { id = 210, name = "منطقه 10" },
-        new { id = 211, name = "منطقه 11" }, new { id = 212, name = "منطقه 12" },
-        new { id = 218, name = "منطقه ثامن" }
+        new { id = 201, name = "منطقه 1", fund = 200201012 },
+        new { id = 202, name = "منطقه 2", fund = 200202012 },
+        new { id = 203, name = "منطقه 3", fund = 200203013 },
+        new { id = 204, name = "منطقه 4", fund = 200204017 },
+        new { id = 205, name = "منطقه 5", fund = 200205008 },
+        new { id = 206, name = "منطقه 6", fund = 200206006 },
+        new { id = 207, name = "منطقه 7", fund = 200207009 },
+        new { id = 208, name = "منطقه 8", fund = 200208010 },
+        new { id = 209, name = "منطقه 9", fund = 200209004 },
+        new { id = 210, name = "منطقه 10", fund = 200210020 },
+        new { id = 211, name = "منطقه 11", fund = 200211007 },
+        new { id = 212, name = "منطقه 12", fund = 200212004 },
+        new { id = 218, name = "منطقه ثامن", fund = 200218011 }
     }
 });
 
@@ -58,7 +64,7 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest req, FicheRepository repo
 
 app.MapPost("/api/fiche/preview", (SendFicheRequest req, SoapBuilder soap) =>
 {
-    var xml = soap.Build(req.Fiche, req.Branch, req.DocDate);
+    var xml = soap.Build(req.Fiche, req.Branch, req.Fund, req.DocDate);
     return Results.Ok(new { xml });
 });
 
@@ -74,7 +80,7 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
         catch (Exception ex) { return Results.Problem($"خطا در ریست وضعیت: {ex.Message}"); }
     }
 
-    var xml = soap.Build(fiche, req.Branch, req.DocDate);
+    var xml = soap.Build(fiche, req.Branch, req.Fund, req.DocDate);
     var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
     var result = await client.SendAsync(xml, dryRun, ct);
 

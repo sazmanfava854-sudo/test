@@ -56,6 +56,7 @@ public class SendFicheRequest
 {
     public FicheHeaderDto Fiche { get; set; } = new();
     public int Branch { get; set; }
+    public int Fund { get; set; }
     public string DocDate { get; set; } = "";
     public bool ResetStatus { get; set; } = true;
 }
