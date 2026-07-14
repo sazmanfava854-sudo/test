@@ -150,7 +150,7 @@ WHERE {where}";
         if (!await reader.ReadAsync(ct)) return null;
 
         var exportType = reader.IsDBNull(reader.GetOrdinal("CI_DutyFicheExportType"))
-            ? 0 : reader.GetInt32(reader.GetOrdinal("CI_DutyFicheExportType"));
+            ? 0 : ReadInt32(reader, "CI_DutyFicheExportType");
         var isSenfi = exportType == 14;
 
         var dto = new FicheHeaderDto
@@ -193,8 +193,8 @@ WHERE NidFiche = @nid";
         while (await reader.ReadAsync(ct))
         {
             subs.Add((
-                reader.GetInt32(reader.GetOrdinal("CI_DutyFormula")),
-                reader.IsDBNull(reader.GetOrdinal("CI_DutyFormulaFiche")) ? 0 : reader.GetInt32(reader.GetOrdinal("CI_DutyFormulaFiche")),
+                ReadInt32(reader, "CI_DutyFormula"),
+                reader.IsDBNull(reader.GetOrdinal("CI_DutyFormulaFiche")) ? 0 : ReadInt32(reader, "CI_DutyFormulaFiche"),
                 reader.GetDecimal(reader.GetOrdinal("Price"))
             ));
         }
@@ -271,6 +271,13 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    private static int ReadInt32(SqlDataReader reader, string column)
+    {
+        var ord = reader.GetOrdinal(column);
+        if (reader.IsDBNull(ord)) return 0;
+        return Convert.ToInt32(reader.GetValue(ord));
     }
 
     private static string ReadRowDate(SqlDataReader reader, string column)

@@ -52,6 +52,36 @@ app.MapGet("/api/config", (IConfiguration config) => new
     }
 });
 
+app.MapGet("/api/db-test", async (IConfiguration config) =>
+{
+    var results = new List<object>();
+    foreach (var name in new[] { "Sara", "Rayvarz" })
+    {
+        var cs = config.GetConnectionString(name);
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            results.Add(new { name, ok = false, error = "Connection string تنظیم نشده" });
+            continue;
+        }
+        try
+        {
+            await using var conn = new SqlConnection(cs);
+            await conn.OpenAsync();
+            var sql = name == "Sara"
+                ? "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche"
+                : "SELECT TOP 1 Ref FROM ray.incmdocsys";
+            await using var cmd = new SqlCommand(sql, conn);
+            var sample = (await cmd.ExecuteScalarAsync())?.ToString();
+            results.Add(new { name, ok = true, server = conn.DataSource, database = conn.Database, sample });
+        }
+        catch (Exception ex)
+        {
+            results.Add(new { name, ok = false, error = ex.Message });
+        }
+    }
+    return Results.Ok(new { connections = results });
+});
+
 app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, CancellationToken ct) =>
 {
     if (req == null || string.IsNullOrWhiteSpace(req.IdentifierValue))
