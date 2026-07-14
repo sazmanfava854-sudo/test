@@ -1,0 +1,9 @@
+{
+  "ConnectionStrings": {
+    "Sara": "Server=YOUR_SQL_SERVER;Database=Sara8M03;Trusted_Connection=True;TrustServerCertificate=True;",
+    "Rayvarz": "Server=YOUR_SQL_SERVER;Database=Ray_CityHall;Trusted_Connection=True;TrustServerCertificate=True;"
+  },
+  "Rayvarz": {
+    "DryRun": true
+  }
+}

@@ -32,6 +32,18 @@ function getPayload(resetStatus) {
   };
 }
 
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    throw new Error(`پاسخ خالی از سرور (HTTP ${res.status}). برنامه dotnet run را چک کنید و connection string را در appsettings.json تنظیم کنید.`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`پاسخ نامعتبر از سرور (HTTP ${res.status}): ${text.slice(0, 300)}`);
+  }
+}
+
 function bnkAcntNoSource(f) {
   if (f.bnkAcntNoSource) return f.bnkAcntNoSource;
   if (f.category === 'Income') return 'کد نوسازی — Base_NosaziCode (فیش درآمد)';
@@ -124,7 +136,14 @@ function renderFiche(f) {
 }
 
 async function init() {
-  config = await fetch('/api/config').then(r => r.json());
+  try {
+    const res = await fetch('/api/config');
+    config = await parseJsonResponse(res);
+  } catch (e) {
+    $('configBadge').textContent = 'خطا در اتصال به API — dotnet run را اجرا کنید';
+    alert(e.message);
+    return;
+  }
   const badge = $('configBadge');
   badge.textContent = config.dryRun
     ? `حالت DryRun — ارسال واقعی نمی‌شود | Id سامانه: ${config.sourceSystemId} | ${config.serviceUrl}`
@@ -169,8 +188,8 @@ $('btnLoad').onclick = async () => {
         docDate: $('docDate').value
       })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.title || 'خطا');
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
     currentFiche = data;
     if (data.dutyRegion) {
@@ -205,7 +224,8 @@ $('btnPreview').onclick = async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(getPayload(false))
   });
-  const data = await res.json();
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
   $('xmlSection').hidden = false;
   $('xmlBox').textContent = data.xml;
   $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -223,8 +243,8 @@ $('btnSend').onclick = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getPayload(true))
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.title || 'خطا');
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
     $('resultSection').hidden = false;
     let msg = `Success: ${data.success}\nMessage: ${data.message || '-'}\nDryRun: ${data.dryRun}\n`;

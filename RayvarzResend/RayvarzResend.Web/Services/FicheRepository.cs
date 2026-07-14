@@ -30,18 +30,23 @@ public class FicheRepository
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
-       NULLIF(LTRIM(RTRIM(CAST(f.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
-       COALESCE(f.BankPaymentDate, f.PaymentDate, f.IssueDate) AS RowDate,
+       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS BankCode,
+       COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
-       CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
-       CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
-       CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-       CAST(b.Apartment AS varchar) + '-' + CAST(b.Shop AS varchar) AS BnkAcntNo
+       ISNULL(
+         NULLIF(LTRIM(RTRIM(
+           CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
+           CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
+           CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
+           CAST(b.Apartment AS varchar) + '-' + CAST(b.Shop AS varchar)
+         )), '-'),
+         ''
+       ) AS BnkAcntNo
 FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
-JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
-JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
+LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
+LEFT JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
 WHERE {where}";
 
         await using var conn = new SqlConnection(_saraCs);
@@ -121,7 +126,7 @@ WHERE ic.NidIncome = @nid";
 
         var sql = $@"
 SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
-       ISNULL(CAST(d.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
+       '18' AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(d.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
        COALESCE(d.BankPaymentDate, d.PaymentDate, d.PrintDate, d.ExportDate) AS RowDate,
        d.EumDutyFicheStatus, d.CI_DutyFicheExportType,

@@ -3,11 +3,26 @@ using RayvarzResend.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 
 var app = builder.Build();
+
+app.UseExceptionHandler(handler =>
+{
+    handler.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        var ex = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        await context.Response.WriteAsJsonAsync(new { error = ex?.Message ?? "خطای داخلی سرور" });
+    });
+});
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -34,9 +49,9 @@ app.MapGet("/api/config", (IConfiguration config) => new
     }
 });
 
-app.MapPost("/api/fiche/load", async (LoadFicheRequest req, FicheRepository repo, CancellationToken ct) =>
+app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(req.IdentifierValue))
+    if (req == null || string.IsNullOrWhiteSpace(req.IdentifierValue))
         return Results.BadRequest(new { error = "شناسه فیش خالی است" });
 
     try
@@ -45,7 +60,17 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest req, FicheRepository repo
         if (fiche == null)
             return Results.NotFound(new { error = "فیش در Income_Fiche یا Duty_Fiche یافت نشد" });
 
-        fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+        try
+        {
+            fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+        }
+        catch (Exception rayEx)
+        {
+            fiche.ExistsInRayvarz = false;
+            fiche.StatusMessage = $"فیش بارگذاری شد — اتصال رایورز ناموفق: {rayEx.Message}";
+            return Results.Ok(fiche);
+        }
+
         if (fiche.ExistsInRayvarz)
             fiche.StatusMessage = "تکراری — در رایورز موجود است";
         else if (fiche.Payable <= 0)
@@ -59,7 +84,7 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest req, FicheRepository repo
     }
     catch (Exception ex)
     {
-        return Results.Problem($"خطا در بارگذاری: {ex.Message}");
+        return Results.Json(new { error = $"خطا در بارگذاری: {ex.Message}" }, statusCode: 500);
     }
 });
 
