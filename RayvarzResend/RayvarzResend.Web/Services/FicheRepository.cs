@@ -199,11 +199,34 @@ WHERE NidFiche = @nid";
             ));
         }
 
-        decimal Afzodeh = subs.Where(s => s.Formula == 3 && s.Fiche == 16).Sum(s => s.Price);
-        decimal Atash = subs.Where(s => s.Formula == 5 && s.Fiche == 0).Sum(s => s.Price)
-                      - subs.Where(s => s.Formula == 5 && s.Fiche != 0).Sum(s => s.Price);
-        decimal Garbage = subs.Where(s => s.Formula == 3 && s.Fiche == 0).Sum(s => s.Price)
-                        - subs.Where(s => s.Formula == 3 && s.Fiche != 0).Sum(s => s.Price);
+        const int AfzodehFiche = 16;
+
+        decimal afzodehAmount = subs.Where(s => s.Formula == 3 && s.Fiche == AfzodehFiche).Sum(s => s.Price);
+        decimal atashCredit = subs.Where(s => s.Formula == 5 && s.Fiche == 0).Sum(s => s.Price);
+        decimal atashDebit = subs.Where(s => s.Formula == 5 && s.Fiche != 0).Sum(s => s.Price);
+        decimal Atash = atashCredit - atashDebit;
+
+        decimal garbageBase = subs.Where(s => s.Formula == 3 && s.Fiche == 0).Sum(s => s.Price);
+        decimal garbageOther = subs.Where(s => s.Formula == 3 && s.Fiche != 0 && s.Fiche != AfzodehFiche).Sum(s => s.Price);
+        decimal garNet = garbageBase - garbageOther;
+        decimal garGross = garbageBase - afzodehAmount - garbageOther;
+
+        // ارزش‌افزوده فقط وقتی ردیف جدا دارد که آتش‌نشانی هم جدا باشد (فیش‌های ۴ ردیفه).
+        bool emitAfzodeh = afzodehAmount > 0 && Atash > 0;
+
+        decimal Garbage;
+        if (emitAfzodeh)
+            Garbage = garGross;
+        else if (afzodehAmount > 0)
+        {
+            // F0 گاهی ناخالص است (باید فیش ۱۶ کم شود)، گاهی خودِ پسماند نهایی است.
+            var mainShare = garbageBase > 0 ? (payable - Atash - garbageBase) / garbageBase : 0;
+            Garbage = mainShare >= 0.3m ? garNet : garGross;
+        }
+        else
+            Garbage = garNet;
+
+        decimal Afzodeh = emitAfzodeh ? afzodehAmount : 0;
 
         var mainIncm = isSenfi ? 100062 : 2003;
         var mainDsc = isSenfi ? "صنفی" : "نوسازی";
