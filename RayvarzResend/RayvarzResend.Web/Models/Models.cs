@@ -32,6 +32,8 @@ public class FicheHeaderDto
     public Guid NidFiche { get; set; }
     public Guid? NidIncome { get; set; }
     public string BnkAcntNo { get; set; } = "";
+    public string BnkAcntNoSource { get; set; } = "";
+    public string? DutyRegion { get; set; }
     public string? RefReconstructionNo { get; set; }
     public string PaymentBranch { get; set; } = "18";
     public string? BankCode { get; set; }

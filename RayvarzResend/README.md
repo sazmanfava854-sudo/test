@@ -25,6 +25,7 @@
 
 ```json
 "Rayvarz": {
+  "SourceSystemId": "11111",
   "DryRun": true
 }
 ```
@@ -38,16 +39,49 @@ cd RayvarzResend\RayvarzResend.Web
 dotnet run
 ```
 
-مرورگر: `http://localhost:5000` یا آدرسی که در کنسول نمایش داده می‌شود.
+مرورگر: `http://localhost:5000`
 
-## استفاده
+## مپینگ BnkAcntNo (مهم)
 
-1. نوع شناسه: `FicheNo` یا `BillID+PaymentID`
-2. یک فیش تست وارد کنید (مثلاً `971030914186`)
-3. شعبه و تاریخ را انتخاب کنید
-4. **دریافت فیش** — اطلاعات و ردیف‌های IncmNo نمایش داده می‌شود
-5. **پیش‌نمایش XML** — SOAP را ببینید
-6. **ارسال** — بعد از `DryRun: false`
+| نوع فیش | جدول | منبع BnkAcntNo | فرمت نمونه |
+|---------|------|----------------|------------|
+| **درآمد** | `Income_Fiche` | `Base_NosaziCode` از join با `Income → Sh_RequestInfo` | `10-8-276-11-1-0-0-0` |
+| **نوسازی/صنفی** | `Duty_Fiche` | `OtherFields` → **کد نوسازی** (XML) | `7-14-55-1-0-0-0` |
+
+> **توجه:** `BnkAcntNo` در رایورز «شماره حساب بانکی» نیست. برای نوسازی از کد XML فیش استفاده می‌شود، **نه** کد ثبت ملکی `Base_NosaziCode`.
+
+### کوئری دستی BnkAcntNo
+
+**نوسازی:**
+```sql
+SELECT OtherFields.value('(//ClsLog[Subject="کد نوسازي"]/Value)[1]', 'nvarchar(100)') AS BnkAcntNo
+FROM dbo.Duty_Fiche WHERE FicheNo = @FicheNo;
+```
+
+**درآمد:**
+```sql
+SELECT CAST(b.CI_City AS varchar) + '-' + ... + CAST(b.Shop AS varchar) AS BnkAcntNo
+FROM dbo.Income_Fiche f
+JOIN dbo.Income i ON i.NidIncome = f.NidIncome
+JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
+JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
+WHERE f.FicheNo = @FicheNo;
+```
+
+## مپینگ سایر فیلدهای SOAP
+
+| فیلد SOAP | منبع |
+|-----------|------|
+| TransactionId | `NidFiche` (GUID) |
+| SourceId | `appsettings → SourceSystemId` (پیش‌فرض `11111`) |
+| RowDocNo | `FicheNo` |
+| Ref2 | `BillID` |
+| Ref3 | `PaymentID` |
+| Qty | `Payable` (مبلغ کل) |
+| Val | مبلغ هر ردیف از `Income_Calculation` یا `Duty_FicheSub` |
+| Bank | `ConfirmBankCode` (فقط اگر پرداخت شده) |
+| RowDate | `BankPaymentDate` → `PaymentDate` → `PrintDate` → `ExportDate` |
+| Fund / branch | انتخاب منطقه (برای نوسازی از `OtherFields → منطقه` پیشنهاد می‌شود) |
 
 ## جریان
 
@@ -55,27 +89,18 @@ dotnet run
 ورود دستی فیش
     → بارگذاری از Income_Fiche / Duty_Fiche
     → چک تکراری در ray.incmdocsys
-    → نمایش BnkAcntNo + IncmNo rows
+    → نمایش BnkAcntNo + منبع آن + IncmNo rows
     → Preview XML
-    → Reset وضعیت (اختیاری) + SaveDocument
-    → بررسی Accounting_DocNotSent در صورت خطا
+    → Reset وضعیت + SaveDocument
 ```
 
-## ارسال واقعی
+## فیش‌های تست
 
-```json
-"Rayvarz": {
-  "ServiceUrl": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
-  "DryRun": false
-}
-```
-
-## فیش‌های تست پیشنهادی
-
-| نوع | FicheNo |
-|-----|---------|
-| درآمد | 971030914186 |
-| نوسازی | 091197/2947568 |
+| نوع | FicheNo | BnkAcntNo نمونه |
+|-----|---------|-----------------|
+| درآمد | 971030914186 | از Base_NosaziCode |
+| نوسازی (در رایورز) | 071101/6174383 | `7-14-55-1-0-0-0` |
+| نوسازی (ارسال نشده) | 071104/0073029 | `7-14-55-1-0-0-0` |
 
 ## عیب‌یابی
 
@@ -83,5 +108,5 @@ dotnet run
 |------|--------|
 | فیش یافت نشد | شناسه و connection string را چک کنید |
 | تکراری | فیش در incmdocsys هست — ارسال نمی‌شود |
-| RowGuid NULL | Id/SourceId از appsettings (`Rayvarz:SourceSystemId`) پر می‌شود — پیش‌فرض `11111` |
+| BnkAcntNo اشتباه | نوع فیش را چک کنید — درآمد و نوسازی منبع متفاوت دارند |
 | خطای شبکه | VPN / URL تست |

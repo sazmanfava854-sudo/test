@@ -71,6 +71,7 @@ WHERE {where}";
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
+            BnkAcntNoSource = "Income_Fiche → Income → Sh_RequestInfo → Base_NosaziCode (کد ثبت ملکی ۸ بخشی)",
             DocTyp = docTyp,
             DocDsc = "اسناد شهرسازی"
         };
@@ -122,9 +123,16 @@ WHERE ic.NidIncome = @nid";
 SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
        ISNULL(CAST(d.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(d.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
-       COALESCE(d.BankPaymentDate, d.PaymentDate, d.IssueDate) AS RowDate,
+       COALESCE(d.BankPaymentDate, d.PaymentDate, d.PrintDate, d.ExportDate) AS RowDate,
        d.EumDutyFicheStatus, d.CI_DutyFicheExportType,
-       d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)') AS BnkAcntNo
+       COALESCE(
+           NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""حوزه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""بلوک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-0-0-0'
+       ) AS BnkAcntNo,
+       NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS DutyRegion
 FROM dbo.Duty_Fiche d
 WHERE {where}";
 
@@ -154,6 +162,8 @@ WHERE {where}";
             CurrentStatus = reader.GetByte(reader.GetOrdinal("EumDutyFicheStatus")),
             DutyExportType = exportType,
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
+            BnkAcntNoSource = "Duty_Fiche.OtherFields → کد نوسازی (منطقه-حوزه-بلوک-ملک — نه Base_NosaziCode)",
+            DutyRegion = reader.IsDBNull(reader.GetOrdinal("DutyRegion")) ? null : reader.GetString(reader.GetOrdinal("DutyRegion")),
             DocTyp = isSenfi ? 2 : 1,
             DocDsc = isSenfi ? "اسناد صنفی" : "اسناد نوسازی"
         };

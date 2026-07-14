@@ -280,6 +280,15 @@ input:focus, select:focus {
   font-size: 1.05rem;
 }
 
+.stat-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  font-weight: 400;
+}
+
 .status-pill {
   display: inline-block;
   padding: 4px 10px;

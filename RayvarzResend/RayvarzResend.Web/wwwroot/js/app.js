@@ -32,6 +32,13 @@ function getPayload(resetStatus) {
   };
 }
 
+function bnkAcntNoSource(f) {
+  if (f.bnkAcntNoSource) return f.bnkAcntNoSource;
+  if (f.category === 'Income') return 'Base_NosaziCode (کد ثبت ملکی ۸ بخشی)';
+  if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') return 'Duty_Fiche.OtherFields → کد نوسازی XML';
+  return 'نامشخص';
+}
+
 function buildMappingRows(f) {
   const branch = config.branches.find(b => b.id === parseInt($('branch').value));
   const fund = $('fund').value;
@@ -46,11 +53,12 @@ function buildMappingRows(f) {
     { field: 'RefRowDocNo (دیتیل)', source: 'DocRow هدر (۱) — ارجاع به ردیف سند', value: '1' },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
-    { field: 'BnkAcntNo', source: 'کد نوسازی (Base_NosaziCode یا OtherFields)', value: f.bnkAcntNo || '-' },
+    { field: 'BnkAcntNo', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
+    { field: 'منطقه فیش (راهنما)', source: 'OtherFields → منطقه (فقط نوسازی/صنفی)', value: f.dutyRegion ? `منطقه ${f.dutyRegion} → branch=${200 + parseInt(f.dutyRegion)}` : '(درآمد — از شعبه فرم)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
     { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند (فرم)', value: docDate },
-    { field: 'RowDate', source: 'BankPaymentDate → PaymentDate → IssueDate', value: f.rowDate || '-' },
+    { field: 'RowDate', source: 'BankPaymentDate → PaymentDate → PrintDate → ExportDate', value: f.rowDate || '-' },
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
     { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
@@ -90,8 +98,9 @@ function renderFiche(f) {
       <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">کد نوسازی (BnkAcntNo)</span>
+      <span class="stat-label">BnkAcntNo</span>
       <span class="stat-value">${f.bnkAcntNo || '-'}</span>
+      <span class="stat-hint">${bnkAcntNoSource(f)}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">وضعیت</span>
@@ -164,6 +173,14 @@ $('btnLoad').onclick = async () => {
     if (!res.ok) throw new Error(data.error || data.title || 'خطا');
 
     currentFiche = data;
+    if (data.dutyRegion) {
+      const branchId = 200 + parseInt(data.dutyRegion, 10);
+      const match = config.branches.find(b => b.id === branchId);
+      if (match) {
+        $('branch').value = branchId;
+        syncFundFromBranch();
+      }
+    }
     renderFiche(data);
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;

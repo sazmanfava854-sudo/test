@@ -82,6 +82,7 @@ public class SoapBuilder
         int parentDocRow,
         string docDateRay,
         string ficheNo,
+        decimal payable,
         string transactionId,
         string sourceSystemId) => $@"
               <wcf:DocumentItemIncm>
@@ -90,7 +91,7 @@ public class SoapBuilder
                 <wcf:IncmNo>{row.IncmNo}</wcf:IncmNo>
                 <wcf:IncmRow>{incmRow}</wcf:IncmRow>
                 <wcf:IncmRowDsc>{Escape(row.IncmRowDsc)}</wcf:IncmRowDsc>
-                <wcf:Qty>1</wcf:Qty>
+                <wcf:Qty>{payable:0}</wcf:Qty>
                 <wcf:Ref>{Escape(ficheNo)}</wcf:Ref>
                 <wcf:RefRowDocNo>{parentDocRow}</wcf:RefRowDocNo>
                 <wcf:SourceId>{Escape(sourceSystemId)}</wcf:SourceId>
