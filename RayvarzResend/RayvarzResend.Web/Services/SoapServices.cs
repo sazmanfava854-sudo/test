@@ -28,7 +28,7 @@ public class SoapBuilder
         var docTypDsc = ResolveDocTypDsc(fiche.DocTyp);
 
         var incmItems = string.Join("\n", rows.Select((r, i) => BuildIncmRow(
-            r, i + 1, docRow, docDateRay, fiche.FicheNo, transactionId, sourceSystemId)));
+            r, i + 1, docRow, docDateRay, fiche.FicheNo, fiche.Payable, transactionId, sourceSystemId)));
 
         var refRecon = XmlOptional("RefreconstructionNo", fiche.RefReconstructionNo);
         var bankXml = XmlOptional("Bank", fiche.BankCode);

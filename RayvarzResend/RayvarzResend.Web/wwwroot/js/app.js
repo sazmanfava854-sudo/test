@@ -54,8 +54,8 @@ function buildMappingRows(f) {
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
     { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
-    { field: 'Qty (دیتیل)', source: 'تعداد — مقدار ۱ برای هر ردیف', value: '1' },
-    { field: 'Val', source: 'Income_Calculation / Duty_FicheSub', value: Number(f.payable).toLocaleString() },
+    { field: 'Qty (دیتیل)', source: 'Payable — مبلغ کل فیش (در هر ردیف)', value: Number(f.payable).toLocaleString() },
+    { field: 'Val (دیتیل)', source: 'Income_Calculation / Duty_FicheSub — مبلغ همان ردیف', value: (f.rows || []).map(r => Number(r.val).toLocaleString()).join(' + ') || '-' },
     { field: 'Bank', source: 'ConfirmBankCode — فقط اگر پرداخت شده', value: f.bankCode || '(خالی — NULL)' },
     { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '(NULL)' }
   ];
