@@ -34,9 +34,9 @@ function getPayload(resetStatus) {
 
 function bnkAcntNoSource(f) {
   if (f.bnkAcntNoSource) return f.bnkAcntNoSource;
-  if (f.category === 'Income') return 'Base_NosaziCode (کد ثبت ملکی ۸ بخشی)';
-  if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') return 'Duty_Fiche.OtherFields → کد نوسازی XML';
-  return 'نامشخص';
+  if (f.category === 'Income') return 'کد نوسازی — Base_NosaziCode (فیش درآمد)';
+  if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') return 'کد نوسازی — Duty_Fiche.OtherFields (فیش نوسازی/صنفی)';
+  return 'کد نوسازی';
 }
 
 function buildMappingRows(f) {
@@ -53,7 +53,7 @@ function buildMappingRows(f) {
     { field: 'RefRowDocNo (دیتیل)', source: 'DocRow هدر (۱) — ارجاع به ردیف سند', value: '1' },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
-    { field: 'BnkAcntNo', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
+    { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
     { field: 'منطقه فیش (راهنما)', source: 'OtherFields → منطقه (فقط نوسازی/صنفی)', value: f.dutyRegion ? `منطقه ${f.dutyRegion} → branch=${200 + parseInt(f.dutyRegion)}` : '(درآمد — از شعبه فرم)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
@@ -98,7 +98,7 @@ function renderFiche(f) {
       <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">BnkAcntNo</span>
+      <span class="stat-label">کد نوسازی (BnkAcntNo)</span>
       <span class="stat-value">${f.bnkAcntNo || '-'}</span>
       <span class="stat-hint">${bnkAcntNoSource(f)}</span>
     </div>

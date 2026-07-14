@@ -71,7 +71,7 @@ WHERE {where}";
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
-            BnkAcntNoSource = "Income_Fiche → Income → Sh_RequestInfo → Base_NosaziCode (کد ثبت ملکی ۸ بخشی)",
+            BnkAcntNoSource = "کد نوسازی — از Base_NosaziCode (فیش درآمد)",
             DocTyp = docTyp,
             DocDsc = "اسناد شهرسازی"
         };
@@ -162,7 +162,7 @@ WHERE {where}";
             CurrentStatus = reader.GetByte(reader.GetOrdinal("EumDutyFicheStatus")),
             DutyExportType = exportType,
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
-            BnkAcntNoSource = "Duty_Fiche.OtherFields → کد نوسازی (منطقه-حوزه-بلوک-ملک — نه Base_NosaziCode)",
+            BnkAcntNoSource = "کد نوسازی — از Duty_Fiche.OtherFields (XML فیش)",
             DutyRegion = reader.IsDBNull(reader.GetOrdinal("DutyRegion")) ? null : reader.GetString(reader.GetOrdinal("DutyRegion")),
             DocTyp = isSenfi ? 2 : 1,
             DocDsc = isSenfi ? "اسناد صنفی" : "اسناد نوسازی"
