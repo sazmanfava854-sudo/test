@@ -57,7 +57,7 @@ WHERE {where}";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
 
-        var group = reader.GetInt32(reader.GetOrdinal("CI_IncomeAccountGroup"));
+        var group = ReadInt32(reader, "CI_IncomeAccountGroup");
         var docTyp = group == 150 ? 11 : 3;
 
         var dto = new FicheHeaderDto
@@ -103,7 +103,7 @@ WHERE ic.NidIncome = @nid";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var incmNo = reader.GetInt32(reader.GetOrdinal("IncmNo"));
+            var incmNo = ReadInt32(reader, "IncmNo");
             if (IncomeExcludedCodes.Codes.Contains(incmNo)) continue;
             var val = reader.GetDecimal(reader.GetOrdinal("Val"));
             if (val == 0) continue;
