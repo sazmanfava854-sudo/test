@@ -66,13 +66,13 @@ WHERE {where}";
             FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
             BillId = reader.GetString(reader.GetOrdinal("BillID")),
             PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
-            Payable = reader.GetDecimal(reader.GetOrdinal("Payable")),
+            Payable = ReadDecimal(reader, "Payable"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
             PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
             BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
             RowDate = ReadRowDate(reader, "RowDate"),
-            CurrentStatus = reader.GetByte(reader.GetOrdinal("EumFicheStatus")),
+            CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
@@ -105,7 +105,7 @@ WHERE ic.NidIncome = @nid";
         {
             var incmNo = ReadInt32(reader, "IncmNo");
             if (IncomeExcludedCodes.Codes.Contains(incmNo)) continue;
-            var val = reader.GetDecimal(reader.GetOrdinal("Val"));
+            var val = ReadDecimal(reader, "Val");
             if (val == 0) continue;
             rows.Add(new IncmRowDto
             {
@@ -159,12 +159,12 @@ WHERE {where}";
             FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
             BillId = reader.GetString(reader.GetOrdinal("BillID")),
             PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
-            Payable = reader.GetDecimal(reader.GetOrdinal("Payable")),
+            Payable = ReadDecimal(reader, "Payable"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
             BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
             RowDate = ReadRowDate(reader, "RowDate"),
-            CurrentStatus = reader.GetByte(reader.GetOrdinal("EumDutyFicheStatus")),
+            CurrentStatus = ReadInt32(reader, "EumDutyFicheStatus"),
             DutyExportType = exportType,
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
             BnkAcntNoSource = "کد نوسازی — از Duty_Fiche.OtherFields (XML فیش)",
@@ -195,7 +195,7 @@ WHERE NidFiche = @nid";
             subs.Add((
                 ReadInt32(reader, "CI_DutyFormula"),
                 reader.IsDBNull(reader.GetOrdinal("CI_DutyFormulaFiche")) ? 0 : ReadInt32(reader, "CI_DutyFormulaFiche"),
-                reader.GetDecimal(reader.GetOrdinal("Price"))
+                ReadDecimal(reader, "Price")
             ));
         }
 
@@ -278,6 +278,13 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var ord = reader.GetOrdinal(column);
         if (reader.IsDBNull(ord)) return 0;
         return Convert.ToInt32(reader.GetValue(ord));
+    }
+
+    private static decimal ReadDecimal(SqlDataReader reader, string column)
+    {
+        var ord = reader.GetOrdinal(column);
+        if (reader.IsDBNull(ord)) return 0;
+        return Convert.ToDecimal(reader.GetValue(ord));
     }
 
     private static string ReadRowDate(SqlDataReader reader, string column)
