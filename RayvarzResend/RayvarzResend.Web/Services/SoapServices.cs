@@ -152,7 +152,7 @@ public class RayvarzClient
         var url = _config["Rayvarz:ServiceUrl"] ?? "";
         var action = _config["Rayvarz:SoapAction"] ?? "";
 
-        using var client = new HttpClient();
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
         using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
         content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
 

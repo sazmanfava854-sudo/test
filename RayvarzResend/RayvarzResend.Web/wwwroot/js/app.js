@@ -145,9 +145,13 @@ async function init() {
     return;
   }
   const badge = $('configBadge');
+  const envLabel = config.isProduction ? 'وب‌سرویس اصلی (Production)' : 'وب‌سرویس تست';
   badge.textContent = config.dryRun
-    ? `حالت DryRun — ارسال واقعی نمی‌شود | Id سامانه: ${config.sourceSystemId} | ${config.serviceUrl}`
-    : `ارسال واقعی | Id سامانه: ${config.sourceSystemId} | ${config.serviceUrl}`;
+    ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
+    : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
+  if (config.isProduction && !config.dryRun) {
+    badge.style.background = 'rgba(220, 53, 69, 0.35)';
+  }
 
   const branchSel = $('branch');
   const fundSel = $('fund');

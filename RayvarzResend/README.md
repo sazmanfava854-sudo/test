@@ -91,6 +91,32 @@ WHERE f.FicheNo = @FicheNo;
 | `101104/9881711` | `10-8-276-11-0-0-0` | 210 | 200210020 |
 | `071101/6174383` | `7-14-55-1-0-0-0` | 207 | 200207009 |
 
+## وب‌سرویس اصلی (Production)
+
+```
+https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices
+```
+
+WSDL: همان آدرس + `?wsdl`
+
+### جریان تست با Production
+
+1. `DryRun: true` — فقط XML (بدون ثبت سند)
+2. فیش **غیرتکراری** (در `incmdocsys` نیست)
+3. `DryRun: false` — ارسال واقعی
+4. بررسی در `ray.incmdocsys`
+5. **حذف سند تست** از رایورز
+
+```json
+"Rayvarz": {
+  "ServiceUrl": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
+  "SoapAction": "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+  "DryRun": true
+}
+```
+
+وب‌سرویس تست قدیمی در `ServiceUrlTest` نگه داشته شده است.
+
 ## عیب‌یابی
 
 | مشکل | راه‌حل |

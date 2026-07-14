@@ -31,6 +31,8 @@ app.MapGet("/api/config", (IConfiguration config) => new
 {
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = config["Rayvarz:ServiceUrl"],
+    serviceUrlTest = config["Rayvarz:ServiceUrlTest"],
+    isProduction = (config["Rayvarz:ServiceUrl"] ?? "").Contains("msb.mashhad.ir", StringComparison.OrdinalIgnoreCase),
     sourceSystemId = config["Rayvarz:SourceSystemId"] ?? "11111",
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },
