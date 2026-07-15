@@ -199,20 +199,17 @@ WHERE NidFiche = @nid";
             ));
         }
 
-        // مبالغ از Duty_FicheSub (همان تجمیع Session Details) — بدون محاسبه باقیمانده
-        const int SimpleNosaziFormula = 1;
+        // منطق تأییدشده تابع Nosazi() در Sara + کوئری فیش 101104/9881711
+        // 100003 ← SUM(F3,F0) | 206098003 ← SUM(F3,F16) | 100002 ← SUM(F5,F0)
+        // 2003 ← PayablePrice − آتش‌نشانی − پسماند − ارزش‌افزوده (نه SUM(F1,F0))
         const int GarbageFormula = 3;
         const int AtashFormula = 5;
         const int AfzodehFiche = 16;
 
-        decimal Nosazi = subs.Where(s => s.Formula == SimpleNosaziFormula && s.Fiche == 0).Sum(s => s.Price);
         decimal Afzodeh = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == AfzodehFiche).Sum(s => s.Price);
         decimal Atash = subs.Where(s => s.Formula == AtashFormula && s.Fiche == 0).Sum(s => s.Price);
         decimal Garbage = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == 0).Sum(s => s.Price);
-
-        // فقط اگر خالص نوسازی در جدول نبود، به منطق قدیمی Sara (Payable − سایر ردیف‌ها) برگرد
-        if (Nosazi == 0 && payable != 0)
-            Nosazi = payable - Atash - Garbage - Afzodeh;
+        decimal Nosazi = payable - Atash - Garbage - Afzodeh;
 
         var mainIncm = isSenfi ? 100062 : 2003;
         var mainDsc = isSenfi ? "صنفی" : "نوسازی";
