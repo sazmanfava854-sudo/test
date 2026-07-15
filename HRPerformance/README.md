@@ -33,7 +33,41 @@ HRPerformance/
 - Redux Toolkit, React Router, Axios
 - Chart.js, Persian date support, PWA
 
-## Database Setup
+## Quick Start (یک دستور)
+
+### اولین بار (Setup)
+
+```bash
+cd HRPerformance
+
+# 1. دیتابیس (فقط یک بار - نیاز به SQL Server)
+npm run db:init
+# یا در Windows: bash scripts/init-database.sh
+
+# 2. نصب وابستگی‌ها (فقط یک بار)
+npm run setup
+```
+
+### هر بار اجرا
+
+```bash
+cd HRPerformance
+./start.sh          # Linux / macOS
+# یا
+.\start.ps1         # Windows PowerShell
+# یا
+npm run dev         # هر سیستم‌عامل
+```
+
+سپس مرورگر را باز کنید:
+- **Frontend:** http://localhost:3000
+- **API / Swagger:** http://localhost:5000/swagger
+
+برای توقف: `Ctrl+C`
+
+---
+
+## Database Setup (دستی)
 
 ```bash
 # Run scripts in order against SQL Server:
@@ -47,28 +81,23 @@ sqlcmd -S localhost -d HRPerformanceDB -i database/07_Triggers.sql
 sqlcmd -S localhost -d HRPerformanceDB -i database/08_SeedData.sql
 ```
 
-## Backend Setup
+## Backend Setup (جداگانه - اختیاری)
 
 ```bash
 cd HRPerformance
-# Update connection string in src/HRPerformance.API/appsettings.json
-dotnet restore
-dotnet build
-cd src/HRPerformance.API
-dotnet run
+dotnet run --project src/HRPerformance.API --launch-profile http
 ```
 
-API: `https://localhost:5001` | Swagger: `https://localhost:5001/swagger`
+API: `http://localhost:5000` | Swagger: `http://localhost:5000/swagger`
 
-## Frontend Setup
+## Frontend Setup (جداگانه - اختیاری)
 
 ```bash
 cd HRPerformance/frontend/hr-performance-web
-npm install
 npm run dev
 ```
 
-Frontend: `http://localhost:5173` (proxies API to backend)
+Frontend: `http://localhost:3000` (proxies API to backend)
 
 ## User Roles
 
