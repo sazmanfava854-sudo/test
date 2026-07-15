@@ -1,0 +1,13 @@
+HR Performance System - Final Package
+Version: 1.0.0-final
+Build Date: 2026-07-15
+Commit: 190d4b0
+.NET: 8.0
+Includes: MIS HR Integration (HZG_View_HourlyLeave), pre-built frontend (wwwroot)
+
+Quick Start (Windows):
+  1. Extract ZIP
+  2. Run database scripts 01-10 in SQL Server (HRPerformanceDB)
+  3. Set HrIntegration:Password in appsettings.json or user-secrets
+  4. cd HRPerformance && .\start.ps1
+  5. Open http://localhost:5000
