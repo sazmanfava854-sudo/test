@@ -31,6 +31,7 @@ public class MisHrDataReader
         FROM [MIS].[dbo].[HZG_View_HourlyLeave]
         WHERE [StartDate] >= @SyncFrom
           AND [ProvinceCode] = @ProvinceCode
+          AND CAST([ShamsiDate] AS NVARCHAR(20)) LIKE @ShamsiYearPrefix + '%'
         ORDER BY [StartDate] DESC
         """;
 
@@ -67,7 +68,9 @@ public class MisHrDataReader
             await using var command = new SqlCommand(query, connection);
             command.Parameters.AddWithValue("@SyncFrom", syncFrom);
             var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
+            var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1405";
             command.Parameters.AddWithValue("@ProvinceCode", provinceCode);
+            command.Parameters.AddWithValue("@ShamsiYearPrefix", shamsiYearPrefix);
             command.CommandTimeout = 120;
 
             await using var reader = await command.ExecuteReaderAsync(ct);
