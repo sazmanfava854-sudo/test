@@ -1,4 +1,4 @@
-using HRPerformance.Infrastructure.Services.ExternalHr;
+using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -10,34 +10,31 @@ public class MisHrDataReader
     private readonly IConfiguration _configuration;
     private readonly ILogger<MisHrDataReader> _logger;
 
-    // مطابق کوئری مصطفی رجب زاده + فیلتر ProvinceCode و ShamsiDate
-    private const string DefaultQuery = """
-        SELECT
-            CAST(ID AS NUMERIC(20,0)) AS ID,
-            CAST([Code] AS NVARCHAR(50)) AS [Code],
-            [PerCod],
-            [LastName],
-            [Name],
-            [NationalIDNo],
-            [ProvinceCode],
-            CAST(REPLACE([ShamsiDate], '/', '') AS INT) AS [ShamsiDate],
-            CAST([StartTime] AS NVARCHAR(8)) AS [StartTime],
-            CAST([EndTime] AS NVARCHAR(8)) AS [EndTime],
-            [LeaveDurationMinutes],
-            [StartDate],
-            [EndDate],
-            CAST(CAST([year] AS NVARCHAR(4)) AS INT) AS [year],
-            CAST([Month] AS INT) AS [Month],
-            [FirstTimeType]
-        FROM [MIS].[dbo].[HZG_View_HourlyLeave]
-        WHERE [StartDate] >= @SyncFrom
-          AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode
-          AND (
-                CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
-                OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
-              )
-        ORDER BY [StartDate] DESC
-        """;
+    private const string DefaultQuery = @"SELECT
+    CAST(ID AS NUMERIC(20,0)) AS ID,
+    CAST([Code] AS NVARCHAR(50)) AS [Code],
+    [PerCod],
+    [LastName],
+    [Name],
+    [NationalIDNo],
+    [ProvinceCode],
+    CAST(REPLACE([ShamsiDate], '/', '') AS INT) AS [ShamsiDate],
+    CAST([StartTime] AS NVARCHAR(8)) AS [StartTime],
+    CAST([EndTime] AS NVARCHAR(8)) AS [EndTime],
+    [LeaveDurationMinutes],
+    [StartDate],
+    [EndDate],
+    CAST(CAST([year] AS NVARCHAR(4)) AS INT) AS [year],
+    CAST([Month] AS INT) AS [Month],
+    [FirstTimeType]
+FROM [MIS].[dbo].[HZG_View_HourlyLeave]
+WHERE [StartDate] >= @SyncFrom
+  AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode
+  AND (
+        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
+        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
+      )
+ORDER BY [StartDate] DESC";
 
     public MisHrDataReader(IConfiguration configuration, ILogger<MisHrDataReader> logger)
     {
@@ -76,8 +73,8 @@ public class MisHrDataReader
             var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1405";
             var shamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%";
 
-            command.Parameters.Add("@ProvinceCode", System.Data.SqlDbType.NVarChar, 20).Value = provinceCode;
-            command.Parameters.Add("@ShamsiYearPattern", System.Data.SqlDbType.NVarChar, 20).Value = shamsiYearPattern;
+            command.Parameters.Add("@ProvinceCode", SqlDbType.NVarChar, 20).Value = provinceCode;
+            command.Parameters.Add("@ShamsiYearPattern", SqlDbType.NVarChar, 20).Value = shamsiYearPattern;
             command.CommandTimeout = 120;
 
             _logger.LogInformation(
