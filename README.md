@@ -2,6 +2,9 @@
 
 سیستم جامع مدیریت عملکرد و انضباط کارکنان برای شهرداری‌ها، سازمان‌های دولتی و شرکت‌های بزرگ.
 
+**دانلود نسخه نهایی (v1.0.1-final):**  
+https://github.com/sazmanfava854-sudo/test/releases/download/v1.0.1-final/HRPerformance-System-v1.0.1-final.zip
+
 ## Architecture
 
 ```
@@ -19,8 +22,8 @@ HRPerformance/
 ## Tech Stack
 
 ### Backend
-- ASP.NET Core 9 Web API
-- Entity Framework Core 9 + SQL Server
+- ASP.NET Core 8 Web API
+- Entity Framework Core 8 + SQL Server
 - JWT Authentication + Refresh Token
 - Clean Architecture + CQRS (MediatR)
 - FluentValidation, AutoMapper, Serilog
@@ -39,12 +42,18 @@ HRPerformance/
 
 ### Windows
 
+**اولین بار (توصیه‌شده):**
 ```powershell
 cd HRPerformance
+.\scripts\setup-windows.ps1
+```
+
+**اجرای برنامه:**
+```powershell
 .\start.ps1
 ```
 
-یا دوبار کلیک روی `start.bat`
+یا دوبار کلیک روی `start.bat` — در اولین اجرا، restore پکیج‌ها به‌صورت خودکار انجام می‌شود.
 
 ### Linux / macOS
 

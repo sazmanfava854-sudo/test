@@ -14,6 +14,14 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+$assetsFile = "src\HRPerformance.API\obj\project.assets.json"
+if (-not (Test-Path $assetsFile)) {
+    Write-Host ""
+    Write-Host "اولین اجرا: در حال restore پکیج‌های NuGet..." -ForegroundColor Yellow
+    & "$PSScriptRoot\scripts\restore-packages.ps1"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
 Write-Host ""
 Write-Host "در حال اجرا..." -ForegroundColor Green
 Write-Host "  Application -> http://localhost:5000" -ForegroundColor White
