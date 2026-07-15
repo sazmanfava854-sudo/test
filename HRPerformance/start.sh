@@ -11,7 +11,7 @@ echo "  HR Performance System"
 echo "=========================================="
 
 if ! command -v dotnet >/dev/null 2>&1; then
-  echo "❌ dotnet یافت نشد. .NET 9 SDK را نصب کنید."
+  echo "❌ dotnet یافت نشد. .NET 8 SDK را نصب کنید."
   exit 1
 fi
 

@@ -63,7 +63,7 @@ cd HRPerformance
 
 | نرم‌افزار | نسخه | دانلود |
 |-----------|------|--------|
-| .NET SDK | 9.0 | https://dotnet.microsoft.com/download/dotnet/9.0 |
+| .NET SDK | **8.0** (شما: 8.0.401 ✅) | https://dotnet.microsoft.com/download/dotnet/8.0 |
 | SQL Server | 2019+ | برای دیتابیس (یک بار `npm run db:init` یا اسکریپت‌های SQL) |
 
 **Node.js فقط برای توسعه‌دهندگان** که می‌خواهند UI را تغییر دهند — برای اجرای عادی لازم نیست.

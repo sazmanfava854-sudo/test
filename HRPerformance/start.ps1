@@ -9,8 +9,8 @@ Write-Host "==========================================" -ForegroundColor Cyan
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     Write-Host ""
     Write-Host "dotnet یافت نشد!" -ForegroundColor Red
-    Write-Host "ابتدا .NET 9 SDK را نصب کنید:" -ForegroundColor Yellow
-    Write-Host "  https://dotnet.microsoft.com/download/dotnet/9.0" -ForegroundColor White
+    Write-Host "ابتدا .NET 8 SDK را نصب کنید:" -ForegroundColor Yellow
+    Write-Host "  https://dotnet.microsoft.com/download/dotnet/8.0" -ForegroundColor White
     exit 1
 }
 
