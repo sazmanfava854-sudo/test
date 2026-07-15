@@ -199,14 +199,12 @@ WHERE NidFiche = @nid";
             ));
         }
 
-        const int AfzodehFiche = 16; // CI_DutyFormulaFiche.Title = «ارزش افزوده»
+        // منطق عین تابع Nosazi() در Sara — فقط جمع Fiche=0 (فیلتر دوم VB روی لیست F0 اثر ندارد)
+        const int AfzodehFiche = 16;
 
         decimal Afzodeh = subs.Where(s => s.Formula == 3 && s.Fiche == AfzodehFiche).Sum(s => s.Price);
-        decimal Atash = subs.Where(s => s.Formula == 5 && s.Fiche == 0).Sum(s => s.Price)
-                      - subs.Where(s => s.Formula == 5 && s.Fiche != 0).Sum(s => s.Price);
-        // پسماند = جمع Formula=3, Fiche=0 — ارزش‌افزوده (Fiche=16) جداست و نباید از پسماند کم شود
-        decimal Garbage = subs.Where(s => s.Formula == 3 && s.Fiche == 0).Sum(s => s.Price)
-                        - subs.Where(s => s.Formula == 3 && s.Fiche != 0 && s.Fiche != AfzodehFiche).Sum(s => s.Price);
+        decimal Atash = subs.Where(s => s.Formula == 5 && s.Fiche == 0).Sum(s => s.Price);
+        decimal Garbage = subs.Where(s => s.Formula == 3 && s.Fiche == 0).Sum(s => s.Price);
 
         var mainIncm = isSenfi ? 100062 : 2003;
         var mainDsc = isSenfi ? "صنفی" : "نوسازی";
