@@ -1,4 +1,4 @@
-# HR Performance - Windows startup script
+# HR Performance - Windows (فقط .NET - بدون نیاز به Node.js)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -7,27 +7,19 @@ Write-Host "  HR Performance System" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Host "dotnet not found. Install .NET 9 SDK first." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "dotnet یافت نشد!" -ForegroundColor Red
+    Write-Host "ابتدا .NET 9 SDK را نصب کنید:" -ForegroundColor Yellow
+    Write-Host "  https://dotnet.microsoft.com/download/dotnet/9.0" -ForegroundColor White
     exit 1
 }
 
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-    Write-Host "npm not found. Install Node.js first." -ForegroundColor Red
-    exit 1
-}
-
-if (-not (Test-Path "node_modules") -or -not (Test-Path "frontend/hr-performance-web/node_modules")) {
-    Write-Host "Installing dependencies (first run)..." -ForegroundColor Yellow
-    npm run setup
-}
-
 Write-Host ""
-Write-Host "Starting services..." -ForegroundColor Green
-Write-Host "  Backend  -> http://localhost:5000"
-Write-Host "  Swagger  -> http://localhost:5000/swagger"
-Write-Host "  Frontend -> http://localhost:3000"
+Write-Host "در حال اجرا..." -ForegroundColor Green
+Write-Host "  Application -> http://localhost:5000" -ForegroundColor White
+Write-Host "  Swagger     -> http://localhost:5000/swagger" -ForegroundColor White
 Write-Host ""
-Write-Host "Press Ctrl+C to stop"
+Write-Host "برای توقف: Ctrl+C" -ForegroundColor Gray
 Write-Host ""
 
-npm run dev
+dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --launch-profile http

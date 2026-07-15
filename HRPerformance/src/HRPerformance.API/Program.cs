@@ -66,9 +66,11 @@ if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseSerilogRequestLogging();
 app.UseIpRateLimiting();
 app.UseCors("AllowFrontend");
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
-app.MapGet("/", () => Results.Redirect("/swagger"));
+app.MapFallbackToFile("index.html");
 app.Run();

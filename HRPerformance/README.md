@@ -33,37 +33,58 @@ HRPerformance/
 - Redux Toolkit, React Router, Axios
 - Chart.js, Persian date support, PWA
 
-## Quick Start (یک دستور)
+## Quick Start (یک دستور — فقط .NET)
 
-### اولین بار (Setup)
+> **نیاز به Node.js/npm ندارید.** فرانت‌اند از قبل بیلد شده و داخل API سرو می‌شود.
 
-```bash
+### Windows
+
+```powershell
 cd HRPerformance
-
-# 1. دیتابیس (فقط یک بار - نیاز به SQL Server)
-npm run db:init
-# یا در Windows: bash scripts/init-database.sh
-
-# 2. نصب وابستگی‌ها (فقط یک بار)
-npm run setup
+.\start.ps1
 ```
 
-### هر بار اجرا
+یا دوبار کلیک روی `start.bat`
+
+### Linux / macOS
 
 ```bash
 cd HRPerformance
-./start.sh          # Linux / macOS
-# یا
-.\start.ps1         # Windows PowerShell
-# یا
-npm run dev         # هر سیستم‌عامل
+./start.sh
 ```
 
 سپس مرورگر را باز کنید:
-- **Frontend:** http://localhost:3000
-- **API / Swagger:** http://localhost:5000/swagger
+- **Application:** http://localhost:5000
+- **Swagger:** http://localhost:5000/swagger
 
 برای توقف: `Ctrl+C`
+
+### پیش‌نیازها
+
+| نرم‌افزار | نسخه | دانلود |
+|-----------|------|--------|
+| .NET SDK | 9.0 | https://dotnet.microsoft.com/download/dotnet/9.0 |
+| SQL Server | 2019+ | برای دیتابیس (یک بار `npm run db:init` یا اسکریپت‌های SQL) |
+
+**Node.js فقط برای توسعه‌دهندگان** که می‌خواهند UI را تغییر دهند — برای اجرای عادی لازم نیست.
+
+---
+
+## توسعه UI (اختیاری — نیاز به Node.js)
+
+اگر می‌خواهید فرانت‌اند را ویرایش کنید:
+
+```bash
+cd HRPerformance/frontend/hr-performance-web
+npm install
+npm run dev
+```
+
+بعد از تغییرات UI:
+```bash
+npm run build
+# فایل‌های dist را به src/HRPerformance.API/wwwroot کپی کنید
+```
 
 ---
 
