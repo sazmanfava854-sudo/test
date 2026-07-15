@@ -30,6 +30,7 @@ public class MisHrDataReader
             [FirstTimeType]
         FROM [MIS].[dbo].[HZG_View_HourlyLeave]
         WHERE [StartDate] >= @SyncFrom
+          AND [ProvinceCode] = @ProvinceCode
         ORDER BY [StartDate] DESC
         """;
 
@@ -65,6 +66,8 @@ public class MisHrDataReader
             await connection.OpenAsync(ct);
             await using var command = new SqlCommand(query, connection);
             command.Parameters.AddWithValue("@SyncFrom", syncFrom);
+            var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
+            command.Parameters.AddWithValue("@ProvinceCode", provinceCode);
             command.CommandTimeout = 120;
 
             await using var reader = await command.ExecuteReaderAsync(ct);

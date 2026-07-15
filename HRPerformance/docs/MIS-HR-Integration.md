@@ -36,6 +36,8 @@ dotnet user-secrets set "HrIntegration:Password" "رمز-واقعی-ITCMISUserRe
 
 `MIS.dbo.HZG_View_HourlyLeave`
 
+فیلتر پیش‌فرض: `ProvinceCode = '147'` (قابل تغییر در `HrIntegration:ProvinceCode`)
+
 | فیلد MIS | کاربرد در سیستم |
 |----------|-----------------|
 | PerCod | کد پرسنلی → Employees.PersonnelCode |
