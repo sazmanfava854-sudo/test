@@ -10,6 +10,7 @@ public class MisHrDataReader
     private readonly IConfiguration _configuration;
     private readonly ILogger<MisHrDataReader> _logger;
 
+    // مطابق کوئری مصطفی رجب زاده + فیلتر ProvinceCode و ShamsiDate
     private const string DefaultQuery = """
         SELECT
             CAST(ID AS NUMERIC(20,0)) AS ID,
@@ -30,8 +31,11 @@ public class MisHrDataReader
             [FirstTimeType]
         FROM [MIS].[dbo].[HZG_View_HourlyLeave]
         WHERE [StartDate] >= @SyncFrom
-          AND [ProvinceCode] = @ProvinceCode
-          AND CAST([ShamsiDate] AS NVARCHAR(20)) LIKE @ShamsiYearPrefix + '%'
+          AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode
+          AND (
+                CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
+                OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
+              )
         ORDER BY [StartDate] DESC
         """;
 
@@ -67,11 +71,18 @@ public class MisHrDataReader
             await connection.OpenAsync(ct);
             await using var command = new SqlCommand(query, connection);
             command.Parameters.AddWithValue("@SyncFrom", syncFrom);
+
             var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
             var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1405";
-            command.Parameters.AddWithValue("@ProvinceCode", provinceCode);
-            command.Parameters.AddWithValue("@ShamsiYearPrefix", shamsiYearPrefix);
+            var shamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%";
+
+            command.Parameters.Add("@ProvinceCode", System.Data.SqlDbType.NVarChar, 20).Value = provinceCode;
+            command.Parameters.Add("@ShamsiYearPattern", System.Data.SqlDbType.NVarChar, 20).Value = shamsiYearPattern;
             command.CommandTimeout = 120;
+
+            _logger.LogInformation(
+                "MIS query filters: ProvinceCode={ProvinceCode}, ShamsiDate LIKE {ShamsiPattern}, SyncFrom={SyncFrom}",
+                provinceCode, shamsiYearPattern, syncFrom);
 
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -84,16 +95,16 @@ public class MisHrDataReader
                     LastName = reader.IsDBNull(reader.GetOrdinal("LastName")) ? null : reader.GetString(reader.GetOrdinal("LastName")).Trim(),
                     Name = reader.IsDBNull(reader.GetOrdinal("Name")) ? null : reader.GetString(reader.GetOrdinal("Name")).Trim(),
                     NationalIDNo = reader.IsDBNull(reader.GetOrdinal("NationalIDNo")) ? null : reader.GetString(reader.GetOrdinal("NationalIDNo")).Trim(),
-                    ProvinceCode = reader.IsDBNull(reader.GetOrdinal("ProvinceCode")) ? null : reader.GetString(reader.GetOrdinal("ProvinceCode")).Trim(),
-                    ShamsiDate = reader.IsDBNull(reader.GetOrdinal("ShamsiDate")) ? null : reader.GetInt32(reader.GetOrdinal("ShamsiDate")),
+                    ProvinceCode = reader.IsDBNull(reader.GetOrdinal("ProvinceCode")) ? null : Convert.ToString(reader.GetValue(reader.GetOrdinal("ProvinceCode")))?.Trim(),
+                    ShamsiDate = reader.IsDBNull(reader.GetOrdinal("ShamsiDate")) ? null : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("ShamsiDate"))),
                     StartTime = reader.IsDBNull(reader.GetOrdinal("StartTime")) ? null : reader.GetString(reader.GetOrdinal("StartTime")).Trim(),
                     EndTime = reader.IsDBNull(reader.GetOrdinal("EndTime")) ? null : reader.GetString(reader.GetOrdinal("EndTime")).Trim(),
-                    LeaveDurationMinutes = reader.IsDBNull(reader.GetOrdinal("LeaveDurationMinutes")) ? 0 : reader.GetInt32(reader.GetOrdinal("LeaveDurationMinutes")),
+                    LeaveDurationMinutes = reader.IsDBNull(reader.GetOrdinal("LeaveDurationMinutes")) ? 0 : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("LeaveDurationMinutes"))),
                     StartDate = reader.GetDateTime(reader.GetOrdinal("StartDate")),
                     EndDate = reader.GetDateTime(reader.GetOrdinal("EndDate")),
-                    Year = reader.GetInt32(reader.GetOrdinal("year")),
-                    Month = reader.GetInt32(reader.GetOrdinal("Month")),
-                    FirstTimeType = reader.IsDBNull(reader.GetOrdinal("FirstTimeType")) ? 0 : reader.GetInt32(reader.GetOrdinal("FirstTimeType"))
+                    Year = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("year"))),
+                    Month = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("Month"))),
+                    FirstTimeType = reader.IsDBNull(reader.GetOrdinal("FirstTimeType")) ? 0 : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("FirstTimeType")))
                 });
             }
         }
