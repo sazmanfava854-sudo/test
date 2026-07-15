@@ -199,20 +199,27 @@ WHERE NidFiche = @nid";
             ));
         }
 
-        // منطق عین تابع Nosazi() در Sara — فقط جمع Fiche=0 (فیلتر دوم VB روی لیست F0 اثر ندارد)
+        // مبالغ از Duty_FicheSub (همان تجمیع Session Details) — بدون محاسبه باقیمانده
+        const int SimpleNosaziFormula = 1;
+        const int GarbageFormula = 3;
+        const int AtashFormula = 5;
         const int AfzodehFiche = 16;
 
-        decimal Afzodeh = subs.Where(s => s.Formula == 3 && s.Fiche == AfzodehFiche).Sum(s => s.Price);
-        decimal Atash = subs.Where(s => s.Formula == 5 && s.Fiche == 0).Sum(s => s.Price);
-        decimal Garbage = subs.Where(s => s.Formula == 3 && s.Fiche == 0).Sum(s => s.Price);
+        decimal Nosazi = subs.Where(s => s.Formula == SimpleNosaziFormula && s.Fiche == 0).Sum(s => s.Price);
+        decimal Afzodeh = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == AfzodehFiche).Sum(s => s.Price);
+        decimal Atash = subs.Where(s => s.Formula == AtashFormula && s.Fiche == 0).Sum(s => s.Price);
+        decimal Garbage = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == 0).Sum(s => s.Price);
+
+        // فقط اگر خالص نوسازی در جدول نبود، به منطق قدیمی Sara (Payable − سایر ردیف‌ها) برگرد
+        if (Nosazi == 0 && payable != 0)
+            Nosazi = payable - Atash - Garbage - Afzodeh;
 
         var mainIncm = isSenfi ? 100062 : 2003;
         var mainDsc = isSenfi ? "صنفی" : "نوسازی";
-        var mainPrice = payable - Atash - Garbage - Afzodeh;
 
         var rows = new List<IncmRowDto>();
-        if (mainPrice != 0)
-            rows.Add(new IncmRowDto { IncmNo = mainIncm, Val = mainPrice, IncmRowDsc = mainDsc });
+        if (Nosazi != 0)
+            rows.Add(new IncmRowDto { IncmNo = mainIncm, Val = Nosazi, IncmRowDsc = mainDsc });
         if (Atash != 0)
             rows.Add(new IncmRowDto { IncmNo = 100002, Val = Atash, IncmRowDsc = "آتش نشانی" });
         if (Garbage != 0)

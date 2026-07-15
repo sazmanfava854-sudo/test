@@ -115,6 +115,10 @@ public class SoapBuilder
         if (rows.Count == 0)
             rows.Add(new IncmRowDto { IncmNo = 0, Val = fiche.Payable, IncmRowDsc = "کل" });
 
+        // فیش نوسازی/صنفی: مبالغ از Duty_FicheSub خوانده می‌شوند؛ نرمال‌سازی آن‌ها را خراب می‌کند (مثلاً جایزه)
+        if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
+            return rows;
+
         var sum = rows.Sum(r => r.Val);
         if (sum != fiche.Payable && sum != 0)
         {
