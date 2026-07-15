@@ -39,12 +39,26 @@ HRPerformance/
 
 ### Windows
 
-```powershell
+**روش پیشنهادی** (بدون محدودیت PowerShell):
+
+```cmd
 cd HRPerformance
-.\start.ps1
+start.bat
 ```
 
 یا دوبار کلیک روی `start.bat`
+
+اگر می‌خواهید `start.ps1` را اجرا کنید و خطای Execution Policy گرفتید:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+یا مستقیم:
+
+```cmd
+dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http
+```
 
 ### Linux / macOS
 
