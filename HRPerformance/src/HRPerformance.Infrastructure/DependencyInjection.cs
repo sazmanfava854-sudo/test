@@ -4,6 +4,7 @@ using HRPerformance.Infrastructure.BackgroundServices;
 using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Repositories;
 using HRPerformance.Infrastructure.Services;
+using HRPerformance.Infrastructure.Services.ExternalHr;
 using HRPerformance.Infrastructure.SignalR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,8 @@ public static class DependencyInjection
         services.AddScoped<IRuleEngineService, RuleEngineService>();
         services.AddScoped<IRankingService, RankingService>();
         services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
+        services.AddScoped<MisHrDataReader>();
+        services.AddScoped<MisHrEmployeeSyncService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
         services.AddHttpClient("AttendanceSync");

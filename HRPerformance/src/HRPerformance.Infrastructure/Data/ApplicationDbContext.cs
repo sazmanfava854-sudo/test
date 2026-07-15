@@ -50,7 +50,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
         builder.Entity<OrganizationUnit>().HasOne(u => u.Parent).WithMany(u => u.Children).HasForeignKey(u => u.ParentId).OnDelete(DeleteBehavior.Restrict);
         builder.Entity<RolePermission>().HasKey(rp => new { rp.RoleId, rp.PermissionId });
         builder.Entity<Setting>().HasIndex(s => new { s.OrganizationId, s.Key }).IsUnique();
-        builder.Entity<AttendanceLog>().HasIndex(a => new { a.EmployeeId, a.AttendanceDate }).IsUnique();
+        builder.Entity<AttendanceLog>().HasIndex(a => new { a.OrganizationId, a.ExternalId })
+            .IsUnique()
+            .HasFilter("[ExternalId] IS NOT NULL");
+        builder.Entity<AttendanceLog>().HasIndex(a => new { a.EmployeeId, a.AttendanceDate });
         builder.Entity<RefreshToken>().HasIndex(r => r.Token);
     }
 }

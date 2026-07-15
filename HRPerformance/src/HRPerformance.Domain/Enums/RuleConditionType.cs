@@ -5,4 +5,5 @@ public enum RuleConditionType
     Absence = 2,
     Attendance = 3,
     Custom = 4,
+    HourlyLeave = 5,
 }
