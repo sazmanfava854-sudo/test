@@ -2,6 +2,7 @@ using System.Text;
 using AspNetCoreRateLimit;
 using HRPerformance;
 using HRPerformance.API.Middleware;
+using HRPerformance.Data;
 using HRPerformance.SignalR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -66,6 +67,14 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+if (string.Equals(builder.Configuration["Database:Provider"], "InMemory", StringComparison.OrdinalIgnoreCase))
+{
+    await DemoDataSeeder.SeedAsync(app.Services, app.Logger);
+    app.Logger.LogInformation("=== DEMO MODE (بدون SQL Server) ===");
+    app.Logger.LogInformation("Login: admin / {Password}", DemoDataSeeder.DefaultAdminPassword);
+}
+
 app.UseMiddleware<ExceptionMiddleware>();
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseSerilogRequestLogging();

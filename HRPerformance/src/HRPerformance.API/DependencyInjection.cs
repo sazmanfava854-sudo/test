@@ -15,8 +15,15 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddHrPerformance(this IServiceCollection services, IConfiguration configuration)
     {
+        var dbProvider = configuration["Database:Provider"] ?? "SqlServer";
+
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+        {
+            if (string.Equals(dbProvider, "InMemory", StringComparison.OrdinalIgnoreCase))
+                options.UseInMemoryDatabase(configuration["Database:InMemoryName"] ?? "HRPerformanceDemo");
+            else
+                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
+        });
 
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         {
@@ -49,7 +56,12 @@ public static class DependencyInjection
         services.AddScoped<SettingService>();
 
         services.AddHttpClient("AttendanceSync");
-        services.AddHostedService<AttendanceSyncBackgroundService>();
+
+        if (!string.Equals(dbProvider, "InMemory", StringComparison.OrdinalIgnoreCase)
+            && configuration.GetValue<bool>("HrIntegration:Enabled"))
+        {
+            services.AddHostedService<AttendanceSyncBackgroundService>();
+        }
 
         return services;
     }
