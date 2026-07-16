@@ -10,4 +10,4 @@ Quick Start (Windows):
   2. Run database scripts 01-10 in SQL Server (HRPerformanceDB)
   3. Set HrIntegration:Password in appsettings.json
   4. cd HRPerformance && start.bat
-  5. Open http://localhost:5000
+  5. Open http://localhost:5050

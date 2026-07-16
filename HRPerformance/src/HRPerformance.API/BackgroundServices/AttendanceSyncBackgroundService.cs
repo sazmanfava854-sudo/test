@@ -26,7 +26,14 @@ public class AttendanceSyncBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_configuration.GetValue<bool>("HrIntegration:Enabled"))
+        {
+            _logger.LogInformation("HR integration background sync is disabled");
+            return;
+        }
+
         var intervalMinutes = _configuration.GetValue<int>("HrIntegration:SyncIntervalMinutes", 5);
+        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -36,28 +43,46 @@ public class AttendanceSyncBackgroundService : BackgroundService
                 var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 var syncService = scope.ServiceProvider.GetRequiredService<IAttendanceSyncService>();
 
-                var orgIds = await context.AttendanceIntegrationSettings
-                    .Where(s => s.IsActive)
-                    .Select(s => s.OrganizationId)
-                    .Distinct()
-                    .ToListAsync(stoppingToken);
-
-                if (orgIds.Count == 0 && _configuration.GetValue<bool>("HrIntegration:Enabled"))
+                if (!await context.Database.CanConnectAsync(stoppingToken))
                 {
-                    var defaultOrg = await context.Organizations.Select(o => o.Id).FirstOrDefaultAsync(stoppingToken);
-                    if (defaultOrg != Guid.Empty)
-                        orgIds.Add(defaultOrg);
+                    _logger.LogWarning("Database not available yet; skipping attendance sync");
                 }
+                else
+                {
+                    var orgIds = await context.AttendanceIntegrationSettings
+                        .Where(s => s.IsActive)
+                        .Select(s => s.OrganizationId)
+                        .Distinct()
+                        .ToListAsync(stoppingToken);
 
-                foreach (var orgId in orgIds)
-                    await syncService.SyncAsync(orgId, stoppingToken);
+                    if (orgIds.Count == 0)
+                    {
+                        var defaultOrg = await context.Organizations.Select(o => o.Id).FirstOrDefaultAsync(stoppingToken);
+                        if (defaultOrg != Guid.Empty)
+                            orgIds.Add(defaultOrg);
+                    }
+
+                    foreach (var orgId in orgIds)
+                        await syncService.SyncAsync(orgId, stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Background attendance sync error");
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 }

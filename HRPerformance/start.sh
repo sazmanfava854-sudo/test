@@ -17,8 +17,8 @@ fi
 
 echo ""
 echo "🚀 در حال اجرا..."
-echo "   Application → http://localhost:5000"
-echo "   Swagger     → http://localhost:5000/swagger"
+echo "   Application → http://localhost:5050"
+echo "   Swagger     → http://localhost:5050/swagger"
 echo ""
 echo "برای توقف: Ctrl+C"
 echo ""

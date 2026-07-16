@@ -17,6 +17,8 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.File("logs/hr-performance-.log", rollingInterval: RollingInterval.Day)
     .CreateLogger();
 builder.Host.UseSerilog();
+builder.Services.Configure<HostOptions>(options =>
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
 
 builder.Services.AddHrPerformance(builder.Configuration);
 builder.Services.AddHttpContextAccessor();

@@ -16,8 +16,8 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 
 Write-Host ""
 Write-Host "در حال اجرا..." -ForegroundColor Green
-Write-Host "  Application -> http://localhost:5000" -ForegroundColor White
-Write-Host "  Swagger     -> http://localhost:5000/swagger" -ForegroundColor White
+Write-Host "  Application -> http://localhost:5050" -ForegroundColor White
+Write-Host "  Swagger     -> http://localhost:5050/swagger" -ForegroundColor White
 Write-Host ""
 Write-Host "برای توقف: Ctrl+C" -ForegroundColor Gray
 Write-Host ""

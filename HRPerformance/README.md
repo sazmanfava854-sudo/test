@@ -66,8 +66,8 @@ cd HRPerformance
 ```
 
 سپس مرورگر را باز کنید:
-- **Application:** http://localhost:5000
-- **Swagger:** http://localhost:5000/swagger
+- **Application:** http://localhost:5050
+- **Swagger:** http://localhost:5050/swagger
 
 برای توقف: `Ctrl+C`
 
@@ -121,7 +121,7 @@ cd HRPerformance
 dotnet run --project src/HRPerformance.API --launch-profile http
 ```
 
-API: `http://localhost:5000` | Swagger: `http://localhost:5000/swagger`
+API: `http://localhost:5050` | Swagger: `http://localhost:5050/swagger`
 
 ## Frontend Setup (جداگانه - اختیاری)
 
