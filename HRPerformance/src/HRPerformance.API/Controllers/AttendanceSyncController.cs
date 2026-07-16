@@ -1,4 +1,4 @@
-using HRPerformance.Domain.Interfaces;
+using HRPerformance.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

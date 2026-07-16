@@ -1,0 +1,56 @@
+using HRPerformance.BackgroundServices;
+using HRPerformance.Data;
+using HRPerformance.Entities;
+using HRPerformance.Interfaces;
+using HRPerformance.Repositories;
+using HRPerformance.Services;
+using HRPerformance.Services.App;
+using HRPerformance.Services.ExternalHr;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace HRPerformance;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddHrPerformance(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+
+        services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
+        {
+            options.Password.RequiredLength = 8;
+            options.Password.RequireDigit = true;
+            options.Password.RequireUppercase = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.User.RequireUniqueEmail = true;
+        }).AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
+
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IRuleEngineService, RuleEngineService>();
+        services.AddScoped<IRankingService, RankingService>();
+        services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
+        services.AddScoped<MisHrDataReader>();
+        services.AddScoped<MisHrEmployeeSyncService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IFileStorageService, FileStorageService>();
+
+        services.AddScoped<AuthService>();
+        services.AddScoped<EmployeeService>();
+        services.AddScoped<DashboardService>();
+        services.AddScoped<AppealService>();
+        services.AddScoped<EvaluationService>();
+        services.AddScoped<NotificationAppService>();
+        services.AddScoped<SettingService>();
+
+        services.AddHttpClient("AttendanceSync");
+        services.AddHostedService<AttendanceSyncBackgroundService>();
+
+        return services;
+    }
+}

@@ -2,30 +2,28 @@
 
 سیستم جامع مدیریت عملکرد و انضباط کارکنان برای شهرداری‌ها، سازمان‌های دولتی و شرکت‌های بزرگ.
 
-## Architecture
+## Architecture (ساده‌شده — یک پروژه)
 
 ```
 HRPerformance/
-├── database/           # SQL Server scripts (01-08)
-├── src/
-│   ├── HRPerformance.Domain/          # Entities, Enums, Interfaces
-│   ├── HRPerformance.Application/     # CQRS (MediatR), DTOs, Validators
-│   ├── HRPerformance.Infrastructure/  # EF Core, Repositories, Services
-│   └── HRPerformance.API/             # REST API, SignalR, Background Services
-└── frontend/
-    └── hr-performance-web/            # React + TypeScript + MUI (RTL)
+├── database/              # SQL Server scripts (01-10)
+├── src/HRPerformance.API/ # همه چیز در یک پروژه
+│   ├── Controllers/       # API endpoints
+│   ├── Services/          # منطق کسب‌وکار + MIS sync
+│   ├── Entities/          # مدل‌های دیتابیس
+│   ├── Data/              # EF Core DbContext
+│   ├── DTOs/              # ورودی/خروجی API
+│   └── wwwroot/           # فرانت‌اند بیلد شده
+└── frontend/              # سورس React (اختیاری)
 ```
 
 ## Tech Stack
 
 ### Backend
-- ASP.NET Core 9 Web API
-- Entity Framework Core 9 + SQL Server
+- ASP.NET Core 8 Web API (تک‌پروژه‌ای)
+- Entity Framework Core 8 + SQL Server
 - JWT Authentication + Refresh Token
-- Clean Architecture + CQRS (MediatR)
-- FluentValidation, AutoMapper, Serilog
-- SignalR (real-time notifications)
-- Background Service (attendance sync every 5 min)
+- Serilog, SignalR, Background Service (MIS sync هر ۵ دقیقه)
 
 ### Frontend
 - React 18 + TypeScript + Vite

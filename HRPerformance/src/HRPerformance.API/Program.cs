@@ -1,9 +1,8 @@
 using System.Text;
 using AspNetCoreRateLimit;
+using HRPerformance;
 using HRPerformance.API.Middleware;
-using HRPerformance.Application;
-using HRPerformance.Infrastructure;
-using HRPerformance.Infrastructure.SignalR;
+using HRPerformance.SignalR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -19,20 +18,23 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 builder.Host.UseSerilog();
 
-builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHrPerformance(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options => {
-        options.TokenValidationParameters = new TokenValidationParameters {
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
             ValidateIssuer = true, ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidateAudience = true, ValidAudience = builder.Configuration["Jwt:Audience"],
             ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
             ValidateLifetime = true, ClockSkew = TimeSpan.Zero
         };
-        options.Events = new JwtBearerEvents {
-            OnMessageReceived = context => {
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
                 var accessToken = context.Request.Query["access_token"];
                 if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                     context.Token = accessToken;
@@ -54,7 +56,8 @@ builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c => {
+builder.Services.AddSwaggerGen(c =>
+{
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "HR Performance API", Version = "v1", Description = "سیستم مدیریت عملکرد و انضباط کارکنان" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme { Name = "Authorization", Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT", In = ParameterLocation.Header });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement { { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }, Array.Empty<string>() } });

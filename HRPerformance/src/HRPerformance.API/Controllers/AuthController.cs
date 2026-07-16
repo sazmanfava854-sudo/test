@@ -1,16 +1,27 @@
-using HRPerformance.Application.DTOs.Auth;
-using HRPerformance.Application.Features.Auth;
-using MediatR;
+using HRPerformance.DTOs.Auth;
+using HRPerformance.Services.App;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HRPerformance.API.Controllers;
-[ApiController] [Route("api/[controller]")]
+
+[ApiController]
+[Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly IMediator _mediator;
-    public AuthController(IMediator mediator) => _mediator = mediator;
-    [HttpPost("login")] public async Task<IActionResult> Login([FromBody] LoginRequest request) => Ok(await _mediator.Send(new LoginCommand(request)));
-    [HttpPost("refresh")] public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request) => Ok(await _mediator.Send(new RefreshTokenCommand(request)));
-    [Authorize] [HttpGet("me")] public IActionResult Me() => Ok(new { User.Identity?.Name });
+    private readonly AuthService _authService;
+
+    public AuthController(AuthService authService) => _authService = authService;
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request) =>
+        Ok(await _authService.LoginAsync(request));
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request) =>
+        Ok(await _authService.RefreshAsync(request));
+
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult Me() => Ok(new { User.Identity?.Name });
 }

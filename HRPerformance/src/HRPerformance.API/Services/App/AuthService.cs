@@ -1,0 +1,55 @@
+using HRPerformance.Common;
+using HRPerformance.DTOs.Auth;
+using HRPerformance.Entities;
+using HRPerformance.Interfaces;
+using Microsoft.AspNetCore.Identity;
+
+namespace HRPerformance.Services.App;
+
+public class AuthService
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ITokenService _tokenService;
+    private readonly IAuditService _auditService;
+
+    public AuthService(UserManager<ApplicationUser> userManager, ITokenService tokenService, IAuditService auditService)
+    {
+        _userManager = userManager;
+        _tokenService = tokenService;
+        _auditService = auditService;
+    }
+
+    public async Task<ApiResponse<LoginResponse>> LoginAsync(LoginRequest request, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByNameAsync(request.UserName);
+        if (user == null || !user.IsActive)
+            return ApiResponse<LoginResponse>.Fail("نام کاربری یا رمز عبور اشتباه است");
+
+        if (!await _userManager.CheckPasswordAsync(user, request.Password))
+            return ApiResponse<LoginResponse>.Fail("نام کاربری یا رمز عبور اشتباه است");
+
+        var (access, refresh, expires) = await _tokenService.GenerateTokensAsync(user, ct);
+        user.LastLoginAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
+        var roles = await _userManager.GetRolesAsync(user);
+        await _auditService.LogAsync("Login", "User", user.Id.ToString(), ct: ct);
+        var dto = new UserDto(user.Id, user.UserName!, user.Email!, user.FirstName, user.LastName, user.FullName, user.OrganizationId, user.EmployeeId, roles.ToList());
+        return ApiResponse<LoginResponse>.Ok(new LoginResponse(access, refresh, expires, dto));
+    }
+
+    public async Task<ApiResponse<LoginResponse>> RefreshAsync(RefreshTokenRequest request, CancellationToken ct = default)
+    {
+        var result = await _tokenService.RefreshTokenAsync(request.AccessToken, request.RefreshToken, ct);
+        if (result == null) return ApiResponse<LoginResponse>.Fail("توکن نامعتبر است");
+
+        var userId = _tokenService.GetUserIdFromExpiredToken(request.AccessToken);
+        if (userId == null) return ApiResponse<LoginResponse>.Fail("توکن نامعتبر است");
+
+        var user = await _userManager.FindByIdAsync(userId.Value.ToString());
+        if (user == null) return ApiResponse<LoginResponse>.Fail("کاربر یافت نشد");
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var dto = new UserDto(user.Id, user.UserName!, user.Email!, user.FirstName, user.LastName, user.FullName, user.OrganizationId, user.EmployeeId, roles.ToList());
+        return ApiResponse<LoginResponse>.Ok(new LoginResponse(result.Value.AccessToken, result.Value.RefreshToken, result.Value.ExpiresAt, dto));
+    }
+}
