@@ -1,13 +1,12 @@
-HR Performance System - Final Package
-Version: 2.0.0-simple
+HR Performance System
+Version: 2.1.0-demo
 Build Date: 2026-07-16
-.NET: 8.0
-Architecture: Single project (HRPerformance.API)
-Removed: MediatR, AutoMapper, FluentValidation, 4-layer split
+.NET: 8.0.401 compatible
 
-Quick Start (Windows):
-  1. Extract ZIP
-  2. Run database scripts 01-10 in SQL Server (HRPerformanceDB)
-  3. Set HrIntegration:Password in appsettings.json
-  4. cd HRPerformance && start.bat
-  5. Open http://localhost:5050
+Includes:
+- Single-project architecture
+- Demo mode (no SQL Server): start-demo.bat
+- MIS integration (office/SQL Server): start.bat
+- Port: http://localhost:5050
+
+Demo login: admin / Admin@123
