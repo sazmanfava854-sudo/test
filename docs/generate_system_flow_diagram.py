@@ -1,400 +1,232 @@
 #!/usr/bin/env python3
-"""Generate system flow diagram (SVG, PNG, DOCX) for Word import."""
+"""Generate system flow diagram (PNG, DOCX) for Word import — fixed-size PIL renderer."""
 
-import base64
 from pathlib import Path
 
 import arabic_reshaper
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from bidi.algorithm import get_display
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt
-from matplotlib import font_manager
-from matplotlib.path import Path as MplPath
+from PIL import Image, ImageDraw, ImageFont
 
 DOCS_DIR = Path(__file__).resolve().parent
+ARTIFACTS_DIR = Path("/opt/cursor/artifacts")
 FONTS_DIR = DOCS_DIR / "fonts"
-SVG_PATH = DOCS_DIR / "system_flow_diagram.svg"
 PNG_PATH = DOCS_DIR / "system_flow_diagram.png"
 DOCX_PATH = DOCS_DIR / "system_flow_diagram.docx"
-FONT_PATH = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"
-FONT_BOLD_PATH = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"
-NAZANIN_PATH = FONTS_DIR / "BNazanin.ttf"
-DPI = 300
+ARTIFACT_PNG = ARTIFACTS_DIR / "system_flow_diagram.png"
+ARTIFACT_DOCX = ARTIFACTS_DIR / "system_flow_diagram.docx"
+
+NOTO = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf"
+NOTO_BOLD = "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"
+NAZANIN = FONTS_DIR / "BNazanin.ttf"
+DEJAVU = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+DEJAVU_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+SCALE = 2
+W, H = 900 * SCALE, 1850 * SCALE
 PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
 
-font_manager.fontManager.addfont(FONT_PATH)
-font_manager.fontManager.addfont(FONT_BOLD_PATH)
-font_manager.fontManager.addfont(str(NAZANIN_PATH))
-FONT_REG = font_manager.FontProperties(family=["Noto Naskh Arabic", "DejaVu Sans"])
-FONT_BOLD = font_manager.FontProperties(family=["Noto Naskh Arabic", "DejaVu Sans"], weight="bold")
-FONT_NAZANIN = font_manager.FontProperties(fname=str(NAZANIN_PATH))
-FONT_LATIN = font_manager.FontProperties(family="DejaVu Sans")
-FONT_LATIN_BOLD = font_manager.FontProperties(family="DejaVu Sans", weight="bold")
 
-
-def fa(text: str, for_matplotlib: bool = False) -> str:
-    shaped = arabic_reshaper.reshape(text)
-    return shaped if for_matplotlib else get_display(shaped)
-
-
-def fap(text: str) -> str:
-    return fa(text, for_matplotlib=True)
+def fa(text: str) -> str:
+    return arabic_reshaper.reshape(text)
 
 
 def persian_num(n: int) -> str:
     return "".join(PERSIAN_DIGITS[int(d)] for d in str(n))
 
 
-def algo_parts(number: int, suffix: str = "") -> list[tuple[str, font_manager.FontProperties]]:
-    parts: list[tuple[str, font_manager.FontProperties]] = [
-        (fap("الگوریتم "), FONT_REG),
-        (persian_num(number), FONT_NAZANIN),
-    ]
-    if suffix:
-        ascii_ratio = sum(1 for c in suffix if ord(c) < 128) / max(len(suffix), 1)
-        fp = FONT_LATIN if ascii_ratio > 0.5 else FONT_REG
-        parts.append((fap(f" — {suffix}") if fp is FONT_REG else f" — {suffix}", fp))
-    return parts
+def s(v: int) -> int:
+    return v * SCALE
 
 
-def _pick_font(line: str, bold: bool = False):
-    ascii_ratio = sum(1 for c in line if ord(c) < 128) / max(len(line), 1)
-    if ascii_ratio > 0.6:
-        return FONT_LATIN_BOLD if bold else FONT_LATIN
-    return FONT_BOLD if bold else FONT_REG
+class Fonts:
+    def __init__(self):
+        self.title = ImageFont.truetype(NOTO_BOLD, s(26))
+        self.title_latin = ImageFont.truetype(DEJAVU_BOLD, s(26))
+        self.box_lg = ImageFont.truetype(NOTO_BOLD, s(22))
+        self.box_md = ImageFont.truetype(NOTO, s(20))
+        self.box_sm = ImageFont.truetype(NOTO, s(17))
+        self.nazanin_md = ImageFont.truetype(str(NAZANIN), s(22))
+        self.nazanin_sm = ImageFont.truetype(str(NAZANIN), s(20))
+        self.latin = ImageFont.truetype(DEJAVU, s(18))
+        self.latin_sm = ImageFont.truetype(DEJAVU, s(15))
+        self.final = ImageFont.truetype(NOTO_BOLD, s(28))
 
 
-def _measure_parts(ax, fig, parts, fs):
-    fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
-    widths = []
-    for text, fp in parts:
-        tmp = ax.text(0, 0, text, fontproperties=fp, fontsize=fs)
-        bb = tmp.get_window_extent(renderer=renderer)
-        widths.append(bb.width)
-        tmp.remove()
-    return widths
+class Canvas:
+    def __init__(self):
+        self.img = Image.new("RGB", (W, H), "#FAFAFA")
+        self.draw = ImageDraw.Draw(self.img)
+        self.f = Fonts()
 
+    def text_size(self, text: str, font) -> tuple[int, int]:
+        bb = self.draw.textbbox((0, 0), text, font=font)
+        return bb[2] - bb[0], bb[3] - bb[1]
 
-def draw_mixed_line(ax, fig, cx, cy, parts, fs):
-    widths = _measure_parts(ax, fig, parts, fs)
-    total = sum(widths)
-    x = cx - total / 2
-    for (text, fp), w in zip(parts, widths):
-        ax.text(x + w / 2, cy, text, ha="center", va="center", fontsize=fs, fontproperties=fp, color="#1a1a1a")
-        x += w
+    def draw_centered(self, cx: int, cy: int, text: str, font, fill="#1a1a1a"):
+        tw, th = self.text_size(text, font)
+        self.draw.text((cx - tw // 2, cy - th // 2), text, font=font, fill=fill)
 
+    def draw_mixed_centered(self, cx: int, cy: int, parts: list[tuple[str, object]], fill="#1a1a1a"):
+        total = sum(self.text_size(t, f)[0] for t, f in parts)
+        x = cx - total // 2
+        for text, font in parts:
+            tw, th = self.text_size(text, font)
+            self.draw.text((x, cy - th // 2), text, font=font, fill=fill)
+            x += tw
 
-def draw_rounded_box(ax, fig, cx, cy, w, h, fc, ec, lines, fs=11, bold=False, radius=0.08):
-    box = mpatches.FancyBboxPatch(
-        (cx - w / 2, cy - h / 2),
-        w,
-        h,
-        boxstyle=f"round,pad=0.02,rounding_size={radius}",
-        facecolor=fc,
-        edgecolor=ec,
-        linewidth=1.8,
-    )
-    ax.add_patch(box)
-    line_h = 0.22 if len(lines) > 1 else 0
-    start_y = cy + line_h * (len(lines) - 1) / 2
-    for i, line in enumerate(lines):
-        y = start_y - i * 0.28
-        if isinstance(line, list):
-            draw_mixed_line(ax, fig, cx, y, line, fs)
-        else:
-            ax.text(
-                cx,
-                y,
-                line,
-                ha="center",
-                va="center",
-                fontsize=fs,
-                fontproperties=_pick_font(line, bold),
-                color="#1a1a1a",
-            )
+    def draw_title(self, cx: int, cy: int):
+        parts = [
+            (fa("نمودار جریان کلی سیستم توصیه‌گر فناوری "), self.f.title),
+            ("IoT", self.f.title_latin),
+        ]
+        self.draw_mixed_centered(cx, cy, parts, "#263238")
 
+    def draw_data_subtitle(self, cx: int, cy: int):
+        parts = [
+            ("(", self.f.box_sm),
+            (persian_num(13), self.f.nazanin_sm),
+            (fa(" فناوری x "), self.f.box_sm),
+            (persian_num(8), self.f.nazanin_sm),
+            (fa(" معیار)"), self.f.box_sm),
+        ]
+        self.draw_mixed_centered(cx, cy, parts)
 
-def draw_diamond(ax, fig, cx, cy, size, fc, ec, lines, fs=10.5):
-    half = size / 2
-    verts = [(cx, cy + half), (cx + half, cy), (cx, cy - half), (cx - half, cy), (cx, cy + half)]
-    codes = [MplPath.MOVETO, MplPath.LINETO, MplPath.LINETO, MplPath.LINETO, MplPath.CLOSEPOLY]
-    patch = mpatches.PathPatch(MplPath(verts, codes), facecolor=fc, edgecolor=ec, linewidth=1.8)
-    ax.add_patch(patch)
-    start_y = cy + 0.12 * (len(lines) - 1)
-    for i, line in enumerate(lines):
-        y = start_y - i * 0.24
-        if isinstance(line, list):
-            draw_mixed_line(ax, fig, cx, y, line, fs)
-        else:
-            ax.text(
-                cx,
-                y,
-                line,
-                ha="center",
-                va="center",
-                fontsize=fs,
-                fontproperties=_pick_font(line),
-                color="#1a1a1a",
-            )
-
-
-def draw_arrow(ax, x1, y1, x2, y2):
-    ax.annotate(
-        "",
-        xy=(x2, y2),
-        xytext=(x1, y1),
-        arrowprops=dict(arrowstyle="-|>", color="#455A64", lw=1.8, mutation_scale=14),
-    )
-
-
-def build_matplotlib_png(png_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(7.2, 14.8), dpi=DPI)
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 20.5)
-    ax.axis("off")
-    fig.patch.set_facecolor("#FAFAFA")
-
-    cx = 5.0
-    bw = 5.8
-
-    ax.text(
-        cx,
-        20.0,
-        fap("نمودار جریان کلی سیستم توصیه‌گر فناوری IoT"),
-        ha="center",
-        va="center",
-        fontsize=14,
-        fontproperties=FONT_BOLD,
-        color="#263238",
-    )
-
-    y = 18.8
-    draw_rounded_box(
-        ax, fig, cx, y, bw, 0.95, "#E3F2FD", "#2196F3",
-        [fap("داده خام فناوری‌ها"), fap("(۱۳ فناوری × ۸ معیار)")], fs=11.5, bold=True,
-    )
-
-    y -= 1.35
-    draw_arrow(ax, cx, y + 0.62, cx, y + 0.18)
-    draw_rounded_box(
-        ax, fig, cx, y, bw, 1.05, "#E8EAF6", "#3F51B5",
-        [algo_parts(1, "پیش‌پردازش"), "Log1p + Z-Score"], fs=11.2, bold=True,
-    )
-
-    y -= 1.45
-    draw_arrow(ax, cx, y + 0.67, cx, y + 0.2)
-    draw_rounded_box(
-        ax, fig, cx, y, bw, 1.05, "#E8EAF6", "#3F51B5",
-        [algo_parts(2, "K-Means"), fap("انتخاب خودکار k + Silhouette")], fs=11.2, bold=True,
-    )
-
-    y -= 1.55
-    draw_arrow(ax, cx, y + 0.72, cx, y + 0.45)
-    draw_diamond(ax, fig, cx, y, 1.55, "#FFF3E0", "#FF9800", [fap("انتخاب خوشه"), fap("توسط کاربر")])
-
-    y -= 1.55
-    draw_arrow(ax, cx, y + 0.72, cx, y + 0.2)
-    draw_rounded_box(
-        ax, fig, cx, y, bw, 0.95, "#F3E5F5", "#9C27B0",
-        [algo_parts(3, "AHP"), fap("وزن پایه w")], fs=11.2, bold=True,
-    )
-
-    y -= 1.35
-    draw_arrow(ax, cx, y + 0.62, cx, y + 0.18)
-    draw_rounded_box(
-        ax, fig, cx, y, bw, 0.82, "#FCE4EC", "#E91E63",
-        [fap("پرسشنامه سناریو")], fs=11.5, bold=True,
-    )
-
-    y -= 1.25
-    draw_arrow(ax, cx, y + 0.56, cx, y + 0.18)
-    draw_rounded_box(
-        ax, fig, cx, y, bw, 0.95, "#F3E5F5", "#9C27B0",
-        [algo_parts(4, "تعدیل نمایی"), fap("وزن w̃")], fs=11.2, bold=True,
-    )
-
-    y_rank = y - 1.55
-    sw = 2.55
-    sx = [2.15, 5.0, 7.85]
-    for i, (x, label) in enumerate(zip(sx, ["TOPSIS", "VIKOR", "COPRAS"])):
-        draw_arrow(ax, cx, y - 0.55, x, y_rank + 0.55)
-        draw_rounded_box(
-            ax, fig, x, y_rank, sw, 1.0, "#E0F2F1", "#009688",
-            [algo_parts(i + 5), label], fs=10.5, bold=True,
-        )
-
-    y_spear = y_rank - 1.45
-    for x in sx:
-        draw_arrow(ax, x, y_rank - 0.58, cx, y_spear + 0.55)
-    draw_rounded_box(
-        ax, fig, cx, y_spear, bw, 1.15, "#FFF8E1", "#FFC107",
-        [
-            algo_parts(8, "Spearman"),
-            fap("سه مقایسه زوجی:"),
-            "TOPSIS↔VIKOR | TOPSIS↔COPRAS | VIKOR↔COPRAS",
-        ],
-        fs=10.2,
-        bold=True,
-    )
-
-    y_final = y_spear - 1.45
-    draw_arrow(ax, cx, y_spear - 0.65, cx, y_final + 0.35)
-    draw_rounded_box(
-        ax, fig, cx, y_final, 3.8, 0.9, "#C8E6C9", "#4CAF50",
-        [fap("توصیه نهایی")], fs=14, bold=True, radius=0.25,
-    )
-
-    fig.savefig(png_path, dpi=DPI, bbox_inches="tight", facecolor=fig.get_facecolor(), pad_inches=0.15)
-    plt.close(fig)
-
-
-def _svg_algo_line(number: int, suffix: str = "") -> str:
-    nazanin = persian_num(number)
-    prefix = fa("الگوریتم ")
-    if suffix:
-        ascii_ratio = sum(1 for c in suffix if ord(c) < 128) / max(len(suffix), 1)
-        if ascii_ratio > 0.5:
-            tail = f" — {suffix}"
-        else:
-            tail = fa(f" — {suffix}")
-        return (
-            f'<tspan font-family="NotoNaskhArabic">{prefix}</tspan>'
-            f'<tspan font-family="BNazanin">{nazanin}</tspan>'
-            f'<tspan font-family="{"DejaVu Sans" if ascii_ratio > 0.5 else "NotoNaskhArabic"}">{tail}</tspan>'
-        )
-    return (
-        f'<tspan font-family="NotoNaskhArabic">{prefix}</tspan>'
-        f'<tspan font-family="BNazanin">{nazanin}</tspan>'
-    )
-
-
-def build_svg() -> str:
-    font_data = base64.b64encode(Path(FONT_PATH).read_bytes()).decode("ascii")
-    font_bold_data = base64.b64encode(Path(FONT_BOLD_PATH).read_bytes()).decode("ascii")
-    nazanin_data = base64.b64encode(NAZANIN_PATH.read_bytes()).decode("ascii")
-    w, h = 720, 1480
-
-    def box(x, y, bw, bh, fill, stroke, lines, fs=15, bold=False, radius=10, mixed_first=False):
-        fw = "bold" if bold else "normal"
-        text_y = y + bh / 2 - (len(lines) - 1) * 9
-        texts = ""
-        for i, line in enumerate(lines):
-            if isinstance(line, tuple) and line[0] == "algo":
-                inner = _svg_algo_line(line[1], line[2] if len(line) > 2 else "")
-                texts += (
-                    f'<text x="{x + bw/2}" y="{text_y + i * 22}" text-anchor="middle" '
-                    f'font-size="{fs}" font-weight="{fw}" fill="#1a1a1a">{inner}</text>\n'
-                )
+    def draw_algo_line(self, cx: int, cy: int, num: int, suffix: str = ""):
+        parts: list[tuple[str, object]] = [
+            (fa("الگوریتم "), self.f.box_md),
+            (persian_num(num), self.f.nazanin_md),
+        ]
+        if suffix:
+            if suffix.isascii():
+                parts.append((f" — {suffix}", self.f.latin))
             else:
-                texts += (
-                    f'<text x="{x + bw/2}" y="{text_y + i * 22}" text-anchor="middle" '
-                    f'font-family="NotoNaskhArabic" font-size="{fs}" font-weight="{fw}" '
-                    f'fill="#1a1a1a">{line}</text>\n'
-                )
-        return (
-            f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" rx="{radius}" ry="{radius}" '
-            f'fill="{fill}" stroke="{stroke}" stroke-width="2"/>\n{texts}'
+                parts.append((fa(f" — {suffix}"), self.f.box_md))
+        self.draw_mixed_centered(cx, cy, parts)
+
+    def rounded_rect(self, x1, y1, x2, y2, fill, outline, radius=14, width=2):
+        self.draw.rounded_rectangle(
+            [x1, y1, x2, y2], radius=s(radius), fill=fill, outline=outline, width=s(width)
         )
 
-    def diamond(cx, cy, size, fill, stroke, lines, fs=14):
-        half = size / 2
-        pts = f"{cx},{cy-half} {cx+half},{cy} {cx},{cy+half} {cx-half},{cy}"
-        texts = ""
-        text_y = cy - (len(lines) - 1) * 9
-        for i, line in enumerate(lines):
-            texts += (
-                f'<text x="{cx}" y="{text_y + i * 20}" text-anchor="middle" '
-                f'font-family="NotoNaskhArabic" font-size="{fs}" fill="#1a1a1a">{line}</text>\n'
-            )
-        return f'<polygon points="{pts}" fill="{fill}" stroke="{stroke}" stroke-width="2"/>\n{texts}'
+    def diamond(self, cx, cy, hw, hh, fill, outline):
+        pts = [(cx, cy - hh), (cx + hw, cy), (cx, cy + hh), (cx - hw, cy)]
+        self.draw.polygon(pts, fill=fill, outline=outline)
+        self.draw.line(pts + [pts[0]], fill=outline, width=s(2))
 
-    def arrow(x1, y1, x2, y2):
-        return (
-            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#455A64" '
-            f'stroke-width="2.2" marker-end="url(#arrow)"/>'
+    def arrow_down(self, x, y1, y2):
+        ah = s(12)
+        self.draw.line([(x, y1), (x, y2 - ah)], fill="#455A64", width=s(2))
+        self.draw.polygon([(x, y2), (x - ah // 2, y2 - ah), (x + ah // 2, y2 - ah)], fill="#455A64")
+
+    def arrow_branch(self, x_from, y_from, x_to, y_to):
+        mid_y = (y_from + y_to) // 2
+        ah = s(12)
+        w = s(2)
+        self.draw.line([(x_from, y_from), (x_from, mid_y)], fill="#455A64", width=w)
+        self.draw.line([(x_from, mid_y), (x_to, mid_y)], fill="#455A64", width=w)
+        self.draw.line([(x_to, mid_y), (x_to, y_to - ah)], fill="#455A64", width=w)
+        self.draw.polygon([(x_to, y_to), (x_to - ah // 2, y_to - ah), (x_to + ah // 2, y_to - ah)], fill="#455A64")
+
+    def box(self, cx, top, bw, bh, fill, outline, lines=None, algo=None, custom_lines=None):
+        x1, y1 = cx - bw // 2, top
+        x2, y2 = cx + bw // 2, top + bh
+        self.rounded_rect(x1, y1, x2, y2, fill, outline)
+
+        if custom_lines:
+            cy = top + bh // 2 - (len(custom_lines) - 1) * s(14)
+            for fn in custom_lines:
+                fn(cx, cy)
+                cy += s(30)
+        elif algo is not None:
+            num, suffix = algo
+            line_count = 1 + len(lines or [])
+            cy = top + bh // 2 - (line_count - 1) * s(14)
+            self.draw_algo_line(cx, cy, num, suffix)
+            cy += s(30)
+            for line in lines or []:
+                if line.isascii():
+                    self.draw_centered(cx, cy, line, self.f.latin)
+                else:
+                    self.draw_centered(cx, cy, fa(line), self.f.box_sm)
+                cy += s(28)
+        else:
+            cy = top + bh // 2 - (len(lines or []) - 1) * s(14)
+            for line in lines or []:
+                font = self.f.box_lg if len(lines) == 1 else self.f.box_md
+                if line.isascii():
+                    font = self.f.latin
+                self.draw_centered(cx, cy, line if line.isascii() else fa(line), font)
+                cy += s(30)
+
+        return top + bh
+
+    def build(self) -> Image.Image:
+        cx = W // 2
+        bw_main = s(560)
+
+        self.draw_title(cx, s(40))
+
+        y = s(80)
+        y = self.box(
+            cx, y, bw_main, s(72), "#E3F2FD", "#2196F3",
+            custom_lines=[
+                lambda c, cy: self.draw_centered(c, cy, fa("داده خام فناوری‌ها"), self.f.box_lg),
+                lambda c, cy: self.draw_data_subtitle(c, cy),
+            ],
+        )
+        self.arrow_down(cx, y + s(4), y + s(36))
+        y += s(44)
+
+        y = self.box(cx, y, bw_main, s(82), "#E8EAF6", "#3F51B5",
+                     lines=["Log1p + Z-Score"], algo=(1, "پیش‌پردازش"))
+        self.arrow_down(cx, y + s(4), y + s(36))
+        y += s(44)
+
+        y = self.box(cx, y, bw_main, s(82), "#E8EAF6", "#3F51B5",
+                     lines=["انتخاب خودکار k + Silhouette"], algo=(2, "K-Means"))
+        self.arrow_down(cx, y + s(4), y + s(36))
+        y += s(44)
+
+        self.diamond(cx, y + s(50), s(110), s(50), "#FFF3E0", "#FF9800")
+        self.draw_centered(cx, y + s(38), fa("انتخاب خوشه"), self.f.box_md)
+        self.draw_centered(cx, y + s(62), fa("توسط کاربر"), self.f.box_sm)
+        self.arrow_down(cx, y + s(104), y + s(136))
+        y += s(144)
+
+        y = self.box(cx, y, bw_main, s(76), "#F3E5F5", "#9C27B0",
+                     lines=["وزن پایه w"], algo=(3, "AHP"))
+        self.arrow_down(cx, y + s(4), y + s(36))
+        y += s(44)
+
+        y = self.box(cx, y, bw_main, s(60), "#FCE4EC", "#E91E63", lines=["پرسشنامه سناریو"])
+        self.arrow_down(cx, y + s(4), y + s(36))
+        y += s(44)
+
+        y = self.box(cx, y, bw_main, s(76), "#F3E5F5", "#9C27B0",
+                     lines=["وزن w-tilde"], algo=(4, "تعدیل نمایی"))
+        y_rank = y + s(50)
+        for i, (x, label) in enumerate([(s(170), "TOPSIS"), (s(450), "VIKOR"), (s(730), "COPRAS")]):
+            self.arrow_branch(cx, y + s(4), x, y_rank)
+            self.box(x, y_rank, s(200), s(72), "#E0F2F1", "#009688", lines=[label], algo=(i + 5, ""))
+
+        y_spear = y_rank + s(100)
+        for x in [s(170), s(450), s(730)]:
+            self.arrow_branch(x, y_rank + s(76), cx, y_spear)
+        y = self.box(
+            cx, y_spear, bw_main, s(96), "#FFF8E1", "#FFC107",
+            lines=["سه مقایسه زوجی:", "TOPSIS-VIKOR | TOPSIS-COPRAS | VIKOR-COPRAS"],
+            algo=(8, "Spearman"),
         )
 
-    cx = w // 2
-    bw = 420
-    bx = (w - bw) // 2
-    sbw, gap = 190, 25
-    sx1 = (w - 3 * sbw - 2 * gap) // 2
-    sx2 = sx1 + sbw + gap
-    sx3 = sx2 + sbw + gap
+        y_final = y + s(50)
+        self.arrow_down(cx, y + s(4), y_final)
+        self.rounded_rect(cx - s(150), y_final, cx + s(150), y_final + s(64), "#C8E6C9", "#4CAF50", radius=30)
+        self.draw_centered(cx, y_final + s(32), fa("توصیه نهایی"), self.f.final)
 
-    elements = [
-        box(bx, 40, bw, 58, "#E3F2FD", "#2196F3",
-            [fa("داده خام فناوری‌ها"), fa("(۱۳ فناوری × ۸ معیار)")], fs=16, bold=True),
-        arrow(cx, 98, cx, 118),
-        box(bx, 118, bw, 72, "#E8EAF6", "#3F51B5",
-            [("algo", 1, "پیش‌پردازش"), fa("Log1p + Z-Score")], fs=15, bold=True),
-        arrow(cx, 190, cx, 220),
-        box(bx, 220, bw, 72, "#E8EAF6", "#3F51B5",
-            [("algo", 2, "K-Means"), fa("انتخاب خودکار k + Silhouette")], fs=15, bold=True),
-        arrow(cx, 292, cx, 330),
-        diamond(cx, 370, 130, "#FFF3E0", "#FF9800", [fa("انتخاب خوشه"), fa("توسط کاربر")]),
-        arrow(cx, 435, cx, 465),
-        box(bx, 465, bw, 58, "#F3E5F5", "#9C27B0",
-            [("algo", 3, "AHP"), fa("وزن پایه w")], fs=15, bold=True),
-        arrow(cx, 523, cx, 553),
-        box(bx, 553, bw, 52, "#FCE4EC", "#E91E63", [fa("پرسشنامه سناریو")], fs=15, bold=True),
-        arrow(cx, 605, cx, 635),
-        box(bx, 635, bw, 58, "#F3E5F5", "#9C27B0",
-            [("algo", 4, "تعدیل نمایی"), fa("وزن w̃")], fs=15, bold=True),
-        arrow(cx, 693, cx, 730),
-        box(sx1, 740, sbw, 68, "#E0F2F1", "#009688", [("algo", 5), "TOPSIS"], fs=14, bold=True),
-        box(sx2, 740, sbw, 68, "#E0F2F1", "#009688", [("algo", 6), "VIKOR"], fs=14, bold=True),
-        box(sx3, 740, sbw, 68, "#E0F2F1", "#009688", [("algo", 7), "COPRAS"], fs=14, bold=True),
-        arrow(cx, 693, sx1 + sbw // 2, 730),
-        arrow(cx, 693, sx2 + sbw // 2, 730),
-        arrow(cx, 693, sx3 + sbw // 2, 730),
-        arrow(sx1 + sbw // 2, 808, cx, 840),
-        arrow(sx2 + sbw // 2, 808, cx, 840),
-        arrow(sx3 + sbw // 2, 808, cx, 840),
-        arrow(cx, 840, cx, 860),
-        box(bx, 860, bw, 78, "#FFF8E1", "#FFC107",
-            [("algo", 8, "Spearman"), fa("سه مقایسه زوجی:"),
-             "TOPSIS↔VIKOR | TOPSIS↔COPRAS | VIKOR↔COPRAS"], fs=13, bold=True),
-        arrow(cx, 938, cx, 978),
-        box(bx + 60, 978, bw - 120, 58, "#C8E6C9", "#4CAF50", [fa("توصیه نهایی")], fs=18, bold=True, radius=28),
-    ]
-
-    body = "\n".join(elements)
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <polygon points="0 0, 10 3, 0 6" fill="#455A64"/>
-    </marker>
-    <style>
-      @font-face {{
-        font-family: 'NotoNaskhArabic';
-        src: url(data:font/truetype;base64,{font_data}) format('truetype');
-        font-weight: normal;
-      }}
-      @font-face {{
-        font-family: 'NotoNaskhArabic';
-        src: url(data:font/truetype;base64,{font_bold_data}) format('truetype');
-        font-weight: bold;
-      }}
-      @font-face {{
-        font-family: 'BNazanin';
-        src: url(data:font/truetype;base64,{nazanin_data}) format('truetype');
-        font-weight: normal;
-      }}
-    </style>
-  </defs>
-  <rect width="100%" height="100%" fill="#FAFAFA"/>
-  <text x="{cx}" y="28" text-anchor="middle" font-family="NotoNaskhArabic" font-size="20"
-        font-weight="bold" fill="#263238">{fa("نمودار جریان کلی سیستم توصیه‌گر فناوری IoT")}</text>
-  {body}
-</svg>
-"""
+        return self.img
 
 
 def build_docx(png_path: Path, docx_path: Path) -> None:
@@ -419,7 +251,7 @@ def build_docx(png_path: Path, docx_path: Path) -> None:
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.add_run().add_picture(str(png_path), width=Inches(5.8))
+    p.add_run().add_picture(str(png_path), width=Inches(5.5))
 
     caption = doc.add_paragraph()
     caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -431,13 +263,17 @@ def build_docx(png_path: Path, docx_path: Path) -> None:
 
 
 def main() -> None:
-    svg_content = build_svg()
-    SVG_PATH.write_text(svg_content, encoding="utf-8")
-    build_matplotlib_png(PNG_PATH)
+    img = Canvas().build()
+    img.save(PNG_PATH, format="PNG", dpi=(300, 300))
     build_docx(PNG_PATH, DOCX_PATH)
-    print(f"SVG:  {SVG_PATH}")
-    print(f"PNG:  {PNG_PATH}")
+
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    img.save(ARTIFACT_PNG, format="PNG", dpi=(300, 300))
+    build_docx(ARTIFACT_PNG, ARTIFACT_DOCX)
+
+    print(f"PNG:  {PNG_PATH}  ({PNG_PATH.stat().st_size // 1024} KB, {img.size})")
     print(f"DOCX: {DOCX_PATH}")
+    print(f"Artifact PNG: {ARTIFACT_PNG}")
 
 
 if __name__ == "__main__":
