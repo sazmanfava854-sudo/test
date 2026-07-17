@@ -1,28 +1,40 @@
 #!/usr/bin/env python3
-"""Generate Word document for thesis section 4-5-2 VIKOR."""
+"""Generate Word document for thesis section 4-5-2 VIKOR with native OMML equations."""
 
-from io import BytesIO
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+import latex2mathml.converter as latex2mathml
+import mathml2omml
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
 OUTPUT = Path("/opt/cursor/artifacts/4-5-2_VIKOR_Ranking.docx")
-OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+FORMULAS = [
+    (
+        "رابطه (۴-۱)",
+        r"S_i=\sum_{j=1}^{n} w_j \frac{f_j^* - f_{ij}}{f_j^* - f_j^-}",
+    ),
+    (
+        "رابطه (۴-۲)",
+        r"R_i=\max_{j}\left\{w_j \frac{f_j^* - f_{ij}}{f_j^* - f_j^-}\right\}",
+    ),
+    (
+        "رابطه (۴-۳)",
+        r"Q_i = v\frac{S_i-S^*}{S^- - S^*} + (1-v)\frac{R_i-R^*}{R^- - R^*}",
+    ),
+]
 
 
-def render_formula(latex: str, fontsize: int = 17) -> BytesIO:
-    fig = plt.figure(figsize=(9, 1.0))
-    fig.patch.set_alpha(0.0)
-    fig.text(0.5, 0.5, f"${latex}$", fontsize=fontsize, ha="center", va="center")
-    buf = BytesIO()
-    fig.savefig(buf, format="png", dpi=220, bbox_inches="tight", transparent=True)
-    plt.close(fig)
-    buf.seek(0)
-    return buf
+def latex_to_omml_para(latex: str):
+    mathml = latex2mathml.convert(latex)
+    omml = mathml2omml.convert(mathml)
+    xml = f'<m:oMathPara xmlns:m="{M_NS}">{omml}</m:oMathPara>'
+    return parse_xml(xml)
 
 
 def set_rtl(paragraph):
@@ -50,20 +62,26 @@ def add_para(doc, text, bold=False, size=14, center=False):
     return p
 
 
-def add_formula(doc, latex: str, caption: str = ""):
+def add_equation(doc, caption: str, latex: str):
     if caption:
         add_para(doc, caption, bold=True, size=13, center=True)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.add_run().add_picture(render_formula(latex), width=Cm(14.5))
+    p._element.append(latex_to_omml_para(latex))
 
 
 def build():
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     doc = Document()
+    for section in doc.sections:
+        section.page_height = Cm(29.7)
+        section.page_width = Cm(21.0)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
 
     add_para(doc, "۴-۵-۲- رتبه‌بندی با VIKOR", bold=True, size=16, center=True)
 
-    body = [
+    texts = [
         (
             "روش VIKOR یکی از روش‌های تصمیم‌گیری چندمعیاره است که برای رتبه‌بندی گزینه‌ها "
             "در شرایط وجود معیارهای متعارض به‌کار می‌رود. منطق اصلی این روش بر شناسایی یک "
@@ -80,10 +98,10 @@ def build():
             "را نشان می‌دهد و از رابطه (۴-۱) به‌دست می‌آید:"
         ),
     ]
-    for t in body:
+    for t in texts:
         add_para(doc, t)
 
-    add_formula(doc, r"S_i=\sum_{j=1}^{n} w_j \frac{f_j^* - f_{ij}}{f_j^* - f_j^-}", "رابطه (۴-۱)")
+    add_equation(doc, FORMULAS[0][0], FORMULAS[0][1])
 
     add_para(
         doc,
@@ -100,11 +118,7 @@ def build():
         "دارد و از رابطه (۴-۲) محاسبه می‌شود:",
     )
 
-    add_formula(
-        doc,
-        r"R_i=\max_{j}\left\{w_j \frac{f_j^* - f_{ij}}{f_j^* - f_j^-}\right\}",
-        "رابطه (۴-۲)",
-    )
+    add_equation(doc, FORMULAS[1][0], FORMULAS[1][1])
 
     add_para(
         doc,
@@ -119,11 +133,7 @@ def build():
         "رتبه‌بندی نهایی بر اساس آن انجام گیرد (رابطه ۴-۳):",
     )
 
-    add_formula(
-        doc,
-        r"Q_i = v\frac{S_i-S^*}{S^- - S^*} + (1-v)\frac{R_i-R^*}{R^- - R^*}",
-        "رابطه (۴-۳)",
-    )
+    add_equation(doc, FORMULAS[2][0], FORMULAS[2][1])
 
     add_para(
         doc,
@@ -152,27 +162,20 @@ def build():
     )
 
     doc.add_page_break()
-    add_para(doc, "پیوست: نحوه درج صحیح فرمول در Microsoft Word", bold=True, size=15, center=True)
-
+    add_para(doc, "پیوست: نحوه ویرایش فرمول‌های Equation در Word", bold=True, size=15, center=True)
     guide = [
-        "۱. کلیدهای Alt + = را بزنید تا کادر معادله باز شود.",
-        "۲. در Word ۲۰۱۹/Microsoft 365: از تب Equation (معادله) گزینه Convert و سپس LaTeX را انتخاب کنید.",
-        "۳. کد LaTeX را Paste کنید و Enter بزنید.",
-        "۴. سپس Convert → Professional را بزنید تا فرمول نهایی ساخته شود.",
+        "فرمول‌های این سند به‌صورت Equation بومی Word (OMML) درج شده‌اند، نه تصویر.",
+        "برای ویرایش: روی فرمول دوبارکلیک کنید یا آن را انتخاب کرده و از تب Equation تغییر دهید.",
+        "برای درج فرمول جدید: Alt + = سپس LaTeX یا UnicodeMath.",
         "",
-        "——— اگر LaTeX فعال نیست، از فرمت UnicodeMath استفاده کنید ———",
-        "پس از Paste در کادر معادله، بین بخش‌ها Space بزنید تا Word فرمول را بسازد.",
+        "LaTeX فرمول S_i:",
+        "S_i=\\sum_{j=1}^{n} w_j \\frac{f_j^* - f_{ij}}{f_j^* - f_j^-}",
         "",
-        "S_i=\\sum_(j=1)^n w_j ((f_j^*-f_ij))/(f_j^*-f_j^-)",
+        "LaTeX فرمول R_i:",
+        "R_i=\\max_{j}\\left\\{w_j \\frac{f_j^* - f_{ij}}{f_j^* - f_j^-}\\right\\}",
         "",
-        "R_i=\\max_j(w_j ((f_j^*-f_ij))/(f_j^*-f_j^-))",
-        "",
-        "Q_i=v ((S_i-S^*))/(S^- -S^*)+(1-v) ((R_i-R^*))/(R^- -R^*)",
-        "",
-        "نکات:",
-        "• فرمول را فقط داخل کادر معادله Paste کنید، نه در متن عادی.",
-        "• اگر نمایش به‌هم‌ریخته شد، معادله را انتخاب کنید و Linear را به Professional تبدیل کنید.",
-        "• برای زیرنویس از _ و برای توان از ^ استفاده کنید.",
+        "LaTeX فرمول Q_i:",
+        "Q_i = v\\frac{S_i-S^*}{S^- - S^*} + (1-v)\\frac{R_i-R^*}{R^- - R^*}",
     ]
     for line in guide:
         if line.startswith("S_i") or line.startswith("R_i") or line.startswith("Q_i"):
@@ -180,7 +183,7 @@ def build():
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
             r = p.add_run(line)
             r.font.name = "Cambria Math"
-            r.font.size = Pt(12)
+            r.font.size = Pt(11)
         else:
             add_para(doc, line, size=12)
 
