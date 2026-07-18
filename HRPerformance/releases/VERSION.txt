@@ -1,12 +1,17 @@
-HR Performance System
-Version: 2.1.0-demo
-Build Date: 2026-07-16
-.NET: 8.0.401 compatible
+HR Performance System — DEMO PUBLISH
+Version: 2.2.0-demo
+Build Date: 2026-07-18
+.NET: 8.0.401
 
-Includes:
-- Single-project architecture
-- Demo mode (no SQL Server): start-demo.bat
-- MIS integration (office/SQL Server): start.bat
-- Port: http://localhost:5050
+=== اجرای دمو (بدون SQL Server) ===
+1. Extract ZIP
+2. دوبار کلیک: start-demo.bat
+3. مرورگر: http://localhost:5050
+4. ورود: admin / Admin@123
 
-Demo login: admin / Admin@123
+سایر کاربران:
+  manager / Manager@123
+  employee / Employee@123
+
+=== اجرای واقعی (با SQL Server) ===
+start.bat + اسکریپت‌های database/01 تا 10
