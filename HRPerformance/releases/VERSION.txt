@@ -1,17 +1,5 @@
-HR Performance System — LOCAL (FULL)
-Version: 2.4.2-local
-Build Date: 2026-07-18
+HR Performance — LOCAL
+Version: 2.4.3-local
+ZIP: HRPerformance-2.4.3-local.zip
 
-ZIP: HRPerformance-2.4.2-local.zip
-
-=== رفع مشکلات ===
-- API دیگر 302 نمی‌دهد (JWT به‌جای redirect کوکی)
-- حذف کش فرانت‌اند قدیمی (داده تستی علی محمدی و...)
-- پیام خطا در فهرست کارمندان
-
-=== اجرا ===
-1. Extract ZIP
-2. database/01 تا 10
-3. appsettings.Development.json
-4. start-local.bat
-5. Ctrl+F5 در مرورگر + ورود مجدد admin
+Fix: POST /api/auth/refresh دیگر 500 نمی‌دهد
