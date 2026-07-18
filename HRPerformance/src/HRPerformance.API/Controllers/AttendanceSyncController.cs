@@ -1,7 +1,7 @@
-using HRPerformance.Data;
-using HRPerformance.DTOs.HrIntegration;
-using HRPerformance.Interfaces;
-using HRPerformance.Services.ExternalHr;
+using HRPerformance.Domain.Interfaces;
+using HRPerformance.Domain.Models;
+using HRPerformance.Infrastructure.Data;
+using HRPerformance.Infrastructure.Services.ExternalHr;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

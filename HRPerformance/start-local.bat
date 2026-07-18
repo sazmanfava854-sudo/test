@@ -22,7 +22,14 @@ echo   Application: http://localhost:5050
 echo   Swagger:     http://localhost:5050/swagger
 echo   Health:      http://localhost:5050/api/health
 echo.
+echo معماری: 4 پروژه (Domain / Application / Infrastructure / API)
+echo اولین بار: dotnet restore HRPerformance.sln
+echo.
 echo برای توقف: Ctrl+C
+echo این پنجره را نبندید — تا وقتی باز است سرور روشن است.
+echo.
+echo اگر Network Error دیدید، اول این آدرس را در مرورگر باز کنید:
+echo   http://localhost:5050/api/health
 echo.
 
 dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http

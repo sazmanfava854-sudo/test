@@ -1,0 +1,22 @@
+{
+  "dotnet.defaultSolution": "HRPerformance.sln",
+  "dotnet.server.useOmnisharp": false,
+  "files.watcherExclude": {
+    "**/bin/**": true,
+    "**/obj/**": true,
+    "**/.nuget/**": true,
+    "**/node_modules/**": true,
+    "**/frontend/**/dist/**": true
+  },
+  "search.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/.nuget": true,
+    "**/node_modules": true,
+    "**/frontend/**/dist": true
+  },
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  }
+}

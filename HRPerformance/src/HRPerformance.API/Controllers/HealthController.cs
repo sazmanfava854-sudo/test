@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using HRPerformance.Data;
+using HRPerformance.Infrastructure.Data;
 
 namespace HRPerformance.API.Controllers;
 [ApiController] [Route("api/[controller]")]
