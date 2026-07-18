@@ -9,14 +9,29 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 
+var contentRoot = AppContext.BaseDirectory;
+Directory.CreateDirectory(Path.Combine(contentRoot, "logs"));
+Directory.CreateDirectory(Path.Combine(contentRoot, "uploads"));
+
 var builder = WebApplication.CreateBuilder(args);
 
-Log.Logger = new LoggerConfiguration()
+var loggerConfig = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.File("logs/hr-performance-.log", rollingInterval: RollingInterval.Day)
-    .CreateLogger();
+    .WriteTo.Console();
+
+try
+{
+    loggerConfig.WriteTo.File(
+        Path.Combine(contentRoot, "logs", "hr-performance-.log"),
+        rollingInterval: RollingInterval.Day);
+}
+catch
+{
+    // اگر IIS هنوز دسترسی logs ندارد، فقط Console
+}
+
+Log.Logger = loggerConfig.CreateLogger();
 builder.Host.UseSerilog();
 builder.Services.Configure<HostOptions>(options =>
     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
@@ -68,15 +83,27 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-if (string.Equals(builder.Configuration["Database:Provider"], "InMemory", StringComparison.OrdinalIgnoreCase))
+if (string.Equals(builder.Configuration["Database:Provider"], "InMemory", StringComparison.OrdinalIgnoreCase)
+    || app.Environment.EnvironmentName.Equals("Demo", StringComparison.OrdinalIgnoreCase))
 {
-    await DemoDataSeeder.SeedAsync(app.Services, app.Logger);
-    app.Logger.LogInformation("=== DEMO MODE (بدون SQL Server) ===");
-    app.Logger.LogInformation("Login: admin / {Password}", DemoDataSeeder.DefaultAdminPassword);
+    try
+    {
+        await DemoDataSeeder.SeedAsync(app.Services, app.Logger);
+        app.Logger.LogInformation("=== DEMO MODE (بدون SQL Server) ===");
+        app.Logger.LogInformation("Login: admin / {Password}", DemoDataSeeder.DefaultAdminPassword);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Demo seed failed");
+    }
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
-if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("Demo", StringComparison.OrdinalIgnoreCase))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseSerilogRequestLogging();
 app.UseIpRateLimiting();
 app.UseCors("AllowFrontend");

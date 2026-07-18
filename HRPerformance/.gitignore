@@ -3,6 +3,8 @@
 ## .NET
 bin/
 obj/
+publish/
+!releases/
 *.user
 *.suo
 logs/
