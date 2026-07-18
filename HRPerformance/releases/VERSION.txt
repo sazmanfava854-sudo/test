@@ -1,23 +1,18 @@
-HR Performance System
-Version: 2.4.0
+HR Performance System — LOCAL
+Version: 2.4.0-local
 Build Date: 2026-07-18
-.NET: 8.0 (framework-dependent, win-x64)
+نیاز: .NET 8 SDK + SQL Server
 
-ZIP: HRPerformance-v2.4.0.zip
-
-=== تغییرات این نسخه ===
-- حذف کامل داده‌های فرضی / Demo / InMemory
-- سینک کارمندان از MIS: PerCod, Name, LastName
-- سینک حضور از MIS: ShamsiDate, StartTime, EndTime, LeaveDurationMinutes
-- سال شمسی MIS: 1404
-- نمره‌دهی از HRPerformanceDB (EvaluationRules + EmployeeScores)
-- endpoint عیب‌یابی: GET /api/attendancesync/diagnostic
-
-=== نصب ===
-1. Extract HRPerformance-v2.4.0.zip
-2. database/01 تا 10 روی SQL Server
-3. app/appsettings.Production.json را تنظیم کنید
-4. run.bat
+ZIP: HRPerformance-2.4.0-local.zip
 
 === اجرا ===
-http://localhost:5050
+1. Extract ZIP
+2. database/01 تا 10
+3. src/HRPerformance.API/appsettings.Development.json
+4. start-local.bat
+5. http://localhost:5050
+
+=== تغییرات ===
+- نسخه لوکال (dotnet run) — بدون publish/IIS
+- بدون داده فرضی
+- سینک MIS سال 1404
