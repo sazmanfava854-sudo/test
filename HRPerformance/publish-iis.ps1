@@ -33,5 +33,5 @@ Write-Host "  $OutDir" -ForegroundColor White
 Write-Host ""
 Write-Host "Or download ready ZIP from GitHub Release: HRPerformance-IIS-Ready.zip" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Login (Demo mode): admin / Admin@123" -ForegroundColor Cyan
+Write-Host "Login: admin (from 08_SeedData.sql)" -ForegroundColor Cyan
 Write-Host ""

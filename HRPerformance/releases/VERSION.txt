@@ -1,17 +1,23 @@
-HR Performance System — DEMO PUBLISH
-Version: 2.2.0-demo
+HR Performance System
+Version: 2.4.0
 Build Date: 2026-07-18
-.NET: 8.0.401
+.NET: 8.0 (framework-dependent, win-x64)
 
-=== اجرای دمو (بدون SQL Server) ===
-1. Extract ZIP
-2. دوبار کلیک: start-demo.bat
-3. مرورگر: http://localhost:5050
-4. ورود: admin / Admin@123
+ZIP: HRPerformance-v2.4.0.zip
 
-سایر کاربران:
-  manager / Manager@123
-  employee / Employee@123
+=== تغییرات این نسخه ===
+- حذف کامل داده‌های فرضی / Demo / InMemory
+- سینک کارمندان از MIS: PerCod, Name, LastName
+- سینک حضور از MIS: ShamsiDate, StartTime, EndTime, LeaveDurationMinutes
+- سال شمسی MIS: 1404
+- نمره‌دهی از HRPerformanceDB (EvaluationRules + EmployeeScores)
+- endpoint عیب‌یابی: GET /api/attendancesync/diagnostic
 
-=== اجرای واقعی (با SQL Server) ===
-start.bat + اسکریپت‌های database/01 تا 10
+=== نصب ===
+1. Extract HRPerformance-v2.4.0.zip
+2. database/01 تا 10 روی SQL Server
+3. app/appsettings.Production.json را تنظیم کنید
+4. run.bat
+
+=== اجرا ===
+http://localhost:5050
