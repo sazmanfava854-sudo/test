@@ -16,6 +16,7 @@ public class AttendanceSyncController : ControllerBase
     private readonly IAttendanceSyncService _syncService;
     private readonly ICurrentUserService _currentUser;
     private readonly MisHrDataReader _misHrDataReader;
+    private readonly MisSyncStateService _syncStateService;
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _configuration;
 
@@ -23,18 +24,20 @@ public class AttendanceSyncController : ControllerBase
         IAttendanceSyncService syncService,
         ICurrentUserService currentUser,
         MisHrDataReader misHrDataReader,
+        MisSyncStateService syncStateService,
         ApplicationDbContext context,
         IConfiguration configuration)
     {
         _syncService = syncService;
         _currentUser = currentUser;
         _misHrDataReader = misHrDataReader;
+        _syncStateService = syncStateService;
         _context = context;
         _configuration = configuration;
     }
 
     /// <summary>
-    /// سینک دستی از MIS / HR خارجی
+    /// سینک دستی از MIS — در حالت Monthly فقط یک بازه (مثلاً یک ماه) را می‌گیرد
     /// </summary>
     [HttpPost("run")]
     public async Task<IActionResult> RunSync(CancellationToken ct)
@@ -43,24 +46,111 @@ public class AttendanceSyncController : ControllerBase
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
 
-        await _syncService.SyncAsync(orgId, ct);
-        return Ok(new { success = true, message = "سینک حضور و غیاب انجام شد" });
+        var result = await _syncService.SyncAsync(orgId, ct);
+        return Ok(new
+        {
+            success = true,
+            message = "سینک حضور و غیاب انجام شد",
+            result
+        });
+    }
+
+    /// <summary>
+    /// سینک یک ماه شمسی مشخص
+    /// </summary>
+    [HttpPost("run-month")]
+    public async Task<IActionResult> RunMonthSync([FromQuery] int shamsiYear, [FromQuery] int shamsiMonth, CancellationToken ct)
+    {
+        var orgId = _currentUser.OrganizationId ?? Guid.Empty;
+        if (orgId == Guid.Empty)
+            return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
+        if (shamsiMonth is < 1 or > 12)
+            return BadRequest(new { success = false, message = "ماه شمسی باید بین ۱ تا ۱۲ باشد" });
+
+        var result = await _syncService.SyncMonthAsync(orgId, shamsiYear, shamsiMonth, ct);
+        return Ok(new
+        {
+            success = true,
+            message = $"سینک ماه {shamsiYear}/{shamsiMonth:00} انجام شد",
+            result
+        });
+    }
+
+    /// <summary>
+    /// وضعیت پیشرفت سینک ماهانه
+    /// </summary>
+    [HttpGet("status")]
+    public async Task<IActionResult> Status(CancellationToken ct)
+    {
+        var orgId = _currentUser.OrganizationId ?? Guid.Empty;
+        if (orgId == Guid.Empty)
+            return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
+
+        var state = await _syncStateService.GetOrCreateStateAsync(orgId, ct);
+        var nextRanges = await _syncStateService.GetNextRangesAsync(orgId, ct);
+
+        return Ok(new
+        {
+            success = true,
+            organizationId = orgId,
+            syncMode = _syncStateService.SyncMode,
+            state = new
+            {
+                state.TargetShamsiYear,
+                state.NextShamsiMonth,
+                state.BackfillStartMonth,
+                state.IsBackfillComplete,
+                state.LastSyncedAt,
+                state.LastSyncDescription
+            },
+            nextRanges = nextRanges.Select(r => new
+            {
+                r.Description,
+                r.SyncFrom,
+                r.SyncToExclusive,
+                r.ShamsiYear,
+                r.ShamsiMonth,
+                r.IsBackfill
+            }),
+            employeesInDatabase = await _context.Employees.CountAsync(e => e.OrganizationId == orgId && !e.IsDeleted, ct)
+        });
     }
 
     /// <summary>
     /// بررسی اتصال MIS و تعداد رکوردها در هر مرحله فیلتر
     /// </summary>
     [HttpGet("diagnostic")]
-    public async Task<IActionResult> Diagnostic(CancellationToken ct)
+    public async Task<IActionResult> Diagnostic([FromQuery] int? shamsiYear, [FromQuery] int? shamsiMonth, CancellationToken ct)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
 
-        var syncDaysBack = _configuration.GetValue<int>("HrIntegration:SyncDaysBack", 30);
-        var syncFrom = DateTime.Today.AddDays(-syncDaysBack);
+        MisSyncRange range;
+        if (shamsiYear.HasValue && shamsiMonth.HasValue)
+        {
+            var (start, endExclusive) = ShamsiDateHelper.GetGregorianMonthRange(shamsiYear.Value, shamsiMonth.Value);
+            range = new MisSyncRange
+            {
+                SyncFrom = start,
+                SyncToExclusive = endExclusive,
+                ShamsiYear = shamsiYear,
+                ShamsiMonth = shamsiMonth,
+                Description = $"ماه {shamsiYear}/{shamsiMonth:00}"
+            };
+        }
+        else
+        {
+            var nextRanges = await _syncStateService.GetNextRangesAsync(orgId, ct);
+            range = nextRanges.FirstOrDefault() ?? new MisSyncRange
+            {
+                SyncFrom = DateTime.Today.AddDays(-30),
+                SyncToExclusive = DateTime.Today.AddDays(1),
+                Description = "۳۰ روز اخیر"
+            };
+        }
 
-        var diagnostic = await _misHrDataReader.GetDiagnosticAsync(syncFrom, ct);
+        var diagnostic = await _misHrDataReader.GetDiagnosticAsync(range, ct);
         diagnostic.EmployeesInHrDatabase = await _context.Employees
             .CountAsync(e => e.OrganizationId == orgId && !e.IsDeleted, ct);
 
@@ -86,7 +176,7 @@ public class AttendanceSyncController : ControllerBase
         if (d.TotalInView == 0)
             hints.Add("View خالی است یا کاربر MIS به آن دسترسی ندارد.");
         else if (d.CountAfterSyncFrom == 0)
-            hints.Add($"هیچ رکوردی بعد از {d.SyncFrom:yyyy-MM-dd} نیست. SyncDaysBack را افزایش دهید.");
+            hints.Add($"هیچ رکوردی در بازه {d.SyncFrom:yyyy-MM-dd} تا {d.SyncTo:yyyy-MM-dd} نیست. ماه یا بازه دیگری را امتحان کنید.");
         else if (d.ApplyProvinceFilter && d.CountAfterProvince == 0)
             hints.Add($"ProvinceCode={d.ProvinceCode} با داده‌های MIS مطابقت ندارد. مقدار صحیح را در HrIntegration:ProvinceCode تنظیم کنید یا ApplyProvinceFilter=false بگذارید.");
         else if (d.ApplyShamsiYearFilter && d.CountAfterShamsiYear == 0)
@@ -97,6 +187,9 @@ public class AttendanceSyncController : ControllerBase
             hints.Add("MIS داده دارد ولی کارمندی در HR ثبت نشده. POST /api/attendancesync/run را اجرا کنید.");
         else if (d.EmployeesInHrDatabase > 0)
             hints.Add($"سینک قبلاً {d.EmployeesInHrDatabase} کارمند ثبت کرده است.");
+
+        if (d.SyncMode.Equals("Monthly", StringComparison.OrdinalIgnoreCase))
+            hints.Add("در حالت Monthly هر اجرا فقط یک ماه را می‌گیرد. وضعیت: GET /api/attendancesync/status");
 
         return hints;
     }

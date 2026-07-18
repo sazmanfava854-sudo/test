@@ -33,6 +33,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<Ranking> Rankings => Set<Ranking>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<AttendanceIntegrationSetting> AttendanceIntegrationSettings => Set<AttendanceIntegrationSetting>();
+    public DbSet<HrMisSyncState> HrMisSyncStates => Set<HrMisSyncState>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -55,6 +56,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
             .HasFilter("[ExternalId] IS NOT NULL");
         builder.Entity<AttendanceLog>().HasIndex(a => new { a.EmployeeId, a.AttendanceDate });
         builder.Entity<RefreshToken>().HasIndex(r => r.Token);
+        builder.Entity<HrMisSyncState>().HasKey(s => s.OrganizationId);
 
         // Match SQL DECIMAL types from database/02_Tables.sql
         builder.Entity<AlertRule>().Property(e => e.Threshold).HasPrecision(10, 2);

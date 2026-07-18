@@ -1,7 +1,7 @@
-using HRPerformance.Entities;
-using HRPerformance.Enums;
+using HRPerformance.Services;
 namespace HRPerformance.Interfaces;
 public interface IAttendanceSyncService
 {
-    Task SyncAsync(Guid organizationId, CancellationToken ct = default);
+    Task<AttendanceSyncResult> SyncAsync(Guid organizationId, CancellationToken ct = default);
+    Task<AttendanceSyncResult> SyncMonthAsync(Guid organizationId, int shamsiYear, int shamsiMonth, CancellationToken ct = default);
 }

@@ -33,7 +33,13 @@ public class AttendanceSyncBackgroundService : BackgroundService
         }
 
         var intervalMinutes = _configuration.GetValue<int>("HrIntegration:SyncIntervalMinutes", 5);
-        await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+        var startupDelaySeconds = _configuration.GetValue<int>("HrIntegration:SyncStartupDelaySeconds", 15);
+        _logger.LogInformation(
+            "HR integration sync scheduled: first run after {Delay}s, then every {Interval} min (mode={Mode})",
+            startupDelaySeconds,
+            intervalMinutes,
+            _configuration["HrIntegration:SyncMode"] ?? "Monthly");
+        await Task.Delay(TimeSpan.FromSeconds(startupDelaySeconds), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {

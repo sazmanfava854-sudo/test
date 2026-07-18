@@ -30,6 +30,7 @@ dotnet user-secrets set "HrIntegration:Password" "رمز-واقعی-ITCMISUserRe
 -- بعد از 08_SeedData.sql
 09_Migration_AttendanceExternalId.sql
 10_HrMisIntegrationSeed.sql
+12_Migration_HrMisSyncState.sql
 ```
 
 ### ۳. View منبع داده
@@ -60,13 +61,41 @@ MIS View → MisHrDataReader
 
 ```
 POST /api/attendancesync/run
+GET  /api/attendancesync/status
+POST /api/attendancesync/run-month?shamsiYear=1404&shamsiMonth=1
 Authorization: Bearer {admin-token}
 ```
+
+### ۵.۱ سینک ماهانه (پیش‌فرض — سریع‌تر)
+
+برای جلوگیری از کندی کوئری MIS، حالت پیش‌فرض `SyncMode: Monthly` است:
+
+- سامانه **بلافاصله** بالا می‌آید
+- اولین سینک **۱۵ ثانیه** بعد از استارت (قابل تنظیم)
+- هر اجرا فقط **یک ماه** از MIS خوانده می‌شود
+- ماه‌های قبلی به‌تدریج در اجراهای بعدی (هر ۵ دقیقه) پر می‌شوند
+
+```json
+"HrIntegration": {
+  "SyncMode": "Monthly",
+  "InitialSyncMonthsBack": 12,
+  "MonthsPerSyncRun": 1,
+  "SyncStartupDelaySeconds": 15,
+  "ShamsiYearPrefix": "1404"
+}
+```
+
+حالت‌های دیگر:
+- `DaysBack` — مثل قبل با `SyncDaysBack` (پیش‌فرض ۳۰ روز)
+- `DateRange` — با `SyncFromDate` و `SyncToDate`
+
+بعد از نصب، اسکریپت `12_Migration_HrMisSyncState.sql` را اجرا کنید.
 
 ### ۶. عیب‌یابی (وقتی کارمندان ۰ است)
 
 ```
 GET /api/attendancesync/diagnostic
+GET /api/attendancesync/diagnostic?shamsiYear=1404&shamsiMonth=1
 Authorization: Bearer {admin-token}
 ```
 
@@ -85,9 +114,12 @@ Authorization: Bearer {admin-token}
   "ApplyShamsiYearFilter": true,
   "ProvinceCode": "147",
   "ShamsiYearPrefix": "1404",
-  "SyncDaysBack": 365
+  "SyncMode": "Monthly",
+  "InitialSyncMonthsBack": 12
 }
 ```
+
+برای سینک کل سال یکجا (کند): `"SyncMode": "DaysBack", "SyncDaysBack": 365`
 
 اگر MIS داده دارد ولی فیلترها ۰ برمی‌گردانند، موقتاً `ApplyShamsiYearFilter: false` بگذارید.
 

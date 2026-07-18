@@ -50,11 +50,19 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
         return $"Server={server};Database={database};User Id={userId};Password={password};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true";
     }
 
-    public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(DateTime syncFrom, CancellationToken ct = default)
+    public Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(DateTime syncFrom, CancellationToken ct = default)
+        => ReadHourlyLeavesAsync(new MisSyncRange
+        {
+            SyncFrom = syncFrom,
+            SyncToExclusive = DateTime.Today.AddDays(1),
+            Description = $"از {syncFrom:yyyy-MM-dd}"
+        }, ct);
+
+    public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(MisSyncRange range, CancellationToken ct = default)
     {
         var records = new List<MisHourlyLeaveRecord>();
         var customQuery = _configuration["HrIntegration:SqlQuery"];
-        var query = string.IsNullOrWhiteSpace(customQuery) ? BuildQuery() : customQuery;
+        var query = string.IsNullOrWhiteSpace(customQuery) ? BuildQuery(range) : customQuery;
         var filters = GetFilterSettings();
 
         try
@@ -62,13 +70,18 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
             await using var connection = new SqlConnection(GetConnectionString());
             await connection.OpenAsync(ct);
             await using var command = new SqlCommand(query, connection);
-            command.Parameters.AddWithValue("@SyncFrom", syncFrom);
-            AddFilterParameters(command, filters);
+            command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
+            command.Parameters.AddWithValue("@SyncTo", range.SyncToExclusive);
+            AddFilterParameters(command, filters, range);
             command.CommandTimeout = 120;
 
             _logger.LogInformation(
-                "MIS query filters: SyncFrom={SyncFrom}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern})",
-                syncFrom,
+                "MIS query filters: Range={Range}, SyncFrom={SyncFrom}, SyncTo={SyncTo}, ShamsiMonth={ShamsiYear}/{ShamsiMonth}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern})",
+                range.Description,
+                range.SyncFrom,
+                range.SyncToExclusive,
+                range.ShamsiYear,
+                range.ShamsiMonth,
                 filters.ApplyProvinceFilter,
                 filters.ProvinceCode,
                 filters.ApplyShamsiYearFilter,
@@ -115,12 +128,24 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
         return records;
     }
 
-    public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(DateTime syncFrom, CancellationToken ct = default)
+    public Task<MisHrDiagnosticResult> GetDiagnosticAsync(DateTime syncFrom, CancellationToken ct = default)
+        => GetDiagnosticAsync(new MisSyncRange
+        {
+            SyncFrom = syncFrom,
+            SyncToExclusive = DateTime.Today.AddDays(1),
+            Description = $"از {syncFrom:yyyy-MM-dd}"
+        }, ct);
+
+    public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(MisSyncRange range, CancellationToken ct = default)
     {
         var filters = GetFilterSettings();
         var result = new MisHrDiagnosticResult
         {
-            SyncFrom = syncFrom,
+            SyncFrom = range.SyncFrom,
+            SyncTo = range.SyncToExclusive,
+            ShamsiYear = range.ShamsiYear,
+            ShamsiMonth = range.ShamsiMonth,
+            SyncMode = _configuration["HrIntegration:SyncMode"] ?? "Monthly",
             ProvinceCode = filters.ProvinceCode,
             ShamsiYearPrefix = filters.ShamsiYearPrefix,
             ApplyProvinceFilter = filters.ApplyProvinceFilter,
@@ -136,35 +161,37 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
 
             result.TotalInView = await CountAsync(connection, "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]", ct);
             result.CountAfterSyncFrom = await CountAsync(connection,
-                "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom",
-                ct, ("@SyncFrom", syncFrom));
+                "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo",
+                ct, ("@SyncFrom", range.SyncFrom), ("@SyncTo", range.SyncToExclusive));
 
             if (filters.ApplyProvinceFilter)
             {
                 result.CountAfterProvince = await CountAsync(connection,
-                    "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode",
-                    ct, ("@SyncFrom", syncFrom), ("@ProvinceCode", filters.ProvinceCode));
+                    "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode",
+                    ct, ("@SyncFrom", range.SyncFrom), ("@SyncTo", range.SyncToExclusive), ("@ProvinceCode", filters.ProvinceCode));
             }
 
             if (filters.ApplyShamsiYearFilter)
             {
                 result.CountAfterShamsiYear = await CountAsync(connection, $@"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]
-WHERE [StartDate] >= @SyncFrom
+WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
   AND (
         CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
         OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
         OR CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix
       )",
                     ct,
-                    ("@SyncFrom", syncFrom),
+                    ("@SyncFrom", range.SyncFrom),
+                    ("@SyncTo", range.SyncToExclusive),
                     ("@ShamsiYearPattern", filters.ShamsiYearPattern),
                     ("@ShamsiYearPrefix", filters.ShamsiYearPrefix));
             }
 
-            var activeQuery = BuildQuery().Replace(SelectColumns, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
+            var activeQuery = BuildQuery(range).Replace(SelectColumns, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
             await using var command = new SqlCommand(activeQuery, connection);
-            command.Parameters.AddWithValue("@SyncFrom", syncFrom);
-            AddFilterParameters(command, filters);
+            command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
+            command.Parameters.AddWithValue("@SyncTo", range.SyncToExclusive);
+            AddFilterParameters(command, filters, range);
             command.CommandTimeout = 120;
 
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -184,10 +211,20 @@ WHERE [StartDate] >= @SyncFrom
         return result;
     }
 
-    private string BuildQuery()
+    private string BuildQuery(MisSyncRange? range = null)
     {
         var filters = GetFilterSettings();
-        var conditions = new List<string> { "[StartDate] >= @SyncFrom" };
+        var conditions = new List<string>
+        {
+            "[StartDate] >= @SyncFrom",
+            "[StartDate] < @SyncTo"
+        };
+
+        if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
+        {
+            conditions.Add("CAST([year] AS INT) = @ShamsiYear");
+            conditions.Add("CAST([Month] AS INT) = @ShamsiMonth");
+        }
 
         if (filters.ApplyProvinceFilter)
             conditions.Add("CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode");
@@ -218,8 +255,14 @@ WHERE [StartDate] >= @SyncFrom
         };
     }
 
-    private static void AddFilterParameters(SqlCommand command, MisFilterSettings filters)
+    private static void AddFilterParameters(SqlCommand command, MisFilterSettings filters, MisSyncRange? range = null)
     {
+        if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
+        {
+            command.Parameters.Add("@ShamsiYear", SqlDbType.Int).Value = shamsiYear;
+            command.Parameters.Add("@ShamsiMonth", SqlDbType.Int).Value = shamsiMonth;
+        }
+
         if (filters.ApplyProvinceFilter)
             command.Parameters.Add("@ProvinceCode", SqlDbType.NVarChar, 20).Value = filters.ProvinceCode;
 
