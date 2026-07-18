@@ -1,31 +1,37 @@
 # Publish HR Performance for IIS
-# Run in PowerShell as Administrator (recommended)
-
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Project = Join-Path $Root "src\HRPerformance.API\HRPerformance.API.csproj"
 $OutDir = Join-Path $Root "publish\iis"
 
-Write-Host "Publishing to: $OutDir" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  HR Performance - IIS Publish" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Output folder:" -ForegroundColor Yellow
+Write-Host "  $OutDir" -ForegroundColor White
+Write-Host ""
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Host "dotnet SDK not found. Install .NET 8 SDK first." -ForegroundColor Red
+    Write-Host "[ERROR] dotnet SDK not found." -ForegroundColor Red
+    Write-Host "Install .NET 8 SDK: https://dotnet.microsoft.com/download/dotnet/8.0" -ForegroundColor Yellow
     exit 1
 }
 
-dotnet publish $Project -c Release -o $OutDir --self-contained false
+dotnet publish $Project -c Release -r win-x64 --self-contained false -o $OutDir
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# folders needed at runtime
 New-Item -ItemType Directory -Force -Path (Join-Path $OutDir "logs") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $OutDir "uploads") | Out-Null
 
 Write-Host ""
-Write-Host "Publish completed." -ForegroundColor Green
-Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Edit appsettings.Production.json in publish folder (SQL + JWT + MIS password)"
-Write-Host "  2. IIS: Application Pool -> No Managed Code, Integrated pipeline"
-Write-Host "  3. IIS: Site physical path -> $OutDir"
-Write-Host "  4. App Pool identity needs read/write on logs and uploads"
-Write-Host "  5. Install ASP.NET Core 8 Hosting Bundle if not installed"
+Write-Host "[OK] Publish completed!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Demo on IIS: set environment variable ASPNETCORE_ENVIRONMENT=Demo on the site"
+Write-Host "IIS Physical Path = this folder:" -ForegroundColor Yellow
+Write-Host "  $OutDir" -ForegroundColor White
+Write-Host ""
+Write-Host "Or download ready ZIP from GitHub Release: HRPerformance-IIS-Ready.zip" -ForegroundColor Gray
+Write-Host ""
+Write-Host "Login (Demo mode): admin / Admin@123" -ForegroundColor Cyan
+Write-Host ""
