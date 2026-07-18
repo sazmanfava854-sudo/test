@@ -19,6 +19,8 @@ public class EmployeeService
 
     public async Task<ApiResponse<PagedResult<EmployeeDto>>> GetAllAsync(EmployeeSearchRequest request, Guid organizationId, CancellationToken ct = default)
     {
+        if (organizationId == Guid.Empty)
+            return ApiResponse<PagedResult<EmployeeDto>>.Fail("شناسه سازمان در توکن یافت نشد. یک بار خارج و دوباره وارد شوید.");
         var query = _uow.Repository<Employee>().Query()
             .Include(e => e.OrganizationUnit).Include(e => e.Manager)
             .Where(e => e.OrganizationId == organizationId && !e.IsDeleted);
