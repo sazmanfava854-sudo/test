@@ -132,6 +132,45 @@ POST http://SERVER/api/attendancesync/run
 
 ---
 
+## خطای «Cannot read configuration file due to insufficient permissions»
+
+### علت
+IIS (App Pool) اجازه **خواندن `web.config`** یا پوشه سایت را ندارد.
+اغلب وقتی سایت در **Downloads** یا پوشه کاربر است رخ می‌دهد.
+
+### راه‌حل سریع
+
+**۱. سایت را به مسیر استاندارد منتقل کنید:**
+
+```
+C:\inetpub\HRPerformance
+```
+
+ZIP را Extract کنید **مستقیم** در `C:\inetpub\HRPerformance` (نه Downloads).
+
+**۲. PowerShell as Administrator:**
+
+```powershell
+cd C:\inetpub\HRPerformance
+.\iis-fix-permissions.ps1
+iisreset
+```
+
+**۳. در IIS Manager:**
+- Site → Physical Path = `C:\inetpub\HRPerformance`
+- Application Pool → Advanced → Identity = `ApplicationPoolIdentity`
+
+**۴. دستی (اگر اسکریپت نبود):**
+
+```cmd
+icacls C:\inetpub\HRPerformance /grant "IIS AppPool\HRPerformance:(OI)(CI)RX" /T
+icacls C:\inetpub\HRPerformance /grant "IIS_IUSRS:(OI)(CI)RX" /T
+icacls C:\inetpub\HRPerformance\web.config /grant "IIS_IUSRS:R"
+iisreset
+```
+
+---
+
 ## خطاهای رایج
 
 | خطا | راه‌حل |
