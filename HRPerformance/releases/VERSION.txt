@@ -1,9 +1,18 @@
-HR Performance System — LOCAL
-Version: 2.4.0-local
+HR Performance System — LOCAL (FULL)
+Version: 2.4.1-local
 Build Date: 2026-07-18
 نیاز: .NET 8 SDK + SQL Server
 
-ZIP: HRPerformance-2.4.0-local.zip
+ZIP: HRPerformance-2.4.1-local.zip
+
+شامل:
+- HRPerformance.sln
+- src/HRPerformance.API (سورس + wwwroot)
+- database/ (01-10)
+- docs/ (MIS + IIS)
+- frontend/hr-performance-web (سورس React)
+- start-local.bat / start.sh
+- pack-local.sh
 
 === اجرا ===
 1. Extract ZIP
@@ -11,8 +20,3 @@ ZIP: HRPerformance-2.4.0-local.zip
 3. src/HRPerformance.API/appsettings.Development.json
 4. start-local.bat
 5. http://localhost:5050
-
-=== تغییرات ===
-- نسخه لوکال (dotnet run) — بدون publish/IIS
-- بدون داده فرضی
-- سینک MIS سال 1404
