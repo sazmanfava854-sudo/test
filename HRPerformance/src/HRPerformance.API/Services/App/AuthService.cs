@@ -11,12 +11,18 @@ public class AuthService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITokenService _tokenService;
     private readonly IAuditService _auditService;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(UserManager<ApplicationUser> userManager, ITokenService tokenService, IAuditService auditService)
+    public AuthService(
+        UserManager<ApplicationUser> userManager,
+        ITokenService tokenService,
+        IAuditService auditService,
+        ILogger<AuthService> logger)
     {
         _userManager = userManager;
         _tokenService = tokenService;
         _auditService = auditService;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<LoginResponse>> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -25,8 +31,19 @@ public class AuthService
         if (user == null || !user.IsActive)
             return ApiResponse<LoginResponse>.Fail("نام کاربری یا رمز عبور اشتباه است");
 
-        if (!await _userManager.CheckPasswordAsync(user, request.Password))
-            return ApiResponse<LoginResponse>.Fail("نام کاربری یا رمز عبور اشتباه است");
+        try
+        {
+            if (!await _userManager.CheckPasswordAsync(user, request.Password))
+                return ApiResponse<LoginResponse>.Fail("نام کاربری یا رمز عبور اشتباه است");
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogError(ex,
+                "Invalid password hash for user {UserName}. Run database/11_RepairAuthentication.sql",
+                request.UserName);
+            return ApiResponse<LoginResponse>.Fail(
+                "رمز ذخیره‌شده نامعتبر است. اسکریپت database/11_RepairAuthentication.sql را اجرا کنید.");
+        }
 
         var (access, refresh, expires) = await _tokenService.GenerateTokensAsync(user, ct);
         user.LastLoginAt = DateTime.UtcNow;

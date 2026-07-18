@@ -27,7 +27,8 @@ INSERT INTO [dbo].[Permissions]([Id],[Name],[Code],[Module]) VALUES
 INSERT INTO [dbo].[Users]([Id],[UserName],[NormalizedUserName],[Email],[NormalizedEmail],[EmailConfirmed],
 [PasswordHash],[SecurityStamp],[ConcurrencyStamp],[FirstName],[LastName],[OrganizationId],[IsActive])
 VALUES(@UserId,'admin','ADMIN','admin@hr.local','ADMIN@HR.LOCAL',1,
-'AQAAAAIAAYagAAAAEPlaceholderHashReplaceOnFirstLogin','SEC','CONC',N'مدیر',N'سیستم',@OrgId,1);
+'AQAAAAIAAYagAAAAEE6v9aYxxq5Mwu8wmjbwKyVue/lYmYNZ2Dte3bzJG6nNReQWP/s55XxgmbiSsqTvKw==',
+NEWID(),NEWID(),N'مدیر',N'سیستم',@OrgId,1);
 
 INSERT INTO [dbo].[UserRoles]([UserId],[RoleId]) VALUES(@UserId,@RoleSuperAdmin);
 

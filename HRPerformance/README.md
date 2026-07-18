@@ -6,7 +6,7 @@
 
 ```
 HRPerformance/
-├── database/              # SQL Server scripts (01-10)
+├── database/              # SQL Server scripts (01-11)
 ├── src/HRPerformance.API/ # همه چیز در یک پروژه
 │   ├── Controllers/       # API endpoints
 │   ├── Services/          # منطق کسب‌وکار + MIS sync
