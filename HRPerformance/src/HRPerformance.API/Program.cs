@@ -83,23 +83,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-if (string.Equals(builder.Configuration["Database:Provider"], "InMemory", StringComparison.OrdinalIgnoreCase)
-    || app.Environment.EnvironmentName.Equals("Demo", StringComparison.OrdinalIgnoreCase))
-{
-    try
-    {
-        await DemoDataSeeder.SeedAsync(app.Services, app.Logger);
-        app.Logger.LogInformation("=== DEMO MODE (بدون SQL Server) ===");
-        app.Logger.LogInformation("Login: admin / {Password}", DemoDataSeeder.DefaultAdminPassword);
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogError(ex, "Demo seed failed");
-    }
-}
-
 app.UseMiddleware<ExceptionMiddleware>();
-if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("Demo", StringComparison.OrdinalIgnoreCase))
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();

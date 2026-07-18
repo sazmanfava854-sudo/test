@@ -10,6 +10,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import LinearProgress from '@mui/material/LinearProgress';
+import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 import {
   Chart as ChartJS,
@@ -31,32 +32,22 @@ import type { AdminDashboardDto } from '../../types';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const fallbackData: AdminDashboardDto = {
-  totalEmployees: 250,
-  totalManagers: 18,
-  totalDepartments: 12,
-  todayPresent: 220,
-  todayAbsent: 15,
-  averageScore: 81.5,
-  departmentRankings: [
-    { id: '1', name: 'فناوری اطلاعات', averageScore: 88, employeeCount: 45 },
-    { id: '2', name: 'مالی', averageScore: 85, employeeCount: 30 },
-    { id: '3', name: 'فروش', averageScore: 82, employeeCount: 55 },
-    { id: '4', name: 'منابع انسانی', averageScore: 80, employeeCount: 15 },
-    { id: '5', name: 'پشتیبانی', averageScore: 75, employeeCount: 40 },
-  ],
-  performanceDistribution: [
-    { label: 'عالی (۹۰+)', value: 45 },
-    { label: 'خوب (۷۵-۹۰)', value: 120 },
-    { label: 'متوسط (۶۰-۷۵)', value: 65 },
-    { label: 'ضعیف (زیر ۶۰)', value: 20 },
-  ],
+const emptyData: AdminDashboardDto = {
+  totalEmployees: 0,
+  totalManagers: 0,
+  totalDepartments: 0,
+  todayPresent: 0,
+  todayAbsent: 0,
+  averageScore: 0,
+  departmentRankings: [],
+  performanceDistribution: [],
 };
 
 export default function AdminDashboard() {
   const theme = useTheme();
-  const [data, setData] = useState<AdminDashboardDto | null>(null);
+  const [data, setData] = useState<AdminDashboardDto>(emptyData);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -65,10 +56,10 @@ export default function AdminDashboard() {
         if (response.success && response.data) {
           setData(response.data);
         } else {
-          setData(fallbackData);
+          setError(response.message ?? 'خطا در دریافت داده‌های داشبورد');
         }
       } catch {
-        setData(fallbackData);
+        setError('خطا در اتصال به سرور');
       } finally {
         setLoading(false);
       }
@@ -77,10 +68,10 @@ export default function AdminDashboard() {
   }, []);
 
   const distData = {
-    labels: data?.performanceDistribution.map((d) => d.label) ?? [],
+    labels: data.performanceDistribution.map((d) => d.label),
     datasets: [
       {
-        data: data?.performanceDistribution.map((d) => d.value) ?? [],
+        data: data.performanceDistribution.map((d) => d.value),
         backgroundColor: [
           theme.palette.success.main,
           theme.palette.primary.main,
@@ -94,28 +85,33 @@ export default function AdminDashboard() {
   return (
     <Box>
       <LoadingOverlay open={loading} />
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
         نمای کلی سازمان
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        آمار و رتبه‌بندی واحدهای سازمانی
+        آمار و رتبه‌بندی واحدهای سازمانی (از دیتابیس)
       </Typography>
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard title="کل کارمندان" value={data?.totalEmployees ?? 0} icon={<PeopleIcon />} />
+          <StatCard title="کل کارمندان" value={data.totalEmployees} icon={<PeopleIcon />} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard title="مدیران" value={data?.totalManagers ?? 0} icon={<SupervisorAccountIcon />} color={theme.palette.secondary.main} />
+          <StatCard title="مدیران" value={data.totalManagers} icon={<SupervisorAccountIcon />} color={theme.palette.secondary.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard title="واحدها" value={data?.totalDepartments ?? 0} icon={<BusinessIcon />} color={theme.palette.info.main} />
+          <StatCard title="واحدها" value={data.totalDepartments} icon={<BusinessIcon />} color={theme.palette.info.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard title="حاضر امروز" value={data?.todayPresent ?? 0} icon={<CheckCircleIcon />} color={theme.palette.success.main} />
+          <StatCard title="حاضر امروز" value={data.todayPresent} icon={<CheckCircleIcon />} color={theme.palette.success.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }}>
-          <StatCard title="میانگین امتیاز" value={data?.averageScore?.toFixed(1) ?? '—'} icon={<StarIcon />} color={theme.palette.warning.main} />
+          <StatCard title="میانگین امتیاز" value={data.averageScore?.toFixed(1) ?? '—'} icon={<StarIcon />} color={theme.palette.warning.main} />
         </Grid>
       </Grid>
 
@@ -144,7 +140,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {data?.departmentRankings.map((dept) => (
+                  {data.departmentRankings.map((dept) => (
                     <TableRow key={dept.id}>
                       <TableCell>{dept.name}</TableCell>
                       <TableCell align="center">{dept.employeeCount}</TableCell>

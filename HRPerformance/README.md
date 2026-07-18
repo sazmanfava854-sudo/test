@@ -35,33 +35,6 @@ HRPerformance/
 
 > **نیاز به Node.js/npm ندارید.** فرانت‌اند از قبل بیلد شده و داخل API سرو می‌شود.
 
-### حالت دمو — بدون SQL Server (خانه / تست UI)
-
-اگر به دیتابیس دسترسی ندارید:
-
-```cmd
-cd HRPerformance
-start-demo.bat
-```
-
-یا:
-
-```cmd
-dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile demo
-```
-
-سپس مرورگر: **http://localhost:5050**
-
-| کاربر | رمز |
-|-------|-----|
-| `admin` | `Admin@123` |
-| `manager` | `Manager@123` |
-| `employee` | `Employee@123` |
-
-داده‌ها در حافظه (InMemory) هستند — با بستن برنامه پاک می‌شوند.
-
----
-
 ### Windows (با SQL Server — محیط واقعی)
 
 **روش پیشنهادی** (بدون محدودیت PowerShell):

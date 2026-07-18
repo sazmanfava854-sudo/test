@@ -43,7 +43,8 @@ public class DashboardService
         var weak = emps.OrderBy(e => e.CurrentScore).Take(5)
             .Select(e => new TopEmployeeDto(e.Id, e.FullName, e.OrganizationUnit?.Name, e.CurrentScore, e.Ranking)).ToList();
         var avg = emps.Any() ? emps.Average(e => e.CurrentScore) : 0;
-        return ApiResponse<ManagerDashboardDto>.Ok(new ManagerDashboardDto(emps.Count, att.Count(a => !a.IsAbsent), att.Count(a => a.DelayMinutes > 0), att.Count(a => a.IsAbsent), avg, top, weak, new List<ChartDataDto>()));
+        var monthlyTrend = await BuildMonthlyTrendAsync(organizationId, empIds, ct);
+        return ApiResponse<ManagerDashboardDto>.Ok(new ManagerDashboardDto(emps.Count, att.Count(a => !a.IsAbsent), att.Count(a => a.DelayMinutes > 0), att.Count(a => a.IsAbsent), avg, top, weak, monthlyTrend));
     }
 
     public async Task<ApiResponse<AdminDashboardDto>> GetAdminDashboardAsync(Guid organizationId, CancellationToken ct = default)
@@ -61,6 +62,38 @@ public class DashboardService
             .Select(u => new DepartmentRankDto(u.Id, u.Name,
                 emps.Where(e => e.OrganizationUnitId == u.Id).Average(e => (decimal?)e.CurrentScore) ?? 0,
                 emps.Count(e => e.OrganizationUnitId == u.Id))).ToListAsync(ct);
-        return ApiResponse<AdminDashboardDto>.Ok(new AdminDashboardDto(emps.Count, mgrCount, depts, att.Count(a => !a.IsAbsent), att.Count(a => a.IsAbsent), emps.Any() ? emps.Average(e => e.CurrentScore) : 0, deptRanks, new List<ChartDataDto>()));
+        var performanceDistribution = BuildPerformanceDistribution(emps);
+        return ApiResponse<AdminDashboardDto>.Ok(new AdminDashboardDto(emps.Count, mgrCount, depts, att.Count(a => !a.IsAbsent), att.Count(a => a.IsAbsent), emps.Any() ? emps.Average(e => e.CurrentScore) : 0, deptRanks, performanceDistribution));
+    }
+
+    private async Task<IList<ChartDataDto>> BuildMonthlyTrendAsync(Guid organizationId, IReadOnlyCollection<Guid> employeeIds, CancellationToken ct)
+    {
+        if (employeeIds.Count == 0) return [];
+
+        var scores = await _uow.Repository<EmployeeScore>().Query()
+            .Where(s => s.OrganizationId == organizationId && employeeIds.Contains(s.EmployeeId))
+            .OrderByDescending(s => s.ScoreDate)
+            .Take(500)
+            .ToListAsync(ct);
+
+        return scores
+            .GroupBy(s => new { s.Year, s.Month })
+            .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
+            .TakeLast(6)
+            .Select(g => new ChartDataDto($"{g.Key.Year}/{g.Key.Month}", g.Sum(x => x.Score)))
+            .ToList();
+    }
+
+    private static IList<ChartDataDto> BuildPerformanceDistribution(IReadOnlyCollection<Employee> employees)
+    {
+        if (employees.Count == 0) return [];
+
+        return
+        [
+            new ChartDataDto("عالی (۹۰+)", employees.Count(e => e.CurrentScore >= 90)),
+            new ChartDataDto("خوب (۷۵-۹۰)", employees.Count(e => e.CurrentScore >= 75 && e.CurrentScore < 90)),
+            new ChartDataDto("متوسط (۶۰-۷۵)", employees.Count(e => e.CurrentScore >= 60 && e.CurrentScore < 75)),
+            new ChartDataDto("ضعیف (زیر ۶۰)", employees.Count(e => e.CurrentScore < 60))
+        ];
     }
 }

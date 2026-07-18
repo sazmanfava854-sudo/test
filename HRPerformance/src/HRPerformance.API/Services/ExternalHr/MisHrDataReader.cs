@@ -207,7 +207,7 @@ WHERE [StartDate] >= @SyncFrom
     private MisFilterSettings GetFilterSettings()
     {
         var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
-        var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1405";
+        var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1404";
         return new MisFilterSettings
         {
             ProvinceCode = provinceCode,
@@ -251,8 +251,8 @@ WHERE [StartDate] >= @SyncFrom
     private sealed class MisFilterSettings
     {
         public string ProvinceCode { get; init; } = "147";
-        public string ShamsiYearPrefix { get; init; } = "1405";
-        public string ShamsiYearPattern { get; init; } = "1405%";
+        public string ShamsiYearPrefix { get; init; } = "1404";
+        public string ShamsiYearPattern { get; init; } = "1404%";
         public bool ApplyProvinceFilter { get; init; } = true;
         public bool ApplyShamsiYearFilter { get; init; } = true;
     }

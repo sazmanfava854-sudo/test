@@ -84,7 +84,7 @@ Authorization: Bearer {admin-token}
   "ApplyProvinceFilter": true,
   "ApplyShamsiYearFilter": true,
   "ProvinceCode": "147",
-  "ShamsiYearPrefix": "1405",
+  "ShamsiYearPrefix": "1404",
   "SyncDaysBack": 365
 }
 ```
