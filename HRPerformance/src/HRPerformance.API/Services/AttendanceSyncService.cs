@@ -96,8 +96,19 @@ public class AttendanceSyncService : IAttendanceSyncService
         _logger.LogInformation("MIS SQL sync from {SyncFrom} for organization {OrgId}", syncFrom, organizationId);
 
         var records = await _misHrDataReader.ReadHourlyLeavesAsync(syncFrom, ct);
+        if (records.Count == 0)
+        {
+            _logger.LogWarning(
+                "MIS returned 0 records for organization {OrgId}. Check ProvinceCode, ShamsiYearPrefix, SyncDaysBack, or run test query in SSMS.",
+                organizationId);
+        }
+
         foreach (var record in records)
             await ProcessMisHourlyLeaveAsync(organizationId, record, log, ct);
+
+        _logger.LogInformation(
+            "MIS sync finished for {OrgId}: processed={Processed}, failed={Failed}",
+            organizationId, log.RecordsProcessed, log.RecordsFailed);
     }
 
     private async Task ProcessMisHourlyLeaveAsync(Guid organizationId, MisHourlyLeaveRecord record, AttendanceSyncLog log, CancellationToken ct)

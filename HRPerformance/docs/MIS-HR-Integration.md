@@ -63,4 +63,32 @@ POST /api/attendancesync/run
 Authorization: Bearer {admin-token}
 ```
 
+### ۶. عیب‌یابی (وقتی کارمندان ۰ است)
+
+```
+GET /api/attendancesync/diagnostic
+Authorization: Bearer {admin-token}
+```
+
+خروجی تعداد رکوردها را در هر مرحله فیلتر نشان می‌دهد:
+- کل View
+- بعد از `SyncDaysBack`
+- بعد از `ProvinceCode`
+- بعد از سال شمسی
+- تعداد کارمندان ثبت‌شده در HR
+
+تنظیمات قابل تغییر در `appsettings.json`:
+
+```json
+"HrIntegration": {
+  "ApplyProvinceFilter": true,
+  "ApplyShamsiYearFilter": true,
+  "ProvinceCode": "147",
+  "ShamsiYearPrefix": "1405",
+  "SyncDaysBack": 365
+}
+```
+
+اگر MIS داده دارد ولی فیلترها ۰ برمی‌گردانند، موقتاً `ApplyShamsiYearFilter: false` بگذارید.
+
 سینک خودکار هر ۵ دقیقه توسط Background Service.

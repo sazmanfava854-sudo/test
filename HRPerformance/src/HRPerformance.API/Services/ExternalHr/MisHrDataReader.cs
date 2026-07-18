@@ -10,7 +10,7 @@ public class MisHrDataReader
     private readonly IConfiguration _configuration;
     private readonly ILogger<MisHrDataReader> _logger;
 
-    private const string DefaultQuery = @"SELECT
+    private const string SelectColumns = @"SELECT
     CAST(ID AS NUMERIC(20,0)) AS ID,
     CAST([Code] AS NVARCHAR(50)) AS [Code],
     [PerCod],
@@ -27,14 +27,7 @@ public class MisHrDataReader
     CAST(CAST([year] AS NVARCHAR(4)) AS INT) AS [year],
     CAST([Month] AS INT) AS [Month],
     [FirstTimeType]
-FROM [MIS].[dbo].[HZG_View_HourlyLeave]
-WHERE [StartDate] >= @SyncFrom
-  AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode
-  AND (
-        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
-        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
-      )
-ORDER BY [StartDate] DESC";
+FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
 
     public MisHrDataReader(IConfiguration configuration, ILogger<MisHrDataReader> logger)
     {
@@ -60,7 +53,9 @@ ORDER BY [StartDate] DESC";
     public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(DateTime syncFrom, CancellationToken ct = default)
     {
         var records = new List<MisHourlyLeaveRecord>();
-        var query = _configuration["HrIntegration:SqlQuery"] ?? DefaultQuery;
+        var customQuery = _configuration["HrIntegration:SqlQuery"];
+        var query = string.IsNullOrWhiteSpace(customQuery) ? BuildQuery() : customQuery;
+        var filters = GetFilterSettings();
 
         try
         {
@@ -68,34 +63,36 @@ ORDER BY [StartDate] DESC";
             await connection.OpenAsync(ct);
             await using var command = new SqlCommand(query, connection);
             command.Parameters.AddWithValue("@SyncFrom", syncFrom);
-
-            var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
-            var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1405";
-            var shamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%";
-
-            command.Parameters.Add("@ProvinceCode", SqlDbType.NVarChar, 20).Value = provinceCode;
-            command.Parameters.Add("@ShamsiYearPattern", SqlDbType.NVarChar, 20).Value = shamsiYearPattern;
+            AddFilterParameters(command, filters);
             command.CommandTimeout = 120;
 
             _logger.LogInformation(
-                "MIS query filters: ProvinceCode={ProvinceCode}, ShamsiDate LIKE {ShamsiPattern}, SyncFrom={SyncFrom}",
-                provinceCode, shamsiYearPattern, syncFrom);
+                "MIS query filters: SyncFrom={SyncFrom}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern})",
+                syncFrom,
+                filters.ApplyProvinceFilter,
+                filters.ProvinceCode,
+                filters.ApplyShamsiYearFilter,
+                filters.ShamsiYearPattern);
 
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
+                var perCod = ReadString(reader, "PerCod");
+                if (string.IsNullOrWhiteSpace(perCod))
+                    continue;
+
                 records.Add(new MisHourlyLeaveRecord
                 {
                     Id = reader.GetDecimal(reader.GetOrdinal("ID")),
-                    Code = reader.IsDBNull(reader.GetOrdinal("Code")) ? null : reader.GetString(reader.GetOrdinal("Code")),
-                    PerCod = reader.GetString(reader.GetOrdinal("PerCod")).Trim(),
-                    LastName = reader.IsDBNull(reader.GetOrdinal("LastName")) ? null : reader.GetString(reader.GetOrdinal("LastName")).Trim(),
-                    Name = reader.IsDBNull(reader.GetOrdinal("Name")) ? null : reader.GetString(reader.GetOrdinal("Name")).Trim(),
-                    NationalIDNo = reader.IsDBNull(reader.GetOrdinal("NationalIDNo")) ? null : reader.GetString(reader.GetOrdinal("NationalIDNo")).Trim(),
-                    ProvinceCode = reader.IsDBNull(reader.GetOrdinal("ProvinceCode")) ? null : Convert.ToString(reader.GetValue(reader.GetOrdinal("ProvinceCode")))?.Trim(),
+                    Code = ReadString(reader, "Code"),
+                    PerCod = perCod,
+                    LastName = ReadString(reader, "LastName"),
+                    Name = ReadString(reader, "Name"),
+                    NationalIDNo = ReadString(reader, "NationalIDNo"),
+                    ProvinceCode = ReadString(reader, "ProvinceCode"),
                     ShamsiDate = reader.IsDBNull(reader.GetOrdinal("ShamsiDate")) ? null : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("ShamsiDate"))),
-                    StartTime = reader.IsDBNull(reader.GetOrdinal("StartTime")) ? null : reader.GetString(reader.GetOrdinal("StartTime")).Trim(),
-                    EndTime = reader.IsDBNull(reader.GetOrdinal("EndTime")) ? null : reader.GetString(reader.GetOrdinal("EndTime")).Trim(),
+                    StartTime = ReadString(reader, "StartTime"),
+                    EndTime = ReadString(reader, "EndTime"),
                     LeaveDurationMinutes = reader.IsDBNull(reader.GetOrdinal("LeaveDurationMinutes")) ? 0 : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("LeaveDurationMinutes"))),
                     StartDate = reader.GetDateTime(reader.GetOrdinal("StartDate")),
                     EndDate = reader.GetDateTime(reader.GetOrdinal("EndDate")),
@@ -111,6 +108,152 @@ ORDER BY [StartDate] DESC";
             throw;
         }
 
+        _logger.LogInformation("MIS query returned {RecordCount} records ({DistinctEmployees} distinct PerCod)",
+            records.Count,
+            records.Select(r => r.PerCod).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
         return records;
+    }
+
+    public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(DateTime syncFrom, CancellationToken ct = default)
+    {
+        var filters = GetFilterSettings();
+        var result = new MisHrDiagnosticResult
+        {
+            SyncFrom = syncFrom,
+            ProvinceCode = filters.ProvinceCode,
+            ShamsiYearPrefix = filters.ShamsiYearPrefix,
+            ApplyProvinceFilter = filters.ApplyProvinceFilter,
+            ApplyShamsiYearFilter = filters.ApplyShamsiYearFilter,
+            SyncDaysBack = _configuration.GetValue<int>("HrIntegration:SyncDaysBack", 30)
+        };
+
+        try
+        {
+            await using var connection = new SqlConnection(GetConnectionString());
+            await connection.OpenAsync(ct);
+            result.CanConnect = true;
+
+            result.TotalInView = await CountAsync(connection, "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]", ct);
+            result.CountAfterSyncFrom = await CountAsync(connection,
+                "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom",
+                ct, ("@SyncFrom", syncFrom));
+
+            if (filters.ApplyProvinceFilter)
+            {
+                result.CountAfterProvince = await CountAsync(connection,
+                    "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode",
+                    ct, ("@SyncFrom", syncFrom), ("@ProvinceCode", filters.ProvinceCode));
+            }
+
+            if (filters.ApplyShamsiYearFilter)
+            {
+                result.CountAfterShamsiYear = await CountAsync(connection, $@"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]
+WHERE [StartDate] >= @SyncFrom
+  AND (
+        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
+        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
+        OR CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix
+      )",
+                    ct,
+                    ("@SyncFrom", syncFrom),
+                    ("@ShamsiYearPattern", filters.ShamsiYearPattern),
+                    ("@ShamsiYearPrefix", filters.ShamsiYearPrefix));
+            }
+
+            var activeQuery = BuildQuery().Replace(SelectColumns, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
+            await using var command = new SqlCommand(activeQuery, connection);
+            command.Parameters.AddWithValue("@SyncFrom", syncFrom);
+            AddFilterParameters(command, filters);
+            command.CommandTimeout = 120;
+
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                result.CountWithActiveFilters = reader.GetInt32(0);
+                result.DistinctEmployeesWithActiveFilters = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+            }
+        }
+        catch (Exception ex)
+        {
+            result.CanConnect = false;
+            result.ErrorMessage = ex.Message;
+            _logger.LogError(ex, "MIS diagnostic query failed");
+        }
+
+        return result;
+    }
+
+    private string BuildQuery()
+    {
+        var filters = GetFilterSettings();
+        var conditions = new List<string> { "[StartDate] >= @SyncFrom" };
+
+        if (filters.ApplyProvinceFilter)
+            conditions.Add("CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode");
+
+        if (filters.ApplyShamsiYearFilter)
+        {
+            conditions.Add(@"(
+        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
+        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
+        OR CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix
+      )");
+        }
+
+        return $"{SelectColumns}\nWHERE {string.Join("\n  AND ", conditions)}\nORDER BY [StartDate] DESC";
+    }
+
+    private MisFilterSettings GetFilterSettings()
+    {
+        var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
+        var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1405";
+        return new MisFilterSettings
+        {
+            ProvinceCode = provinceCode,
+            ShamsiYearPrefix = shamsiYearPrefix,
+            ShamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%",
+            ApplyProvinceFilter = _configuration.GetValue("HrIntegration:ApplyProvinceFilter", true),
+            ApplyShamsiYearFilter = _configuration.GetValue("HrIntegration:ApplyShamsiYearFilter", true)
+        };
+    }
+
+    private static void AddFilterParameters(SqlCommand command, MisFilterSettings filters)
+    {
+        if (filters.ApplyProvinceFilter)
+            command.Parameters.Add("@ProvinceCode", SqlDbType.NVarChar, 20).Value = filters.ProvinceCode;
+
+        if (filters.ApplyShamsiYearFilter)
+        {
+            command.Parameters.Add("@ShamsiYearPattern", SqlDbType.NVarChar, 20).Value = filters.ShamsiYearPattern;
+            command.Parameters.Add("@ShamsiYearPrefix", SqlDbType.NVarChar, 4).Value = filters.ShamsiYearPrefix;
+        }
+    }
+
+    private static async Task<int> CountAsync(SqlConnection connection, string sql, CancellationToken ct, params (string Name, object Value)[] parameters)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        command.CommandTimeout = 120;
+        foreach (var (name, value) in parameters)
+            command.Parameters.AddWithValue(name, value);
+
+        var result = await command.ExecuteScalarAsync(ct);
+        return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+    }
+
+    private static string? ReadString(SqlDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        if (reader.IsDBNull(ordinal)) return null;
+        return Convert.ToString(reader.GetValue(ordinal))?.Trim();
+    }
+
+    private sealed class MisFilterSettings
+    {
+        public string ProvinceCode { get; init; } = "147";
+        public string ShamsiYearPrefix { get; init; } = "1405";
+        public string ShamsiYearPattern { get; init; } = "1405%";
+        public bool ApplyProvinceFilter { get; init; } = true;
+        public bool ApplyShamsiYearFilter { get; init; } = true;
     }
 }
