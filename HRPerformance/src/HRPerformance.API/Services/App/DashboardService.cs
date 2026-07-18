@@ -57,11 +57,18 @@ public class DashboardService
         var att = await _uow.Repository<AttendanceLog>().Query()
             .Where(a => a.OrganizationId == organizationId && a.AttendanceDate == today).ToListAsync(ct);
         var mgrCount = emps.Count(e => emps.Any(s => s.ManagerId == e.Id));
-        var deptRanks = await _uow.Repository<OrganizationUnit>().Query()
+        var units = await _uow.Repository<OrganizationUnit>().Query()
             .Where(u => u.OrganizationId == organizationId && !u.IsDeleted)
-            .Select(u => new DepartmentRankDto(u.Id, u.Name,
-                emps.Where(e => e.OrganizationUnitId == u.Id).Average(e => (decimal?)e.CurrentScore) ?? 0,
-                emps.Count(e => e.OrganizationUnitId == u.Id))).ToListAsync(ct);
+            .ToListAsync(ct);
+        var deptRanks = units.Select(u =>
+        {
+            var deptEmps = emps.Where(e => e.OrganizationUnitId == u.Id).ToList();
+            return new DepartmentRankDto(
+                u.Id,
+                u.Name,
+                deptEmps.Count > 0 ? deptEmps.Average(e => e.CurrentScore) : 0,
+                deptEmps.Count);
+        }).ToList();
         var performanceDistribution = BuildPerformanceDistribution(emps);
         return ApiResponse<AdminDashboardDto>.Ok(new AdminDashboardDto(emps.Count, mgrCount, depts, att.Count(a => !a.IsAbsent), att.Count(a => a.IsAbsent), emps.Any() ? emps.Average(e => e.CurrentScore) : 0, deptRanks, performanceDistribution));
     }
