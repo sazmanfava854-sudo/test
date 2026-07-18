@@ -8,9 +8,12 @@ IF @OrgId IS NOT NULL AND NOT EXISTS (
 )
 BEGIN
     INSERT INTO [dbo].[AttendanceIntegrationSettings]
-    ([Id],[OrganizationId],[SourceType],[SqlViewName],[SyncIntervalMinutes],[IsActive],[CreatedAt])
+    ([Id],[OrganizationId],[SourceType],[SqlViewName],[SyncMode],[ShamsiYearPrefix],[ProvinceCode],
+     [ApplyProvinceFilter],[ApplyShamsiYearFilter],[InitialSyncMonthsBack],[MonthsPerSyncRun],
+     [SyncDaysBack],[EmployeeLimit],[BackgroundSyncEnabled],[SyncIntervalMinutes],[IsActive],[CreatedAt])
     VALUES
-    (NEWID(), @OrgId, 'SQLView', 'MIS.dbo.HZG_View_HourlyLeave', 5, 1, SYSUTCDATETIME());
+    (NEWID(), @OrgId, 'SQLView', 'MIS.dbo.HZG_View_HourlyLeave', 'Monthly', '1404', '147',
+     1, 1, 12, 1, 30, 0, 0, 5, 1, SYSUTCDATETIME());
 END
 GO
 

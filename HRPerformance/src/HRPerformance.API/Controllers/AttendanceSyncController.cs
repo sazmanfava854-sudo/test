@@ -4,7 +4,6 @@ using HRPerformance.Services.ExternalHr;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace HRPerformance.API.Controllers;
 
@@ -17,23 +16,23 @@ public class AttendanceSyncController : ControllerBase
     private readonly ICurrentUserService _currentUser;
     private readonly MisHrDataReader _misHrDataReader;
     private readonly MisSyncStateService _syncStateService;
+    private readonly HrIntegrationSettingsService _hrSettingsService;
     private readonly ApplicationDbContext _context;
-    private readonly IConfiguration _configuration;
 
     public AttendanceSyncController(
         IAttendanceSyncService syncService,
         ICurrentUserService currentUser,
         MisHrDataReader misHrDataReader,
         MisSyncStateService syncStateService,
-        ApplicationDbContext context,
-        IConfiguration configuration)
+        HrIntegrationSettingsService hrSettingsService,
+        ApplicationDbContext context)
     {
         _syncService = syncService;
         _currentUser = currentUser;
         _misHrDataReader = misHrDataReader;
         _syncStateService = syncStateService;
+        _hrSettingsService = hrSettingsService;
         _context = context;
-        _configuration = configuration;
     }
 
     /// <summary>
@@ -86,6 +85,7 @@ public class AttendanceSyncController : ControllerBase
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
 
+        var runtimeSettings = await _hrSettingsService.GetRuntimeSettingsAsync(orgId, ct);
         var state = await _syncStateService.GetOrCreateStateAsync(orgId, ct);
         var nextRanges = await _syncStateService.GetNextRangesAsync(orgId, ct);
 
@@ -93,7 +93,9 @@ public class AttendanceSyncController : ControllerBase
         {
             success = true,
             organizationId = orgId,
-            syncMode = _syncStateService.SyncMode,
+            syncMode = runtimeSettings.SyncMode,
+            backgroundSyncEnabled = runtimeSettings.BackgroundSyncEnabled,
+            employeeLimit = runtimeSettings.EmployeeLimit,
             state = new
             {
                 state.TargetShamsiYear,
@@ -126,6 +128,7 @@ public class AttendanceSyncController : ControllerBase
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
 
+        var runtimeSettings = await _hrSettingsService.GetRuntimeSettingsAsync(orgId, ct);
         MisSyncRange range;
         if (shamsiYear.HasValue && shamsiMonth.HasValue)
         {
@@ -150,7 +153,7 @@ public class AttendanceSyncController : ControllerBase
             };
         }
 
-        var diagnostic = await _misHrDataReader.GetDiagnosticAsync(range, ct);
+        var diagnostic = await _misHrDataReader.GetDiagnosticAsync(runtimeSettings, range, ct);
         diagnostic.EmployeesInHrDatabase = await _context.Employees
             .CountAsync(e => e.OrganizationId == orgId && !e.IsDeleted, ct);
 
@@ -178,11 +181,11 @@ public class AttendanceSyncController : ControllerBase
         else if (d.CountAfterSyncFrom == 0)
             hints.Add($"هیچ رکوردی در بازه {d.SyncFrom:yyyy-MM-dd} تا {d.SyncTo:yyyy-MM-dd} نیست. ماه یا بازه دیگری را امتحان کنید.");
         else if (d.ApplyProvinceFilter && d.CountAfterProvince == 0)
-            hints.Add($"ProvinceCode={d.ProvinceCode} با داده‌های MIS مطابقت ندارد. مقدار صحیح را در HrIntegration:ProvinceCode تنظیم کنید یا ApplyProvinceFilter=false بگذارید.");
+            hints.Add($"ProvinceCode={d.ProvinceCode} با داده‌های MIS مطابقت ندارد. از تنظیمات > سینک MIS مقدار صحیح را وارد کنید.");
         else if (d.ApplyShamsiYearFilter && d.CountAfterShamsiYear == 0)
-            hints.Add($"سال شمسی {d.ShamsiYearPrefix} در MIS یافت نشد. ShamsiYearPrefix را اصلاح کنید یا ApplyShamsiYearFilter=false بگذارید.");
+            hints.Add($"سال شمسی {d.ShamsiYearPrefix} در MIS یافت نشد. از تنظیمات > سینک MIS سال را اصلاح کنید.");
         else if (d.CountWithActiveFilters == 0)
-            hints.Add("ترکیب فیلترهای فعال هیچ رکوردی برنمی‌گرداند. فیلترها را در appsettings شل‌تر کنید.");
+            hints.Add("ترکیب فیلترهای فعال هیچ رکوردی برنمی‌گرداند. تنظیمات سینک MIS را شل‌تر کنید.");
         else if (d.EmployeesInHrDatabase == 0 && d.DistinctEmployeesWithActiveFilters > 0)
             hints.Add("MIS داده دارد ولی کارمندی در HR ثبت نشده. POST /api/attendancesync/run را اجرا کنید.");
         else if (d.EmployeesInHrDatabase > 0)

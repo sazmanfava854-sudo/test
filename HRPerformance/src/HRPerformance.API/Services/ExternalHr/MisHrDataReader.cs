@@ -35,39 +35,21 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
         _logger = logger;
     }
 
-    public string GetConnectionString()
-    {
-        var section = _configuration.GetSection("HrIntegration");
-        var connectionString = section["ConnectionString"];
-        if (!string.IsNullOrWhiteSpace(connectionString))
-            return connectionString;
-
-        var server = section["Server"] ?? throw new InvalidOperationException("HrIntegration:Server is not configured");
-        var database = section["Database"] ?? "MIS";
-        var userId = section["UserId"] ?? throw new InvalidOperationException("HrIntegration:UserId is not configured");
-        var password = section["Password"] ?? throw new InvalidOperationException("HrIntegration:Password is not configured");
-
-        return $"Server={server};Database={database};User Id={userId};Password={password};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true";
-    }
-
-    public Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(DateTime syncFrom, CancellationToken ct = default)
-        => ReadHourlyLeavesAsync(new MisSyncRange
-        {
-            SyncFrom = syncFrom,
-            SyncToExclusive = DateTime.Today.AddDays(1),
-            Description = $"از {syncFrom:yyyy-MM-dd}"
-        }, ct);
-
-    public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(MisSyncRange range, CancellationToken ct = default)
+    public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadHourlyLeavesAsync(
+        HrIntegrationRuntimeSettings settings,
+        MisSyncRange range,
+        CancellationToken ct = default)
     {
         var records = new List<MisHourlyLeaveRecord>();
         var customQuery = _configuration["HrIntegration:SqlQuery"];
-        var query = string.IsNullOrWhiteSpace(customQuery) ? BuildQuery(range) : customQuery;
-        var filters = GetFilterSettings();
+        var query = string.IsNullOrWhiteSpace(customQuery) ? BuildQuery(settings, range) : customQuery;
+        var filters = GetFilterSettings(settings);
+        var connectionString = settings.MisConnectionString
+            ?? throw new InvalidOperationException("اتصال MIS پیکربندی نشده است");
 
         try
         {
-            await using var connection = new SqlConnection(GetConnectionString());
+            await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync(ct);
             await using var command = new SqlCommand(query, connection);
             command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
@@ -76,7 +58,7 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
             command.CommandTimeout = 120;
 
             _logger.LogInformation(
-                "MIS query filters: Range={Range}, SyncFrom={SyncFrom}, SyncTo={SyncTo}, ShamsiMonth={ShamsiYear}/{ShamsiMonth}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern})",
+                "MIS query filters: Range={Range}, SyncFrom={SyncFrom}, SyncTo={SyncTo}, ShamsiMonth={ShamsiYear}/{ShamsiMonth}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern}), EmployeeLimit={EmployeeLimit}",
                 range.Description,
                 range.SyncFrom,
                 range.SyncToExclusive,
@@ -85,7 +67,8 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
                 filters.ApplyProvinceFilter,
                 filters.ProvinceCode,
                 filters.ApplyShamsiYearFilter,
-                filters.ShamsiYearPattern);
+                filters.ShamsiYearPattern,
+                filters.EmployeeLimit);
 
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -128,34 +111,38 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
         return records;
     }
 
-    public Task<MisHrDiagnosticResult> GetDiagnosticAsync(DateTime syncFrom, CancellationToken ct = default)
-        => GetDiagnosticAsync(new MisSyncRange
-        {
-            SyncFrom = syncFrom,
-            SyncToExclusive = DateTime.Today.AddDays(1),
-            Description = $"از {syncFrom:yyyy-MM-dd}"
-        }, ct);
-
-    public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(MisSyncRange range, CancellationToken ct = default)
+    public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(
+        HrIntegrationRuntimeSettings settings,
+        MisSyncRange range,
+        CancellationToken ct = default)
     {
-        var filters = GetFilterSettings();
+        var filters = GetFilterSettings(settings);
         var result = new MisHrDiagnosticResult
         {
             SyncFrom = range.SyncFrom,
             SyncTo = range.SyncToExclusive,
             ShamsiYear = range.ShamsiYear,
             ShamsiMonth = range.ShamsiMonth,
-            SyncMode = _configuration["HrIntegration:SyncMode"] ?? "Monthly",
+            SyncMode = settings.SyncMode,
             ProvinceCode = filters.ProvinceCode,
             ShamsiYearPrefix = filters.ShamsiYearPrefix,
             ApplyProvinceFilter = filters.ApplyProvinceFilter,
             ApplyShamsiYearFilter = filters.ApplyShamsiYearFilter,
-            SyncDaysBack = _configuration.GetValue<int>("HrIntegration:SyncDaysBack", 30)
+            SyncDaysBack = settings.SyncDaysBack,
+            EmployeeLimit = settings.EmployeeLimit
         };
+
+        var connectionString = settings.MisConnectionString;
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            result.CanConnect = false;
+            result.ErrorMessage = "اتصال MIS در appsettings پیکربندی نشده است";
+            return result;
+        }
 
         try
         {
-            await using var connection = new SqlConnection(GetConnectionString());
+            await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync(ct);
             result.CanConnect = true;
 
@@ -187,7 +174,7 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
                     ("@ShamsiYearPrefix", filters.ShamsiYearPrefix));
             }
 
-            var activeQuery = BuildQuery(range).Replace(SelectColumns, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
+            var activeQuery = BuildQuery(settings, range).Replace(SelectColumns, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
             await using var command = new SqlCommand(activeQuery, connection);
             command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
             command.Parameters.AddWithValue("@SyncTo", range.SyncToExclusive);
@@ -211,9 +198,9 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
         return result;
     }
 
-    private string BuildQuery(MisSyncRange? range = null)
+    private static string BuildQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
     {
-        var filters = GetFilterSettings();
+        var filters = GetFilterSettings(settings);
         var conditions = new List<string>
         {
             "[StartDate] >= @SyncFrom",
@@ -238,20 +225,33 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
       )");
         }
 
+        if (filters.EmployeeLimit > 0)
+        {
+            var employeeSelectionConditions = string.Join("\n          AND ", conditions);
+            conditions.Add($@"[PerCod] IN (
+        SELECT TOP (@EmployeeLimit) [PerCod]
+        FROM [MIS].[dbo].[HZG_View_HourlyLeave]
+        WHERE {employeeSelectionConditions}
+          AND [PerCod] IS NOT NULL
+        GROUP BY [PerCod]
+        ORDER BY [PerCod]
+      )");
+        }
+
         return $"{SelectColumns}\nWHERE {string.Join("\n  AND ", conditions)}\nORDER BY [StartDate] DESC";
     }
 
-    private MisFilterSettings GetFilterSettings()
+    private static MisFilterSettings GetFilterSettings(HrIntegrationRuntimeSettings settings)
     {
-        var provinceCode = _configuration["HrIntegration:ProvinceCode"] ?? "147";
-        var shamsiYearPrefix = _configuration["HrIntegration:ShamsiYearPrefix"] ?? "1404";
+        var shamsiYearPrefix = settings.ShamsiYearPrefix;
         return new MisFilterSettings
         {
-            ProvinceCode = provinceCode,
+            ProvinceCode = settings.ProvinceCode,
             ShamsiYearPrefix = shamsiYearPrefix,
             ShamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%",
-            ApplyProvinceFilter = _configuration.GetValue("HrIntegration:ApplyProvinceFilter", true),
-            ApplyShamsiYearFilter = _configuration.GetValue("HrIntegration:ApplyShamsiYearFilter", true)
+            ApplyProvinceFilter = settings.ApplyProvinceFilter,
+            ApplyShamsiYearFilter = settings.ApplyShamsiYearFilter,
+            EmployeeLimit = settings.EmployeeLimit
         };
     }
 
@@ -271,6 +271,9 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
             command.Parameters.Add("@ShamsiYearPattern", SqlDbType.NVarChar, 20).Value = filters.ShamsiYearPattern;
             command.Parameters.Add("@ShamsiYearPrefix", SqlDbType.NVarChar, 4).Value = filters.ShamsiYearPrefix;
         }
+
+        if (filters.EmployeeLimit > 0)
+            command.Parameters.Add("@EmployeeLimit", SqlDbType.Int).Value = filters.EmployeeLimit;
     }
 
     private static async Task<int> CountAsync(SqlConnection connection, string sql, CancellationToken ct, params (string Name, object Value)[] parameters)
@@ -298,5 +301,6 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
         public string ShamsiYearPattern { get; init; } = "1404%";
         public bool ApplyProvinceFilter { get; init; } = true;
         public bool ApplyShamsiYearFilter { get; init; } = true;
+        public int EmployeeLimit { get; init; }
     }
 }

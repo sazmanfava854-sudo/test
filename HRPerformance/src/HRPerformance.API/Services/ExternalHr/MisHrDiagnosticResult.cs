@@ -10,6 +10,7 @@ public class MisHrDiagnosticResult
     public int? ShamsiYear { get; set; }
     public int? ShamsiMonth { get; set; }
     public int SyncDaysBack { get; set; }
+    public int EmployeeLimit { get; set; }
     public string ProvinceCode { get; set; } = string.Empty;
     public string ShamsiYearPrefix { get; set; } = string.Empty;
     public bool ApplyProvinceFilter { get; set; }

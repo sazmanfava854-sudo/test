@@ -49,7 +49,7 @@ HR Performance — نسخه لوکال (کامل)
 
 پیش‌نیاز: .NET 8 SDK + SQL Server
 
-1) database/01 تا 12 را روی SQL Server اجرا کنید
+1) database/01 تا 13 را روی SQL Server اجرا کنید
 2) src/HRPerformance.API/appsettings.Development.json را تنظیم کنید
 3) start-local.bat (ویندوز) یا start.sh (لینوکس)
 4) http://localhost:5050
@@ -72,7 +72,7 @@ Build Date: $(date +%Y-%m-%d)
 شامل:
 - HRPerformance.sln
 - src/HRPerformance.API (سورس + wwwroot)
-- database/ (01-12)
+- database/ (01-13)
 - docs/
 - frontend/hr-performance-web (سورس، بدون node_modules)
 - start-local.bat / start.sh

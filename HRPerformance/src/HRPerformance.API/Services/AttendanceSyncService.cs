@@ -18,6 +18,7 @@ public class AttendanceSyncService : IAttendanceSyncService
     private readonly MisHrDataReader _misHrDataReader;
     private readonly MisHrEmployeeSyncService _employeeSync;
     private readonly MisSyncStateService _syncStateService;
+    private readonly HrIntegrationSettingsService _hrSettingsService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AttendanceSyncService> _logger;
 
@@ -28,6 +29,7 @@ public class AttendanceSyncService : IAttendanceSyncService
         MisHrDataReader misHrDataReader,
         MisHrEmployeeSyncService employeeSync,
         MisSyncStateService syncStateService,
+        HrIntegrationSettingsService hrSettingsService,
         IConfiguration configuration,
         ILogger<AttendanceSyncService> logger)
     {
@@ -37,6 +39,7 @@ public class AttendanceSyncService : IAttendanceSyncService
         _misHrDataReader = misHrDataReader;
         _employeeSync = employeeSync;
         _syncStateService = syncStateService;
+        _hrSettingsService = hrSettingsService;
         _configuration = configuration;
         _logger = logger;
     }
@@ -65,12 +68,13 @@ public class AttendanceSyncService : IAttendanceSyncService
         bool updateState = true)
     {
         var result = new AttendanceSyncResult();
-        var settings = await _context.AttendanceIntegrationSettings
-            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId && s.IsActive, ct);
-
-        var sourceType = settings?.SourceType ?? _configuration["HrIntegration:SourceType"] ?? "SQLView";
-        if (settings == null && !IsHrIntegrationEnabled())
+        var runtimeSettings = await _hrSettingsService.GetRuntimeSettingsAsync(organizationId, ct);
+        if (!runtimeSettings.IsConnectionConfigured)
             return result;
+
+        var entity = await _context.AttendanceIntegrationSettings
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        var sourceType = entity?.SourceType ?? runtimeSettings.SourceType;
 
         var syncLog = new AttendanceSyncLog
         {
@@ -84,11 +88,11 @@ public class AttendanceSyncService : IAttendanceSyncService
             switch (sourceType.ToUpperInvariant())
             {
                 case "REST":
-                    if (settings != null && !string.IsNullOrEmpty(settings.EndpointUrl))
-                        await SyncFromRestAsync(settings, syncLog, ct);
+                    if (entity != null && !string.IsNullOrEmpty(entity.EndpointUrl))
+                        await SyncFromRestAsync(entity, syncLog, ct);
                     break;
                 case "SQLVIEW":
-                    await SyncFromMisSqlViewAsync(organizationId, syncLog, result, ranges, updateState, ct);
+                    await SyncFromMisSqlViewAsync(organizationId, runtimeSettings, syncLog, result, ranges, updateState, ct);
                     break;
                 default:
                     _logger.LogWarning("Unsupported attendance source type: {SourceType}", sourceType);
@@ -96,7 +100,7 @@ public class AttendanceSyncService : IAttendanceSyncService
             }
 
             syncLog.Status = syncLog.RecordsFailed > 0 ? AttendanceSyncStatus.Partial : AttendanceSyncStatus.Success;
-            if (settings != null) settings.LastSyncAt = DateTime.UtcNow;
+            if (entity != null) entity.LastSyncAt = DateTime.UtcNow;
             result.RecordsProcessed = syncLog.RecordsProcessed;
             result.RecordsFailed = syncLog.RecordsFailed;
         }
@@ -113,11 +117,9 @@ public class AttendanceSyncService : IAttendanceSyncService
         return result;
     }
 
-    private bool IsHrIntegrationEnabled() =>
-        _configuration.GetValue<bool>("HrIntegration:Enabled");
-
     private async Task SyncFromMisSqlViewAsync(
         Guid organizationId,
+        HrIntegrationRuntimeSettings runtimeSettings,
         AttendanceSyncLog log,
         AttendanceSyncResult result,
         IReadOnlyList<MisSyncRange>? explicitRanges,
@@ -136,7 +138,7 @@ public class AttendanceSyncService : IAttendanceSyncService
         {
             _logger.LogInformation("MIS SQL sync {Range} for organization {OrgId}", range.Description, organizationId);
 
-            var records = await _misHrDataReader.ReadHourlyLeavesAsync(range, ct);
+            var records = await _misHrDataReader.ReadHourlyLeavesAsync(runtimeSettings, range, ct);
             if (records.Count == 0)
             {
                 _logger.LogWarning(

@@ -66,7 +66,30 @@ POST /api/attendancesync/run-month?shamsiYear=1404&shamsiMonth=1
 Authorization: Bearer {admin-token}
 ```
 
-### ۵.۱ سینک ماهانه (پیش‌فرض — سریع‌تر)
+### ۵.۱ تنظیمات سینک از داخل برنامه (پیشنهادی)
+
+بعد از لاگین با نقش مدیر:
+**تنظیمات > سینک MIS**
+
+| تنظیم | توضیح |
+|-------|--------|
+| سینک خودکار پس‌زمینه | پیش‌فرض **خاموش** — تا زمانی که فعال نکنید، هنگام اجرا داده لود نمی‌شود |
+| محدودیت تعداد پرسنل | برای تست مقدار `10` بگذارید |
+| تعداد ماه در هر اجرا | پیش‌فرض `1` (هر بار فقط یک ماه) |
+| سینک دستی | دکمه «سینک دستی» در همان صفحه |
+
+در `appsettings` فقط **اتصال MIS** (Server, UserId, Password) باقی می‌ماند.
+
+API:
+```
+GET  /api/hrintegration/settings
+PUT  /api/hrintegration/settings
+POST /api/attendancesync/run
+```
+
+اسکریپت دیتابیس: `13_Migration_HrIntegrationSettings.sql`
+
+### ۵.۲ سینک ماهانه (پیش‌فرض — سریع‌تر)
 
 برای جلوگیری از کندی کوئری MIS، حالت پیش‌فرض `SyncMode: Monthly` است:
 
@@ -90,6 +113,28 @@ Authorization: Bearer {admin-token}
 - `DateRange` — با `SyncFromDate` و `SyncToDate`
 
 بعد از نصب، اسکریپت `12_Migration_HrMisSyncState.sql` را اجرا کنید.
+
+### ۵.۲ تست محلی — بدون سینک خودکار
+
+**توجه:** داده‌ها هنگام `Building...` لود نمی‌شوند. بعد از `dotnet run` سرویس پس‌زمینه شروع می‌کند.
+
+برای تست با ۱۰ نفر و بدون سینک خودکار، در `appsettings.Development.json`:
+
+```json
+"HrIntegration": {
+  "Enabled": true,
+  "BackgroundSyncEnabled": false,
+  "EmployeeLimit": 10,
+  "InitialSyncMonthsBack": 1,
+  "MonthsPerSyncRun": 1
+}
+```
+
+- `BackgroundSyncEnabled: false` → هیچ داده‌ای خودکار لود نمی‌شود
+- `EmployeeLimit: 10` → فقط ۱۰ پرسنل اول MIS
+- سینک دستی فقط وقتی بخواهید: `POST /api/attendancesync/run`
+
+اگر لاگ `ranges=6` دیدید یعنی `MonthsPerSyncRun` روی ۶ است — برای تست روی `1` بگذارید.
 
 ### ۶. عیب‌یابی (وقتی کارمندان ۰ است)
 

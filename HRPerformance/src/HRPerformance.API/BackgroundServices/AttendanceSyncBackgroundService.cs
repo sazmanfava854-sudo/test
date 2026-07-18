@@ -1,5 +1,6 @@
 using HRPerformance.Interfaces;
 using HRPerformance.Data;
+using HRPerformance.Services.ExternalHr;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,21 +29,16 @@ public class AttendanceSyncBackgroundService : BackgroundService
     {
         if (!_configuration.GetValue<bool>("HrIntegration:Enabled"))
         {
-            _logger.LogInformation("HR integration background sync is disabled");
+            _logger.LogInformation("HR integration is disabled in appsettings");
             return;
         }
 
-        var intervalMinutes = _configuration.GetValue<int>("HrIntegration:SyncIntervalMinutes", 5);
-        var startupDelaySeconds = _configuration.GetValue<int>("HrIntegration:SyncStartupDelaySeconds", 15);
-        _logger.LogInformation(
-            "HR integration sync scheduled: first run after {Delay}s, then every {Interval} min (mode={Mode})",
-            startupDelaySeconds,
-            intervalMinutes,
-            _configuration["HrIntegration:SyncMode"] ?? "Monthly");
-        await Task.Delay(TimeSpan.FromSeconds(startupDelaySeconds), stoppingToken);
+        _logger.LogInformation("HR integration background worker started. Sync runs only when enabled in admin settings.");
+        await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var intervalMinutes = 5;
             try
             {
                 using var scope = _scopeFactory.CreateScope();
@@ -55,21 +51,28 @@ public class AttendanceSyncBackgroundService : BackgroundService
                 }
                 else
                 {
-                    var orgIds = await context.AttendanceIntegrationSettings
-                        .Where(s => s.IsActive)
-                        .Select(s => s.OrganizationId)
-                        .Distinct()
+                    var orgSettings = await context.AttendanceIntegrationSettings
+                        .Where(s => s.IsActive && s.BackgroundSyncEnabled)
                         .ToListAsync(stoppingToken);
 
-                    if (orgIds.Count == 0)
+                    if (orgSettings.Count == 0)
                     {
-                        var defaultOrg = await context.Organizations.Select(o => o.Id).FirstOrDefaultAsync(stoppingToken);
-                        if (defaultOrg != Guid.Empty)
-                            orgIds.Add(defaultOrg);
+                        _logger.LogDebug("No organization has background MIS sync enabled");
                     }
+                    else
+                    {
+                        intervalMinutes = orgSettings.Min(s => Math.Max(1, s.SyncIntervalMinutes));
+                        foreach (var setting in orgSettings)
+                        {
+                            _logger.LogInformation(
+                                "Background MIS sync for org {OrgId} (mode={Mode}, employeeLimit={Limit})",
+                                setting.OrganizationId,
+                                setting.SyncMode,
+                                setting.EmployeeLimit);
 
-                    foreach (var orgId in orgIds)
-                        await syncService.SyncAsync(orgId, stoppingToken);
+                            await syncService.SyncAsync(setting.OrganizationId, stoppingToken);
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

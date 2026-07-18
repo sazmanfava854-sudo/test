@@ -1,7 +1,6 @@
 using HRPerformance.Data;
 using HRPerformance.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace HRPerformance.Services.ExternalHr;
@@ -9,20 +8,18 @@ namespace HRPerformance.Services.ExternalHr;
 public class MisSyncStateService
 {
     private readonly ApplicationDbContext _context;
-    private readonly IConfiguration _configuration;
+    private readonly HrIntegrationSettingsService _settingsService;
     private readonly ILogger<MisSyncStateService> _logger;
 
     public MisSyncStateService(
         ApplicationDbContext context,
-        IConfiguration configuration,
+        HrIntegrationSettingsService settingsService,
         ILogger<MisSyncStateService> logger)
     {
         _context = context;
-        _configuration = configuration;
+        _settingsService = settingsService;
         _logger = logger;
     }
-
-    public string SyncMode => _configuration["HrIntegration:SyncMode"] ?? "Monthly";
 
     public async Task<HrMisSyncState> GetOrCreateStateAsync(Guid organizationId, CancellationToken ct = default)
     {
@@ -32,14 +29,12 @@ public class MisSyncStateService
         if (state != null)
             return state;
 
-        var targetYear = int.Parse(_configuration["HrIntegration:ShamsiYearPrefix"] ?? "1404");
-        var monthsBack = Math.Max(1, _configuration.GetValue("HrIntegration:InitialSyncMonthsBack", 12));
+        var settings = await _settingsService.GetRuntimeSettingsAsync(organizationId, ct);
+        var targetYear = int.Parse(settings.ShamsiYearPrefix);
+        var monthsBack = Math.Max(1, settings.InitialSyncMonthsBack);
         var (currentYear, currentMonth) = ShamsiDateHelper.GetCurrentShamsi();
 
-        var startMonth = currentYear == targetYear
-            ? currentMonth
-            : 12;
-
+        var startMonth = currentYear == targetYear ? currentMonth : 12;
         var backfillStart = Math.Max(1, startMonth - monthsBack + 1);
 
         state = new HrMisSyncState
@@ -63,29 +58,28 @@ public class MisSyncStateService
 
     public async Task<IReadOnlyList<MisSyncRange>> GetNextRangesAsync(Guid organizationId, CancellationToken ct = default)
     {
-        var mode = SyncMode.Trim();
-        if (mode.Equals("DaysBack", StringComparison.OrdinalIgnoreCase))
-            return [CreateDaysBackRange()];
+        var settings = await _settingsService.GetRuntimeSettingsAsync(organizationId, ct);
+        var mode = settings.SyncMode.Trim();
 
-        if (mode.Equals("DateRange", StringComparison.OrdinalIgnoreCase))
+        if (mode.Equals("DaysBack", StringComparison.OrdinalIgnoreCase))
+            return [CreateDaysBackRange(settings)];
+
+        if (mode.Equals("DateRange", StringComparison.OrdinalIgnoreCase)
+            && settings.SyncFromDate.HasValue
+            && settings.SyncToDate.HasValue)
         {
-            var from = _configuration.GetValue<DateTime?>("HrIntegration:SyncFromDate");
-            var to = _configuration.GetValue<DateTime?>("HrIntegration:SyncToDate");
-            if (from.HasValue && to.HasValue)
-            {
-                return
-                [
-                    new MisSyncRange
-                    {
-                        SyncFrom = from.Value.Date,
-                        SyncToExclusive = to.Value.Date.AddDays(1),
-                        Description = $"بازه {from:yyyy-MM-dd} تا {to:yyyy-MM-dd}"
-                    }
-                ];
-            }
+            return
+            [
+                new MisSyncRange
+                {
+                    SyncFrom = settings.SyncFromDate.Value.Date,
+                    SyncToExclusive = settings.SyncToDate.Value.Date.AddDays(1),
+                    Description = $"بازه {settings.SyncFromDate:yyyy-MM-dd} تا {settings.SyncToDate:yyyy-MM-dd}"
+                }
+            ];
         }
 
-        return await GetMonthlyRangesAsync(organizationId, ct);
+        return await GetMonthlyRangesAsync(organizationId, settings, ct);
     }
 
     public async Task MarkRangeCompletedAsync(Guid organizationId, MisSyncRange range, CancellationToken ct = default)
@@ -121,10 +115,13 @@ public class MisSyncStateService
         await _context.SaveChangesAsync(ct);
     }
 
-    private async Task<IReadOnlyList<MisSyncRange>> GetMonthlyRangesAsync(Guid organizationId, CancellationToken ct)
+    private async Task<IReadOnlyList<MisSyncRange>> GetMonthlyRangesAsync(
+        Guid organizationId,
+        HrIntegrationRuntimeSettings settings,
+        CancellationToken ct)
     {
         var state = await GetOrCreateStateAsync(organizationId, ct);
-        var monthsPerRun = Math.Max(1, _configuration.GetValue("HrIntegration:MonthsPerSyncRun", 1));
+        var monthsPerRun = Math.Max(1, settings.MonthsPerSyncRun);
         var ranges = new List<MisSyncRange>();
 
         if (state.IsBackfillComplete)
@@ -145,15 +142,14 @@ public class MisSyncStateService
         return ranges;
     }
 
-    private MisSyncRange CreateDaysBackRange()
+    private static MisSyncRange CreateDaysBackRange(HrIntegrationRuntimeSettings settings)
     {
-        var syncDaysBack = Math.Max(1, _configuration.GetValue("HrIntegration:SyncDaysBack", 30));
-        var syncFrom = DateTime.Today.AddDays(-syncDaysBack);
+        var syncFrom = DateTime.Today.AddDays(-settings.SyncDaysBack);
         return new MisSyncRange
         {
             SyncFrom = syncFrom,
             SyncToExclusive = DateTime.Today.AddDays(1),
-            Description = $"{syncDaysBack} روز اخیر"
+            Description = $"{settings.SyncDaysBack} روز اخیر"
         };
     }
 
