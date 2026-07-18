@@ -39,17 +39,27 @@ public class AuthService
 
     public async Task<ApiResponse<LoginResponse>> RefreshAsync(RefreshTokenRequest request, CancellationToken ct = default)
     {
-        var result = await _tokenService.RefreshTokenAsync(request.AccessToken, request.RefreshToken, ct);
-        if (result == null) return ApiResponse<LoginResponse>.Fail("توکن نامعتبر است");
+        if (string.IsNullOrWhiteSpace(request.AccessToken) || string.IsNullOrWhiteSpace(request.RefreshToken))
+            return ApiResponse<LoginResponse>.Fail("توکن ارسال نشده است");
 
-        var userId = _tokenService.GetUserIdFromExpiredToken(request.AccessToken);
-        if (userId == null) return ApiResponse<LoginResponse>.Fail("توکن نامعتبر است");
+        try
+        {
+            var result = await _tokenService.RefreshTokenAsync(request.AccessToken, request.RefreshToken, ct);
+            if (result == null) return ApiResponse<LoginResponse>.Fail("توکن نامعتبر یا منقضی شده است");
 
-        var user = await _userManager.FindByIdAsync(userId.Value.ToString());
-        if (user == null) return ApiResponse<LoginResponse>.Fail("کاربر یافت نشد");
+            var userId = _tokenService.GetUserIdFromExpiredToken(request.AccessToken);
+            if (userId == null) return ApiResponse<LoginResponse>.Fail("توکن نامعتبر است");
 
-        var roles = await _userManager.GetRolesAsync(user);
-        var dto = new UserDto(user.Id, user.UserName!, user.Email!, user.FirstName, user.LastName, user.FullName, user.OrganizationId, user.EmployeeId, roles.ToList());
-        return ApiResponse<LoginResponse>.Ok(new LoginResponse(result.Value.AccessToken, result.Value.RefreshToken, result.Value.ExpiresAt, dto));
+            var user = await _userManager.FindByIdAsync(userId.Value.ToString());
+            if (user == null) return ApiResponse<LoginResponse>.Fail("کاربر یافت نشد");
+
+            var roles = await _userManager.GetRolesAsync(user);
+            var dto = new UserDto(user.Id, user.UserName!, user.Email!, user.FirstName, user.LastName, user.FullName, user.OrganizationId, user.EmployeeId, roles.ToList());
+            return ApiResponse<LoginResponse>.Ok(new LoginResponse(result.Value.AccessToken, result.Value.RefreshToken, result.Value.ExpiresAt, dto));
+        }
+        catch (Exception)
+        {
+            return ApiResponse<LoginResponse>.Fail("خطا در تمدید توکن. دوباره وارد شوید.");
+        }
     }
 }

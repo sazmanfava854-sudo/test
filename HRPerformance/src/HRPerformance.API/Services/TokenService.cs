@@ -39,11 +39,19 @@ public class TokenService : ITokenService
 
     public async Task<(string AccessToken, string RefreshToken, DateTime ExpiresAt)?> RefreshTokenAsync(string accessToken, string refreshToken, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
+            return null;
+
         var userId = GetUserIdFromExpiredToken(accessToken);
         if (userId == null) return null;
-        var stored = await _context.RefreshTokens.FirstOrDefaultAsync(r => r.Token == refreshToken && r.UserId == userId && r.IsActive, ct);
+
+        var now = DateTime.UtcNow;
+        var stored = await _context.RefreshTokens.FirstOrDefaultAsync(
+            r => r.Token == refreshToken && r.UserId == userId && !r.IsRevoked && r.ExpiresAt > now, ct);
         if (stored == null) return null;
-        stored.IsRevoked = true; stored.RevokedAt = DateTime.UtcNow;
+
+        stored.IsRevoked = true;
+        stored.RevokedAt = now;
         var user = await _context.Users.FindAsync(new object[] { userId.Value }, ct);
         if (user == null) return null;
         return await GenerateTokensAsync(user, ct);
