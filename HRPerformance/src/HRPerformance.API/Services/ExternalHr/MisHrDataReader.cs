@@ -123,13 +123,11 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
             SyncTo = range.SyncToExclusive,
             ShamsiYear = range.ShamsiYear,
             ShamsiMonth = range.ShamsiMonth,
-            SyncMode = settings.SyncMode,
             ProvinceCode = filters.ProvinceCode,
             ShamsiYearPrefix = filters.ShamsiYearPrefix,
             ApplyProvinceFilter = filters.ApplyProvinceFilter,
             ApplyShamsiYearFilter = filters.ApplyShamsiYearFilter,
-            SyncDaysBack = settings.SyncDaysBack,
-            EmployeeLimit = settings.EmployeeLimit
+            EmployeeLimit = filters.EmployeeLimit
         };
 
         var connectionString = settings.MisConnectionString;

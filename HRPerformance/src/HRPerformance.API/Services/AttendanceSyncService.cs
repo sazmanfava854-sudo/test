@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using HRPerformance.DTOs.HrIntegration;
 using HRPerformance.Entities;
 using HRPerformance.Enums;
 using HRPerformance.Interfaces;
@@ -17,8 +18,7 @@ public class AttendanceSyncService : IAttendanceSyncService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly MisHrDataReader _misHrDataReader;
     private readonly MisHrEmployeeSyncService _employeeSync;
-    private readonly MisSyncStateService _syncStateService;
-    private readonly HrIntegrationSettingsService _hrSettingsService;
+    private readonly HrIntegrationConnectionService _connectionService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AttendanceSyncService> _logger;
 
@@ -28,8 +28,7 @@ public class AttendanceSyncService : IAttendanceSyncService
         IHttpClientFactory httpClientFactory,
         MisHrDataReader misHrDataReader,
         MisHrEmployeeSyncService employeeSync,
-        MisSyncStateService syncStateService,
-        HrIntegrationSettingsService hrSettingsService,
+        HrIntegrationConnectionService connectionService,
         IConfiguration configuration,
         ILogger<AttendanceSyncService> logger)
     {
@@ -38,43 +37,34 @@ public class AttendanceSyncService : IAttendanceSyncService
         _httpClientFactory = httpClientFactory;
         _misHrDataReader = misHrDataReader;
         _employeeSync = employeeSync;
-        _syncStateService = syncStateService;
-        _hrSettingsService = hrSettingsService;
+        _connectionService = connectionService;
         _configuration = configuration;
         _logger = logger;
     }
 
-    public Task<AttendanceSyncResult> SyncAsync(Guid organizationId, CancellationToken ct = default)
-        => SyncInternalAsync(organizationId, ranges: null, ct);
-
-    public Task<AttendanceSyncResult> SyncMonthAsync(Guid organizationId, int shamsiYear, int shamsiMonth, CancellationToken ct = default)
-    {
-        var (start, endExclusive) = ShamsiDateHelper.GetGregorianMonthRange(shamsiYear, shamsiMonth);
-        var range = new MisSyncRange
-        {
-            SyncFrom = start,
-            SyncToExclusive = endExclusive,
-            ShamsiYear = shamsiYear,
-            ShamsiMonth = shamsiMonth,
-            Description = $"ماه {shamsiYear}/{shamsiMonth:00}"
-        };
-        return SyncInternalAsync(organizationId, [range], ct, updateState: false);
-    }
-
-    private async Task<AttendanceSyncResult> SyncInternalAsync(
+    public async Task<AttendanceSyncResult> SyncDateRangeAsync(
         Guid organizationId,
-        IReadOnlyList<MisSyncRange>? ranges,
-        CancellationToken ct,
-        bool updateState = true)
+        MisSyncDateRangeRequest request,
+        CancellationToken ct = default)
     {
         var result = new AttendanceSyncResult();
-        var runtimeSettings = await _hrSettingsService.GetRuntimeSettingsAsync(organizationId, ct);
+        if (request.ToDate < request.FromDate)
+            throw new ArgumentException("تاریخ پایان باید بعد از تاریخ شروع باشد");
+
+        var runtimeSettings = _connectionService.BuildForSync(request);
         if (!runtimeSettings.IsConnectionConfigured)
-            return result;
+            throw new InvalidOperationException("اتصال MIS پیکربندی نشده است");
 
         var entity = await _context.AttendanceIntegrationSettings
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
         var sourceType = entity?.SourceType ?? runtimeSettings.SourceType;
+
+        var range = new MisSyncRange
+        {
+            SyncFrom = request.FromDate.Date,
+            SyncToExclusive = request.ToDate.Date.AddDays(1),
+            Description = $"بازه {request.FromDate:yyyy-MM-dd} تا {request.ToDate:yyyy-MM-dd}"
+        };
 
         var syncLog = new AttendanceSyncLog
         {
@@ -85,84 +75,42 @@ public class AttendanceSyncService : IAttendanceSyncService
 
         try
         {
-            switch (sourceType.ToUpperInvariant())
+            if (sourceType.Equals("SQLVIEW", StringComparison.OrdinalIgnoreCase))
             {
-                case "REST":
-                    if (entity != null && !string.IsNullOrEmpty(entity.EndpointUrl))
-                        await SyncFromRestAsync(entity, syncLog, ct);
-                    break;
-                case "SQLVIEW":
-                    await SyncFromMisSqlViewAsync(organizationId, runtimeSettings, syncLog, result, ranges, updateState, ct);
-                    break;
-                default:
-                    _logger.LogWarning("Unsupported attendance source type: {SourceType}", sourceType);
-                    break;
+                _logger.LogInformation("MIS sync {Range} for organization {OrgId}", range.Description, organizationId);
+                var records = await _misHrDataReader.ReadHourlyLeavesAsync(runtimeSettings, range, ct);
+                foreach (var record in records)
+                    await ProcessMisHourlyLeaveAsync(organizationId, record, syncLog, ct);
+
+                result.SyncedRanges = [$"{range.Description} ({records.Count} رکورد)"];
+                result.RecordsProcessed = syncLog.RecordsProcessed;
+                result.RecordsFailed = syncLog.RecordsFailed;
+            }
+            else if (sourceType.Equals("REST", StringComparison.OrdinalIgnoreCase) && entity != null)
+            {
+                await SyncFromRestAsync(entity, syncLog, ct);
+                result.RecordsProcessed = syncLog.RecordsProcessed;
+                result.RecordsFailed = syncLog.RecordsFailed;
             }
 
             syncLog.Status = syncLog.RecordsFailed > 0 ? AttendanceSyncStatus.Partial : AttendanceSyncStatus.Success;
             if (entity != null) entity.LastSyncAt = DateTime.UtcNow;
-            result.RecordsProcessed = syncLog.RecordsProcessed;
-            result.RecordsFailed = syncLog.RecordsFailed;
         }
         catch (Exception ex)
         {
             syncLog.Status = AttendanceSyncStatus.Failed;
             syncLog.ErrorMessage = ex.Message;
             _logger.LogError(ex, "Attendance sync failed for organization {OrgId}", organizationId);
+            throw;
+        }
+        finally
+        {
+            syncLog.SyncCompletedAt = DateTime.UtcNow;
+            _context.AttendanceSyncLogs.Add(syncLog);
+            await _context.SaveChangesAsync(ct);
         }
 
-        syncLog.SyncCompletedAt = DateTime.UtcNow;
-        _context.AttendanceSyncLogs.Add(syncLog);
-        await _context.SaveChangesAsync(ct);
         return result;
-    }
-
-    private async Task SyncFromMisSqlViewAsync(
-        Guid organizationId,
-        HrIntegrationRuntimeSettings runtimeSettings,
-        AttendanceSyncLog log,
-        AttendanceSyncResult result,
-        IReadOnlyList<MisSyncRange>? explicitRanges,
-        bool updateState,
-        CancellationToken ct)
-    {
-        var ranges = explicitRanges ?? await _syncStateService.GetNextRangesAsync(organizationId, ct);
-        if (ranges.Count == 0)
-        {
-            _logger.LogInformation("No MIS sync ranges scheduled for organization {OrgId}", organizationId);
-            return;
-        }
-
-        var syncedRanges = new List<string>();
-        foreach (var range in ranges)
-        {
-            _logger.LogInformation("MIS SQL sync {Range} for organization {OrgId}", range.Description, organizationId);
-
-            var records = await _misHrDataReader.ReadHourlyLeavesAsync(runtimeSettings, range, ct);
-            if (records.Count == 0)
-            {
-                _logger.LogWarning(
-                    "MIS returned 0 records for {Range} (org {OrgId}). Check filters or run diagnostic.",
-                    range.Description, organizationId);
-            }
-
-            foreach (var record in records)
-                await ProcessMisHourlyLeaveAsync(organizationId, record, log, ct);
-
-            syncedRanges.Add($"{range.Description} ({records.Count} رکورد)");
-            if (updateState)
-                await _syncStateService.MarkRangeCompletedAsync(organizationId, range, ct);
-        }
-
-        result.SyncedRanges = syncedRanges;
-        var state = await _syncStateService.GetOrCreateStateAsync(organizationId, ct);
-        result.IsBackfillComplete = state.IsBackfillComplete;
-        if (!state.IsBackfillComplete)
-            result.NextRangeDescription = $"ماه {state.TargetShamsiYear}/{state.NextShamsiMonth:00}";
-
-        _logger.LogInformation(
-            "MIS sync finished for {OrgId}: ranges={Ranges}, processed={Processed}, failed={Failed}, backfillComplete={BackfillComplete}",
-            organizationId, syncedRanges.Count, log.RecordsProcessed, log.RecordsFailed, result.IsBackfillComplete);
     }
 
     private async Task ProcessMisHourlyLeaveAsync(Guid organizationId, MisHourlyLeaveRecord record, AttendanceSyncLog log, CancellationToken ct)

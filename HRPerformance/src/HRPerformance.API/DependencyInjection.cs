@@ -1,4 +1,3 @@
-using HRPerformance.BackgroundServices;
 using HRPerformance.Data;
 using HRPerformance.Entities;
 using HRPerformance.Interfaces;
@@ -62,8 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
         services.AddScoped<MisHrDataReader>();
         services.AddScoped<MisHrEmployeeSyncService>();
-        services.AddScoped<MisSyncStateService>();
-        services.AddScoped<HrIntegrationSettingsService>();
+        services.AddScoped<HrIntegrationConnectionService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
 
@@ -76,9 +74,6 @@ public static class DependencyInjection
         services.AddScoped<SettingService>();
 
         services.AddHttpClient("AttendanceSync");
-
-        if (configuration.GetValue<bool>("HrIntegration:Enabled"))
-            services.AddHostedService<AttendanceSyncBackgroundService>();
 
         return services;
     }

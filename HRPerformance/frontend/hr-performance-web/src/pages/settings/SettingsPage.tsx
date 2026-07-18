@@ -15,58 +15,52 @@ import Paper from '@mui/material/Paper';
 import Alert from '@mui/material/Alert';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
-import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import api from '../../services/api';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
-import type {
-  SettingDto,
-  HolidayDto,
-  HrIntegrationSettingsDto,
-  UpdateHrIntegrationSettingsRequest,
-} from '../../types';
+import type { SettingDto, HolidayDto } from '../../types';
 
-const defaultHrSettings: UpdateHrIntegrationSettingsRequest = {
-  syncMode: 'Monthly',
-  shamsiYearPrefix: '1404',
-  provinceCode: '147',
-  applyProvinceFilter: true,
-  applyShamsiYearFilter: true,
-  initialSyncMonthsBack: 12,
-  monthsPerSyncRun: 1,
-  syncDaysBack: 30,
-  employeeLimit: 10,
-  backgroundSyncEnabled: false,
-  syncIntervalMinutes: 5,
-};
+function formatDateInput(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
 
 export default function SettingsPage() {
   const [tab, setTab] = useState(0);
   const [settings, setSettings] = useState<SettingDto[]>([]);
   const [holidays, setHolidays] = useState<HolidayDto[]>([]);
-  const [hrSettings, setHrSettings] = useState<UpdateHrIntegrationSettingsRequest>(defaultHrSettings);
-  const [hrMeta, setHrMeta] = useState<Pick<HrIntegrationSettingsDto, 'isConnectionConfigured' | 'lastSyncAt'>>({
-    isConnectionConfigured: false,
-  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
+  const [connectionOk, setConnectionOk] = useState(false);
+
+  const today = new Date();
+  const monthAgo = new Date();
+  monthAgo.setDate(today.getDate() - 30);
+
+  const [fromDate, setFromDate] = useState(formatDateInput(monthAgo));
+  const [toDate, setToDate] = useState(formatDateInput(today));
+  const [provinceCode, setProvinceCode] = useState('147');
+  const [shamsiYearPrefix, setShamsiYearPrefix] = useState('1404');
+  const [employeeLimit, setEmployeeLimit] = useState(10);
+  const [applyProvinceFilter, setApplyProvinceFilter] = useState(true);
+  const [applyShamsiYearFilter, setApplyShamsiYearFilter] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [settingsRes, holidaysRes, hrRes] = await Promise.all([
+        const [settingsRes, holidaysRes, statusRes] = await Promise.all([
           api.get('/settings'),
           api.get('/settings/holidays'),
-          api.get('/hrintegration/settings'),
+          api.get('/attendancesync/status'),
         ]);
         const settingsData = settingsRes.data?.data ?? settingsRes.data;
         const holidaysData = holidaysRes.data?.data ?? holidaysRes.data;
-        const hrData: HrIntegrationSettingsDto | undefined = hrRes.data?.data ?? hrRes.data;
+        const status = statusRes.data;
 
         if (Array.isArray(settingsData)) {
           setSettings(settingsData);
@@ -77,25 +71,7 @@ export default function SettingsPage() {
           setEditedValues(initial);
         }
         if (Array.isArray(holidaysData)) setHolidays(holidaysData);
-        if (hrData) {
-          setHrSettings({
-            syncMode: hrData.syncMode,
-            shamsiYearPrefix: hrData.shamsiYearPrefix,
-            provinceCode: hrData.provinceCode,
-            applyProvinceFilter: hrData.applyProvinceFilter,
-            applyShamsiYearFilter: hrData.applyShamsiYearFilter,
-            initialSyncMonthsBack: hrData.initialSyncMonthsBack,
-            monthsPerSyncRun: hrData.monthsPerSyncRun,
-            syncDaysBack: hrData.syncDaysBack,
-            employeeLimit: hrData.employeeLimit,
-            backgroundSyncEnabled: hrData.backgroundSyncEnabled,
-            syncIntervalMinutes: hrData.syncIntervalMinutes,
-          });
-          setHrMeta({
-            isConnectionConfigured: hrData.isConnectionConfigured,
-            lastSyncAt: hrData.lastSyncAt,
-          });
-        }
+        setConnectionOk(status?.connection?.isConnectionConfigured ?? false);
       } catch {
         /* empty */
       } finally {
@@ -108,44 +84,41 @@ export default function SettingsPage() {
   const handleSave = async (key: string) => {
     setSaving(true);
     setSuccess('');
+    setError('');
     try {
       await api.put('/settings', { key, value: editedValues[key] });
       setSuccess('تنظیمات با موفقیت ذخیره شد');
     } catch {
-      /* error */
+      setError('خطا در ذخیره تنظیمات');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveHrSettings = async () => {
-    setSaving(true);
-    setSuccess('');
-    try {
-      const res = await api.put('/hrintegration/settings', hrSettings);
-      const saved: HrIntegrationSettingsDto | undefined = res.data?.data ?? res.data;
-      if (saved) {
-        setHrMeta({
-          isConnectionConfigured: saved.isConnectionConfigured,
-          lastSyncAt: saved.lastSyncAt,
-        });
-      }
-      setSuccess('تنظیمات سینک MIS ذخیره شد');
-    } catch {
-      setSuccess('');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleManualSync = async () => {
+  const handleFetchMisData = async () => {
     setSyncing(true);
     setSuccess('');
+    setError('');
     try {
-      await api.post('/attendancesync/run');
-      setSuccess('سینک دستی انجام شد');
-    } catch {
-      setSuccess('');
+      const res = await api.post('/attendancesync/run-range', {
+        fromDate,
+        toDate,
+        provinceCode,
+        shamsiYearPrefix,
+        applyProvinceFilter,
+        applyShamsiYearFilter,
+        employeeLimit,
+      });
+      const result = res.data?.result;
+      setSuccess(
+        res.data?.message ??
+          `دریافت انجام شد: ${result?.recordsProcessed ?? 0} رکورد، ${result?.recordsFailed ?? 0} خطا`
+      );
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'خطا در دریافت داده از MIS';
+      setError(message);
     } finally {
       setSyncing(false);
     }
@@ -155,7 +128,7 @@ export default function SettingsPage() {
 
   return (
     <Box>
-      <LoadingOverlay open={loading} />
+      <LoadingOverlay open={loading || syncing} />
       <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
         تنظیمات سیستم
       </Typography>
@@ -168,10 +141,15 @@ export default function SettingsPage() {
           {success}
         </Alert>
       )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
         <Tab label="تنظیمات عمومی" />
-        <Tab label="سینک MIS" />
+        <Tab label="دریافت از MIS" />
         <Tab label="تعطیلات رسمی" />
       </Tabs>
 
@@ -239,117 +217,62 @@ export default function SettingsPage() {
 
       {tab === 1 && (
         <Paper elevation={0} sx={{ p: 3 }}>
-          {!hrMeta.isConnectionConfigured && (
+          {!connectionOk && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              اتصال MIS در appsettings سرور پیکربندی نشده است. فقط مدیر فنی می‌تواند Server و Password را تنظیم کند.
+              اتصال MIS در سرور پیکربندی نشده است. فقط مدیر فنی می‌تواند Server و Password را در appsettings تنظیم کند.
             </Alert>
           )}
 
           <Alert severity="info" sx={{ mb: 3 }}>
-            سینک خودکار هنگام اجرای برنامه انجام نمی‌شود مگر اینکه «سینک خودکار» را فعال کنید.
-            برای تست، تعداد پرسنل را ۱۰ بگذارید و با دکمه «سینک دستی» داده بگیرید.
+            بازه تاریخ را انتخاب کنید و سپس «دریافت داده» را بزنید. هیچ داده‌ای به‌صورت خودکار لود نمی‌شود.
           </Alert>
 
           <Stack spacing={2}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
-                select
                 fullWidth
-                label="حالت سینک"
-                value={hrSettings.syncMode}
-                onChange={(e) => setHrSettings((prev) => ({ ...prev, syncMode: e.target.value }))}
-              >
-                <MenuItem value="Monthly">ماهانه</MenuItem>
-                <MenuItem value="DaysBack">بر اساس روز</MenuItem>
-              </TextField>
+                type="date"
+                label="از تاریخ"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <TextField
+                fullWidth
+                type="date"
+                label="تا تاریخ"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
                 fullWidth
                 label="سال شمسی"
-                value={hrSettings.shamsiYearPrefix}
-                onChange={(e) => setHrSettings((prev) => ({ ...prev, shamsiYearPrefix: e.target.value }))}
+                value={shamsiYearPrefix}
+                onChange={(e) => setShamsiYearPrefix(e.target.value)}
               />
               <TextField
                 fullWidth
                 label="کد استان"
-                value={hrSettings.provinceCode}
-                onChange={(e) => setHrSettings((prev) => ({ ...prev, provinceCode: e.target.value }))}
-              />
-            </Stack>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label="تعداد ماه بک‌فیل"
-                value={hrSettings.initialSyncMonthsBack}
-                onChange={(e) =>
-                  setHrSettings((prev) => ({
-                    ...prev,
-                    initialSyncMonthsBack: Number(e.target.value),
-                  }))
-                }
+                value={provinceCode}
+                onChange={(e) => setProvinceCode(e.target.value)}
               />
               <TextField
                 fullWidth
                 type="number"
-                label="تعداد ماه در هر اجرا"
-                value={hrSettings.monthsPerSyncRun}
-                onChange={(e) =>
-                  setHrSettings((prev) => ({
-                    ...prev,
-                    monthsPerSyncRun: Number(e.target.value),
-                  }))
-                }
-              />
-              <TextField
-                fullWidth
-                type="number"
-                label="محدودیت تعداد پرسنل (۰ = بدون محدودیت)"
-                value={hrSettings.employeeLimit}
-                onChange={(e) =>
-                  setHrSettings((prev) => ({
-                    ...prev,
-                    employeeLimit: Number(e.target.value),
-                  }))
-                }
-              />
-            </Stack>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                type="number"
-                label="روزهای گذشته (حالت DaysBack)"
-                value={hrSettings.syncDaysBack}
-                onChange={(e) =>
-                  setHrSettings((prev) => ({
-                    ...prev,
-                    syncDaysBack: Number(e.target.value),
-                  }))
-                }
-              />
-              <TextField
-                fullWidth
-                type="number"
-                label="فاصله سینک خودکار (دقیقه)"
-                value={hrSettings.syncIntervalMinutes}
-                onChange={(e) =>
-                  setHrSettings((prev) => ({
-                    ...prev,
-                    syncIntervalMinutes: Number(e.target.value),
-                  }))
-                }
+                label="حداکثر تعداد پرسنل (۰ = همه)"
+                value={employeeLimit}
+                onChange={(e) => setEmployeeLimit(Number(e.target.value))}
               />
             </Stack>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <FormControlLabel
                 control={
                   <Switch
-                    checked={hrSettings.applyProvinceFilter}
-                    onChange={(e) =>
-                      setHrSettings((prev) => ({
-                        ...prev,
-                        applyProvinceFilter: e.target.checked,
-                      }))
-                    }
+                    checked={applyProvinceFilter}
+                    onChange={(e) => setApplyProvinceFilter(e.target.checked)}
                   />
                 }
                 label="فیلتر استان"
@@ -357,56 +280,24 @@ export default function SettingsPage() {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={hrSettings.applyShamsiYearFilter}
-                    onChange={(e) =>
-                      setHrSettings((prev) => ({
-                        ...prev,
-                        applyShamsiYearFilter: e.target.checked,
-                      }))
-                    }
+                    checked={applyShamsiYearFilter}
+                    onChange={(e) => setApplyShamsiYearFilter(e.target.checked)}
                   />
                 }
                 label="فیلتر سال شمسی"
               />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={hrSettings.backgroundSyncEnabled}
-                    onChange={(e) =>
-                      setHrSettings((prev) => ({
-                        ...prev,
-                        backgroundSyncEnabled: e.target.checked,
-                      }))
-                    }
-                  />
-                }
-                label="سینک خودکار پس‌زمینه"
-              />
             </Stack>
           </Stack>
 
-          {hrMeta.lastSyncAt && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              آخرین سینک: {new Date(hrMeta.lastSyncAt).toLocaleString('fa-IR')}
-            </Typography>
-          )}
-
-          <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+          <Box sx={{ mt: 3 }}>
             <Button
               variant="contained"
-              startIcon={<SaveIcon />}
-              onClick={handleSaveHrSettings}
-              disabled={saving}
-            >
-              ذخیره تنظیمات سینک
-            </Button>
-            <Button
-              variant="outlined"
+              size="large"
               startIcon={<SyncIcon />}
-              onClick={handleManualSync}
-              disabled={syncing}
+              onClick={handleFetchMisData}
+              disabled={syncing || !fromDate || !toDate}
             >
-              سینک دستی (یک بازه)
+              دریافت داده از MIS
             </Button>
           </Box>
         </Paper>

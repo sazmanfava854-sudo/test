@@ -265,36 +265,14 @@ export interface HolidayDto {
   description?: string;
 }
 
-export interface HrIntegrationSettingsDto {
-  id?: string;
-  sourceType: string;
-  syncMode: string;
-  shamsiYearPrefix: string;
-  provinceCode: string;
-  applyProvinceFilter: boolean;
-  applyShamsiYearFilter: boolean;
-  initialSyncMonthsBack: number;
-  monthsPerSyncRun: number;
-  syncDaysBack: number;
-  employeeLimit: number;
-  backgroundSyncEnabled: boolean;
-  syncIntervalMinutes: number;
-  isConnectionConfigured: boolean;
-  lastSyncAt?: string;
-}
-
-export interface UpdateHrIntegrationSettingsRequest {
-  syncMode: string;
-  shamsiYearPrefix: string;
-  provinceCode: string;
-  applyProvinceFilter: boolean;
-  applyShamsiYearFilter: boolean;
-  initialSyncMonthsBack: number;
-  monthsPerSyncRun: number;
-  syncDaysBack: number;
-  employeeLimit: number;
-  backgroundSyncEnabled: boolean;
-  syncIntervalMinutes: number;
+export interface MisSyncDateRangeRequest {
+  fromDate: string;
+  toDate: string;
+  provinceCode?: string;
+  shamsiYearPrefix?: string;
+  applyProvinceFilter?: boolean;
+  applyShamsiYearFilter?: boolean;
+  employeeLimit?: number;
 }
 
 export interface ReportSummaryDto {
