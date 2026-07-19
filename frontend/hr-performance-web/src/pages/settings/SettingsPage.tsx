@@ -33,7 +33,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.4-dev';
+const APP_VERSION = '2.8.5-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -76,6 +76,7 @@ export default function SettingsPage() {
   const [toShamsi, setToShamsi] = useState<ShamsiDateParts>(defaultMisRange.to);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
   const [queryPreview, setQueryPreview] = useState('');
+  const [queryPreviewLoading, setQueryPreviewLoading] = useState(false);
   const [gregorianRangeLabel, setGregorianRangeLabel] = useState('');
 
   const syncPayload = useMemo(
@@ -142,10 +143,25 @@ export default function SettingsPage() {
   };
 
   const loadQueryPreview = async () => {
+    setQueryPreviewLoading(true);
+    setError('');
     try {
-      const res = await api.get('/attendancesync/preview-query', { params: syncPayload });
+      let res;
+      try {
+        res = await api.get('/attendancesync/preview-query', { params: syncPayload });
+      } catch {
+        res = await api.get('/health/mis-preview-query', { params: syncPayload });
+      }
       const data = res.data;
-      setQueryPreview(data?.sql ?? data?.sqlWithLiteralValues ?? '');
+      const sql = String(data?.sql ?? data?.sqlWithLiteralValues ?? '').trim();
+      if (!sql) {
+        const msg = 'کوئری خالی برگشت — پارامترهای تاریخ را بررسی کنید';
+        setQueryPreview(`-- خطا: ${msg}`);
+        setError(msg);
+        return;
+      }
+      setQueryPreview(sql);
+      setSuccess('کوئری ساخته شد — در کادر پایین نمایش داده می‌شود');
       const gr = data?.gregorianRange;
       if (gr?.from && gr?.to) {
         setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
@@ -153,9 +169,12 @@ export default function SettingsPage() {
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'خطا در ساخت کوئری';
+        'خطا در ساخت کوئری — لاگ سرور را در logs/hr-performance-*.log ببینید';
       setQueryPreview(`-- خطا: ${message}`);
+      setError(message);
       setGregorianRangeLabel('');
+    } finally {
+      setQueryPreviewLoading(false);
     }
   };
 
@@ -331,9 +350,9 @@ export default function SettingsPage() {
               size="large"
               startIcon={<CodeIcon />}
               onClick={() => void loadQueryPreview()}
-              disabled={syncing || !rangeIsValid}
+              disabled={syncing || queryPreviewLoading || !rangeIsValid}
             >
-              نمایش کوئری SQL
+              {queryPreviewLoading ? 'در حال ساخت کوئری...' : 'نمایش کوئری SQL'}
             </Button>
             <Button
               variant="contained"
@@ -345,6 +364,21 @@ export default function SettingsPage() {
               دریافت داده از MIS
             </Button>
           </Box>
+
+          <TextField
+            fullWidth
+            multiline
+            minRows={12}
+            label="کوئری SQL ساخته‌شده"
+            value={queryPreview || '— دکمه «نمایش کوئری SQL» را بزنید —'}
+            slotProps={{
+              input: {
+                readOnly: true,
+                sx: { fontFamily: 'monospace', fontSize: 12, direction: 'ltr', textAlign: 'left' },
+              },
+            }}
+            sx={{ mb: 2 }}
+          />
 
           {!rangeIsValid && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -383,15 +417,6 @@ export default function SettingsPage() {
                 gregorianRangeLabel ||
                 'برای جستجو در MIS به تاریخ میلادی تبدیل می‌شود — StartDate با ساعت هم پوشش داده می‌شود'
               }
-            />
-
-            <TextField
-              fullWidth
-              multiline
-              minRows={10}
-              label="کوئری SQL ساخته‌شده"
-              value={queryPreview || '— دکمه «نمایش کوئری» را بزنید —'}
-              slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 12 } } }}
             />
 
             <TextField

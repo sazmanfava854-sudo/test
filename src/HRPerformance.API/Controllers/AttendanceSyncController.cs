@@ -21,6 +21,7 @@ public class AttendanceSyncController : ControllerBase
     private readonly HrIntegrationConnectionService _connectionService;
     private readonly ApplicationDbContext _context;
     private readonly IMediator _mediator;
+    private readonly ILogger<AttendanceSyncController> _logger;
 
     public AttendanceSyncController(
         IAttendanceSyncService syncService,
@@ -28,7 +29,8 @@ public class AttendanceSyncController : ControllerBase
         MisHrDataReader misHrDataReader,
         HrIntegrationConnectionService connectionService,
         ApplicationDbContext context,
-        IMediator mediator)
+        IMediator mediator,
+        ILogger<AttendanceSyncController> logger)
     {
         _syncService = syncService;
         _currentUser = currentUser;
@@ -36,6 +38,7 @@ public class AttendanceSyncController : ControllerBase
         _connectionService = connectionService;
         _context = context;
         _mediator = mediator;
+        _logger = logger;
     }
 
     /// <summary>
@@ -132,6 +135,13 @@ public class AttendanceSyncController : ControllerBase
             var range = MisSyncRequestMapper.ToSyncRange(request);
             var runtimeSettings = _connectionService.BuildForSync(request);
             var preview = _misHrDataReader.BuildQueryPreview(runtimeSettings, range);
+            if (string.IsNullOrWhiteSpace(preview.SqlWithLiteralValues))
+            {
+                _logger.LogWarning("Preview-query returned empty SQL for range {Range}", range.Description);
+                return BadRequest(new { success = false, message = "کوئری ساخته‌شده خالی است" });
+            }
+
+            _logger.LogInformation("Preview-query built for {Range}", range.Description);
 
             return Ok(new
             {
@@ -152,6 +162,9 @@ public class AttendanceSyncController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Preview-query failed for {From}/{To}",
+                $"{shamsiFromYear}/{shamsiFromMonth}/{shamsiFromDay}",
+                $"{shamsiToYear}/{shamsiToMonth}/{shamsiToDay}");
             return BadRequest(new { success = false, message = ex.Message });
         }
     }

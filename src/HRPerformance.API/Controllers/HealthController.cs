@@ -1,3 +1,4 @@
+using HRPerformance.Domain.Models;
 using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Services.ExternalHr;
 using Microsoft.AspNetCore.Mvc;
@@ -57,5 +58,47 @@ public class HealthController : ControllerBase
             userId = status.UserId,
             passwordIsPlaceholder = status.PasswordIsPlaceholder
         });
+    }
+
+    /// <summary>
+    /// پیش‌نمایش کوئری MIS — بدون نیاز به لاگین (فقط ساخت SQL، بدون اتصال به MIS)
+    /// </summary>
+    [HttpGet("mis-preview-query")]
+    public IActionResult MisPreviewQuery(
+        [FromQuery] int shamsiFromYear,
+        [FromQuery] int shamsiFromMonth,
+        [FromQuery] int shamsiFromDay,
+        [FromQuery] int shamsiToYear,
+        [FromQuery] int shamsiToMonth,
+        [FromQuery] int shamsiToDay)
+    {
+        try
+        {
+            var request = new MisSyncDateRangeRequest(
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay);
+            var range = MisSyncRequestMapper.ToSyncRange(request);
+            var settings = new HrIntegrationRuntimeSettings
+            {
+                ProvinceCode = MisSyncDefaults.PersonnelGroupCode,
+                ApplyProvinceFilter = true,
+                ApplyShamsiYearFilter = false
+            };
+            var preview = MisQueryBuilder.BuildPreview(settings, range);
+            return Ok(new
+            {
+                success = true,
+                sql = preview.SqlWithLiteralValues,
+                gregorianRange = new
+                {
+                    from = preview.GregorianFrom.ToString("yyyy-MM-dd HH:mm:ss"),
+                    to = preview.GregorianToInclusive.ToString("yyyy-MM-dd HH:mm:ss")
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 }
