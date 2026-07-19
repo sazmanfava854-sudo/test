@@ -6,5 +6,10 @@
     <Nullable>enable</Nullable>
     <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <RunAnalyzersDuringLiveAnalysis>false</RunAnalyzersDuringLiveAnalysis>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
 </Project>

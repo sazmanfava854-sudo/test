@@ -2,14 +2,22 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-2.5.0-simple-local}"
+VERSION="${1:-2.5.1-simple-local}"
 STAGE="/tmp/HRPerformance-${VERSION}"
 OUT="$ROOT/releases/HRPerformance-${VERSION}.zip"
+PUBLISH_DIR="$STAGE/app"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 
-# Multi-project backend
+echo "==> Publishing pre-built app (no build needed on Windows)..."
+dotnet publish "$ROOT/src/HRPerformance.API/HRPerformance.API.csproj" \
+  -c Release \
+  -o "$PUBLISH_DIR" \
+  --no-self-contained \
+  -v minimal
+
+# Multi-project source (no bin/obj)
 mkdir -p "$STAGE/src"
 for proj in HRPerformance.Domain HRPerformance.Application HRPerformance.Infrastructure HRPerformance.API; do
   cp -r "$ROOT/src/$proj" "$STAGE/src/"
@@ -38,41 +46,41 @@ cp "$ROOT/HRPerformance.sln" "$STAGE/"
 cp "$ROOT/start.bat" "$ROOT/start-local.bat" "$ROOT/start.sh" "$ROOT/run-api.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/publish-iis.bat" "$ROOT/publish-iis.ps1" "$ROOT/iis-fix-permissions.bat" "$STAGE/" 2>/dev/null || true
 mkdir -p "$STAGE/scripts"
-cp "$ROOT/scripts/init-database.sh" "$STAGE/scripts/" 2>/dev/null || true
+cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || true
 
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
 
 cat > "$STAGE/README-LOCAL.txt" << 'EOF'
-HR Performance — نسخه لوکال (معماری v2.0.0-simple + فیلتر تاریخ MIS)
+HR Performance — نسخه لوکال (بدون نیاز به Build)
 
-پیش‌نیاز: .NET 8 SDK + SQL Server
+پیش‌نیاز: .NET 8 Runtime/SDK + SQL Server
 
 1) database/01 تا 11 را روی SQL Server اجرا کنید
-2) src/HRPerformance.API/appsettings.Development.json را تنظیم کنید
-3) start-local.bat (ویندوز) یا start.sh (لینوکس)
+2) app/appsettings.Development.json را تنظیم کنید (پسورد SQL و MIS)
+3) دوبار کلیک روی start-local.bat
 4) http://localhost:5050
+
+⚡ پوشه app/ از قبل Build شده — start-local.bat بدون انتظار اجرا می‌شود.
 
 سینک MIS (فقط دستی از UI):
   تنظیمات > دریافت از MIS > انتخاب بازه تاریخ > دریافت داده
 
-توسعه UI (اختیاری):
-  cd frontend/hr-performance-web
-  npm install && npm run dev
+توسعه سورس (اختیاری):
+  scripts\build-once.bat
 EOF
 
 cat > "$STAGE/VERSION.txt" << EOF
-HR Performance System — SIMPLE LOCAL
+HR Performance System — SIMPLE LOCAL (PRE-BUILT)
 Version: ${VERSION}
 Build Date: $(date +%Y-%m-%d)
-.NET: 8 SDK required
+.NET: 8 Runtime required
 
 شامل:
-- HRPerformance.sln (4 پروژه: Domain, Application, Infrastructure, API)
+- app/ (از قبل Build شده — بدون انتظار)
+- HRPerformance.sln (4 پروژه برای توسعه)
 - Directory.Build.props, global.json, nuget.config
 - database/ (01-11)
-- docs/
-- frontend/hr-performance-web (سورس)
-- start-local.bat / start.sh
+- start-local.bat
 EOF
 
 mkdir -p "$ROOT/releases"

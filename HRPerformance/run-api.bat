@@ -1,18 +1,19 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0src\HRPerformance.API"
+cd /d "%~dp0"
 
-echo ==========================================
-echo   HR Performance API
-echo ==========================================
-echo.
-echo آدرس: http://localhost:5050
-echo تست:  http://localhost:5050/api/health
-echo.
-echo این پنجره را باز نگه دارید. توقف: Ctrl+C
-echo.
+set ASPNETCORE_ENVIRONMENT=Development
+set ASPNETCORE_URLS=http://localhost:5050
 
-dotnet run --launch-profile http
-echo.
-echo برنامه بسته شد. کد خروج: %ERRORLEVEL%
+if exist "app\HRPerformance.API.dll" (
+    echo API: http://localhost:5050
+    pushd app
+    dotnet HRPerformance.API.dll
+    popd
+) else (
+  cd src\HRPerformance.API
+  dotnet run --launch-profile http --no-build 2>nul
+  if errorlevel 1 dotnet run --launch-profile http
+)
+
 pause

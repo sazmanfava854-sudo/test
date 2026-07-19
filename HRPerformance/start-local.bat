@@ -14,23 +14,47 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+set ASPNETCORE_ENVIRONMENT=Development
+set ASPNETCORE_URLS=http://localhost:5050
+
+REM نسخه از پیش Build شده — بدون انتظار (توصیه‌شده)
+if exist "app\HRPerformance.API.dll" (
+    echo اجرای نسخه آماده — بدون Build...
+    echo   Application: http://localhost:5050
+    echo   Health:      http://localhost:5050/api/health
+    echo.
+    echo تنظیمات: app\appsettings.Development.json
+    echo.
+    pushd app
+    dotnet HRPerformance.API.dll
+    popd
+    goto :done
+)
+
+echo نسخه آماده یافت نشد — یک بار Build می‌شود...
 echo تنظیمات: src\HRPerformance.API\appsettings.Development.json
-echo   ConnectionStrings:DefaultConnection
-echo   HrIntegration:Password
-echo.
-echo   Application: http://localhost:5050
-echo   Swagger:     http://localhost:5050/swagger
-echo   Health:      http://localhost:5050/api/health
-echo.
-echo معماری: 4 پروژه (Domain / Application / Infrastructure / API)
-echo اولین بار: dotnet restore HRPerformance.sln
-echo.
-echo برای توقف: Ctrl+C
-echo این پنجره را نبندید — تا وقتی باز است سرور روشن است.
-echo.
-echo اگر Network Error دیدید، اول این آدرس را در مرورگر باز کنید:
-echo   http://localhost:5050/api/health
 echo.
 
-dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http
+if not exist "src\HRPerformance.API\obj\project.assets.json" (
+    call scripts\restore-packages.bat
+    if errorlevel 1 goto :done
+)
+
+echo Building (فقط یک بار)...
+dotnet build HRPerformance.sln -c Release -v minimal
+if errorlevel 1 (
+    echo Build ناموفق بود.
+    goto :done
+)
+
+echo.
+echo   Application: http://localhost:5050
+echo   Health:      http://localhost:5050/api/health
+echo.
+echo برای توقف: Ctrl+C
+echo.
+
+dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http --no-build
+
+:done
 pause
