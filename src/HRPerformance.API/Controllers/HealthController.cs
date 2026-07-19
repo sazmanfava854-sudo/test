@@ -65,18 +65,34 @@ public class HealthController : ControllerBase
     /// </summary>
     [HttpGet("mis-preview-query")]
     public IActionResult MisPreviewQuery(
-        [FromQuery] int shamsiFromYear,
-        [FromQuery] int shamsiFromMonth,
-        [FromQuery] int shamsiFromDay,
-        [FromQuery] int shamsiToYear,
-        [FromQuery] int shamsiToMonth,
-        [FromQuery] int shamsiToDay)
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string? shamsiFromYear,
+        [FromQuery] string? shamsiFromMonth,
+        [FromQuery] string? shamsiFromDay,
+        [FromQuery] string? shamsiToYear,
+        [FromQuery] string? shamsiToMonth,
+        [FromQuery] string? shamsiToDay)
     {
+        if (!MisShamsiQueryParser.TryParseRange(
+                from, to,
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay,
+                out var request, out var parseError))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = parseError,
+                example =
+                    "/api/health/mis-preview-query?from=1404/04/10&to=1404/04/11",
+                exampleAlt =
+                    "/api/health/mis-preview-query?shamsiFromYear=1404&shamsiFromMonth=4&shamsiFromDay=10&shamsiToYear=1404&shamsiToMonth=4&shamsiToDay=11"
+            });
+        }
+
         try
         {
-            var request = new MisSyncDateRangeRequest(
-                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
-                shamsiToYear, shamsiToMonth, shamsiToDay);
             var range = MisSyncRequestMapper.ToSyncRange(request);
             var settings = new HrIntegrationRuntimeSettings
             {
@@ -90,8 +106,8 @@ public class HealthController : ControllerBase
                 success = true,
                 apiVersion = "2.8.6-dev",
                 shamsiRange =
-                    $"{shamsiFromYear}/{shamsiFromMonth:D2}/{shamsiFromDay:D2} تا " +
-                    $"{shamsiToYear}/{shamsiToMonth:D2}/{shamsiToDay:D2}",
+                    $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
+                    $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",
                 sql = preview.SqlWithLiteralValues,
                 gregorianRange = new
                 {

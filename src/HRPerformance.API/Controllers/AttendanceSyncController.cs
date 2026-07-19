@@ -119,19 +119,28 @@ public class AttendanceSyncController : ControllerBase
 
     [HttpGet("preview-query")]
     public IActionResult PreviewQuery(
-        [FromQuery] int shamsiFromYear,
-        [FromQuery] int shamsiFromMonth,
-        [FromQuery] int shamsiFromDay,
-        [FromQuery] int shamsiToYear,
-        [FromQuery] int shamsiToMonth,
-        [FromQuery] int shamsiToDay,
-        [FromQuery] int employeeLimit = 0)
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string? shamsiFromYear,
+        [FromQuery] string? shamsiFromMonth,
+        [FromQuery] string? shamsiFromDay,
+        [FromQuery] string? shamsiToYear,
+        [FromQuery] string? shamsiToMonth,
+        [FromQuery] string? shamsiToDay,
+        [FromQuery] string? employeeLimit = null)
     {
+        if (!MisShamsiQueryParser.TryParseRange(
+                from, to,
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay,
+                out var request, out var parseError,
+                ParseEmployeeLimit(employeeLimit)))
+        {
+            return BadRequest(new { success = false, message = parseError });
+        }
+
         try
         {
-            var request = new MisSyncDateRangeRequest(
-                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
-                shamsiToYear, shamsiToMonth, shamsiToDay, employeeLimit);
             var range = MisSyncRequestMapper.ToSyncRange(request);
             var runtimeSettings = _connectionService.BuildForSync(request);
             var preview = _misHrDataReader.BuildQueryPreview(runtimeSettings, range);
@@ -147,7 +156,9 @@ public class AttendanceSyncController : ControllerBase
             {
                 success = true,
                 apiVersion = "2.8.6-dev",
-                shamsiRange = $"{shamsiFromYear}/{shamsiFromMonth:D2}/{shamsiFromDay:D2} تا {shamsiToYear}/{shamsiToMonth:D2}/{shamsiToDay:D2}",
+                shamsiRange =
+                    $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
+                    $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",
                 gregorianRange = new
                 {
                     from = preview.GregorianFrom.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -164,34 +175,41 @@ public class AttendanceSyncController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Preview-query failed for {From}/{To}",
-                $"{shamsiFromYear}/{shamsiFromMonth}/{shamsiFromDay}",
-                $"{shamsiToYear}/{shamsiToMonth}/{shamsiToDay}");
+            _logger.LogError(ex, "Preview-query failed for {Range}", request);
             return BadRequest(new { success = false, message = ex.Message });
         }
     }
 
     [HttpGet("diagnostic")]
     public async Task<IActionResult> Diagnostic(
-        [FromQuery] int shamsiFromYear,
-        [FromQuery] int shamsiFromMonth,
-        [FromQuery] int shamsiFromDay,
-        [FromQuery] int shamsiToYear,
-        [FromQuery] int shamsiToMonth,
-        [FromQuery] int shamsiToDay,
-        [FromQuery] int employeeLimit = 0,
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string? shamsiFromYear,
+        [FromQuery] string? shamsiFromMonth,
+        [FromQuery] string? shamsiFromDay,
+        [FromQuery] string? shamsiToYear,
+        [FromQuery] string? shamsiToMonth,
+        [FromQuery] string? shamsiToDay,
+        [FromQuery] string? employeeLimit = null,
         CancellationToken ct = default)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
 
+        if (!MisShamsiQueryParser.TryParseRange(
+                from, to,
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay,
+                out var request, out var parseError,
+                ParseEmployeeLimit(employeeLimit)))
+        {
+            return BadRequest(new { success = false, message = parseError });
+        }
+
         MisSyncRange range;
         try
         {
-            var request = new MisSyncDateRangeRequest(
-                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
-                shamsiToYear, shamsiToMonth, shamsiToDay, employeeLimit);
             range = MisSyncRequestMapper.ToSyncRange(request);
         }
         catch (Exception ex)
@@ -199,10 +217,7 @@ public class AttendanceSyncController : ControllerBase
             return BadRequest(new { success = false, message = ex.Message });
         }
 
-        var runtimeSettings = _connectionService.BuildForSync(
-            new MisSyncDateRangeRequest(
-                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
-                shamsiToYear, shamsiToMonth, shamsiToDay, employeeLimit));
+        var runtimeSettings = _connectionService.BuildForSync(request);
 
         var diagnostic = await _misHrDataReader.GetDiagnosticAsync(runtimeSettings, range, ct);
         diagnostic.EmployeesInHrDatabase = await _context.Employees
@@ -248,19 +263,30 @@ public class AttendanceSyncController : ControllerBase
 
     [HttpGet("records")]
     public async Task<IActionResult> Records(
-        [FromQuery] int shamsiFromYear,
-        [FromQuery] int shamsiFromMonth,
-        [FromQuery] int shamsiFromDay,
-        [FromQuery] int shamsiToYear,
-        [FromQuery] int shamsiToMonth,
-        [FromQuery] int shamsiToDay,
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string? shamsiFromYear,
+        [FromQuery] string? shamsiFromMonth,
+        [FromQuery] string? shamsiFromDay,
+        [FromQuery] string? shamsiToYear,
+        [FromQuery] string? shamsiToMonth,
+        [FromQuery] string? shamsiToDay,
         CancellationToken ct = default)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
-        var request = new MisSyncDateRangeRequest(
-            shamsiFromYear, shamsiFromMonth, shamsiFromDay,
-            shamsiToYear, shamsiToMonth, shamsiToDay);
+        if (!MisShamsiQueryParser.TryParseRange(
+                from, to,
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay,
+                out var request, out var parseError))
+        {
+            return BadRequest(new { success = false, message = parseError });
+        }
+
         var (fromDate, toDate) = MisSyncRequestMapper.ToGregorianRange(request);
         return Ok(await _mediator.Send(new GetAttendanceRecordsQuery(orgId, fromDate, toDate), ct));
     }
+
+    private static int ParseEmployeeLimit(string? raw) =>
+        int.TryParse(raw?.Trim(), out var limit) ? Math.Max(0, limit) : 0;
 }
