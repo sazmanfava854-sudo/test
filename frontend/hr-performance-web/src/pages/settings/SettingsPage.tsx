@@ -68,7 +68,6 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [connectionOk, setConnectionOk] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<MisConnectionStatus | null>(null);
 
   const defaultMisRange = useMemo(() => getDefaultMisSyncRange(), []);
   const [fromShamsi, setFromShamsi] = useState<ShamsiDateParts>(defaultMisRange.from);
@@ -116,7 +115,6 @@ export default function SettingsPage() {
         const conn =
           parseMisConnection(misHealthRes.data) ??
           parseMisConnection((statusRes.data as { connection?: unknown } | null)?.connection);
-        setConnectionStatus(conn);
         setConnectionOk(conn?.isConnectionConfigured ?? false);
       } catch {
         /* empty */
