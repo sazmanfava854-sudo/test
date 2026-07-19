@@ -10,7 +10,7 @@ public class MisHrDataReader
     private readonly IConfiguration _configuration;
     private readonly ILogger<MisHrDataReader> _logger;
 
-    private const string SelectColumns = @"SELECT
+    internal const string SelectColumnsSql = @"SELECT
     CAST(ID AS NUMERIC(20,0)) AS ID,
     CAST([Code] AS NVARCHAR(50)) AS [Code],
     [PerCod],
@@ -26,8 +26,7 @@ public class MisHrDataReader
     [EndDate],
     CAST(CAST([year] AS NVARCHAR(4)) AS INT) AS [year],
     CAST([Month] AS INT) AS [Month],
-    [FirstTimeType]
-FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
+    [FirstTimeType]";
 
     public MisHrDataReader(IConfiguration configuration, ILogger<MisHrDataReader> logger)
     {
@@ -42,7 +41,7 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
     {
         var records = new List<MisHourlyLeaveRecord>();
         var customQuery = _configuration["HrIntegration:SqlQuery"];
-        var query = string.IsNullOrWhiteSpace(customQuery) ? BuildQuery(settings, range) : customQuery;
+        var query = string.IsNullOrWhiteSpace(customQuery) ? MisQueryBuilder.BuildSelectQuery(settings, range) : customQuery;
         var filters = GetFilterSettings(settings);
         var connectionString = settings.MisConnectionString
             ?? throw new InvalidOperationException("اتصال MIS پیکربندی نشده است");
@@ -111,6 +110,9 @@ FROM [MIS].[dbo].[HZG_View_HourlyLeave]";
         return records;
     }
 
+    public MisQueryPreview BuildQueryPreview(HrIntegrationRuntimeSettings settings, MisSyncRange range) =>
+        MisQueryBuilder.BuildPreview(settings, range);
+
     public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(
         HrIntegrationRuntimeSettings settings,
         MisSyncRange range,
@@ -172,7 +174,8 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
                     ("@ShamsiYearPrefix", filters.ShamsiYearPrefix));
             }
 
-            var activeQuery = BuildQuery(settings, range).Replace(SelectColumns, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
+            var activeQuery = MisQueryBuilder.BuildSelectQuery(settings, range)
+                .Replace(MisHrDataReader.SelectColumnsSql, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
             await using var command = new SqlCommand(activeQuery, connection);
             command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
             command.Parameters.AddWithValue("@SyncTo", range.SyncToExclusive);
@@ -196,55 +199,6 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
         return result;
     }
 
-    private static string BuildQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
-    {
-        var filters = GetFilterSettings(settings);
-        var conditions = new List<string>
-        {
-            "[StartDate] >= @SyncFrom",
-            "[StartDate] < @SyncTo"
-        };
-
-        if (range?.ShamsiFromYm is int fromYm && range.ShamsiToYm is int toYm)
-        {
-            conditions.Add("(CAST([year] AS INT) * 100 + CAST([Month] AS INT)) >= @ShamsiFromYm");
-            conditions.Add("(CAST([year] AS INT) * 100 + CAST([Month] AS INT)) <= @ShamsiToYm");
-        }
-
-        if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
-        {
-            conditions.Add("CAST([year] AS INT) = @ShamsiYear");
-            conditions.Add("CAST([Month] AS INT) = @ShamsiMonth");
-        }
-
-        if (filters.ApplyProvinceFilter)
-            conditions.Add("CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode");
-
-        if (filters.ApplyShamsiYearFilter)
-        {
-            conditions.Add(@"(
-        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
-        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
-        OR CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix
-      )");
-        }
-
-        if (filters.EmployeeLimit > 0)
-        {
-            var employeeSelectionConditions = string.Join("\n          AND ", conditions);
-            conditions.Add($@"[PerCod] IN (
-        SELECT TOP (@EmployeeLimit) [PerCod]
-        FROM [MIS].[dbo].[HZG_View_HourlyLeave]
-        WHERE {employeeSelectionConditions}
-          AND [PerCod] IS NOT NULL
-        GROUP BY [PerCod]
-        ORDER BY [PerCod]
-      )");
-        }
-
-        return $"{SelectColumns}\nWHERE {string.Join("\n  AND ", conditions)}\nORDER BY [StartDate] DESC";
-    }
-
     private static MisFilterSettings GetFilterSettings(HrIntegrationRuntimeSettings settings)
     {
         var shamsiYearPrefix = settings.ShamsiYearPrefix;
@@ -261,12 +215,6 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
 
     private static void AddFilterParameters(SqlCommand command, MisFilterSettings filters, MisSyncRange? range = null)
     {
-        if (range?.ShamsiFromYm is int fromYm && range.ShamsiToYm is int toYm)
-        {
-            command.Parameters.Add("@ShamsiFromYm", SqlDbType.Int).Value = fromYm;
-            command.Parameters.Add("@ShamsiToYm", SqlDbType.Int).Value = toYm;
-        }
-
         if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
         {
             command.Parameters.Add("@ShamsiYear", SqlDbType.Int).Value = shamsiYear;

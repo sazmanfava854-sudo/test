@@ -50,6 +50,8 @@ export default function SettingsPage() {
   const [fromShamsi, setFromShamsi] = useState<ShamsiDateParts>(defaultRange.from);
   const [toShamsi, setToShamsi] = useState<ShamsiDateParts>(defaultRange.to);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
+  const [queryPreview, setQueryPreview] = useState('');
+  const [gregorianRangeLabel, setGregorianRangeLabel] = useState('');
 
   const syncPayload = useMemo(
     () => toMisSyncRequestPayload(fromShamsi, toShamsi),
@@ -101,6 +103,27 @@ export default function SettingsPage() {
     }
   };
 
+  const loadQueryPreview = async () => {
+    try {
+      const res = await api.get('/attendancesync/preview-query', { params: syncPayload });
+      const data = res.data;
+      setQueryPreview(data?.sql ?? '');
+      const gr = data?.gregorianRange;
+      if (gr?.from && gr?.to) {
+        setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
+      }
+    } catch {
+      setQueryPreview('');
+      setGregorianRangeLabel('');
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 1) {
+      void loadQueryPreview();
+    }
+  }, [tab, syncPayload]);
+
   const loadAttendanceRecords = async () => {
     const res = await api.get('/attendancesync/records', {
       params: syncPayload,
@@ -118,8 +141,16 @@ export default function SettingsPage() {
       const res = await api.post('/attendancesync/run-range', syncPayload);
       const result = res.data?.result;
       const processed = result?.recordsProcessed ?? 0;
+      const preview = res.data?.queryPreview;
+      if (preview?.sqlWithLiteralValues) setQueryPreview(preview.sqlWithLiteralValues);
+      const gr = res.data?.gregorianRange;
+      if (gr?.from && gr?.to) {
+        setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
+      }
       if (processed === 0) {
-        setError('هیچ رکوردی دریافت نشد. بازه تاریخ شمسی را بررسی کنید.');
+        setError(
+          'هیچ رکوردی دریافت نشد. بازه شمسی به میلادی تبدیل شده و روی StartDate (با ساعت) جستجو می‌شود. کوئری ساخته‌شده را در پایین بررسی کنید.',
+        );
       } else {
         setSuccess(
           res.data?.message ??
@@ -264,8 +295,23 @@ export default function SettingsPage() {
               label="بازه انتخاب‌شده"
               value={`${formatShamsiParts(fromShamsi)} تا ${formatShamsiParts(toShamsi)}`}
               slotProps={{ input: { readOnly: true } }}
-              helperText="برای جستجو در MIS به تاریخ میلادی تبدیل می‌شود"
+              helperText={
+                gregorianRangeLabel ||
+                'برای جستجو در MIS به تاریخ میلادی تبدیل می‌شود — StartDate با ساعت هم پوشش داده می‌شود'
+              }
             />
+
+            {queryPreview && (
+              <TextField
+                fullWidth
+                multiline
+                minRows={8}
+                label="کوئری SQL ساخته‌شده"
+                value={queryPreview}
+                slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 12 } } }}
+                helperText="مثال: StartDate=2025-10-04 12:23:00 معادل شمسی 1404/07/12 است — نه 1404/04/28"
+              />
+            )}
 
             <TextField
               fullWidth

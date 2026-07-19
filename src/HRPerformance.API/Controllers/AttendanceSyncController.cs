@@ -51,6 +51,8 @@ public class AttendanceSyncController : ControllerBase
         try
         {
             var range = MisSyncRequestMapper.ToSyncRange(request);
+            var runtimeSettings = _connectionService.BuildForSync(request);
+            var queryPreview = _misHrDataReader.BuildQueryPreview(runtimeSettings, range);
             var result = await _syncService.SyncDateRangeAsync(orgId, request, ct);
             return Ok(new
             {
@@ -59,8 +61,16 @@ public class AttendanceSyncController : ControllerBase
                 result,
                 gregorianRange = new
                 {
-                    from = range.SyncFrom.ToString("yyyy-MM-dd"),
-                    to = range.SyncToExclusive.AddDays(-1).ToString("yyyy-MM-dd")
+                    from = range.SyncFrom.ToString("yyyy-MM-dd HH:mm:ss"),
+                    to = range.SyncToExclusive.AddTicks(-1).ToString("yyyy-MM-dd HH:mm:ss")
+                },
+                queryPreview = new
+                {
+                    queryPreview.Note,
+                    queryPreview.SqlWithLiteralValues,
+                    parameters = queryPreview.Parameters.ToDictionary(
+                        p => p.Key,
+                        p => p.Value is DateTime dt ? dt.ToString("yyyy-MM-dd HH:mm:ss") : p.Value)
                 }
             });
         }
@@ -91,6 +101,48 @@ public class AttendanceSyncController : ControllerBase
             lastSyncAt = lastSync,
             employeesInDatabase = await _context.Employees.CountAsync(e => e.OrganizationId == orgId && !e.IsDeleted, ct)
         });
+    }
+
+    [HttpGet("preview-query")]
+    public IActionResult PreviewQuery(
+        [FromQuery] int shamsiFromYear,
+        [FromQuery] int shamsiFromMonth,
+        [FromQuery] int shamsiFromDay,
+        [FromQuery] int shamsiToYear,
+        [FromQuery] int shamsiToMonth,
+        [FromQuery] int shamsiToDay,
+        [FromQuery] int employeeLimit = 0)
+    {
+        try
+        {
+            var request = new MisSyncDateRangeRequest(
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay, employeeLimit);
+            var range = MisSyncRequestMapper.ToSyncRange(request);
+            var runtimeSettings = _connectionService.BuildForSync(request);
+            var preview = _misHrDataReader.BuildQueryPreview(runtimeSettings, range);
+
+            return Ok(new
+            {
+                success = true,
+                shamsiRange = $"{shamsiFromYear}/{shamsiFromMonth:D2}/{shamsiFromDay:D2} تا {shamsiToYear}/{shamsiToMonth:D2}/{shamsiToDay:D2}",
+                gregorianRange = new
+                {
+                    from = preview.GregorianFrom.ToString("yyyy-MM-dd HH:mm:ss"),
+                    to = preview.GregorianToInclusive.ToString("yyyy-MM-dd HH:mm:ss")
+                },
+                preview.Note,
+                sql = preview.SqlWithLiteralValues,
+                sqlWithParameters = preview.SqlWithParameters,
+                parameters = preview.Parameters.ToDictionary(
+                    p => p.Key,
+                    p => p.Value is DateTime dt ? dt.ToString("yyyy-MM-dd HH:mm:ss") : p.Value)
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpGet("diagnostic")]
