@@ -59,7 +59,7 @@ HR Performance — نسخه توسعه لوکال (سورس کامل)
 
 ─── راه‌اندازی اولین بار ───
 1) Extract کنید — ترجیحاً C:\Projects\HRPerformance (نه Downloads)
-2) database/01 تا 11 را روی SQL Server اجرا کنید
+2) database/01 تا 15 را روی SQL Server اجرا کنید
 3) src\HRPerformance.API\appsettings.Development.json — پسورد SQL
 4) scripts\restore-packages.bat  (فقط اولین بار — ممکن است چند دقیقه)
 5) start-local.bat  یا  HRPerformance.sln را در Cursor باز کنید
