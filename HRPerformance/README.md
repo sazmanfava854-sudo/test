@@ -71,6 +71,33 @@ cd HRPerformance
 
 برای توقف: `Ctrl+C`
 
+### خطای «address already in use» روی پورت 5050
+
+اگر پیام `Failed to bind to address http://127.0.0.1:5050` دیدید، معمولاً یک نمونه قبلی API هنوز در حال اجراست (مثلاً پنجره `start-local.bat` بسته شده ولی `dotnet` هنوز زنده است).
+
+اسکریپت‌های `start-local.bat` / `start.ps1` / `start.sh` قبل از اجرا سعی می‌کنند پورت را آزاد کنند. اگر خودتان می‌خواهید:
+
+**Windows (CMD):**
+```bat
+scripts\free-port-5050.bat
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\free-port-5050.ps1
+```
+
+**دستی:**
+```bat
+netstat -ano | findstr :5050
+taskkill /PID <pid> /F
+```
+
+**Linux / macOS:**
+```bash
+./scripts/free-port-5050.sh
+```
+
 ### پیش‌نیازها
 
 | نرم‌افزار | نسخه | دانلود |

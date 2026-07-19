@@ -16,6 +16,10 @@ if ! command -v dotnet >/dev/null 2>&1; then
 fi
 
 echo ""
+echo "بررسی پورت 5050..."
+bash "$ROOT_DIR/scripts/free-port-5050.sh"
+
+echo ""
 echo "🚀 در حال اجرا..."
 echo "   Application → http://localhost:5050"
 echo "   Swagger     → http://localhost:5050/swagger"

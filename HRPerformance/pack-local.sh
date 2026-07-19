@@ -40,7 +40,7 @@ cp "$ROOT/HRPerformance.sln" "$STAGE/"
 cp "$ROOT/start.bat" "$ROOT/start-local.bat" "$ROOT/start.sh" "$ROOT/run-api.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/publish-iis.bat" "$ROOT/publish-iis.ps1" "$ROOT/iis-fix-permissions.bat" "$STAGE/" 2>/dev/null || true
 mkdir -p "$STAGE/scripts"
-cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || true
+cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$ROOT/scripts/"*.ps1 "$STAGE/scripts/" 2>/dev/null || true
 
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
 

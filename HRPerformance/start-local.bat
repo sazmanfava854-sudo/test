@@ -36,6 +36,17 @@ if not exist "%DLL%" (
 )
 
 echo.
+echo بررسی پورت 5050...
+call scripts\free-port-5050.bat
+if errorlevel 1 (
+    echo.
+    echo پورت 5050 آزاد نشد. احتمالاً یک نمونه قبلی HR Performance هنوز در حال اجراست.
+    echo   netstat -ano ^| findstr :5050
+    echo   taskkill /PID ^<pid^> /F
+    goto :done
+)
+
+echo.
 echo   Application: http://localhost:5050
 echo   Health:      http://localhost:5050/api/health
 echo   Swagger:     http://localhost:5050/swagger
