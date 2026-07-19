@@ -66,7 +66,7 @@ public class MisHrDataReader
                 filters.ApplyProvinceFilter,
                 filters.ProvinceCode,
                 filters.ApplyShamsiYearFilter,
-                filters.ShamsiYearPattern,
+                filters.ShamsiYearPrefix,
                 filters.EmployeeLimit);
 
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -160,17 +160,12 @@ public class MisHrDataReader
 
             if (filters.ApplyShamsiYearFilter)
             {
-                result.CountAfterShamsiYear = await CountAsync(connection, $@"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]
+                result.CountAfterShamsiYear = await CountAsync(connection, @"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]
 WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
-  AND (
-        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
-        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
-        OR CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix
-      )",
+  AND CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix",
                     ct,
                     ("@SyncFrom", range.SyncFrom),
                     ("@SyncTo", range.SyncToExclusive),
-                    ("@ShamsiYearPattern", filters.ShamsiYearPattern),
                     ("@ShamsiYearPrefix", filters.ShamsiYearPrefix));
             }
 
@@ -206,7 +201,6 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
         {
             ProvinceCode = settings.ProvinceCode,
             ShamsiYearPrefix = shamsiYearPrefix,
-            ShamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%",
             ApplyProvinceFilter = settings.ApplyProvinceFilter,
             ApplyShamsiYearFilter = settings.ApplyShamsiYearFilter,
             EmployeeLimit = settings.EmployeeLimit
@@ -225,10 +219,7 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
             command.Parameters.Add("@ProvinceCode", SqlDbType.NVarChar, 20).Value = filters.ProvinceCode;
 
         if (filters.ApplyShamsiYearFilter)
-        {
-            command.Parameters.Add("@ShamsiYearPattern", SqlDbType.NVarChar, 20).Value = filters.ShamsiYearPattern;
             command.Parameters.Add("@ShamsiYearPrefix", SqlDbType.NVarChar, 4).Value = filters.ShamsiYearPrefix;
-        }
 
         if (filters.EmployeeLimit > 0)
             command.Parameters.Add("@EmployeeLimit", SqlDbType.Int).Value = filters.EmployeeLimit;
@@ -256,7 +247,6 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
     {
         public string ProvinceCode { get; init; } = "147";
         public string ShamsiYearPrefix { get; init; } = "1404";
-        public string ShamsiYearPattern { get; init; } = "1404%";
         public bool ApplyProvinceFilter { get; init; } = true;
         public bool ApplyShamsiYearFilter { get; init; } = true;
         public int EmployeeLimit { get; init; }

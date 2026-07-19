@@ -66,13 +66,7 @@ ORDER BY [StartDate] DESC";
             conditions.Add("CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode");
 
         if (filters.ApplyShamsiYearFilter)
-        {
-            conditions.Add(@"(
-        CAST([ShamsiDate] AS NVARCHAR(30)) LIKE @ShamsiYearPattern
-        OR REPLACE(CAST([ShamsiDate] AS NVARCHAR(30)), '/', '') LIKE @ShamsiYearPattern
-        OR CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix
-      )");
-        }
+            conditions.Add("CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix");
 
         if (filters.EmployeeLimit > 0)
         {
@@ -111,10 +105,7 @@ ORDER BY [StartDate] DESC";
             parameters["@ProvinceCode"] = filters.ProvinceCode;
 
         if (filters.ApplyShamsiYearFilter)
-        {
-            parameters["@ShamsiYearPattern"] = filters.ShamsiYearPattern;
             parameters["@ShamsiYearPrefix"] = filters.ShamsiYearPrefix;
-        }
 
         if (filters.EmployeeLimit > 0)
             parameters["@EmployeeLimit"] = filters.EmployeeLimit;
@@ -145,7 +136,6 @@ ORDER BY [StartDate] DESC";
         {
             ProvinceCode = settings.ProvinceCode,
             ShamsiYearPrefix = shamsiYearPrefix,
-            ShamsiYearPattern = shamsiYearPrefix.TrimEnd('%') + "%",
             ApplyProvinceFilter = settings.ApplyProvinceFilter,
             ApplyShamsiYearFilter = settings.ApplyShamsiYearFilter,
             EmployeeLimit = settings.EmployeeLimit
@@ -156,7 +146,6 @@ ORDER BY [StartDate] DESC";
     {
         public string ProvinceCode { get; init; } = "147";
         public string ShamsiYearPrefix { get; init; } = "1404";
-        public string ShamsiYearPattern { get; init; } = "1404%";
         public bool ApplyProvinceFilter { get; init; } = true;
         public bool ApplyShamsiYearFilter { get; init; } = true;
         public int EmployeeLimit { get; init; }
