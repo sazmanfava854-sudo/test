@@ -178,12 +178,6 @@ export default function SettingsPage() {
       );
       return;
     }
-    if (!connectionOk) {
-      setError(
-        'اتصال MIS پیکربندی نشده است. فایل src\\HRPerformance.API\\appsettings.Development.json را ویرایش کنید و Password واقعی MIS را وارد کنید.',
-      );
-      return;
-    }
 
     setSyncing(true);
     setSuccess('');
@@ -323,48 +317,17 @@ export default function SettingsPage() {
 
       {tab === 1 && (
         <Paper elevation={0} sx={{ p: 3 }}>
-          {connectionOk && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              اتصال MIS پیکربندی شده — Server: {connectionStatus?.server} | User:{' '}
-              {connectionStatus?.userId}
-            </Alert>
-          )}
-
-          {!connectionOk && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              اتصال MIS در سرور پیکربندی نشده است.
-              {connectionStatus?.missingFields?.length ? (
-                <>
-                  {' '}
-                  فیلدهای ناقص: {connectionStatus.missingFields.join('، ')}.
-                </>
-              ) : null}
-              <br />
-              فایل: <strong>src\HRPerformance.API\appsettings.Development.json</strong>
-              <br />
-              Server: {connectionStatus?.server || '—'} | Database:{' '}
-              {connectionStatus?.database || 'MIS'} | User: {connectionStatus?.userId || '—'}
-              {connectionStatus?.passwordIsPlaceholder ? (
-                <>
-                  <br />
-                  Password هنوز CHANGE_ME است — پسورد واقعی MIS را وارد کنید.
-                </>
-              ) : null}
-            </Alert>
-          )}
-
           {!rangeIsValid && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              تاریخ پایان ({formatShamsiParts(toShamsi)}) قبل از تاریخ شروع (
-              {formatShamsiParts(fromShamsi)}) است. «از تاریخ» باید کوچکتر یا مساوی «تا تاریخ»
-              باشد.
+              تاریخ پایان قبل از تاریخ شروع است.
             </Alert>
           )}
 
-          <Alert severity="info" sx={{ mb: 3 }}>
-            بازه تاریخ شمسی را انتخاب کنید و «دریافت داده از MIS» را بزنید.
-            جستجو در پایگاه MIS بر اساس تبدیل شمسی به میلادی انجام می‌شود.
-          </Alert>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            تاریخ شمسی را انتخاب کنید → به میلادی تبدیل می‌شود → در MIS جستجو می‌شود.
+            گروه پرسنلی: {PERSONNEL_GROUP_CODE}
+            {!connectionOk && ' — Password MIS را در appsettings.Development.json بررسی کنید.'}
+          </Typography>
 
           <Stack spacing={2}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
@@ -420,7 +383,7 @@ export default function SettingsPage() {
               size="large"
               startIcon={<SyncIcon />}
               onClick={handleFetchMisData}
-              disabled={syncing || !connectionOk || !rangeIsValid}
+              disabled={syncing || !rangeIsValid}
             >
               دریافت داده از MIS
             </Button>
