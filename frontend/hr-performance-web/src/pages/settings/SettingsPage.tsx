@@ -33,7 +33,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.7-dev';
+const APP_VERSION = '2.8.8-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -78,6 +78,8 @@ export default function SettingsPage() {
   const [queryPreview, setQueryPreview] = useState('');
   const [queryPreviewLoading, setQueryPreviewLoading] = useState(false);
   const [shamsiFilterLabel, setShamsiFilterLabel] = useState('');
+  const [misLiveHint, setMisLiveHint] = useState('');
+  const [misLiveRowCount, setMisLiveRowCount] = useState<number | null>(null);
 
   const syncPayload = useMemo(
     () => toMisSyncRequestPayload(fromShamsi, toShamsi),
@@ -142,6 +144,25 @@ export default function SettingsPage() {
     }
   };
 
+  const loadMisLiveTest = async () => {
+    try {
+      const res = await api.get('/health/mis-live-test', { params: syncPayload });
+      const data = res.data;
+      const rowCount = typeof data?.rowCount === 'number' ? data.rowCount : null;
+      const hint = String(data?.hint ?? data?.error ?? '');
+      setMisLiveRowCount(rowCount);
+      setMisLiveHint(hint);
+      if (data?.isConnectionConfigured === false) setConnectionOk(false);
+      else if (data?.canConnect) setConnectionOk(true);
+      return { rowCount, hint };
+    } catch {
+      const hint = 'تست اتصال MIS ناموفق — سرور API در حال اجرا است؟';
+      setMisLiveHint(hint);
+      setMisLiveRowCount(null);
+      return { rowCount: null, hint };
+    }
+  };
+
   const loadQueryPreview = async () => {
     setQueryPreviewLoading(true);
     setError('');
@@ -182,6 +203,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (tab === 1) {
       void loadQueryPreview();
+      void loadMisLiveTest();
     }
   }, [tab, syncPayload]);
 
@@ -189,7 +211,13 @@ export default function SettingsPage() {
     const res = await api.get('/attendancesync/records', {
       params: syncPayload,
     });
-    const data = res.data?.data ?? res.data;
+    const body = res.data;
+    if (body?.success === false) {
+      setError(body.message ?? 'خطا در بارگذاری رکوردها — شناسه سازمان را بررسی کنید');
+      setAttendanceRecords([]);
+      return;
+    }
+    const data = body?.data ?? body;
     if (Array.isArray(data)) setAttendanceRecords(data);
     else setAttendanceRecords([]);
   };
@@ -209,25 +237,32 @@ export default function SettingsPage() {
       const res = await api.post('/attendancesync/run-range', syncPayload);
       const result = res.data?.result;
       const processed = result?.recordsProcessed ?? 0;
+      const misFetched = res.data?.misRowsFetched ?? result?.misRowsFetched ?? 0;
       const preview = res.data?.queryPreview;
       if (preview?.sqlWithLiteralValues) setQueryPreview(preview.sqlWithLiteralValues);
       const sr = res.data?.shamsiRange;
       if (sr?.from && sr?.to) {
         setShamsiFilterLabel(`فیلتر ShamsiDate: ${sr.from} تا ${sr.to}`);
       }
+      const live = await loadMisLiveTest();
       if (processed === 0) {
         let hintText = '';
-        try {
-          const diagRes = await api.get('/attendancesync/diagnostic', { params: syncPayload });
-          const hints = diagRes.data?.hints;
-          if (Array.isArray(hints) && hints.length > 0) {
-            hintText = ` ${hints.join(' ')}`;
+        if (misFetched > 0) {
+          hintText = ` MIS ${misFetched} رکورد برگرداند ولی ذخیره نشد — لاگ سرور را ببینید.`;
+        } else {
+          try {
+            const diagRes = await api.get('/attendancesync/diagnostic', { params: syncPayload });
+            const hints = diagRes.data?.hints;
+            if (Array.isArray(hints) && hints.length > 0) {
+              hintText = ` ${hints.join(' ')}`;
+            }
+          } catch {
+            /* ignore */
           }
-        } catch {
-          /* ignore diagnostic errors */
+          if (live.hint) hintText += ` ${live.hint}`;
         }
         setError(
-          `هیچ رکوردی دریافت نشد.${hintText} کوئری ساخته‌شده را در پایین بررسی کنید.`,
+          `هیچ رکوردی دریافت نشد.${hintText} کوئری را در پایین بررسی کنید یا بازه تاریخ را عوض کنید.`,
         );
       } else {
         setSuccess(
@@ -384,6 +419,13 @@ export default function SettingsPage() {
           {!rangeIsValid && (
             <Alert severity="error" sx={{ mb: 2 }}>
               تاریخ پایان قبل از تاریخ شروع است.
+            </Alert>
+          )}
+
+          {misLiveHint && (
+            <Alert severity={misLiveRowCount && misLiveRowCount > 0 ? 'success' : connectionOk ? 'warning' : 'error'} sx={{ mb: 2 }}>
+              {misLiveHint}
+              {misLiveRowCount !== null && ` (تعداد در MIS: ${misLiveRowCount})`}
             </Alert>
           )}
 

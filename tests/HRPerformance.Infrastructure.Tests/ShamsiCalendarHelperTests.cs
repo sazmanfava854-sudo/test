@@ -44,7 +44,7 @@ public class ShamsiCalendarHelperTests
 
         var preview = MisQueryBuilder.BuildPreview(settings, range);
 
-        Assert.Contains("[ShamsiDate]", preview.SqlWithLiteralValues);
+        Assert.Contains("PARSENAME", preview.SqlWithLiteralValues);
         Assert.Contains("14040410", preview.SqlWithLiteralValues);
         Assert.Contains("14040411", preview.SqlWithLiteralValues);
         Assert.DoesNotContain("[StartDate] >=", preview.SqlWithLiteralValues);

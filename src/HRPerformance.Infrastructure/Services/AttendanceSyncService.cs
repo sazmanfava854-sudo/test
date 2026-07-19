@@ -71,6 +71,7 @@ public class AttendanceSyncService : IAttendanceSyncService
             {
                 _logger.LogInformation("MIS sync {Range} for organization {OrgId}", range.Description, organizationId);
                 var records = await _misHrDataReader.ReadHourlyLeavesAsync(runtimeSettings, range, ct);
+                result.MisRowsFetched = records.Count;
                 foreach (var record in records)
                     await ProcessMisHourlyLeaveAsync(organizationId, record, syncLog, ct);
 

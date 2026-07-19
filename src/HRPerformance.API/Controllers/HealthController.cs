@@ -10,11 +10,16 @@ public class HealthController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly HrIntegrationConnectionService _misConnection;
+    private readonly MisHrDataReader _misReader;
 
-    public HealthController(ApplicationDbContext context, HrIntegrationConnectionService misConnection)
+    public HealthController(
+        ApplicationDbContext context,
+        HrIntegrationConnectionService misConnection,
+        MisHrDataReader misReader)
     {
         _context = context;
         _misConnection = misConnection;
+        _misReader = misReader;
     }
 
     [HttpGet]
@@ -80,6 +85,56 @@ public class HealthController : ControllerBase
         {
             return BadRequest(new { success = false, message = ex.Message });
         }
+    }
+
+    /// <summary>تست زنده اتصال MIS + شمارش رکورد — بدون لاگین</summary>
+    [HttpGet("mis-live-test")]
+    public async Task<IActionResult> MisLiveTest(
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string? shamsiFromYear,
+        [FromQuery] string? shamsiFromMonth,
+        [FromQuery] string? shamsiFromDay,
+        [FromQuery] string? shamsiToYear,
+        [FromQuery] string? shamsiToMonth,
+        [FromQuery] string? shamsiToDay,
+        CancellationToken ct = default)
+    {
+        if (!MisShamsiQueryParser.TryParseRange(
+                from, to,
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay,
+                out var request, out var parseError))
+        {
+            return BadRequest(new { success = false, message = parseError });
+        }
+
+        var range = MisSyncRequestMapper.ToSyncRange(request);
+        var runtime = _misConnection.BuildForSync(request);
+        var status = _misConnection.GetStatus();
+        var (canConnect, rowCount, error) = await _misReader.CountRowsAsync(runtime, range, ct);
+
+        return Ok(new
+        {
+            success = canConnect && string.IsNullOrEmpty(error),
+            apiVersion = "2.8.8-dev",
+            canConnect = canConnect && status.IsConnectionConfigured,
+            isConnectionConfigured = status.IsConnectionConfigured,
+            rowCount,
+            shamsiRange = range.Description,
+            shamsiFromKey = range.ShamsiFromKey,
+            shamsiToKey = range.ShamsiToKey,
+            server = status.Server,
+            database = status.Database,
+            error,
+            hint = !status.IsConnectionConfigured
+                ? "Password/Server در appsettings.Development.json تنظیم نشده"
+                : canConnect && string.IsNullOrEmpty(error)
+                    ? rowCount > 0
+                        ? $"MIS دارای {rowCount} رکورد در این بازه است"
+                        : "اتصال OK — در این بازه داده‌ای نیست (بازه دیگر امتحان کنید)"
+                    : $"خطای اتصال MIS: {error}"
+        });
     }
 
     /// <summary>

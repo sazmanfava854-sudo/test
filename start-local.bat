@@ -53,7 +53,7 @@ if "%APP_PORT%"=="" (
 
 set ASPNETCORE_URLS=http://localhost:%APP_PORT%
 
-echo   نسخه: 2.8.7-dev  ^(فیلتر ShamsiDate شمسی^)
+echo   نسخه: 2.8.8-dev  ^(ShamsiDate PARSENAME + تست زنده MIS^)
 echo   Application: http://localhost:%APP_PORT%
 echo   Health:      http://localhost:%APP_PORT%/api/health
 echo   Swagger:     http://localhost:%APP_PORT%/swagger

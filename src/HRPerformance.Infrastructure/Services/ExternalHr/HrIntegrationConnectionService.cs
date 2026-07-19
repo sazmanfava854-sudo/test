@@ -86,7 +86,7 @@ public class HrIntegrationConnectionService
         if (IsPlaceholderPassword(password))
             return null;
 
-        return $"Server={server};Database={database};User Id={userId};Password={password};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true";
+        return $"Server={server};Database={database};User Id={userId};Password={password};TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true;Connection Timeout=30";
     }
 
     private static bool IsPlaceholderPassword(string? password) =>

@@ -6,8 +6,13 @@ public static class MisQueryBuilder
 {
     private const string ViewName = "[MIS].[dbo].[HZG_View_HourlyLeave]";
 
-    /// <summary>ستون ShamsiDate در MIS مثل 1404/04/10 — برای فیلتر به int تبدیل می‌شود</summary>
-    internal const string ShamsiDateIntExpr = "CAST(REPLACE([ShamsiDate], '/', '') AS INT)";
+    /// <summary>
+    /// ShamsiDate مثل 1404/04/10 یا 1404/4/10 — با PARSENAME ماه/روز بدون صفر هم درست مقایسه می‌شود
+    /// </summary>
+    internal const string ShamsiDateIntExpr =
+        "(CAST(PARSENAME(REPLACE([ShamsiDate], '/', '.'), 3) AS INT) * 10000 + " +
+        "CAST(PARSENAME(REPLACE([ShamsiDate], '/', '.'), 2) AS INT) * 100 + " +
+        "CAST(PARSENAME(REPLACE([ShamsiDate], '/', '.'), 1) AS INT))";
 
     public static string BuildSelectQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
     {

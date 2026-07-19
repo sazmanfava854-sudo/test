@@ -111,6 +111,37 @@ public class MisHrDataReader
     public MisQueryPreview BuildQueryPreview(HrIntegrationRuntimeSettings settings, MisSyncRange range) =>
         MisQueryBuilder.BuildPreview(settings, range);
 
+    public async Task<(bool CanConnect, int RowCount, string? Error)> CountRowsAsync(
+        HrIntegrationRuntimeSettings settings,
+        MisSyncRange range,
+        CancellationToken ct = default)
+    {
+        var connectionString = settings.MisConnectionString;
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return (false, 0, "اتصال MIS در appsettings پیکربندی نشده است");
+
+        try
+        {
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(ct);
+            var sql = $@"SELECT COUNT(*)
+FROM [MIS].[dbo].[HZG_View_HourlyLeave]
+WHERE {string.Join("\n  AND ", MisQueryBuilder.BuildConditions(settings, range))}";
+            await using var command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@ShamsiFromKey", range.ShamsiFromKey);
+            command.Parameters.AddWithValue("@ShamsiToKey", range.ShamsiToKey);
+            AddFilterParameters(command, GetFilterSettings(settings), range);
+            command.CommandTimeout = 30;
+            var scalar = await command.ExecuteScalarAsync(ct);
+            return (true, scalar == null || scalar == DBNull.Value ? 0 : Convert.ToInt32(scalar), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MIS count query failed");
+            return (false, 0, ex.GetBaseException().Message);
+        }
+    }
+
     public async Task<MisHrDiagnosticResult> GetDiagnosticAsync(
         HrIntegrationRuntimeSettings settings,
         MisSyncRange range,

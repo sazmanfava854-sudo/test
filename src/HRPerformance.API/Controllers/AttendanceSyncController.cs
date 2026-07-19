@@ -62,6 +62,7 @@ public class AttendanceSyncController : ControllerBase
                 success = true,
                 message = $"داده‌های بازه {range.Description} دریافت شد",
                 result,
+                misRowsFetched = result.MisRowsFetched,
                 shamsiRange = new
                 {
                     from = range.ShamsiFromText,
