@@ -147,6 +147,20 @@ export interface ChartDataDto {
   value: number;
 }
 
+export interface AttendanceRecordDto {
+  id: string;
+  employeeId: string;
+  personnelCode: string;
+  fullName: string;
+  attendanceDate: string;
+  entryTime?: string;
+  exitTime?: string;
+  workingHours?: number;
+  isOnLeave: boolean;
+  leaveType?: string;
+  source: string;
+}
+
 export interface ManagerDashboardDto {
   employeeCount: number;
   todayPresent: number;
@@ -156,6 +170,7 @@ export interface ManagerDashboardDto {
   topEmployees: TopEmployeeDto[];
   weakEmployees: TopEmployeeDto[];
   monthlyTrend: ChartDataDto[];
+  teamIndicators: ChartDataDto[];
 }
 
 export interface DepartmentRankDto {

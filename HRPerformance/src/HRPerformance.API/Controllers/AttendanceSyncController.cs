@@ -1,7 +1,9 @@
+using HRPerformance.Application.Features.Dashboard;
 using HRPerformance.Domain.Interfaces;
 using HRPerformance.Domain.Models;
 using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Services.ExternalHr;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,19 +20,22 @@ public class AttendanceSyncController : ControllerBase
     private readonly MisHrDataReader _misHrDataReader;
     private readonly HrIntegrationConnectionService _connectionService;
     private readonly ApplicationDbContext _context;
+    private readonly IMediator _mediator;
 
     public AttendanceSyncController(
         IAttendanceSyncService syncService,
         ICurrentUserService currentUser,
         MisHrDataReader misHrDataReader,
         HrIntegrationConnectionService connectionService,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        IMediator mediator)
     {
         _syncService = syncService;
         _currentUser = currentUser;
         _misHrDataReader = misHrDataReader;
         _connectionService = connectionService;
         _context = context;
+        _mediator = mediator;
     }
 
     /// <summary>
@@ -89,7 +94,7 @@ public class AttendanceSyncController : ControllerBase
         [FromQuery] DateTime fromDate,
         [FromQuery] DateTime toDate,
         [FromQuery] string provinceCode = "147",
-        [FromQuery] string shamsiYearPrefix = "1404",
+        [FromQuery] string shamsiYearPrefix = "1405",
         [FromQuery] bool applyProvinceFilter = true,
         [FromQuery] bool applyShamsiYearFilter = true,
         [FromQuery] int employeeLimit = 0,
@@ -136,7 +141,10 @@ public class AttendanceSyncController : ControllerBase
         if (d.TotalInView == 0)
             hints.Add("View خالی است یا کاربر MIS به آن دسترسی ندارد.");
         else if (d.CountAfterSyncFrom == 0)
-            hints.Add($"هیچ رکوردی در بازه {d.SyncFrom:yyyy-MM-dd} تا {d.SyncTo:yyyy-MM-dd} نیست. بازه دیگری انتخاب کنید.");
+        {
+            var toInclusive = d.SyncTo?.AddDays(-1);
+            hints.Add($"هیچ رکوردی در بازه {d.SyncFrom:yyyy-MM-dd} تا {toInclusive:yyyy-MM-dd} نیست. بازه دیگری انتخاب کنید.");
+        }
         else if (d.ApplyProvinceFilter && d.CountAfterProvince == 0)
             hints.Add($"کد استان {d.ProvinceCode} با داده‌های MIS مطابقت ندارد.");
         else if (d.ApplyShamsiYearFilter && d.CountAfterShamsiYear == 0)
@@ -149,5 +157,15 @@ public class AttendanceSyncController : ControllerBase
             hints.Add($"در سیستم {d.EmployeesInHrDatabase} کارمند ثبت شده است.");
 
         return hints;
+    }
+
+    [HttpGet("records")]
+    public async Task<IActionResult> Records(
+        [FromQuery] DateTime fromDate,
+        [FromQuery] DateTime toDate,
+        CancellationToken ct = default)
+    {
+        var orgId = _currentUser.OrganizationId ?? Guid.Empty;
+        return Ok(await _mediator.Send(new GetAttendanceRecordsQuery(orgId, fromDate, toDate), ct));
     }
 }

@@ -20,10 +20,13 @@ import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import api from '../../services/api';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
-import type { SettingDto, HolidayDto } from '../../types';
+import type { SettingDto, HolidayDto, AttendanceRecordDto } from '../../types';
 
 function formatDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 export default function SettingsPage() {
@@ -45,10 +48,12 @@ export default function SettingsPage() {
   const [fromDate, setFromDate] = useState(formatDateInput(monthAgo));
   const [toDate, setToDate] = useState(formatDateInput(today));
   const [provinceCode, setProvinceCode] = useState('147');
-  const [shamsiYearPrefix, setShamsiYearPrefix] = useState('1404');
-  const [employeeLimit, setEmployeeLimit] = useState(10);
+  const [shamsiYearPrefix, setShamsiYearPrefix] = useState('1405');
+  const [employeeLimit, setEmployeeLimit] = useState(0);
   const [applyProvinceFilter, setApplyProvinceFilter] = useState(true);
-  const [applyShamsiYearFilter, setApplyShamsiYearFilter] = useState(true);
+  const [applyShamsiYearFilter, setApplyShamsiYearFilter] = useState(false);
+  const [diagnosticHints, setDiagnosticHints] = useState<string[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -95,10 +100,51 @@ export default function SettingsPage() {
     }
   };
 
+  const loadAttendanceRecords = async () => {
+    try {
+      const res = await api.get('/attendancesync/records', {
+        params: { fromDate, toDate },
+      });
+      const data = res.data?.data ?? res.data;
+      if (Array.isArray(data)) setAttendanceRecords(data);
+    } catch {
+      setAttendanceRecords([]);
+    }
+  };
+
+  const handlePreviewMis = async () => {
+    setError('');
+    setDiagnosticHints([]);
+    try {
+      const res = await api.get('/attendancesync/diagnostic', {
+        params: {
+          fromDate,
+          toDate,
+          provinceCode,
+          shamsiYearPrefix,
+          applyProvinceFilter,
+          applyShamsiYearFilter,
+          employeeLimit,
+        },
+      });
+      const hints = res.data?.hints ?? [];
+      setDiagnosticHints(Array.isArray(hints) ? hints : []);
+      const count = res.data?.diagnostic?.countWithActiveFilters ?? 0;
+      if (count === 0) {
+        setError('با این فیلترها داده‌ای یافت نشد. راهنمای بالا را ببینید.');
+      } else {
+        setSuccess(`پیش‌نمایش: ${count} رکورد آماده دریافت است`);
+      }
+    } catch {
+      setError('خطا در پیش‌نمایش MIS');
+    }
+  };
+
   const handleFetchMisData = async () => {
     setSyncing(true);
     setSuccess('');
     setError('');
+    setDiagnosticHints([]);
     try {
       const res = await api.post('/attendancesync/run-range', {
         fromDate,
@@ -110,10 +156,16 @@ export default function SettingsPage() {
         employeeLimit,
       });
       const result = res.data?.result;
-      setSuccess(
-        res.data?.message ??
-          `دریافت انجام شد: ${result?.recordsProcessed ?? 0} رکورد، ${result?.recordsFailed ?? 0} خطا`
-      );
+      const processed = result?.recordsProcessed ?? 0;
+      if (processed === 0) {
+        setError('هیچ رکوردی دریافت نشد. فیلتر سال شمسی یا بازه تاریخ را بررسی کنید.');
+      } else {
+        setSuccess(
+          res.data?.message ??
+            `دریافت انجام شد: ${processed} رکورد، ${result?.recordsFailed ?? 0} خطا`
+        );
+      }
+      await loadAttendanceRecords();
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -289,7 +341,10 @@ export default function SettingsPage() {
             </Stack>
           </Stack>
 
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button variant="outlined" onClick={handlePreviewMis} disabled={syncing}>
+              پیش‌نمایش فیلتر
+            </Button>
             <Button
               variant="contained"
               size="large"
@@ -299,7 +354,47 @@ export default function SettingsPage() {
             >
               دریافت داده از MIS
             </Button>
+            <Button variant="text" onClick={loadAttendanceRecords} disabled={syncing}>
+              نمایش رکوردهای دریافت‌شده
+            </Button>
           </Box>
+
+          {diagnosticHints.length > 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {diagnosticHints.map((h) => (
+                <div key={h}>{h}</div>
+              ))}
+            </Alert>
+          )}
+
+          {attendanceRecords.length > 0 && (
+            <TableContainer component={Paper} elevation={0} sx={{ mt: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>کد پرسنلی</TableCell>
+                    <TableCell>نام</TableCell>
+                    <TableCell>تاریخ</TableCell>
+                    <TableCell>ورود</TableCell>
+                    <TableCell>خروج</TableCell>
+                    <TableCell>نوع</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {attendanceRecords.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.personnelCode}</TableCell>
+                      <TableCell>{r.fullName}</TableCell>
+                      <TableCell>{new Date(r.attendanceDate).toLocaleDateString('fa-IR')}</TableCell>
+                      <TableCell>{r.entryTime ?? '—'}</TableCell>
+                      <TableCell>{r.exitTime ?? '—'}</TableCell>
+                      <TableCell>{r.leaveType ?? r.source}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </Paper>
       )}
 

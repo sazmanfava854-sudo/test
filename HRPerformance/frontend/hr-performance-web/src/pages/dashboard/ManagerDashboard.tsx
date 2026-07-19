@@ -16,10 +16,12 @@ import {
   PointElement,
   LineElement,
   ArcElement,
+  RadialLinearScale,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
-import { Bar, Line, Pie } from 'react-chartjs-2';
+import { Bar, Line, Pie, Radar } from 'react-chartjs-2';
 import PeopleIcon from '@mui/icons-material/People';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -38,8 +40,10 @@ ChartJS.register(
   PointElement,
   LineElement,
   ArcElement,
+  RadialLinearScale,
   Tooltip,
   Legend,
+  Filler,
 );
 
 const emptyData: ManagerDashboardDto = {
@@ -51,6 +55,7 @@ const emptyData: ManagerDashboardDto = {
   topEmployees: [],
   weakEmployees: [],
   monthlyTrend: [],
+  teamIndicators: [],
 };
 
 export default function ManagerDashboard() {
@@ -79,6 +84,19 @@ export default function ManagerDashboard() {
 
   const labels = data.monthlyTrend.map((t) => t.label);
   const values = data.monthlyTrend.map((t) => t.value);
+
+  const radarData = {
+    labels: data.teamIndicators.map((i) => i.label),
+    datasets: [
+      {
+        label: 'میانگین تیم',
+        data: data.teamIndicators.map((i) => i.value),
+        backgroundColor: `${theme.palette.primary.main}33`,
+        borderColor: theme.palette.primary.main,
+        pointBackgroundColor: theme.palette.secondary.main,
+      },
+    ],
+  };
 
   const barData = {
     labels,
@@ -137,7 +155,7 @@ export default function ManagerDashboard() {
         داشبورد مدیریتی
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        شاخص‌های کلیدی عملکرد تیم (از دیتابیس)
+        شاخص‌های کلیدی عملکرد تیم
       </Typography>
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
@@ -157,6 +175,22 @@ export default function ManagerDashboard() {
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 6 }}>
+          <ChartCard title="شاخص‌های تیم (رادار)">
+            {data.teamIndicators.length > 0 ? (
+              <Radar data={radarData} options={{ ...chartOptions, scales: { r: { beginAtZero: true, max: 100 } } }} />
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                پس از ثبت ارزیابی یا دریافت MIS، شاخص‌ها نمایش داده می‌شوند.
+              </Typography>
+            )}
+          </ChartCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <ChartCard title="وضعیت حضور امروز">
+            <Pie data={pieData} options={chartOptions} />
+          </ChartCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
           <ChartCard title="روند ماهانه (میله‌ای)">
             <Bar data={barData} options={{ ...chartOptions, plugins: { legend: { display: false } } }} />
           </ChartCard>
@@ -164,11 +198,6 @@ export default function ManagerDashboard() {
         <Grid size={{ xs: 12, md: 6 }}>
           <ChartCard title="روند ماهانه (خطی)">
             <Line data={lineData} options={{ ...chartOptions, plugins: { legend: { display: false } } }} />
-          </ChartCard>
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <ChartCard title="وضعیت حضور امروز">
-            <Pie data={pieData} options={chartOptions} />
           </ChartCard>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
