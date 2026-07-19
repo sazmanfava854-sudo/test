@@ -29,10 +29,9 @@ public class HrIntegrationConnectionService
         {
             IsConnectionConfigured = IsEnabled() && !string.IsNullOrWhiteSpace(connectionString),
             SourceType = _configuration["HrIntegration:SourceType"] ?? "SQLView",
-            ShamsiYearPrefix = string.IsNullOrWhiteSpace(request.ShamsiYearPrefix) ? "1404" : request.ShamsiYearPrefix.Trim(),
-            ProvinceCode = string.IsNullOrWhiteSpace(request.ProvinceCode) ? "147" : request.ProvinceCode.Trim(),
-            ApplyProvinceFilter = request.ApplyProvinceFilter,
-            ApplyShamsiYearFilter = request.ApplyShamsiYearFilter,
+            ProvinceCode = MisSyncDefaults.PersonnelGroupCode,
+            ApplyProvinceFilter = true,
+            ApplyShamsiYearFilter = false,
             EmployeeLimit = Math.Max(0, request.EmployeeLimit),
             MisConnectionString = connectionString
         };

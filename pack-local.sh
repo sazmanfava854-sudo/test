@@ -75,6 +75,7 @@ HR Performance — نسخه توسعه لوکال (سورس کامل)
 
 لاگین: admin / Admin@123
 اگر ورود ناموفق بود: database/11_RepairAuthentication.sql
+EOF
 
 cat > "$STAGE/DEV-WORKFLOW.txt" << 'EOF'
 چرا اولین بار کند است؟

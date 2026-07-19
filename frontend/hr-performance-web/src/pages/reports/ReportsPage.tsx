@@ -65,7 +65,7 @@ export default function ReportsPage() {
               <TextField
                 fullWidth
                 type="date"
-                label="از تاریخ"
+                label="از تاریخ (میلادی)"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -75,7 +75,7 @@ export default function ReportsPage() {
               <TextField
                 fullWidth
                 type="date"
-                label="تا تاریخ"
+                label="تا تاریخ (میلادی)"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}

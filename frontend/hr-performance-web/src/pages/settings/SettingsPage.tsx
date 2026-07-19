@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -14,14 +14,18 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import Alert from '@mui/material/Alert';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Switch from '@mui/material/Switch';
 import Stack from '@mui/material/Stack';
 import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import api from '../../services/api';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
 import type { SettingDto, HolidayDto, AttendanceRecordDto } from '../../types';
+import {
+  formatGregorianDate,
+  getShamsiYearRangeLabel,
+} from '../../utils/misDate';
+
+const PERSONNEL_GROUP_CODE = '147';
 
 function formatDateInput(date: Date) {
   const y = date.getFullYear();
@@ -50,13 +54,12 @@ export default function SettingsPage() {
 
   const [fromDate, setFromDate] = useState(formatDateInput(monthAgo));
   const [toDate, setToDate] = useState(formatDateInput(today));
-  const [provinceCode, setProvinceCode] = useState('147');
-  const [shamsiYearPrefix, setShamsiYearPrefix] = useState('1405');
-  const [employeeLimit, setEmployeeLimit] = useState(0);
-  const [applyProvinceFilter, setApplyProvinceFilter] = useState(true);
-  const [applyShamsiYearFilter, setApplyShamsiYearFilter] = useState(false);
-  const [diagnosticHints, setDiagnosticHints] = useState<string[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
+
+  const shamsiYearLabel = useMemo(
+    () => getShamsiYearRangeLabel(fromDate, toDate),
+    [fromDate, toDate],
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -104,76 +107,40 @@ export default function SettingsPage() {
   };
 
   const loadAttendanceRecords = async () => {
-    try {
-      const res = await api.get('/attendancesync/records', {
-        params: { fromDate, toDate },
-      });
-      const data = res.data?.data ?? res.data;
-      if (Array.isArray(data)) setAttendanceRecords(data);
-    } catch {
-      setAttendanceRecords([]);
-    }
-  };
-
-  const handlePreviewMis = async () => {
-    setError('');
-    setDiagnosticHints([]);
-    try {
-      const res = await api.get('/attendancesync/diagnostic', {
-        params: {
-          fromDate,
-          toDate,
-          provinceCode,
-          shamsiYearPrefix,
-          applyProvinceFilter,
-          applyShamsiYearFilter,
-          employeeLimit,
-        },
-      });
-      const hints = res.data?.hints ?? [];
-      setDiagnosticHints(Array.isArray(hints) ? hints : []);
-      const count = res.data?.diagnostic?.countWithActiveFilters ?? 0;
-      if (count === 0) {
-        setError('با این فیلترها داده‌ای یافت نشد. راهنمای بالا را ببینید.');
-      } else {
-        setSuccess(`پیش‌نمایش: ${count} رکورد آماده دریافت است`);
-      }
-    } catch {
-      setError('خطا در پیش‌نمایش MIS');
-    }
+    const res = await api.get('/attendancesync/records', {
+      params: { fromDate, toDate },
+    });
+    const data = res.data?.data ?? res.data;
+    if (Array.isArray(data)) setAttendanceRecords(data);
+    else setAttendanceRecords([]);
   };
 
   const handleFetchMisData = async () => {
     setSyncing(true);
     setSuccess('');
     setError('');
-    setDiagnosticHints([]);
     try {
       const res = await api.post('/attendancesync/run-range', {
         fromDate,
         toDate,
-        provinceCode,
-        shamsiYearPrefix,
-        applyProvinceFilter,
-        applyShamsiYearFilter,
-        employeeLimit,
       });
       const result = res.data?.result;
       const processed = result?.recordsProcessed ?? 0;
       if (processed === 0) {
-        setError('هیچ رکوردی دریافت نشد. فیلتر سال شمسی یا بازه تاریخ را بررسی کنید.');
+        setError('هیچ رکوردی دریافت نشد. بازه تاریخ میلادی را بررسی کنید.');
       } else {
         setSuccess(
           res.data?.message ??
-            `دریافت انجام شد: ${processed} رکورد، ${result?.recordsFailed ?? 0} خطا`
+            `دریافت انجام شد: ${processed} رکورد، ${result?.recordsFailed ?? 0} خطا`,
         );
       }
       await loadAttendanceRecords();
     } catch (err: unknown) {
       const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'خطا در دریافت داده از MIS';
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'خطا در دریافت داده از MIS';
       setError(message);
+      setAttendanceRecords([]);
     } finally {
       setSyncing(false);
     }
@@ -274,12 +241,14 @@ export default function SettingsPage() {
         <Paper elevation={0} sx={{ p: 3 }}>
           {!connectionOk && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              اتصال MIS در سرور پیکربندی نشده است. فقط مدیر فنی می‌تواند Server و Password را در appsettings تنظیم کند.
+              اتصال MIS در سرور پیکربندی نشده است. فقط مدیر فنی می‌تواند Server و
+              Password را در appsettings تنظیم کند.
             </Alert>
           )}
 
           <Alert severity="info" sx={{ mb: 3 }}>
-            بازه تاریخ را انتخاب کنید و سپس «دریافت داده» را بزنید. هیچ داده‌ای به‌صورت خودکار لود نمی‌شود.
+            بازه تاریخ میلادی را انتخاب کنید و «دریافت داده از MIS» را بزنید.
+            سال شمسی به‌صورت خودکار از تاریخ محاسبه می‌شود.
           </Alert>
 
           <Stack spacing={2}>
@@ -287,7 +256,7 @@ export default function SettingsPage() {
               <TextField
                 fullWidth
                 type="date"
-                label="از تاریخ"
+                label="از تاریخ (میلادی)"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -295,59 +264,31 @@ export default function SettingsPage() {
               <TextField
                 fullWidth
                 type="date"
-                label="تا تاریخ"
+                label="تا تاریخ (میلادی)"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
             </Stack>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                label="سال شمسی"
-                value={shamsiYearPrefix}
-                onChange={(e) => setShamsiYearPrefix(e.target.value)}
-              />
-              <TextField
-                fullWidth
-                label="کد استان"
-                value={provinceCode}
-                onChange={(e) => setProvinceCode(e.target.value)}
-              />
-              <TextField
-                fullWidth
-                type="number"
-                label="حداکثر تعداد پرسنل (۰ = همه)"
-                value={employeeLimit}
-                onChange={(e) => setEmployeeLimit(Number(e.target.value))}
-              />
-            </Stack>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={applyProvinceFilter}
-                    onChange={(e) => setApplyProvinceFilter(e.target.checked)}
-                  />
-                }
-                label="فیلتر استان"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={applyShamsiYearFilter}
-                    onChange={(e) => setApplyShamsiYearFilter(e.target.checked)}
-                  />
-                }
-                label="فیلتر سال شمسی"
-              />
-            </Stack>
+
+            <TextField
+              fullWidth
+              label="سال شمسی (محاسبه خودکار)"
+              value={shamsiYearLabel}
+              slotProps={{ input: { readOnly: true } }}
+              helperText="از بازه تاریخ میلادی محاسبه می‌شود — نیازی به انتخاب جداگانه نیست"
+            />
+
+            <TextField
+              fullWidth
+              label="گروه پرسنلی"
+              value={PERSONNEL_GROUP_CODE}
+              slotProps={{ input: { readOnly: true } }}
+              helperText="همیشه گروه 147 — ثابت سازمانی"
+            />
           </Stack>
 
-          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Button variant="outlined" onClick={handlePreviewMis} disabled={syncing}>
-              پیش‌نمایش فیلتر
-            </Button>
+          <Box sx={{ mt: 3 }}>
             <Button
               variant="contained"
               size="large"
@@ -357,27 +298,19 @@ export default function SettingsPage() {
             >
               دریافت داده از MIS
             </Button>
-            <Button variant="text" onClick={loadAttendanceRecords} disabled={syncing}>
-              نمایش رکوردهای دریافت‌شده
-            </Button>
           </Box>
-
-          {diagnosticHints.length > 0 && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              {diagnosticHints.map((h) => (
-                <div key={h}>{h}</div>
-              ))}
-            </Alert>
-          )}
 
           {attendanceRecords.length > 0 && (
             <TableContainer component={Paper} elevation={0} sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, p: 2, pb: 0 }}>
+                رکوردهای دریافت‌شده ({attendanceRecords.length})
+              </Typography>
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>کد پرسنلی</TableCell>
                     <TableCell>نام</TableCell>
-                    <TableCell>تاریخ</TableCell>
+                    <TableCell>تاریخ (میلادی)</TableCell>
                     <TableCell>ورود</TableCell>
                     <TableCell>خروج</TableCell>
                     <TableCell>نوع</TableCell>
@@ -388,7 +321,7 @@ export default function SettingsPage() {
                     <TableRow key={r.id}>
                       <TableCell>{r.personnelCode}</TableCell>
                       <TableCell>{r.fullName}</TableCell>
-                      <TableCell>{new Date(r.attendanceDate).toLocaleDateString('fa-IR')}</TableCell>
+                      <TableCell>{formatGregorianDate(r.attendanceDate)}</TableCell>
                       <TableCell>{r.entryTime ?? '—'}</TableCell>
                       <TableCell>{r.exitTime ?? '—'}</TableCell>
                       <TableCell>{r.leaveType ?? r.source}</TableCell>
@@ -397,6 +330,12 @@ export default function SettingsPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
+
+          {!syncing && attendanceRecords.length === 0 && success && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              دریافت انجام شد اما رکوردی برای نمایش در این بازه وجود ندارد.
+            </Alert>
           )}
         </Paper>
       )}
@@ -407,7 +346,7 @@ export default function SettingsPage() {
             <TableHead>
               <TableRow>
                 <TableCell>عنوان</TableCell>
-                <TableCell>تاریخ</TableCell>
+                <TableCell>تاریخ (میلادی)</TableCell>
                 <TableCell>تکرار سالانه</TableCell>
               </TableRow>
             </TableHead>
@@ -415,9 +354,7 @@ export default function SettingsPage() {
               {holidays.map((holiday) => (
                 <TableRow key={holiday.id}>
                   <TableCell>{holiday.title}</TableCell>
-                  <TableCell>
-                    {new Date(holiday.holidayDate).toLocaleDateString('fa-IR')}
-                  </TableCell>
+                  <TableCell>{formatGregorianDate(holiday.holidayDate)}</TableCell>
                   <TableCell>{holiday.isRecurring ? 'بله' : 'خیر'}</TableCell>
                 </TableRow>
               ))}

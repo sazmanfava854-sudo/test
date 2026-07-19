@@ -249,8 +249,8 @@ export default function EvaluationPage() {
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
-                    type="date"
-                    label="تاریخ ارزیابی"
+                  type="date"
+                  label="تاریخ ارزیابی (میلادی)"
                     value={form.evaluationDate}
                     onChange={(e) =>
                       setForm((prev) => ({

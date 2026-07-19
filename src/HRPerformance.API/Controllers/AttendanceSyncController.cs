@@ -93,10 +93,6 @@ public class AttendanceSyncController : ControllerBase
     public async Task<IActionResult> Diagnostic(
         [FromQuery] DateTime fromDate,
         [FromQuery] DateTime toDate,
-        [FromQuery] string provinceCode = "147",
-        [FromQuery] string shamsiYearPrefix = "1405",
-        [FromQuery] bool applyProvinceFilter = true,
-        [FromQuery] bool applyShamsiYearFilter = true,
         [FromQuery] int employeeLimit = 0,
         CancellationToken ct = default)
     {
@@ -106,7 +102,7 @@ public class AttendanceSyncController : ControllerBase
         if (toDate < fromDate)
             return BadRequest(new { success = false, message = "تاریخ پایان باید بعد از تاریخ شروع باشد" });
 
-        var request = new MisSyncDateRangeRequest(fromDate, toDate, provinceCode, shamsiYearPrefix, applyProvinceFilter, applyShamsiYearFilter, employeeLimit);
+        var request = new MisSyncDateRangeRequest(fromDate, toDate, employeeLimit);
         var runtimeSettings = _connectionService.BuildForSync(request);
         var range = new MisSyncRange
         {
@@ -143,12 +139,10 @@ public class AttendanceSyncController : ControllerBase
         else if (d.CountAfterSyncFrom == 0)
         {
             var toInclusive = d.SyncTo?.AddDays(-1);
-            hints.Add($"هیچ رکوردی در بازه {d.SyncFrom:yyyy-MM-dd} تا {toInclusive:yyyy-MM-dd} نیست. بازه دیگری انتخاب کنید.");
+            hints.Add($"هیچ رکوردی در بازه میلادی {d.SyncFrom:yyyy-MM-dd} تا {toInclusive:yyyy-MM-dd} نیست. بازه دیگری انتخاب کنید.");
         }
-        else if (d.ApplyProvinceFilter && d.CountAfterProvince == 0)
-            hints.Add($"کد استان {d.ProvinceCode} با داده‌های MIS مطابقت ندارد.");
-        else if (d.ApplyShamsiYearFilter && d.CountAfterShamsiYear == 0)
-            hints.Add($"سال شمسی {d.ShamsiYearPrefix} در این بازه یافت نشد.");
+        else if (d.CountAfterProvince == 0)
+            hints.Add($"گروه پرسنلی {d.ProvinceCode} در این بازه داده‌ای ندارد.");
         else if (d.CountWithActiveFilters == 0)
             hints.Add("با فیلترهای انتخاب‌شده هیچ رکوردی برنمی‌گردد.");
         else if (d.EmployeesInHrDatabase == 0)

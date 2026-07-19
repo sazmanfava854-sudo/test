@@ -291,10 +291,6 @@ export interface HolidayDto {
 export interface MisSyncDateRangeRequest {
   fromDate: string;
   toDate: string;
-  provinceCode?: string;
-  shamsiYearPrefix?: string;
-  applyProvinceFilter?: boolean;
-  applyShamsiYearFilter?: boolean;
   employeeLimit?: number;
 }
 
