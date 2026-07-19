@@ -28,13 +28,12 @@ import {
   formatShamsiParts,
   getDefaultMisSyncRange,
   isShamsiRangeValid,
-  looksLikeUnconvertedShamsiDate,
   toMisSyncRequestPayload,
   type ShamsiDateParts,
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.6-dev';
+const APP_VERSION = '2.8.7-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -78,7 +77,7 @@ export default function SettingsPage() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
   const [queryPreview, setQueryPreview] = useState('');
   const [queryPreviewLoading, setQueryPreviewLoading] = useState(false);
-  const [gregorianRangeLabel, setGregorianRangeLabel] = useState('');
+  const [shamsiFilterLabel, setShamsiFilterLabel] = useState('');
 
   const syncPayload = useMemo(
     () => toMisSyncRequestPayload(fromShamsi, toShamsi),
@@ -162,30 +161,19 @@ export default function SettingsPage() {
         return;
       }
       setQueryPreview(sql);
-      const gr = data?.gregorianRange;
-      if (gr?.from && gr?.to) {
-        if (
-          data?.conversionOk === false ||
-          looksLikeUnconvertedShamsiDate(gr.from) ||
-          looksLikeUnconvertedShamsiDate(gr.to)
-        ) {
-          const msg =
-            'تبدیل شمسی به میلادی انجام نشده — backend قدیمی است. dotnet build را اجرا کنید و نسخه 2.8.6-dev را استفاده کنید.';
-          setGregorianRangeLabel('');
-          setQueryPreview(`-- خطا: ${msg}\n-- ${sql}`);
-          setError(msg);
-          return;
-        }
-        setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
+      if (data?.shamsiRange) {
+        setShamsiFilterLabel(`فیلتر ShamsiDate: ${data.shamsiRange}`);
+      } else if (data?.shamsiFromKey && data?.shamsiToKey) {
+        setShamsiFilterLabel(`فیلتر ShamsiDate: ${data.shamsiFromKey} تا ${data.shamsiToKey}`);
       }
-      setSuccess('کوئری ساخته شد — در کادر پایین نمایش داده می‌شود');
+      setSuccess('کوئری ساخته شد — فیلتر روی ستون ShamsiDate (شمسی)');
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'خطا در ساخت کوئری — لاگ سرور را در logs/hr-performance-*.log ببینید';
       setQueryPreview(`-- خطا: ${message}`);
       setError(message);
-      setGregorianRangeLabel('');
+      setShamsiFilterLabel('');
     } finally {
       setQueryPreviewLoading(false);
     }
@@ -223,9 +211,9 @@ export default function SettingsPage() {
       const processed = result?.recordsProcessed ?? 0;
       const preview = res.data?.queryPreview;
       if (preview?.sqlWithLiteralValues) setQueryPreview(preview.sqlWithLiteralValues);
-      const gr = res.data?.gregorianRange;
-      if (gr?.from && gr?.to) {
-        setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
+      const sr = res.data?.shamsiRange;
+      if (sr?.from && sr?.to) {
+        setShamsiFilterLabel(`فیلتر ShamsiDate: ${sr.from} تا ${sr.to}`);
       }
       if (processed === 0) {
         let hintText = '';
@@ -400,7 +388,7 @@ export default function SettingsPage() {
           )}
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            تاریخ شمسی را انتخاب کنید → به میلادی تبدیل می‌شود → در MIS جستجو می‌شود.
+            تاریخ شمسی را انتخاب کنید — فیلتر مستقیم روی ستون ShamsiDate در MIS (مثل 1404/04/10).
             گروه پرسنلی: {PERSONNEL_GROUP_CODE}
             {!connectionOk && ' — Password MIS را در appsettings.Development.json بررسی کنید.'}
           </Typography>
@@ -427,8 +415,8 @@ export default function SettingsPage() {
               value={`${formatShamsiParts(fromShamsi)} تا ${formatShamsiParts(toShamsi)}`}
               slotProps={{ input: { readOnly: true } }}
               helperText={
-                gregorianRangeLabel ||
-                'برای جستجو در MIS به تاریخ میلادی تبدیل می‌شود — StartDate با ساعت هم پوشش داده می‌شود'
+                shamsiFilterLabel ||
+                'فیلتر MIS روی ستون ShamsiDate (مثل 1404/04/10) — بدون تبدیل میلادی'
               }
             />
 

@@ -2,53 +2,54 @@ using System.Globalization;
 
 namespace HRPerformance.Infrastructure.Services.ExternalHr;
 
+/// <summary>
+/// شمسی → میلادی (فقط تاریخ، بدون ساعت)
+/// </summary>
 public static class ShamsiCalendarHelper
 {
     private static readonly PersianCalendar Calendar = new();
 
-    public static DateTime ToGregorianDate(int year, int month, int day)
+    public static DateTime ToGregorianDateOnly(int shamsiYear, int shamsiMonth, int shamsiDay)
     {
-        if (year < 1300 || year > 1500)
+        if (shamsiYear is < 1300 or > 1500)
         {
-            if (year is >= 1990 and <= 2100)
-            {
-                throw new ArgumentOutOfRangeException(nameof(year),
-                    $"سال {year} میلادی است. تاریخ شمسی وارد کنید — مثلاً 1404/04/10 نه 2025/07/01.");
-            }
+            if (shamsiYear is >= 1990 and <= 2100)
+                throw new ArgumentOutOfRangeException(nameof(shamsiYear),
+                    $"سال {shamsiYear} میلادی است. تاریخ شمسی بدهید — مثلاً 1404/04/10");
 
-            throw new ArgumentOutOfRangeException(nameof(year),
-                $"سال شمسی {year} نامعتبر است. بازه مجاز: 1300 تا 1500.");
+            throw new ArgumentOutOfRangeException(nameof(shamsiYear),
+                $"سال شمسی {shamsiYear} نامعتبر است (1300–1500).");
         }
-        if (month is < 1 or > 12)
-            throw new ArgumentOutOfRangeException(nameof(month), "ماه شمسی نامعتبر است");
 
-        var daysInMonth = Calendar.GetDaysInMonth(year, month);
-        if (day < 1 || day > daysInMonth)
-            throw new ArgumentOutOfRangeException(nameof(day), "روز شمسی نامعتبر است");
+        if (shamsiMonth is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(shamsiMonth), "ماه شمسی 1–12");
 
-        var gregorian = Calendar.ToDateTime(year, month, day, 0, 0, 0, 0);
-        EnsureGregorianDate(gregorian, year, month, day);
+        var maxDay = Calendar.GetDaysInMonth(shamsiYear, shamsiMonth);
+        if (shamsiDay < 1 || shamsiDay > maxDay)
+            throw new ArgumentOutOfRangeException(nameof(shamsiDay), $"روز شمسی 1–{maxDay}");
+
+        // PersianCalendar → DateTime میلادی
+        var gregorian = Calendar.ToDateTime(shamsiYear, shamsiMonth, shamsiDay, 0, 0, 0, 0).Date;
+
+        if (!IsGregorianDate(gregorian))
+        {
+            throw new InvalidOperationException(
+                $"تبدیل {shamsiYear}/{shamsiMonth:D2}/{shamsiDay:D2} → {gregorian:yyyy-MM-dd} نامعتبر است. " +
+                "dotnet build --no-incremental src\\HRPerformance.API\\HRPerformance.API.csproj");
+        }
+
         return gregorian;
     }
 
-    /// <summary>
-    /// Rejects dates that look like Shamsi values used as Gregorian (e.g. 1404-04-10).
-    /// </summary>
-    public static void EnsureGregorianDate(DateTime date, int shamsiYear, int shamsiMonth, int shamsiDay)
-    {
-        if (date.Year is >= 1300 and <= 1500)
-        {
-            throw new InvalidOperationException(
-                $"تبدیل شمسی {shamsiYear}/{shamsiMonth:D2}/{shamsiDay:D2} به میلادی انجام نشده است " +
-                $"(نتیجه: {date:yyyy-MM-dd}). لطفاً dotnet build را اجرا کنید و از نسخه 2.8.6-dev به بعد استفاده کنید.");
-        }
+    public static bool IsGregorianDate(DateTime date) =>
+        date.Year is >= 1990 and <= 2100;
 
-        if (date.Year < 1990 || date.Year > 2100)
-        {
-            throw new InvalidOperationException(
-                $"تبدیل شمسی {shamsiYear}/{shamsiMonth:D2}/{shamsiDay:D2} به میلادی نامعتبر است ({date:yyyy-MM-dd}).");
-        }
-    }
+    /// <summary>1404/04/10 → 14040410</summary>
+    public static int ToDateKey(int year, int month, int day) =>
+        year * 10000 + month * 100 + day;
+
+    public static string FormatDate(int year, int month, int day) =>
+        $"{year}/{month:D2}/{day:D2}";
 
     public static int ToYearMonthKey(int year, int month) => year * 100 + month;
 }

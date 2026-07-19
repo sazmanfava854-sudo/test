@@ -4,8 +4,10 @@ public class MisHrDiagnosticResult
 {
     public bool CanConnect { get; set; }
     public string? ErrorMessage { get; set; }
-    public DateTime SyncFrom { get; set; }
-    public DateTime? SyncTo { get; set; }
+    public int ShamsiFromKey { get; set; }
+    public int ShamsiToKey { get; set; }
+    public string ShamsiFromText { get; set; } = string.Empty;
+    public string ShamsiToText { get; set; } = string.Empty;
     public int? ShamsiYear { get; set; }
     public int? ShamsiMonth { get; set; }
     public int EmployeeLimit { get; set; }

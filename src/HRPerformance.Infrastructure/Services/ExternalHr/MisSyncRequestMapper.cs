@@ -6,30 +6,38 @@ public static class MisSyncRequestMapper
 {
     public static MisSyncRange ToSyncRange(MisSyncDateRangeRequest request)
     {
-        var fromGregorian = ShamsiCalendarHelper.ToGregorianDate(
+        var fromKey = ShamsiCalendarHelper.ToDateKey(
             request.ShamsiFromYear, request.ShamsiFromMonth, request.ShamsiFromDay);
-        var toGregorian = ShamsiCalendarHelper.ToGregorianDate(
+        var toKey = ShamsiCalendarHelper.ToDateKey(
             request.ShamsiToYear, request.ShamsiToMonth, request.ShamsiToDay);
 
-        if (toGregorian < fromGregorian)
+        if (toKey < fromKey)
             throw new ArgumentException("تاریخ پایان شمسی باید بعد از تاریخ شروع باشد");
+
+        var fromText = ShamsiCalendarHelper.FormatDate(
+            request.ShamsiFromYear, request.ShamsiFromMonth, request.ShamsiFromDay);
+        var toText = ShamsiCalendarHelper.FormatDate(
+            request.ShamsiToYear, request.ShamsiToMonth, request.ShamsiToDay);
 
         return new MisSyncRange
         {
-            SyncFrom = fromGregorian.Date,
-            SyncToExclusive = toGregorian.Date.AddDays(1),
+            ShamsiFromKey = fromKey,
+            ShamsiToKey = toKey,
+            ShamsiFromText = fromText,
+            ShamsiToText = toText,
             ShamsiFromYm = ShamsiCalendarHelper.ToYearMonthKey(request.ShamsiFromYear, request.ShamsiFromMonth),
             ShamsiToYm = ShamsiCalendarHelper.ToYearMonthKey(request.ShamsiToYear, request.ShamsiToMonth),
-            Description =
-                $"شمسی {request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
-                $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2} " +
-                $"(میلادی {fromGregorian:yyyy-MM-dd} تا {toGregorian:yyyy-MM-dd})"
+            Description = $"شمسی {fromText} تا {toText}"
         };
     }
 
+    /// <summary>فقط برای نمایش رکوردهای ذخیره‌شده در DB محلی (میلادی)</summary>
     public static (DateTime From, DateTime To) ToGregorianRange(MisSyncDateRangeRequest request)
     {
-        var range = ToSyncRange(request);
-        return (range.SyncFrom, range.SyncToExclusive.AddDays(-1));
+        var from = ShamsiCalendarHelper.ToGregorianDateOnly(
+            request.ShamsiFromYear, request.ShamsiFromMonth, request.ShamsiFromDay);
+        var to = ShamsiCalendarHelper.ToGregorianDateOnly(
+            request.ShamsiToYear, request.ShamsiToMonth, request.ShamsiToDay);
+        return (from, to);
     }
 }

@@ -6,13 +6,16 @@ public static class MisQueryBuilder
 {
     private const string ViewName = "[MIS].[dbo].[HZG_View_HourlyLeave]";
 
+    /// <summary>ستون ShamsiDate در MIS مثل 1404/04/10 — برای فیلتر به int تبدیل می‌شود</summary>
+    internal const string ShamsiDateIntExpr = "CAST(REPLACE([ShamsiDate], '/', '') AS INT)";
+
     public static string BuildSelectQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
     {
         var conditions = BuildConditions(settings, range);
         return $@"{MisHrDataReader.SelectColumnsSql}
 FROM {ViewName}
 WHERE {string.Join("\n  AND ", conditions)}
-ORDER BY [StartDate] DESC";
+ORDER BY {ShamsiDateIntExpr} DESC";
     }
 
     public static MisQueryPreview BuildPreview(
@@ -25,23 +28,25 @@ ORDER BY [StartDate] DESC";
         var sqlWithParams = $@"{MisHrDataReader.SelectColumnsSql}
 FROM {ViewName}
 WHERE {string.Join("\n  AND ", conditions)}
-ORDER BY [StartDate] DESC";
+ORDER BY {ShamsiDateIntExpr} DESC";
 
         var sqlLiteral = $@"{MisHrDataReader.SelectColumnsSql}
 FROM {ViewName}
 WHERE {string.Join("\n  AND ", conditions.Select(c => ReplaceParameters(c, parameters)))}
-ORDER BY [StartDate] DESC";
+ORDER BY {ShamsiDateIntExpr} DESC";
 
         return new MisQueryPreview
         {
             SqlWithParameters = sqlWithParams,
             SqlWithLiteralValues = sqlLiteral,
             Parameters = parameters,
-            GregorianFrom = range.SyncFrom,
-            GregorianToInclusive = range.SyncToExclusive.AddDays(-1),
+            ShamsiFromKey = range.ShamsiFromKey,
+            ShamsiToKey = range.ShamsiToKey,
+            ShamsiFromText = range.ShamsiFromText,
+            ShamsiToText = range.ShamsiToText,
             Note =
-                "StartDate/EndDate در MIS از نوع datetime هستند. " +
-                "بازه میلادی با >= ابتدای روز و < ابتدای روز بعد جستجو می‌شود تا ساعت هم پوشش داده شود."
+                "فیلتر روی ستون ShamsiDate (شمسی، مثل 1404/04/10). " +
+                "نیازی به تبدیل میلادی نیست."
         };
     }
 
@@ -50,11 +55,13 @@ ORDER BY [StartDate] DESC";
         MisSyncRange? range = null)
     {
         var filters = GetFilterSettings(settings);
-        var conditions = new List<string>
+        var conditions = new List<string>();
+
+        if (range is { ShamsiFromKey: > 0, ShamsiToKey: > 0 })
         {
-            "[StartDate] >= @SyncFrom",
-            "[StartDate] < @SyncTo"
-        };
+            conditions.Add($"{ShamsiDateIntExpr} >= @ShamsiFromKey");
+            conditions.Add($"{ShamsiDateIntExpr} <= @ShamsiToKey");
+        }
 
         if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
         {
@@ -91,8 +98,8 @@ ORDER BY [StartDate] DESC";
         var filters = GetFilterSettings(settings);
         var parameters = new Dictionary<string, object>
         {
-            ["@SyncFrom"] = range.SyncFrom,
-            ["@SyncTo"] = range.SyncToExclusive
+            ["@ShamsiFromKey"] = range.ShamsiFromKey,
+            ["@ShamsiToKey"] = range.ShamsiToKey
         };
 
         if (range.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
@@ -157,7 +164,9 @@ public class MisQueryPreview
     public string SqlWithParameters { get; init; } = string.Empty;
     public string SqlWithLiteralValues { get; init; } = string.Empty;
     public Dictionary<string, object> Parameters { get; init; } = new();
-    public DateTime GregorianFrom { get; init; }
-    public DateTime GregorianToInclusive { get; init; }
+    public int ShamsiFromKey { get; init; }
+    public int ShamsiToKey { get; init; }
+    public string ShamsiFromText { get; init; } = string.Empty;
+    public string ShamsiToText { get; init; } = string.Empty;
     public string Note { get; init; } = string.Empty;
 }

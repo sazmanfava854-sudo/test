@@ -60,6 +60,28 @@ public class HealthController : ControllerBase
         });
     }
 
+    /// <summary>تست تبدیل شمسی → میلادی</summary>
+    [HttpGet("shamsi-convert")]
+    public IActionResult ShamsiConvert([FromQuery] int year, [FromQuery] int month, [FromQuery] int day)
+    {
+        try
+        {
+            var gregorian = ShamsiCalendarHelper.ToGregorianDateOnly(year, month, day);
+            return Ok(new
+            {
+                success = true,
+                apiVersion = "2.8.7-dev",
+                shamsi = $"{year}/{month:D2}/{day:D2}",
+                gregorian = gregorian.ToString("yyyy-MM-dd"),
+                ok = ShamsiCalendarHelper.IsGregorianDate(gregorian)
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
     /// <summary>
     /// پیش‌نمایش کوئری MIS — بدون نیاز به لاگین (فقط ساخت SQL، بدون اتصال به MIS)
     /// </summary>
@@ -101,20 +123,18 @@ public class HealthController : ControllerBase
                 ApplyShamsiYearFilter = false
             };
             var preview = MisQueryBuilder.BuildPreview(settings, range);
+
             return Ok(new
             {
                 success = true,
-                apiVersion = "2.8.6-dev",
+                apiVersion = "2.8.7-dev",
                 shamsiRange =
                     $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
                     $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",
+                shamsiFromKey = preview.ShamsiFromKey,
+                shamsiToKey = preview.ShamsiToKey,
                 sql = preview.SqlWithLiteralValues,
-                gregorianRange = new
-                {
-                    from = preview.GregorianFrom.ToString("yyyy-MM-dd HH:mm:ss"),
-                    to = preview.GregorianToInclusive.ToString("yyyy-MM-dd HH:mm:ss")
-                },
-                conversionOk = preview.GregorianFrom.Year is >= 1990 and <= 2100
+                note = preview.Note
             });
         }
         catch (Exception ex)

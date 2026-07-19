@@ -62,10 +62,12 @@ public class AttendanceSyncController : ControllerBase
                 success = true,
                 message = $"داده‌های بازه {range.Description} دریافت شد",
                 result,
-                gregorianRange = new
+                shamsiRange = new
                 {
-                    from = range.SyncFrom.ToString("yyyy-MM-dd HH:mm:ss"),
-                    to = range.SyncToExclusive.AddTicks(-1).ToString("yyyy-MM-dd HH:mm:ss")
+                    from = range.ShamsiFromText,
+                    to = range.ShamsiToText,
+                    fromKey = range.ShamsiFromKey,
+                    toKey = range.ShamsiToKey
                 },
                 queryPreview = new
                 {
@@ -155,16 +157,12 @@ public class AttendanceSyncController : ControllerBase
             return Ok(new
             {
                 success = true,
-                apiVersion = "2.8.6-dev",
+                apiVersion = "2.8.7-dev",
                 shamsiRange =
                     $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
                     $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",
-                gregorianRange = new
-                {
-                    from = preview.GregorianFrom.ToString("yyyy-MM-dd HH:mm:ss"),
-                    to = preview.GregorianToInclusive.ToString("yyyy-MM-dd HH:mm:ss")
-                },
-                conversionOk = preview.GregorianFrom.Year is >= 1990 and <= 2100,
+                shamsiFromKey = preview.ShamsiFromKey,
+                shamsiToKey = preview.ShamsiToKey,
                 preview.Note,
                 sql = preview.SqlWithLiteralValues,
                 sqlWithParameters = preview.SqlWithParameters,
@@ -245,10 +243,7 @@ public class AttendanceSyncController : ControllerBase
         if (d.TotalInView == 0)
             hints.Add("View خالی است یا کاربر MIS به آن دسترسی ندارد.");
         else if (d.CountAfterSyncFrom == 0)
-        {
-            var toInclusive = d.SyncTo?.AddDays(-1);
-            hints.Add($"هیچ رکوردی در بازه شمسی انتخاب‌شده نیست (میلادی {d.SyncFrom:yyyy-MM-dd} تا {toInclusive:yyyy-MM-dd}). بازه دیگری انتخاب کنید.");
-        }
+            hints.Add($"هیچ رکوردی در بازه شمسی {d.ShamsiFromText} تا {d.ShamsiToText} نیست. بازه دیگری انتخاب کنید.");
         else if (d.CountAfterProvince == 0)
             hints.Add($"گروه پرسنلی {d.ProvinceCode} در این بازه داده‌ای ندارد.");
         else if (d.CountWithActiveFilters == 0)

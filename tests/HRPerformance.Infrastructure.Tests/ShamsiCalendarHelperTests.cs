@@ -7,31 +7,31 @@ namespace HRPerformance.Infrastructure.Tests;
 public class ShamsiCalendarHelperTests
 {
     [Fact]
-    public void ToGregorianDate_1404_04_10_Returns_2025_07_01()
+    public void ToDateKey_1404_04_10_Returns_14040410()
     {
-        var date = ShamsiCalendarHelper.ToGregorianDate(1404, 4, 10);
+        Assert.Equal(14040410, ShamsiCalendarHelper.ToDateKey(1404, 4, 10));
+    }
+
+    [Fact]
+    public void ToGregorianDateOnly_1404_04_10_Returns_2025_07_01()
+    {
+        var date = ShamsiCalendarHelper.ToGregorianDateOnly(1404, 4, 10);
         Assert.Equal(new DateTime(2025, 7, 1), date.Date);
     }
 
     [Fact]
-    public void ToGregorianDate_1404_07_12_Returns_2025_10_04()
-    {
-        var date = ShamsiCalendarHelper.ToGregorianDate(1404, 7, 12);
-        Assert.Equal(new DateTime(2025, 10, 4), date.Date);
-    }
-
-    [Fact]
-    public void MisSyncRequestMapper_Builds_Gregorian_Range_For_Sample_Input()
+    public void MisSyncRequestMapper_Builds_Shami_Keys()
     {
         var request = new MisSyncDateRangeRequest(1404, 4, 10, 1404, 4, 11);
         var range = MisSyncRequestMapper.ToSyncRange(request);
 
-        Assert.Equal(new DateTime(2025, 7, 1), range.SyncFrom);
-        Assert.Equal(new DateTime(2025, 7, 3), range.SyncToExclusive);
+        Assert.Equal(14040410, range.ShamsiFromKey);
+        Assert.Equal(14040411, range.ShamsiToKey);
+        Assert.Equal("1404/04/10", range.ShamsiFromText);
     }
 
     [Fact]
-    public void MisQueryBuilder_Preview_Uses_Gregorian_Dates_In_Sql()
+    public void MisQueryBuilder_Preview_Filters_ShamsiDate_Column()
     {
         var request = new MisSyncDateRangeRequest(1404, 4, 10, 1404, 4, 11);
         var range = MisSyncRequestMapper.ToSyncRange(request);
@@ -44,8 +44,9 @@ public class ShamsiCalendarHelperTests
 
         var preview = MisQueryBuilder.BuildPreview(settings, range);
 
-        Assert.Contains("2025-07-01", preview.SqlWithLiteralValues);
-        Assert.Contains("2025-07-03", preview.SqlWithLiteralValues);
-        Assert.DoesNotContain("1404-04-10", preview.SqlWithLiteralValues);
+        Assert.Contains("[ShamsiDate]", preview.SqlWithLiteralValues);
+        Assert.Contains("14040410", preview.SqlWithLiteralValues);
+        Assert.Contains("14040411", preview.SqlWithLiteralValues);
+        Assert.DoesNotContain("[StartDate] >=", preview.SqlWithLiteralValues);
     }
 }

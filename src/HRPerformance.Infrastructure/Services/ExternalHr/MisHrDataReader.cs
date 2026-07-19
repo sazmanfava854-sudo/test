@@ -51,18 +51,16 @@ public class MisHrDataReader
             await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync(ct);
             await using var command = new SqlCommand(query, connection);
-            command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
-            command.Parameters.AddWithValue("@SyncTo", range.SyncToExclusive);
+            command.Parameters.AddWithValue("@ShamsiFromKey", range.ShamsiFromKey);
+            command.Parameters.AddWithValue("@ShamsiToKey", range.ShamsiToKey);
             AddFilterParameters(command, filters, range);
             command.CommandTimeout = 120;
 
             _logger.LogInformation(
-                "MIS query filters: Range={Range}, SyncFrom={SyncFrom}, SyncTo={SyncTo}, ShamsiMonth={ShamsiYear}/{ShamsiMonth}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern}), EmployeeLimit={EmployeeLimit}",
+                "MIS query filters: Range={Range}, ShamsiFromKey={ShamsiFromKey}, ShamsiToKey={ShamsiToKey}, ProvinceFilter={ApplyProvince} ({ProvinceCode}), ShamsiFilter={ApplyShamsi} ({ShamsiPattern}), EmployeeLimit={EmployeeLimit}",
                 range.Description,
-                range.SyncFrom,
-                range.SyncToExclusive,
-                range.ShamsiYear,
-                range.ShamsiMonth,
+                range.ShamsiFromKey,
+                range.ShamsiToKey,
                 filters.ApplyProvinceFilter,
                 filters.ProvinceCode,
                 filters.ApplyShamsiYearFilter,
@@ -121,8 +119,10 @@ public class MisHrDataReader
         var filters = GetFilterSettings(settings);
         var result = new MisHrDiagnosticResult
         {
-            SyncFrom = range.SyncFrom,
-            SyncTo = range.SyncToExclusive,
+            ShamsiFromKey = range.ShamsiFromKey,
+            ShamsiToKey = range.ShamsiToKey,
+            ShamsiFromText = range.ShamsiFromText,
+            ShamsiToText = range.ShamsiToText,
             ShamsiYear = range.ShamsiYear,
             ShamsiMonth = range.ShamsiMonth,
             ProvinceCode = filters.ProvinceCode,
@@ -148,32 +148,32 @@ public class MisHrDataReader
 
             result.TotalInView = await CountAsync(connection, "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]", ct);
             result.CountAfterSyncFrom = await CountAsync(connection,
-                "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo",
-                ct, ("@SyncFrom", range.SyncFrom), ("@SyncTo", range.SyncToExclusive));
+                $"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE {MisQueryBuilder.ShamsiDateIntExpr} >= @ShamsiFromKey AND {MisQueryBuilder.ShamsiDateIntExpr} <= @ShamsiToKey",
+                ct, ("@ShamsiFromKey", range.ShamsiFromKey), ("@ShamsiToKey", range.ShamsiToKey));
 
             if (filters.ApplyProvinceFilter)
             {
                 result.CountAfterProvince = await CountAsync(connection,
-                    "SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode",
-                    ct, ("@SyncFrom", range.SyncFrom), ("@SyncTo", range.SyncToExclusive), ("@ProvinceCode", filters.ProvinceCode));
+                    $"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave] WHERE {MisQueryBuilder.ShamsiDateIntExpr} >= @ShamsiFromKey AND {MisQueryBuilder.ShamsiDateIntExpr} <= @ShamsiToKey AND CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode",
+                    ct, ("@ShamsiFromKey", range.ShamsiFromKey), ("@ShamsiToKey", range.ShamsiToKey), ("@ProvinceCode", filters.ProvinceCode));
             }
 
             if (filters.ApplyShamsiYearFilter)
             {
-                result.CountAfterShamsiYear = await CountAsync(connection, @"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]
-WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
+                result.CountAfterShamsiYear = await CountAsync(connection, $@"SELECT COUNT(*) FROM [MIS].[dbo].[HZG_View_HourlyLeave]
+WHERE {MisQueryBuilder.ShamsiDateIntExpr} >= @ShamsiFromKey AND {MisQueryBuilder.ShamsiDateIntExpr} <= @ShamsiToKey
   AND CAST([year] AS NVARCHAR(4)) = @ShamsiYearPrefix",
                     ct,
-                    ("@SyncFrom", range.SyncFrom),
-                    ("@SyncTo", range.SyncToExclusive),
+                    ("@ShamsiFromKey", range.ShamsiFromKey),
+                    ("@ShamsiToKey", range.ShamsiToKey),
                     ("@ShamsiYearPrefix", filters.ShamsiYearPrefix));
             }
 
             var activeQuery = MisQueryBuilder.BuildSelectQuery(settings, range)
                 .Replace(MisHrDataReader.SelectColumnsSql, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
             await using var command = new SqlCommand(activeQuery, connection);
-            command.Parameters.AddWithValue("@SyncFrom", range.SyncFrom);
-            command.Parameters.AddWithValue("@SyncTo", range.SyncToExclusive);
+            command.Parameters.AddWithValue("@ShamsiFromKey", range.ShamsiFromKey);
+            command.Parameters.AddWithValue("@ShamsiToKey", range.ShamsiToKey);
             AddFilterParameters(command, filters, range);
             command.CommandTimeout = 120;
 
