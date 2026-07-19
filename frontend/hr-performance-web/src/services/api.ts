@@ -5,6 +5,8 @@ import { logout, setTokens } from '../store/authSlice';
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
+  maxRedirects: 0,
+  validateStatus: (status) => status >= 200 && status < 300,
 });
 
 let isRefreshing = false;
@@ -32,14 +34,39 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+const isHtmlApiResponse = (response: { headers?: Record<string, unknown>; data?: unknown }) => {
+  const contentType = String(response.headers?.['content-type'] ?? '');
+  if (contentType.includes('text/html')) return true;
+  return typeof response.data === 'string' && response.data.trimStart().startsWith('<!');
+};
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isHtmlApiResponse(response)) {
+      return Promise.reject(
+        Object.assign(new Error('پاسخ HTML به‌جای JSON — توکن JWT ارسال نشده یا منقضی شده'), {
+          response: { status: 401, data: { message: 'احراز هویت ناموفق — دوباره وارد شوید' } },
+        }),
+      );
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
 
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    const status = error.response?.status;
+    if (status === 302 || status === 301 || status === 307 || status === 308) {
+      store.dispatch(logout());
+      return Promise.reject(
+        Object.assign(new Error('احراز هویت ناموفق — سرور API را به نسخه 2.8.9-dev به‌روز کنید'), {
+          response: { status: 401, data: { message: 'احراز هویت ناموفق — دوباره وارد شوید' } },
+        }),
+      );
+    }
+
+    if (status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
 

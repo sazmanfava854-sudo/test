@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using AspNetCoreRateLimit;
 using HRPerformance.API.Middleware;
 using HRPerformance.Application;
@@ -6,6 +7,7 @@ using HRPerformance.Infrastructure;
 using HRPerformance.Infrastructure.Services;
 using HRPerformance.Infrastructure.SignalR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -24,7 +26,11 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options => {
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options => {
         options.TokenValidationParameters = new TokenValidationParameters {
             ValidateIssuer = true, ValidIssuer = builder.Configuration["Jwt:Issuer"],
@@ -38,9 +44,39 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
                     context.Token = accessToken;
                 return Task.CompletedTask;
+            },
+            OnChallenge = context => {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                var payload = JsonSerializer.Serialize(new { success = false, message = "احراز هویت نشده — دوباره وارد شوید" });
+                return context.Response.WriteAsync(payload);
             }
         };
     });
+
+builder.Services.ConfigureApplicationCookie(options => {
+    options.Events.OnRedirectToLogin = context => {
+        if (context.Request.Path.StartsWithSegments("/api")) {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+            var payload = JsonSerializer.Serialize(new { success = false, message = "احراز هویت نشده — دوباره وارد شوید" });
+            return context.Response.WriteAsync(payload);
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context => {
+        if (context.Request.Path.StartsWithSegments("/api")) {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+            var payload = JsonSerializer.Serialize(new { success = false, message = "دسترسی مجاز نیست" });
+            return context.Response.WriteAsync(payload);
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+});
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();

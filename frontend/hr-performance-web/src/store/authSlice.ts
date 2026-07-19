@@ -54,15 +54,46 @@ const persistAuth = (state: AuthState) => {
   );
 };
 
+const normalizeLoginPayload = (raw: unknown) => {
+  const envelope = (raw ?? {}) as Record<string, unknown>;
+  const data = (envelope.data ?? envelope.Data ?? envelope) as Record<string, unknown>;
+  const accessToken = String(data.accessToken ?? data.AccessToken ?? '');
+  const refreshToken = String(data.refreshToken ?? data.RefreshToken ?? '');
+  const expiresAt = String(data.expiresAt ?? data.ExpiresAt ?? '');
+  const userRaw = (data.user ?? data.User ?? null) as Record<string, unknown> | null;
+  if (!accessToken || !refreshToken) return null;
+  return {
+    accessToken,
+    refreshToken,
+    expiresAt,
+    user: userRaw
+      ? {
+          id: String(userRaw.id ?? userRaw.Id ?? ''),
+          userName: String(userRaw.userName ?? userRaw.UserName ?? ''),
+          email: String(userRaw.email ?? userRaw.Email ?? ''),
+          firstName: String(userRaw.firstName ?? userRaw.FirstName ?? ''),
+          lastName: String(userRaw.lastName ?? userRaw.LastName ?? ''),
+          fullName: String(userRaw.fullName ?? userRaw.FullName ?? ''),
+          organizationId: (userRaw.organizationId ?? userRaw.OrganizationId) as string | undefined,
+          employeeId: (userRaw.employeeId ?? userRaw.EmployeeId) as string | undefined,
+          roles: (userRaw.roles ?? userRaw.Roles ?? []) as string[],
+        }
+      : null,
+  };
+};
+
 export const login = createAsyncThunk(
   'auth/login',
   async (credentials: LoginRequest, { rejectWithValue }) => {
     try {
       const response = await authService.login(credentials);
-      if (!response.success || !response.data) {
-        return rejectWithValue(response.message ?? 'خطا در ورود');
+      const success = Boolean(response.success ?? (response as { Success?: boolean }).Success);
+      const message = response.message ?? (response as { Message?: string }).Message;
+      const payload = normalizeLoginPayload(response.data ?? (response as { Data?: unknown }).Data ?? response);
+      if (!success || !payload) {
+        return rejectWithValue(message ?? 'خطا در ورود — accessToken در پاسخ سرور یافت نشد');
       }
-      return response.data;
+      return payload;
     } catch (err: unknown) {
       const axiosErr = err as {
         response?: { status?: number; data?: { message?: string } };
@@ -117,7 +148,7 @@ const authSlice = createSlice({
       })
       .addCase(login.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
+        if (action.payload.user) state.user = action.payload.user;
         state.accessToken = action.payload.accessToken;
         state.refreshToken = action.payload.refreshToken;
         state.expiresAt = action.payload.expiresAt;
