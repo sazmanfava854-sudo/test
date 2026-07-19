@@ -57,5 +57,31 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
         builder.Entity<AttendanceLog>().HasIndex(a => new { a.EmployeeId, a.AttendanceDate });
         builder.Entity<RefreshToken>().HasIndex(r => r.Token);
         builder.Entity<EmployeeIndicatorSetting>().HasIndex(s => new { s.EmployeeId, s.CategoryId }).IsUnique();
+
+        // Match SQL schema (database/02_Tables.sql) — suppress EF decimal truncation warnings
+        builder.Entity<AlertRule>().Property(e => e.Threshold).HasPrecision(10, 2);
+
+        builder.Entity<AttendanceLog>().Property(e => e.WorkingHours).HasPrecision(5, 2);
+        builder.Entity<AttendanceLog>().Property(e => e.OvertimeHours).HasPrecision(5, 2);
+
+        builder.Entity<Employee>().Property(e => e.CurrentScore).HasPrecision(10, 2);
+        builder.Entity<Employee>().Property(e => e.MonthlyScore).HasPrecision(10, 2);
+        builder.Entity<Employee>().Property(e => e.YearlyScore).HasPrecision(10, 2);
+
+        builder.Entity<EmployeeEvaluation>().Property(e => e.Score).HasPrecision(10, 2);
+        builder.Entity<EmployeeIndicatorSetting>().Property(e => e.Weight).HasPrecision(5, 2);
+        builder.Entity<EmployeeScore>().Property(e => e.Score).HasPrecision(10, 2);
+
+        builder.Entity<EvaluationCategory>().Property(e => e.Weight).HasPrecision(5, 2);
+        builder.Entity<EvaluationItem>().Property(e => e.DefaultScore).HasPrecision(10, 2);
+        builder.Entity<EvaluationItem>().Property(e => e.MaxScore).HasPrecision(10, 2);
+        builder.Entity<EvaluationItem>().Property(e => e.MinScore).HasPrecision(10, 2);
+        builder.Entity<EvaluationItem>().Property(e => e.Weight).HasPrecision(5, 2);
+
+        builder.Entity<EvaluationRule>().Property(e => e.MinValue).HasPrecision(10, 2);
+        builder.Entity<EvaluationRule>().Property(e => e.MaxValue).HasPrecision(10, 2);
+        builder.Entity<EvaluationRule>().Property(e => e.ScoreImpact).HasPrecision(10, 2);
+
+        builder.Entity<Ranking>().Property(e => e.Score).HasPrecision(10, 2);
     }
 }
