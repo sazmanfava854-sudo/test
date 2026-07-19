@@ -146,12 +146,14 @@ public class AttendanceSyncController : ControllerBase
             return Ok(new
             {
                 success = true,
+                apiVersion = "2.8.6-dev",
                 shamsiRange = $"{shamsiFromYear}/{shamsiFromMonth:D2}/{shamsiFromDay:D2} تا {shamsiToYear}/{shamsiToMonth:D2}/{shamsiToDay:D2}",
                 gregorianRange = new
                 {
                     from = preview.GregorianFrom.ToString("yyyy-MM-dd HH:mm:ss"),
                     to = preview.GregorianToInclusive.ToString("yyyy-MM-dd HH:mm:ss")
                 },
+                conversionOk = preview.GregorianFrom.Year is >= 1990 and <= 2100,
                 preview.Note,
                 sql = preview.SqlWithLiteralValues,
                 sqlWithParameters = preview.SqlWithParameters,

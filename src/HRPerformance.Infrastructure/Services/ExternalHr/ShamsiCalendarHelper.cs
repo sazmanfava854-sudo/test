@@ -17,7 +17,28 @@ public static class ShamsiCalendarHelper
         if (day < 1 || day > daysInMonth)
             throw new ArgumentOutOfRangeException(nameof(day), "روز شمسی نامعتبر است");
 
-        return Calendar.ToDateTime(year, month, day, 0, 0, 0, 0);
+        var gregorian = Calendar.ToDateTime(year, month, day, 0, 0, 0, 0);
+        EnsureGregorianDate(gregorian, year, month, day);
+        return gregorian;
+    }
+
+    /// <summary>
+    /// Rejects dates that look like Shamsi values used as Gregorian (e.g. 1404-04-10).
+    /// </summary>
+    public static void EnsureGregorianDate(DateTime date, int shamsiYear, int shamsiMonth, int shamsiDay)
+    {
+        if (date.Year is >= 1300 and <= 1500)
+        {
+            throw new InvalidOperationException(
+                $"تبدیل شمسی {shamsiYear}/{shamsiMonth:D2}/{shamsiDay:D2} به میلادی انجام نشده است " +
+                $"(نتیجه: {date:yyyy-MM-dd}). لطفاً dotnet build را اجرا کنید و از نسخه 2.8.6-dev به بعد استفاده کنید.");
+        }
+
+        if (date.Year < 1990 || date.Year > 2100)
+        {
+            throw new InvalidOperationException(
+                $"تبدیل شمسی {shamsiYear}/{shamsiMonth:D2}/{shamsiDay:D2} به میلادی نامعتبر است ({date:yyyy-MM-dd}).");
+        }
     }
 
     public static int ToYearMonthKey(int year, int month) => year * 100 + month;

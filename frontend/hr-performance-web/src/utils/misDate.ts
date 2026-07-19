@@ -82,3 +82,9 @@ export function isShamsiRangeValid(from: ShamsiDateParts, to: ShamsiDateParts): 
 export function compareShamsiParts(a: ShamsiDateParts, b: ShamsiDateParts): number {
   return fromShamsiParts(a).getTime() - fromShamsiParts(b).getTime();
 }
+
+/** True when a "Gregorian" datetime string still uses a Shamsi year (e.g. 1404-04-10). */
+export function looksLikeUnconvertedShamsiDate(isoDateTime: string): boolean {
+  const year = Number(isoDateTime.slice(0, 4));
+  return !Number.isNaN(year) && year >= 1300 && year <= 1500;
+}

@@ -28,12 +28,13 @@ import {
   formatShamsiParts,
   getDefaultMisSyncRange,
   isShamsiRangeValid,
+  looksLikeUnconvertedShamsiDate,
   toMisSyncRequestPayload,
   type ShamsiDateParts,
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.5-dev';
+const APP_VERSION = '2.8.6-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -161,11 +162,23 @@ export default function SettingsPage() {
         return;
       }
       setQueryPreview(sql);
-      setSuccess('کوئری ساخته شد — در کادر پایین نمایش داده می‌شود');
       const gr = data?.gregorianRange;
       if (gr?.from && gr?.to) {
+        if (
+          data?.conversionOk === false ||
+          looksLikeUnconvertedShamsiDate(gr.from) ||
+          looksLikeUnconvertedShamsiDate(gr.to)
+        ) {
+          const msg =
+            'تبدیل شمسی به میلادی انجام نشده — backend قدیمی است. dotnet build را اجرا کنید و نسخه 2.8.6-dev را استفاده کنید.';
+          setGregorianRangeLabel('');
+          setQueryPreview(`-- خطا: ${msg}\n-- ${sql}`);
+          setError(msg);
+          return;
+        }
         setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
       }
+      setSuccess('کوئری ساخته شد — در کادر پایین نمایش داده می‌شود');
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
