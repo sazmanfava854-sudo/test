@@ -3,6 +3,8 @@
 ## .NET
 bin/
 obj/
+publish/
+!releases/
 *.user
 *.suo
 logs/
@@ -15,8 +17,6 @@ dist/
 ## IDE
 .vs/
 .idea/
-.vscode/*
-!.vscode/settings.json
 
 ## Environment
 appsettings.Production.json

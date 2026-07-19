@@ -13,7 +13,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Using: 
+echo Using:
 dotnet --version
 echo.
 
@@ -22,7 +22,7 @@ set ATTEMPT=1
 
 :restore_loop
 echo [Attempt %ATTEMPT%/%RETRIES%] Restoring packages...
-dotnet restore HRPerformance.sln --disable-parallel --verbosity minimal
+dotnet restore HRPerformance.sln --verbosity minimal
 if %errorlevel% equ 0 goto restore_ok
 
 echo.
@@ -45,5 +45,4 @@ exit /b 1
 :restore_ok
 echo.
 echo [OK] Packages restored successfully.
-echo      Reopen the solution in Cursor/VS Code for faster IntelliSense.
 exit /b 0

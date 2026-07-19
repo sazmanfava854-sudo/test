@@ -1,6 +1,5 @@
 using HRPerformance.Application.Interfaces;
 using HRPerformance.Domain.Interfaces;
-using HRPerformance.Infrastructure.BackgroundServices;
 using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Repositories;
 using HRPerformance.Infrastructure.Services;
@@ -33,10 +32,10 @@ public static class DependencyInjection
         services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
         services.AddScoped<MisHrDataReader>();
         services.AddScoped<MisHrEmployeeSyncService>();
+        services.AddScoped<HrIntegrationConnectionService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
         services.AddHttpClient("AttendanceSync");
-        services.AddHostedService<AttendanceSyncBackgroundService>();
         return services;
     }
 }

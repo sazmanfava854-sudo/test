@@ -14,12 +14,15 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-$assetsFile = "src\HRPerformance.API\obj\project.assets.json"
-if (-not (Test-Path $assetsFile)) {
+Write-Host ""
+Write-Host "بررسی پورت 5000..." -ForegroundColor Yellow
+& "$PSScriptRoot/scripts/free-port-5000.ps1"
+if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "اولین اجرا: در حال restore پکیج‌های NuGet..." -ForegroundColor Yellow
-    & "$PSScriptRoot\scripts\restore-packages.ps1"
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "پورت 5000 آزاد نشد. یک نمونه قبلی ممکن است هنوز در حال اجرا باشد." -ForegroundColor Red
+    Write-Host "  netstat -ano | findstr :5000" -ForegroundColor White
+    Write-Host "  taskkill /PID <pid> /F" -ForegroundColor White
+    exit 1
 }
 
 Write-Host ""

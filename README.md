@@ -2,33 +2,28 @@
 
 سیستم جامع مدیریت عملکرد و انضباط کارکنان برای شهرداری‌ها، سازمان‌های دولتی و شرکت‌های بزرگ.
 
-**دانلود نسخه نهایی (v1.0.1-final):**  
-https://github.com/sazmanfava854-sudo/test/releases/download/v1.0.1-final/HRPerformance-System-v1.0.1-final.zip
-
-## Architecture
+## Architecture (ساده‌شده — یک پروژه)
 
 ```
 HRPerformance/
-├── database/           # SQL Server scripts (01-08)
-├── src/
-│   ├── HRPerformance.Domain/          # Entities, Enums, Interfaces
-│   ├── HRPerformance.Application/     # CQRS (MediatR), DTOs, Validators
-│   ├── HRPerformance.Infrastructure/  # EF Core, Repositories, Services
-│   └── HRPerformance.API/             # REST API, SignalR, Background Services
-└── frontend/
-    └── hr-performance-web/            # React + TypeScript + MUI (RTL)
+├── database/              # SQL Server scripts (01-11)
+├── src/HRPerformance.API/ # همه چیز در یک پروژه
+│   ├── Controllers/       # API endpoints
+│   ├── Services/          # منطق کسب‌وکار + MIS sync
+│   ├── Entities/          # مدل‌های دیتابیس
+│   ├── Data/              # EF Core DbContext
+│   ├── DTOs/              # ورودی/خروجی API
+│   └── wwwroot/           # فرانت‌اند بیلد شده
+└── frontend/              # سورس React (اختیاری)
 ```
 
 ## Tech Stack
 
 ### Backend
-- ASP.NET Core 8 Web API
+- ASP.NET Core 8 Web API (تک‌پروژه‌ای)
 - Entity Framework Core 8 + SQL Server
 - JWT Authentication + Refresh Token
-- Clean Architecture + CQRS (MediatR)
-- FluentValidation, AutoMapper, Serilog
-- SignalR (real-time notifications)
-- Background Service (attendance sync every 5 min)
+- Serilog, SignalR, Background Service (MIS sync هر ۵ دقیقه)
 
 ### Frontend
 - React 18 + TypeScript + Vite
@@ -40,20 +35,28 @@ HRPerformance/
 
 > **نیاز به Node.js/npm ندارید.** فرانت‌اند از قبل بیلد شده و داخل API سرو می‌شود.
 
-### Windows
+### Windows (با SQL Server — محیط واقعی)
 
-**اولین بار (توصیه‌شده):**
-```powershell
+**روش پیشنهادی** (بدون محدودیت PowerShell):
+
+```cmd
 cd HRPerformance
-.\scripts\setup-windows.ps1
+start.bat
 ```
 
-**اجرای برنامه:**
+یا دوبار کلیک روی `start.bat`
+
+اگر می‌خواهید `start.ps1` را اجرا کنید و خطای Execution Policy گرفتید:
+
 ```powershell
-.\start.ps1
+powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-یا دوبار کلیک روی `start.bat` — در اولین اجرا، restore پکیج‌ها به‌صورت خودکار انجام می‌شود.
+یا مستقیم:
+
+```cmd
+dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http
+```
 
 ### Linux / macOS
 
@@ -68,31 +71,39 @@ cd HRPerformance
 
 برای توقف: `Ctrl+C`
 
+### خطای «address already in use» روی پورت 5000
+
+اگر پیام `Failed to bind to address http://127.0.0.1:5000` دیدید، معمولاً یک نمونه قبلی API هنوز در حال اجراست (مثلاً پنجره `start-local.bat` بسته شده ولی `dotnet` هنوز زنده است).
+
+اسکریپت‌های `start-local.bat` / `start.ps1` / `start.sh` قبل از اجرا سعی می‌کنند پورت را آزاد کنند. اگر خودتان می‌خواهید:
+
+**Windows (CMD):**
+```bat
+scripts\free-port-5000.bat
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\free-port-5000.ps1
+```
+
+**دستی:**
+```bat
+netstat -ano | findstr :5000
+taskkill /PID <pid> /F
+```
+
+**Linux / macOS:**
+```bash
+./scripts/free-port-5000.sh
+```
+
 ### پیش‌نیازها
 
 | نرم‌افزار | نسخه | دانلود |
 |-----------|------|--------|
 | .NET SDK | **8.0** (شما: 8.0.401 ✅) | https://dotnet.microsoft.com/download/dotnet/8.0 |
 | SQL Server | 2019+ | برای دیتابیس (یک بار `npm run db:init` یا اسکریپت‌های SQL) |
-
-### رفع کندی Cursor / خطای NuGet (SSL)
-
-اگر در IDE پیام `unresolved dependencies` یا خطای SSL هنگام دانلود پکیج می‌بینید:
-
-```powershell
-# Windows — از ریشه پروژه
-.\scripts\restore-packages.ps1
-```
-
-```cmd
-scripts\restore-packages.bat
-```
-
-سپس Cursor را ببندید و دوباره پوشه پروژه را باز کنید. فقط `HRPerformance.sln` را باز کنید (نه چند solution همزمان).
-
-**علت رایج:** فایروال/آنتی‌ویروس/VPN اتصال به `api.nuget.org` را قطع می‌کند. در صورت نیاز:
-- `dotnet nuget locals all --clear` و restore مجدد
-- تنظیم پروکسی: `$env:HTTPS_PROXY='http://proxy:port'`
 
 **Node.js فقط برای توسعه‌دهندگان** که می‌خواهند UI را تغییر دهند — برای اجرای عادی لازم نیست.
 

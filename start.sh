@@ -15,11 +15,9 @@ if ! command -v dotnet >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "src/HRPerformance.API/obj/project.assets.json" ]]; then
-  echo ""
-  echo "اولین اجرا: در حال restore پکیج‌های NuGet..."
-  dotnet restore HRPerformance.sln --disable-parallel --verbosity minimal
-fi
+echo ""
+echo "بررسی پورت 5000..."
+bash "$ROOT_DIR/scripts/free-port-5000.sh"
 
 echo ""
 echo "🚀 در حال اجرا..."

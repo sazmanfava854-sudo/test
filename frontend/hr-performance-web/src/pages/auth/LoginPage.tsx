@@ -36,7 +36,15 @@ export default function LoginPage() {
     dispatch(clearError());
     const result = await dispatch(login({ userName, password }));
     if (login.fulfilled.match(result)) {
-      navigate('/dashboard');
+      const roles = result.payload.user?.roles ?? [];
+      if (
+        roles.includes('SuperAdministrator') ||
+        roles.includes('OrganizationAdministrator')
+      ) {
+        navigate('/settings?tab=mis');
+      } else {
+        navigate('/dashboard');
+      }
     }
   };
 

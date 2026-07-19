@@ -33,6 +33,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<Ranking> Rankings => Set<Ranking>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<AttendanceIntegrationSetting> AttendanceIntegrationSettings => Set<AttendanceIntegrationSetting>();
+    public DbSet<EmployeeIndicatorSetting> EmployeeIndicatorSettings => Set<EmployeeIndicatorSetting>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -55,5 +56,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
             .HasFilter("[ExternalId] IS NOT NULL");
         builder.Entity<AttendanceLog>().HasIndex(a => new { a.EmployeeId, a.AttendanceDate });
         builder.Entity<RefreshToken>().HasIndex(r => r.Token);
+        builder.Entity<EmployeeIndicatorSetting>().HasIndex(s => new { s.EmployeeId, s.CategoryId }).IsUnique();
     }
 }
