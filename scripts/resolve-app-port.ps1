@@ -1,48 +1,63 @@
-# انتخاب پورت آزاد برای HR Performance — فقط عدد پورت را در stdout چاپ می‌کند
+# انتخاب پورت آزاد برای HR Performance
 param(
-    [int[]]$PreferredPorts = @(5000, 5280, 5080, 5180, 5050)
+    [int[]]$PreferredPorts = @(5000, 5280, 5080, 5180, 5050),
+    [string]$OutFile = ''
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $freePortScript = Join-Path $scriptDir 'free-port.ps1'
 
-function Log([string]$Message) {
-    [Console]::Error.WriteLine($Message)
+function Write-Port([int]$Port) {
+    if ($OutFile) {
+        [System.IO.File]::WriteAllText($OutFile, "$Port")
+    }
+    [Console]::Out.WriteLine($Port)
 }
 
 function Test-PortListening {
     param([int]$Port)
 
-    if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
-        $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-        return $null -ne $conn -and @($conn).Count -gt 0
+    try {
+        if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+            $conn = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+            if ($conn.Count -gt 0) { return $true }
+        }
+    } catch {
+        # fallback to netstat
     }
 
-    $matches = netstat -ano |
-        Select-String 'LISTENING' |
-        Select-String ":$Port\s"
-    return $null -ne $matches -and $matches.Count -gt 0
+    try {
+        $lines = netstat -ano |
+            Select-String 'LISTENING' |
+            Select-String ":$Port\s"
+        return $null -ne $lines -and @($lines).Count -gt 0
+    } catch {
+        return $false
+    }
 }
 
 foreach ($port in $PreferredPorts) {
     if (-not (Test-PortListening -Port $port)) {
-        Write-Output $port
+        Write-Port $port
         exit 0
     }
 
-    Log "پورت $port اشغال است — تلاش برای آزادسازی..."
-    & $freePortScript -Port $port 1>$null
-    Start-Sleep -Milliseconds 400
+    if (Test-Path $freePortScript) {
+        try {
+            & $freePortScript -Port $port *> $null
+        } catch {
+            # ignore
+        }
+        Start-Sleep -Milliseconds 400
+    }
 
     if (-not (Test-PortListening -Port $port)) {
-        Log "پورت $port آزاد شد."
-        Write-Output $port
+        Write-Port $port
         exit 0
     }
-
-    Log "پورت $port هنوز اشغال است — پورت بعدی..."
 }
 
-Log "هیچ پورت آزادی یافت نشد. پورت‌های امتحان‌شده: $($PreferredPorts -join ', ')"
-exit 1
+# fallback: still return 5280 and let dotnet report bind error
+Write-Port 5280
+exit 0

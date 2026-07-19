@@ -1,5 +1,5 @@
 # HR Performance - Windows (فقط .NET - بدون نیاز به Node.js)
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 Set-Location $PSScriptRoot
 
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -16,11 +16,10 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 
 Write-Host ""
 Write-Host "انتخاب پورت آزاد..." -ForegroundColor Yellow
-$appPort = & "$PSScriptRoot/scripts/resolve-app-port.ps1" | Select-Object -Last 1
-if (-not $appPort -or $appPort -notmatch '^\d+$') {
-    Write-Host "هیچ پورت آزادی یافت نشد." -ForegroundColor Red
-    exit 1
-}
+$portFile = Join-Path $env:TEMP 'hr-performance-port.txt'
+& "$PSScriptRoot/scripts/resolve-app-port.ps1" -OutFile $portFile | Out-Null
+$appPort = if (Test-Path $portFile) { (Get-Content $portFile -Raw).Trim() } else { '5280' }
+if ($appPort -notmatch '^\d+$') { $appPort = '5280' }
 
 $env:ASPNETCORE_URLS = "http://localhost:$appPort"
 $env:ASPNETCORE_ENVIRONMENT = "Development"
