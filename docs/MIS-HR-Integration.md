@@ -1,66 +1,64 @@
 ## اتصال به سیستم MIS (HR خارجی)
 
-### ۱. تنظیم رمز عبور (امن)
+### ۱. تنظیم اتصال (فقط مدیر فنی سرور)
 
-در PowerShell داخل پوشه API:
-
-```powershell
-cd src\HRPerformance.API
-dotnet user-secrets init
-dotnet user-secrets set "HrIntegration:Password" "رمز-واقعی-ITCMISUserReader"
-```
-
-یا در `appsettings.json` (فقط برای تست محلی):
+در `appsettings.json` فقط اطلاعات اتصال MIS:
 
 ```json
 "HrIntegration": {
+  "Enabled": true,
   "Server": "mdc-aogmain2016\\sql2016",
   "Database": "MIS",
   "UserId": "ITCMISUserReader",
   "Password": "رمز-شما",
-  "Enabled": true,
-  "SourceType": "SQLView",
-  "SyncDaysBack": 30
+  "SourceType": "SQLView"
 }
 ```
 
-### ۲. اجرای اسکریپت‌های دیتابیس
+### ۲. دریافت داده توسط کاربر (بعد از لاگین)
 
-```sql
--- بعد از 08_SeedData.sql
-09_Migration_AttendanceExternalId.sql
-10_HrMisIntegrationSeed.sql
+هیچ داده‌ای به‌صورت خودکار لود نمی‌شود.
+
+1. با نقش مدیر وارد شوید
+2. بروید به **تنظیمات > دریافت از MIS**
+3. **بازه تاریخ** (از / تا) را انتخاب کنید
+4. دکمه **دریافت داده از MIS** را بزنید
+
+API:
+```
+POST /api/attendancesync/run-range
+Authorization: Bearer {token}
+
+{
+  "fromDate": "2025-01-01",
+  "toDate": "2025-01-31",
+  "provinceCode": "147",
+  "shamsiYearPrefix": "1404",
+  "employeeLimit": 10
+}
 ```
 
-### ۳. View منبع داده
+### ۳. اسکریپت‌های دیتابیس
+
+```
+09_Migration_AttendanceExternalId.sql
+10_HrMisIntegrationSeed.sql
+12_Migration_HrMisSyncState.sql  (اختیاری — نسخه‌های قدیمی)
+```
+
+### ۴. View منبع داده
 
 `MIS.dbo.HZG_View_HourlyLeave`
 
-فیلتر پیش‌فرض: `ProvinceCode = '147'` (قابل تغییر در `HrIntegration:ProvinceCode`)
+| فیلد MIS | کاربرد |
+|----------|--------|
+| PerCod | کد پرسنلی |
+| Name / LastName | نام کارمند |
+| StartDate | بازه فیلتر تاریخ |
+| ID | ExternalId |
 
-| فیلد MIS | کاربرد در سیستم |
-|----------|-----------------|
-| PerCod | کد پرسنلی → Employees.PersonnelCode |
-| Name / LastName | نام کارمند (سینک خودکار پرسنل) |
-| NationalIDNo | کد ملی |
-| StartDate / StartTime / EndTime | زمان مرخصی ساعتی |
-| LeaveDurationMinutes | امتیازدهی Rule Engine |
-| ID | ExternalId (کلید یکتا) |
-
-### ۴. جریان سینک
+### ۵. عیب‌یابی
 
 ```
-MIS View → MisHrDataReader
-         → MisHrEmployeeSyncService (ایجاد/بروزرسانی کارمند)
-         → AttendanceLogs
-         → RuleEngine (امتیاز مرخصی ساعتی)
+GET /api/attendancesync/diagnostic?fromDate=2025-01-01&toDate=2025-01-31
 ```
-
-### ۵. سینک دستی (API)
-
-```
-POST /api/attendancesync/run
-Authorization: Bearer {admin-token}
-```
-
-سینک خودکار هر ۵ دقیقه توسط Background Service.

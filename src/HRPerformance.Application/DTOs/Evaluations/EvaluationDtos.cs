@@ -5,3 +5,6 @@ public record EvaluationItemDto(Guid Id, Guid CategoryId, string Title, string? 
 public record EvaluationRuleDto(Guid Id, string Name, string? Description, RuleConditionType ConditionType, RuleOperator Operator, decimal? MinValue, decimal? MaxValue, decimal ScoreImpact, bool IsActive);
 public record CreateEvaluationRequest(Guid EmployeeId, Guid? CategoryId, Guid? ItemId, decimal Score, ScoreType ScoreType, string? Notes, DateTime EvaluationDate);
 public record EmployeeEvaluationDto(Guid Id, Guid EmployeeId, string EmployeeName, decimal Score, ScoreType ScoreType, string? Notes, DateTime EvaluationDate, WorkflowStatus WorkflowStatus);
+public record EmployeeIndicatorDto(Guid CategoryId, string CategoryName, decimal DefaultWeight, decimal Weight, bool IsActive);
+public record UpdateEmployeeIndicatorRequest(Guid CategoryId, decimal Weight, bool IsActive);
+public record SaveEmployeeIndicatorsRequest(IList<UpdateEmployeeIndicatorRequest> Indicators);

@@ -21,6 +21,12 @@ public class EvaluationsController : ControllerBase
         Ok(await _mediator.Send(new CreateEvaluationCommand(request, _currentUser.EmployeeId ?? Guid.Empty, _currentUser.OrganizationId ?? Guid.Empty)));
     [HttpPost("rules")] [Authorize(Roles = "OrganizationAdministrator,SuperAdministrator")] public async Task<IActionResult> CreateRule([FromBody] CreateRuleRequest req) =>
         Ok(await _mediator.Send(new CreateRuleCommand(_currentUser.OrganizationId ?? Guid.Empty, req.Name, req.ConditionType, req.Operator, req.MinValue, req.MaxValue, req.ScoreImpact)));
+    [HttpGet("employees/{employeeId:guid}/indicators")] [Authorize(Roles = "Manager,OrganizationAdministrator,SuperAdministrator")]
+    public async Task<IActionResult> GetEmployeeIndicators(Guid employeeId) =>
+        Ok(await _mediator.Send(new GetEmployeeIndicatorsQuery(employeeId, _currentUser.OrganizationId ?? Guid.Empty)));
+    [HttpPut("employees/{employeeId:guid}/indicators")] [Authorize(Roles = "Manager,OrganizationAdministrator,SuperAdministrator")]
+    public async Task<IActionResult> SaveEmployeeIndicators(Guid employeeId, [FromBody] SaveEmployeeIndicatorsRequest request) =>
+        Ok(await _mediator.Send(new SaveEmployeeIndicatorsCommand(employeeId, _currentUser.OrganizationId ?? Guid.Empty, request)));
 }
 public record CreateCategoryRequest(string Name, string? Description, string? Color, string? Icon, decimal Weight);
 public record CreateRuleRequest(string Name, RuleConditionType ConditionType, RuleOperator Operator, decimal? MinValue, decimal? MaxValue, decimal ScoreImpact);

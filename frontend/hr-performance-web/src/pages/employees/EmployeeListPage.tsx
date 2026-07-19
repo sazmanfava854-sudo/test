@@ -5,6 +5,7 @@ import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import Chip from '@mui/material/Chip';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
+import Alert from '@mui/material/Alert';
 import SearchIcon from '@mui/icons-material/Search';
 import { employeeService } from '../../services/employeeService';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
@@ -58,6 +59,7 @@ export default function EmployeeListPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [paginationModel, setPaginationModel] = useState({
     page: 0,
     pageSize: 20,
@@ -74,10 +76,16 @@ export default function EmployeeListPage() {
       if (response.success && response.data) {
         setRows(response.data.items);
         setTotalCount(response.data.totalCount);
+        setError(null);
+      } else {
+        setRows([]);
+        setTotalCount(0);
+        setError(response.message ?? 'خطا در دریافت فهرست کارمندان');
       }
     } catch {
       setRows([]);
       setTotalCount(0);
+      setError('خطا در اتصال به API. اگر تازه به‌روزرسانی کرده‌اید، Ctrl+F5 بزنید و دوباره وارد شوید.');
     } finally {
       setLoading(false);
     }
@@ -91,6 +99,11 @@ export default function EmployeeListPage() {
   return (
     <Box>
       <LoadingOverlay open={loading && rows.length === 0} />
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>

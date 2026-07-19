@@ -6,6 +6,7 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Avatar from '@mui/material/Avatar';
+import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 import {
   Chart as ChartJS,
@@ -18,6 +19,7 @@ import {
   RadialLinearScale,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 import { Bar, Line, Pie, Radar } from 'react-chartjs-2';
 import PeopleIcon from '@mui/icons-material/People';
@@ -41,37 +43,26 @@ ChartJS.register(
   RadialLinearScale,
   Tooltip,
   Legend,
+  Filler,
 );
 
-const fallbackData: ManagerDashboardDto = {
-  employeeCount: 45,
-  todayPresent: 38,
-  todayDelays: 5,
-  todayAbsent: 2,
-  averageScore: 82.4,
-  topEmployees: [
-    { id: '1', fullName: 'علی محمدی', department: 'فناوری', score: 95, ranking: 1 },
-    { id: '2', fullName: 'سارا احمدی', department: 'مالی', score: 92, ranking: 2 },
-    { id: '3', fullName: 'رضا کریمی', department: 'فروش', score: 90, ranking: 3 },
-  ],
-  weakEmployees: [
-    { id: '4', fullName: 'مریم حسینی', department: 'پشتیبانی', score: 55, ranking: 43 },
-    { id: '5', fullName: 'حسین رضایی', department: 'انبار', score: 58, ranking: 42 },
-  ],
-  monthlyTrend: [
-    { label: 'فروردین', value: 78 },
-    { label: 'اردیبهشت', value: 80 },
-    { label: 'خرداد', value: 82 },
-    { label: 'تیر', value: 81 },
-    { label: 'مرداد', value: 84 },
-    { label: 'شهریور', value: 85 },
-  ],
+const emptyData: ManagerDashboardDto = {
+  employeeCount: 0,
+  todayPresent: 0,
+  todayDelays: 0,
+  todayAbsent: 0,
+  averageScore: 0,
+  topEmployees: [],
+  weakEmployees: [],
+  monthlyTrend: [],
+  teamIndicators: [],
 };
 
 export default function ManagerDashboard() {
   const theme = useTheme();
-  const [data, setData] = useState<ManagerDashboardDto | null>(null);
+  const [data, setData] = useState<ManagerDashboardDto>(emptyData);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -80,10 +71,10 @@ export default function ManagerDashboard() {
         if (response.success && response.data) {
           setData(response.data);
         } else {
-          setData(fallbackData);
+          setError(response.message ?? 'خطا در دریافت داده‌های داشبورد');
         }
       } catch {
-        setData(fallbackData);
+        setError('خطا در اتصال به سرور');
       } finally {
         setLoading(false);
       }
@@ -91,8 +82,21 @@ export default function ManagerDashboard() {
     fetchData();
   }, []);
 
-  const labels = data?.monthlyTrend.map((t) => t.label) ?? [];
-  const values = data?.monthlyTrend.map((t) => t.value) ?? [];
+  const labels = data.monthlyTrend.map((t) => t.label);
+  const values = data.monthlyTrend.map((t) => t.value);
+
+  const radarData = {
+    labels: data.teamIndicators.map((i) => i.label),
+    datasets: [
+      {
+        label: 'میانگین تیم',
+        data: data.teamIndicators.map((i) => i.value),
+        backgroundColor: `${theme.palette.primary.main}33`,
+        borderColor: theme.palette.primary.main,
+        pointBackgroundColor: theme.palette.secondary.main,
+      },
+    ],
+  };
 
   const barData = {
     labels,
@@ -123,28 +127,12 @@ export default function ManagerDashboard() {
     labels: ['حاضر', 'تأخیر', 'غایب'],
     datasets: [
       {
-        data: [
-          data?.todayPresent ?? 0,
-          data?.todayDelays ?? 0,
-          data?.todayAbsent ?? 0,
-        ],
+        data: [data.todayPresent, data.todayDelays, data.todayAbsent],
         backgroundColor: [
           theme.palette.success.main,
           theme.palette.warning.main,
           theme.palette.error.main,
         ],
-      },
-    ],
-  };
-
-  const radarData = {
-    labels: ['حضور', 'کیفیت', 'سرعت', 'همکاری', 'نوآوری'],
-    datasets: [
-      {
-        label: 'عملکرد تیم',
-        data: [85, 78, 82, 90, 75],
-        backgroundColor: `${theme.palette.primary.main}40`,
-        borderColor: theme.palette.primary.main,
       },
     ],
   };
@@ -158,6 +146,11 @@ export default function ManagerDashboard() {
   return (
     <Box>
       <LoadingOverlay open={loading} />
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
         داشبورد مدیریتی
       </Typography>
@@ -167,39 +160,36 @@ export default function ManagerDashboard() {
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="تعداد کارمندان"
-            value={data?.employeeCount ?? 0}
-            icon={<PeopleIcon />}
-          />
+          <StatCard title="تعداد کارمندان" value={data.employeeCount} icon={<PeopleIcon />} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="حاضر امروز"
-            value={data?.todayPresent ?? 0}
-            icon={<CheckCircleIcon />}
-            color={theme.palette.success.main}
-          />
+          <StatCard title="حاضر امروز" value={data.todayPresent} icon={<CheckCircleIcon />} color={theme.palette.success.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="تأخیر امروز"
-            value={data?.todayDelays ?? 0}
-            icon={<WarningIcon />}
-            color={theme.palette.warning.main}
-          />
+          <StatCard title="تأخیر امروز" value={data.todayDelays} icon={<WarningIcon />} color={theme.palette.warning.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="میانگین امتیاز"
-            value={data?.averageScore?.toFixed(1) ?? '—'}
-            icon={<StarIcon />}
-            color={theme.palette.info.main}
-          />
+          <StatCard title="میانگین امتیاز" value={data.averageScore?.toFixed(1) ?? '—'} icon={<StarIcon />} color={theme.palette.info.main} />
         </Grid>
       </Grid>
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <ChartCard title="شاخص‌های تیم (رادار)">
+            {data.teamIndicators.length > 0 ? (
+              <Radar data={radarData} options={{ ...chartOptions, scales: { r: { beginAtZero: true, max: 100 } } }} />
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                پس از ثبت ارزیابی یا دریافت MIS، شاخص‌ها نمایش داده می‌شوند.
+              </Typography>
+            )}
+          </ChartCard>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <ChartCard title="وضعیت حضور امروز">
+            <Pie data={pieData} options={chartOptions} />
+          </ChartCard>
+        </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
           <ChartCard title="روند ماهانه (میله‌ای)">
             <Bar data={barData} options={{ ...chartOptions, plugins: { legend: { display: false } } }} />
@@ -210,28 +200,15 @@ export default function ManagerDashboard() {
             <Line data={lineData} options={{ ...chartOptions, plugins: { legend: { display: false } } }} />
           </ChartCard>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <ChartCard title="وضعیت حضور امروز">
-            <Pie data={pieData} options={chartOptions} />
-          </ChartCard>
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <ChartCard title="شاخص‌های تیم (رادار)">
-            <Radar data={radarData} options={chartOptions} />
-          </ChartCard>
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <ChartCard title="برترین کارمندان" height={280}>
             <List dense>
-              {data?.topEmployees.map((emp) => (
+              {data.topEmployees.map((emp) => (
                 <ListItem key={emp.id}>
                   <Avatar sx={{ width: 32, height: 32, ml: 1.5, bgcolor: 'success.main', fontSize: '0.8rem' }}>
                     {emp.ranking}
                   </Avatar>
-                  <ListItemText
-                    primary={emp.fullName}
-                    secondary={`${emp.department} — ${emp.score}`}
-                  />
+                  <ListItemText primary={emp.fullName} secondary={`${emp.department ?? '—'} — ${emp.score}`} />
                 </ListItem>
               ))}
             </List>
@@ -241,13 +218,10 @@ export default function ManagerDashboard() {
 
       <ChartCard title="کارمندان نیازمند توجه" height="auto">
         <List>
-          {data?.weakEmployees.map((emp) => (
+          {data.weakEmployees.map((emp) => (
             <ListItem key={emp.id}>
               <CancelIcon color="error" sx={{ ml: 1 }} />
-              <ListItemText
-                primary={emp.fullName}
-                secondary={`${emp.department} — امتیاز: ${emp.score}`}
-              />
+              <ListItemText primary={emp.fullName} secondary={`${emp.department ?? '—'} — امتیاز: ${emp.score}`} />
             </ListItem>
           ))}
         </List>

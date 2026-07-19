@@ -15,23 +15,4 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-if not exist "src\HRPerformance.API\obj\project.assets.json" (
-    echo.
-    echo اولین اجرا: در حال restore پکیج‌های NuGet...
-    call scripts\restore-packages.bat
-    if errorlevel 1 (
-        pause
-        exit /b 1
-    )
-)
-
-echo.
-echo در حال اجرا...
-echo   Application: http://localhost:5000
-echo   Swagger:     http://localhost:5000/swagger
-echo.
-echo برای توقف Ctrl+C
-echo.
-
-dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http
-pause
+call start-local.bat

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
 import LoginPage from './pages/auth/LoginPage';
+import DashboardHome from './components/routing/DashboardHome';
 import EmployeeDashboard from './pages/dashboard/EmployeeDashboard';
 import ManagerDashboard from './pages/dashboard/ManagerDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
@@ -26,7 +27,8 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
-            <Route path="/dashboard" element={<EmployeeDashboard />} />
+            <Route path="/dashboard" element={<DashboardHome />} />
+            <Route path="/dashboard/employee" element={<EmployeeDashboard />} />
             <Route
               path="/dashboard/manager"
               element={

@@ -10,6 +10,7 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
+import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 import {
   Chart as ChartJS,
@@ -43,10 +44,22 @@ ChartJS.register(
   Legend,
 );
 
+const emptyData: EmployeeDashboardDto = {
+  currentScore: 0,
+  monthlyScore: 0,
+  yearlyScore: 0,
+  ranking: undefined,
+  scoreTrend: [],
+  recentAttendance: [],
+  positiveCount: 0,
+  negativeCount: 0,
+};
+
 export default function EmployeeDashboard() {
   const theme = useTheme();
-  const [data, setData] = useState<EmployeeDashboardDto | null>(null);
+  const [data, setData] = useState<EmployeeDashboardDto>(emptyData);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -54,31 +67,11 @@ export default function EmployeeDashboard() {
         const response = await dashboardService.getEmployeeDashboard();
         if (response.success && response.data) {
           setData(response.data);
+        } else {
+          setError(response.message ?? 'خطا در دریافت داده‌های داشبورد');
         }
       } catch {
-        setData({
-          currentScore: 85.5,
-          monthlyScore: 82.3,
-          yearlyScore: 88.1,
-          ranking: 12,
-          scoreTrend: [
-            { label: 'فروردین', score: 78 },
-            { label: 'اردیبهشت', score: 82 },
-            { label: 'خرداد', score: 80 },
-            { label: 'تیر', score: 85 },
-            { label: 'مرداد', score: 83 },
-            { label: 'شهریور', score: 86 },
-          ],
-          recentAttendance: [
-            { date: '2026-07-10', isPresent: true, delayMinutes: 0, isAbsent: false },
-            { date: '2026-07-11', isPresent: true, delayMinutes: 15, isAbsent: false },
-            { date: '2026-07-12', isPresent: false, delayMinutes: 0, isAbsent: true },
-            { date: '2026-07-13', isPresent: true, delayMinutes: 5, isAbsent: false },
-            { date: '2026-07-14', isPresent: true, delayMinutes: 0, isAbsent: false },
-          ],
-          positiveCount: 24,
-          negativeCount: 3,
-        });
+        setError('خطا در اتصال به سرور');
       } finally {
         setLoading(false);
       }
@@ -87,11 +80,11 @@ export default function EmployeeDashboard() {
   }, []);
 
   const chartData = {
-    labels: data?.scoreTrend.map((t) => t.label) ?? [],
+    labels: data.scoreTrend.map((t) => t.label),
     datasets: [
       {
         label: 'امتیاز عملکرد',
-        data: data?.scoreTrend.map((t) => t.score) ?? [],
+        data: data.scoreTrend.map((t) => t.score),
         borderColor: theme.palette.primary.main,
         backgroundColor: `${theme.palette.primary.main}33`,
         fill: true,
@@ -113,72 +106,46 @@ export default function EmployeeDashboard() {
   return (
     <Box>
       <LoadingOverlay open={loading} />
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
         داشبورد عملکرد من
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        نمای کلی از عملکرد و حضور شما
+        نمای کلی از عملکرد و حضور شما (از دیتابیس)
       </Typography>
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="امتیاز فعلی"
-            value={data?.currentScore?.toFixed(1) ?? '—'}
-            icon={<StarIcon />}
-            color={theme.palette.primary.main}
-          />
+          <StatCard title="امتیاز فعلی" value={data.currentScore?.toFixed(1) ?? '—'} icon={<StarIcon />} color={theme.palette.primary.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="امتیاز ماهانه"
-            value={data?.monthlyScore?.toFixed(1) ?? '—'}
-            icon={<TrendingUpIcon />}
-            color={theme.palette.success.main}
-          />
+          <StatCard title="امتیاز ماهانه" value={data.monthlyScore?.toFixed(1) ?? '—'} icon={<TrendingUpIcon />} color={theme.palette.success.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="رتبه سازمانی"
-            value={data?.ranking ?? '—'}
-            subtitle="از بین همکاران"
-            icon={<StarIcon />}
-            color={theme.palette.warning.main}
-          />
+          <StatCard title="رتبه سازمانی" value={data.ranking ?? '—'} subtitle="از بین همکاران" icon={<StarIcon />} color={theme.palette.warning.main} />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="امتیاز سالانه"
-            value={data?.yearlyScore?.toFixed(1) ?? '—'}
-            icon={<EventAvailableIcon />}
-            color={theme.palette.info.main}
-          />
+          <StatCard title="امتیاز سالانه" value={data.yearlyScore?.toFixed(1) ?? '—'} icon={<EventAvailableIcon />} color={theme.palette.info.main} />
         </Grid>
       </Grid>
 
       <Grid container spacing={2.5}>
         <Grid size={{ xs: 12, md: 8 }}>
-          <ChartCard title="روند امتیاز عملکرد" subtitle="۶ ماه اخیر">
+          <ChartCard title="روند امتیاز عملکرد" subtitle="از EmployeeScores">
             <Line data={chartData} options={chartOptions} />
           </ChartCard>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Grid container spacing={2}>
             <Grid size={{ xs: 6, md: 12 }}>
-              <StatCard
-                title="امتیازات مثبت"
-                value={data?.positiveCount ?? 0}
-                icon={<ThumbUpIcon />}
-                color={theme.palette.success.main}
-              />
+              <StatCard title="امتیازات مثبت" value={data.positiveCount} icon={<ThumbUpIcon />} color={theme.palette.success.main} />
             </Grid>
             <Grid size={{ xs: 6, md: 12 }}>
-              <StatCard
-                title="امتیازات منفی"
-                value={data?.negativeCount ?? 0}
-                icon={<ThumbDownIcon />}
-                color={theme.palette.error.main}
-              />
+              <StatCard title="امتیازات منفی" value={data.negativeCount} icon={<ThumbDownIcon />} color={theme.palette.error.main} />
             </Grid>
           </Grid>
         </Grid>
@@ -194,11 +161,9 @@ export default function EmployeeDashboard() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {data?.recentAttendance.map((row, i) => (
+                  {data.recentAttendance.map((row, i) => (
                     <TableRow key={i}>
-                      <TableCell>
-                        {new Date(row.date).toLocaleDateString('fa-IR')}
-                      </TableCell>
+                      <TableCell>{new Date(row.date).toLocaleDateString('fa-IR')}</TableCell>
                       <TableCell>
                         {row.isAbsent ? (
                           <Chip label="غایب" color="error" size="small" />

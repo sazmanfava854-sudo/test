@@ -15,18 +15,16 @@ if ! command -v dotnet >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "src/HRPerformance.API/obj/project.assets.json" ]]; then
-  echo ""
-  echo "اولین اجرا: در حال restore پکیج‌های NuGet..."
-  dotnet restore HRPerformance.sln --disable-parallel --verbosity minimal
-fi
+APP_PORT="$(bash "$ROOT_DIR/scripts/resolve-app-port.sh")"
+export ASPNETCORE_URLS="http://localhost:${APP_PORT}"
+export ASPNETCORE_ENVIRONMENT=Development
 
 echo ""
 echo "🚀 در حال اجرا..."
-echo "   Application → http://localhost:5000"
-echo "   Swagger     → http://localhost:5000/swagger"
+echo "   Application → http://localhost:${APP_PORT}"
+echo "   Swagger     → http://localhost:${APP_PORT}/swagger"
 echo ""
 echo "برای توقف: Ctrl+C"
 echo ""
 
-dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --launch-profile http
+dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --no-launch-profile
