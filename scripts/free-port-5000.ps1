@@ -59,7 +59,7 @@ if ($failed) {
     Write-Host ""
     Write-Host "پورت $Port هنوز اشغال است. دستی اجرا کنید:"
     Write-Host "  netstat -ano | findstr :$Port"
-    Write-Host "  taskkill /PID <pid> /F"
+    Write-Host '  taskkill /PID <pid> /F'
     exit 1
 }
 

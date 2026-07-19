@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host "پورت 5000 آزاد نشد. یک نمونه قبلی ممکن است هنوز در حال اجرا باشد." -ForegroundColor Red
     Write-Host "  netstat -ano | findstr :5000" -ForegroundColor White
-    Write-Host "  taskkill /PID <pid> /F" -ForegroundColor White
+    Write-Host '  taskkill /PID <pid> /F' -ForegroundColor White
     exit 1
 }
 
