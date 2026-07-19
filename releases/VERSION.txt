@@ -1,11 +1,12 @@
 HR Performance — DEV (source)
-Version: 2.7.4.1-dev
+Version: 2.8.6-dev
 Build Date: 2026-07-19
 
-Fix: empty port in start-local.bat (http://localhost:)
-  - PowerShell $matches reserved variable bug fixed
-  - Port written to temp file for reliable batch parsing
-  - Fallback port: 5280
+Fix: Shamsi-to-Gregorian conversion validation for MIS sync
+  - Rejects dates like 1404-04-10 used as Gregorian in SQL
+  - Correct query for 1404/04/10–1404/04/11: 2025-07-01 to 2025-07-03
+  - UI version label: 2.8.6-dev
+  - Test: /api/health/mis-preview-query?shamsiFromYear=1404&shamsiFromMonth=4&shamsiFromDay=10&shamsiToYear=1404&shamsiToMonth=4&shamsiToDay=11
 
 Download:
-https://github.com/sazmanfava854-sudo/test/releases/download/v2.7.4.1-dev/HRPerformance-2.7.4.1-dev.zip
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.8.6-dev/HRPerformance-2.8.6-dev.zip
