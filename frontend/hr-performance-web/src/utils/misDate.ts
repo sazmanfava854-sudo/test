@@ -64,3 +64,13 @@ export function toMisSyncRequestPayload(
     employeeLimit,
   };
 }
+
+export function isShamsiRangeValid(from: ShamsiDateParts, to: ShamsiDateParts): boolean {
+  const fromDate = fromShamsiParts(from).getTime();
+  const toDate = fromShamsiParts(to).getTime();
+  return toDate >= fromDate;
+}
+
+export function compareShamsiParts(a: ShamsiDateParts, b: ShamsiDateParts): number {
+  return fromShamsiParts(a).getTime() - fromShamsiParts(b).getTime();
+}

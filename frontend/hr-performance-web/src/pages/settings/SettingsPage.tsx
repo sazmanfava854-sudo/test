@@ -26,11 +26,21 @@ import {
   formatShamsiDate,
   formatShamsiParts,
   getDefaultShamsiRange,
+  isShamsiRangeValid,
   toMisSyncRequestPayload,
   type ShamsiDateParts,
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
+
+interface MisConnectionStatus {
+  isConnectionConfigured?: boolean;
+  missingFields?: string[];
+  server?: string;
+  database?: string;
+  userId?: string;
+  passwordIsPlaceholder?: boolean;
+}
 
 export default function SettingsPage() {
   const [searchParams] = useSearchParams();
@@ -45,6 +55,7 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [connectionOk, setConnectionOk] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<MisConnectionStatus | null>(null);
 
   const defaultRange = useMemo(() => getDefaultShamsiRange(), []);
   const [fromShamsi, setFromShamsi] = useState<ShamsiDateParts>(defaultRange.from);
@@ -55,6 +66,11 @@ export default function SettingsPage() {
 
   const syncPayload = useMemo(
     () => toMisSyncRequestPayload(fromShamsi, toShamsi),
+    [fromShamsi, toShamsi],
+  );
+
+  const rangeIsValid = useMemo(
+    () => isShamsiRangeValid(fromShamsi, toShamsi),
     [fromShamsi, toShamsi],
   );
 
@@ -79,7 +95,9 @@ export default function SettingsPage() {
           setEditedValues(initial);
         }
         if (Array.isArray(holidaysData)) setHolidays(holidaysData);
-        setConnectionOk(status?.connection?.isConnectionConfigured ?? false);
+        const conn = status?.connection as MisConnectionStatus | undefined;
+        setConnectionStatus(conn ?? null);
+        setConnectionOk(conn?.isConnectionConfigured ?? false);
       } catch {
         /* empty */
       } finally {
@@ -134,6 +152,19 @@ export default function SettingsPage() {
   };
 
   const handleFetchMisData = async () => {
+    if (!rangeIsValid) {
+      setError(
+        `تاریخ پایان (${formatShamsiParts(toShamsi)}) نمی‌تواند قبل از تاریخ شروع (${formatShamsiParts(fromShamsi)}) باشد.`,
+      );
+      return;
+    }
+    if (!connectionOk) {
+      setError(
+        'اتصال MIS پیکربندی نشده است. فایل src\\HRPerformance.API\\appsettings.Development.json را ویرایش کنید و Password واقعی MIS را وارد کنید.',
+      );
+      return;
+    }
+
     setSyncing(true);
     setSuccess('');
     setError('');
@@ -148,8 +179,18 @@ export default function SettingsPage() {
         setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
       }
       if (processed === 0) {
+        let hintText = '';
+        try {
+          const diagRes = await api.get('/attendancesync/diagnostic', { params: syncPayload });
+          const hints = diagRes.data?.hints;
+          if (Array.isArray(hints) && hints.length > 0) {
+            hintText = ` ${hints.join(' ')}`;
+          }
+        } catch {
+          /* ignore diagnostic errors */
+        }
         setError(
-          'هیچ رکوردی دریافت نشد. بازه شمسی به میلادی تبدیل شده و روی StartDate (با ساعت) جستجو می‌شود. کوئری ساخته‌شده را در پایین بررسی کنید.',
+          `هیچ رکوردی دریافت نشد.${hintText} کوئری ساخته‌شده را در پایین بررسی کنید.`,
         );
       } else {
         setSuccess(
@@ -264,8 +305,32 @@ export default function SettingsPage() {
         <Paper elevation={0} sx={{ p: 3 }}>
           {!connectionOk && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              اتصال MIS در سرور پیکربندی نشده است. فقط مدیر فنی می‌تواند Server و
-              Password را در appsettings تنظیم کند.
+              اتصال MIS در سرور پیکربندی نشده است.
+              {connectionStatus?.missingFields?.length ? (
+                <>
+                  {' '}
+                  فیلدهای ناقص: {connectionStatus.missingFields.join('، ')}.
+                </>
+              ) : null}
+              <br />
+              فایل: <strong>src\HRPerformance.API\appsettings.Development.json</strong>
+              <br />
+              Server: {connectionStatus?.server ?? '—'} | Database:{' '}
+              {connectionStatus?.database ?? 'MIS'} | User: {connectionStatus?.userId ?? '—'}
+              {connectionStatus?.passwordIsPlaceholder ? (
+                <>
+                  <br />
+                  Password هنوز CHANGE_ME است — پسورد واقعی MIS را وارد کنید.
+                </>
+              ) : null}
+            </Alert>
+          )}
+
+          {!rangeIsValid && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              تاریخ پایان ({formatShamsiParts(toShamsi)}) قبل از تاریخ شروع (
+              {formatShamsiParts(fromShamsi)}) است. «از تاریخ» باید کوچکتر یا مساوی «تا تاریخ»
+              باشد.
             </Alert>
           )}
 
@@ -328,7 +393,7 @@ export default function SettingsPage() {
               size="large"
               startIcon={<SyncIcon />}
               onClick={handleFetchMisData}
-              disabled={syncing}
+              disabled={syncing || !connectionOk || !rangeIsValid}
             >
               دریافت داده از MIS
             </Button>

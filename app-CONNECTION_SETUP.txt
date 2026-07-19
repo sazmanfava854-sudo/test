@@ -5,6 +5,14 @@
 
 ConnectionStrings:DefaultConnection — پسورد SQL واقعی
 
+─── اتصال MIS (دریافت تردد) ───
+در همان فایل، بخش HrIntegration:
+  Server   = آدرس SQL Server که MIS روی آن است
+  Database = MIS
+  UserId   = ITCMISUserReader
+  Password = پسورد واقعی (نه CHANGE_ME)
+  Enabled  = true
+
 database\01 تا 11 را روی SQL Server اجرا کنید.
 
 تست: http://localhost:5000/api/health
