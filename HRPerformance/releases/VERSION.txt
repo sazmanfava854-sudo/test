@@ -1,0 +1,8 @@
+HR Performance — LOCAL
+Version: 2.4.4-local
+ZIP: HRPerformance-2.4.4-local.zip
+
+Fixes:
+- POST /api/auth/login دیگر به علت PasswordHash نامعتبر 500 نمی‌دهد
+- database/11_RepairAuthentication.sql برای تعمیر دیتابیس موجود
+- POST /api/auth/refresh دیگر 500 نمی‌دهد

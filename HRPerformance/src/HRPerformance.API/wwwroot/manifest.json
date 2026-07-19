@@ -1,0 +1,20 @@
+{
+  "name": "سامانه عملکرد کارکنان",
+  "short_name": "عملکرد HR",
+  "description": "سامانه مدیریت عملکرد و ارزیابی کارکنان",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F5F7",
+  "theme_color": "#0065FF",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "fa",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

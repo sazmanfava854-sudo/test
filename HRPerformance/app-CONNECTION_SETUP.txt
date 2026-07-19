@@ -1,0 +1,11 @@
+تنظیم اتصال SQL — توسعه لوکال
+
+فایل تنظیمات (در نسخه dev):
+  src\HRPerformance.API\appsettings.Development.json
+
+ConnectionStrings:DefaultConnection — پسورد SQL واقعی
+
+database\01 تا 11 را روی SQL Server اجرا کنید.
+
+تست: http://localhost:5050/api/health
+لاگین: admin / Admin@123

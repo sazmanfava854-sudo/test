@@ -1,0 +1,24 @@
+# HR Performance System - .gitignore
+
+## .NET
+bin/
+obj/
+publish/
+!releases/
+*.user
+*.suo
+logs/
+uploads/
+
+## Node
+node_modules/
+dist/
+
+## IDE
+.vs/
+.idea/
+
+## Environment
+appsettings.Production.json
+.env
+.env.local
