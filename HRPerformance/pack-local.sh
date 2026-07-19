@@ -17,7 +17,8 @@ dotnet publish "$ROOT/src/HRPerformance.API/HRPerformance.API.csproj" \
   --no-self-contained \
   -v minimal
 
-# Multi-project source (no bin/obj)
+cp "$ROOT/app-CONNECTION_SETUP.txt" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/app-CONNECTION_SETUP.txt" "$PUBLISH_DIR/" 2>/dev/null || true
 mkdir -p "$STAGE/src"
 for proj in HRPerformance.Domain HRPerformance.Application HRPerformance.Infrastructure HRPerformance.API; do
   cp -r "$ROOT/src/$proj" "$STAGE/src/"

@@ -24,6 +24,7 @@ if exist "app\HRPerformance.API.dll" (
     echo   Health:      http://localhost:5050/api/health
     echo.
     echo تنظیمات: app\appsettings.Development.json
+    echo   (راهنما: app-CONNECTION_SETUP.txt)
     echo.
     pushd app
     dotnet HRPerformance.API.dll

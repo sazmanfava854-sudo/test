@@ -64,8 +64,15 @@ export const login = createAsyncThunk(
       }
       return response.data;
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'خطا در ارتباط با سرور';
+      const axiosErr = err as {
+        response?: { status?: number; data?: { message?: string } };
+        message?: string;
+      };
+      const serverMessage = axiosErr.response?.data?.message;
+      if (serverMessage) return rejectWithValue(serverMessage);
+      if (axiosErr.response?.status === 500 || axiosErr.response?.status === 503)
+        return rejectWithValue('خطای سرور — اتصال SQL و فایل app\\appsettings.Development.json را بررسی کنید');
+      const message = axiosErr.message ?? 'خطا در ارتباط با سرور';
       return rejectWithValue(message);
     }
   },
