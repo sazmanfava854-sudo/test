@@ -53,7 +53,7 @@ if "%APP_PORT%"=="" (
 
 set ASPNETCORE_URLS=http://localhost:%APP_PORT%
 
-echo   نسخه: 2.8.3-dev  ^(اصلاح فیلتر year در کوئری MIS^)
+echo   نسخه: 2.8.4-dev  ^(آخرین — فیلتر year + نمایش کوئری SQL^)
 echo   Application: http://localhost:%APP_PORT%
 echo   Health:      http://localhost:%APP_PORT%/api/health
 echo   Swagger:     http://localhost:%APP_PORT%/swagger
