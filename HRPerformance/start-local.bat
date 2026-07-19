@@ -3,24 +3,13 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ==========================================
-echo   HR Performance - اجرا (بدون Build)
+echo   HR Performance - توسعه لوکال
 echo ==========================================
 echo.
 
 where dotnet >nul 2>&1
 if %errorlevel% neq 0 (
-    echo dotnet یافت نشد! .NET 8 Runtime/SDK را نصب کنید:
-    echo https://dotnet.microsoft.com/download/dotnet/8.0
-    pause
-    exit /b 1
-)
-
-if not exist "app\HRPerformance.API.dll" (
-    echo [خطا] پوشه app یافت نشد!
-    echo.
-    echo این نسخه باید از قبل Build شده باشد.
-    echo نسخه run-only را دانلود کنید — نیازی به Build نیست.
-    echo.
+    echo dotnet یافت نشد! .NET 8 SDK را نصب کنید.
     pause
     exit /b 1
 )
@@ -28,20 +17,35 @@ if not exist "app\HRPerformance.API.dll" (
 set DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 set DOTNET_CLI_TELEMETRY_OPTOUT=1
 set ASPNETCORE_ENVIRONMENT=Development
-set ASPNETCORE_URLS=http://localhost:5050
 
-echo اجرای مستقیم — بدون Build...
+REM اولین بار فقط Restore (ممکن است چند دقیقه طول بکشد)
+if not exist "src\HRPerformance.API\obj\project.assets.json" (
+    echo [اولین بار] Restore پکیج‌های NuGet...
+    call scripts\restore-packages.bat
+    if errorlevel 1 goto :done
+)
+
+REM Build فقط اگر DLL وجود ندارد یا سورس جدیدتر است
+set DLL=src\HRPerformance.API\bin\Debug\net8.0\HRPerformance.API.dll
+if not exist "%DLL%" (
+    echo [اولین بار] Build پروژه API...
+    dotnet build src\HRPerformance.API\HRPerformance.API.csproj -v minimal
+    if errorlevel 1 goto :done
+) else (
+    echo اجرا بدون Build مجدد ^(--no-build^)...
+)
+
+echo.
 echo   Application: http://localhost:5050
 echo   Health:      http://localhost:5050/api/health
+echo   Swagger:     http://localhost:5050/swagger
 echo.
-echo تنظیمات: app\appsettings.Development.json
-echo   (راهنما: app-CONNECTION_SETUP.txt)
+echo تنظیمات: src\HRPerformance.API\appsettings.Development.json
 echo.
-echo برای توقف: Ctrl+C — این پنجره را باز نگه دارید.
+echo برای توقف: Ctrl+C
 echo.
 
-pushd app
-dotnet HRPerformance.API.dll
-popd
+dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http --no-build
 
+:done
 pause

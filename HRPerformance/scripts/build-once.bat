@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0\.."
+cd /d "%~dp0"
 
 echo ==========================================
-echo   HR Performance - Build Once
+echo   HR Performance - Build Once (Dev)
 echo ==========================================
 echo.
 
@@ -12,8 +12,8 @@ if not exist "src\HRPerformance.API\obj\project.assets.json" (
     if errorlevel 1 exit /b 1
 )
 
-echo Building solution...
-dotnet build HRPerformance.sln -c Release -v minimal
+echo Building API project only...
+dotnet build src\HRPerformance.API\HRPerformance.API.csproj -v minimal
 if errorlevel 1 (
     echo Build failed.
     pause
@@ -21,5 +21,5 @@ if errorlevel 1 (
 )
 
 echo.
-echo [OK] Build complete. Run: start-local.bat
+echo [OK] آماده اجرا: start-local.bat
 pause

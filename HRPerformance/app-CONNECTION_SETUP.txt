@@ -1,24 +1,11 @@
-تنظیم اتصال SQL — قبل از لاگین
+تنظیم اتصال SQL — توسعه لوکال
 
-1) این فایل را ویرایش کنید:
-   app\appsettings.Development.json
+فایل تنظیمات (در نسخه dev):
+  src\HRPerformance.API\appsettings.Development.json
 
-2) ConnectionStrings:DefaultConnection را پر کنید:
-   Server=172.16.10.232,1433;Database=HRPerformanceDB;User Id=hr_app;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;MultipleActiveResultSets=true
+ConnectionStrings:DefaultConnection — پسورد SQL واقعی
 
-3) روی SQL Server اسکریپت‌ها را اجرا کنید:
-   database\01_CreateDatabase.sql
-   database\02_Tables.sql
-   ...
-   database\08_SeedData.sql
-   database\11_RepairAuthentication.sql
+database\01 تا 11 را روی SQL Server اجرا کنید.
 
-4) تست اتصال:
-   http://localhost:5050/api/health
-   باید database: Connected باشد
-
-5) لاگین:
-   admin / Admin@123
-
-⚠ اگر از نسخه pre-built استفاده می‌کنید، فایل داخل پوشه app را ویرایش کنید
-   (نه src\HRPerformance.API\...)
+تست: http://localhost:5050/api/health
+لاگین: admin / Admin@123

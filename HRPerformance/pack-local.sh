@@ -1,31 +1,23 @@
 #!/usr/bin/env bash
+# بسته توسعه لوکال — سورس کامل برای کار در Cursor/Visual Studio
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-2.6.0-dev}"
+VERSION="${1:-2.7.0-dev}"
 STAGE="/tmp/HRPerformance-${VERSION}"
 OUT="$ROOT/releases/HRPerformance-${VERSION}.zip"
-PUBLISH_DIR="$STAGE/app"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 
-echo "==> Publishing pre-built app (no build needed on Windows)..."
-dotnet publish "$ROOT/src/HRPerformance.API/HRPerformance.API.csproj" \
-  -c Release \
-  -o "$PUBLISH_DIR" \
-  --no-self-contained \
-  -v minimal
-
-cp "$ROOT/app-CONNECTION_SETUP.txt" "$STAGE/" 2>/dev/null || true
-cp "$ROOT/app-CONNECTION_SETUP.txt" "$PUBLISH_DIR/" 2>/dev/null || true
+# سورس backend (بدون bin/obj)
 mkdir -p "$STAGE/src"
 for proj in HRPerformance.Domain HRPerformance.Application HRPerformance.Infrastructure HRPerformance.API; do
   cp -r "$ROOT/src/$proj" "$STAGE/src/"
   rm -rf "$STAGE/src/$proj/bin" "$STAGE/src/$proj/obj"
 done
 
-# Build optimizations
+# بهینه‌سازی Build
 cp "$ROOT/Directory.Build.props" "$ROOT/global.json" "$ROOT/nuget.config" "$STAGE/"
 mkdir -p "$STAGE/.vscode"
 cp "$ROOT/.vscode/settings.json" "$STAGE/.vscode/"
@@ -33,8 +25,9 @@ cp "$ROOT/.vscode/settings.json" "$STAGE/.vscode/"
 # Database + docs
 cp -r "$ROOT/database" "$STAGE/"
 cp -r "$ROOT/docs" "$STAGE/"
+cp "$ROOT/app-CONNECTION_SETUP.txt" "$STAGE/" 2>/dev/null || true
 
-# Frontend source (no node_modules / dist)
+# Frontend source (بدون node_modules)
 mkdir -p "$STAGE/frontend/hr-performance-web"
 for item in package.json package-lock.json tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts index.html public src; do
   if [ -e "$ROOT/frontend/hr-performance-web/$item" ]; then
@@ -52,44 +45,66 @@ cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || t
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
 
 cat > "$STAGE/README-LOCAL.txt" << 'EOF'
-HR Performance — نسخه توسعه (DEV — شامل سورس)
+HR Performance — نسخه توسعه لوکال (سورس کامل)
 
-⚠ برای اجرای روزمره از pack-run-only.sh استفاده کنید — بدون Build.
+این ZIP برای کار روی سیستم خودتان است — مثل v2.0.0-simple.
 
-پیش‌نیاز: .NET 8 SDK + SQL Server
+شامل:
+  HRPerformance.sln
+  src/ (4 پروژه: Domain, Application, Infrastructure, API)
+  frontend/hr-performance-web
+  database/
 
-1) database/01 تا 11 را روی SQL Server اجرا کنید
-2) app/appsettings.Development.json را تنظیم کنید (پسورد SQL و MIS)
-3) دوبار کلیک روی start-local.bat
-4) http://localhost:5050
+پیش‌نیاز: .NET 8 SDK + SQL Server + (اختیاری) Node.js برای UI
 
-⚡ پوشه app/ از قبل Build شده — start-local.bat بدون انتظار اجرا می‌شود.
+─── راه‌اندازی اولین بار ───
+1) Extract کنید — ترجیحاً C:\Projects\HRPerformance (نه Downloads)
+2) database/01 تا 11 را روی SQL Server اجرا کنید
+3) src\HRPerformance.API\appsettings.Development.json — پسورد SQL
+4) scripts\restore-packages.bat  (فقط اولین بار — ممکن است چند دقیقه)
+5) start-local.bat  یا  HRPerformance.sln را در Cursor باز کنید
 
-سینک MIS (فقط دستی از UI):
-  تنظیمات > دریافت از MIS > انتخاب بازه تاریخ > دریافت داده
+─── اجراهای بعدی ───
+  start-local.bat  → بدون Build مجدد (--no-build)
+  یا F5 در Cursor/Visual Studio
 
-توسعه سورس (اختیاری):
-  scripts\build-once.bat
+─── توسعه UI ───
+  cd frontend\hr-performance-web
+  npm install
+  npm run dev
+
+لاگین: admin / Admin@123
+EOF
+
+cat > "$STAGE/DEV-WORKFLOW.txt" << 'EOF'
+چرا اولین بار کند است؟
+  فقط اولین Restore/Build چند دقیقه طول می‌کشد (دانلود NuGet).
+  بعد از آن اجرا با --no-build است — چند ثانیه.
+
+چرا publish نداریم؟
+  شما سورس می‌خواهید — در Cursor/VS کار کنید.
+  پوشه app/ فقط برای deploy است، نه توسعه.
+
+اگر Build دوباره کند شد:
+  - پوشه را از Downloads خارج کنید
+  - آنتی‌ویروس را برای این پوشه استثنا کنید
+  - scripts\restore-packages.bat را یک بار اجرا کنید
+  - فقط src\HRPerformance.API را Build کنید، نه کل solution
 EOF
 
 cat > "$STAGE/VERSION.txt" << EOF
-HR Performance System — SIMPLE LOCAL (PRE-BUILT)
+HR Performance — DEV (source)
 Version: ${VERSION}
 Build Date: $(date +%Y-%m-%d)
-.NET: 8 Runtime required
+.NET 8 SDK required
 
-شامل:
-- app/ (از قبل Build شده — بدون انتظار)
-- HRPerformance.sln (4 پروژه برای توسعه)
-- Directory.Build.props, global.json, nuget.config
-- database/ (01-11)
-- start-local.bat
+شامل: src/ + sln + frontend + database
+بدون: app/ publish — برای توسعه لوکال
 EOF
 
 mkdir -p "$ROOT/releases"
 rm -f "$OUT"
-(cd /tmp && zip -r "$OUT" "HRPerformance-${VERSION}")
+(cd /tmp && zip -r -q "$OUT" "HRPerformance-${VERSION}")
 
-echo "Created: $OUT"
-ls -lh "$OUT"
+echo "Created: $OUT ($(du -h "$OUT" | cut -f1))"
 unzip -l "$OUT" | tail -3
