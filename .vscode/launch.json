@@ -1,0 +1,46 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "HR Performance API",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/src/HRPerformance.API/bin/Debug/net8.0/HRPerformance.API.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/HRPerformance.API",
+      "stopAtEntry": false,
+      "console": "internalConsole",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/swagger"
+      }
+    },
+    {
+      "name": "HR Performance API (no browser)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/src/HRPerformance.API/bin/Debug/net8.0/HRPerformance.API.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/HRPerformance.API",
+      "stopAtEntry": false,
+      "console": "internalConsole",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"
+      }
+    },
+    {
+      "name": "Attach to HR Performance API",
+      "type": "coreclr",
+      "request": "attach",
+      "processName": "HRPerformance.API"
+    }
+  ]
+}

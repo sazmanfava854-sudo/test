@@ -20,7 +20,7 @@ done
 # بهینه‌سازی Build
 cp "$ROOT/Directory.Build.props" "$ROOT/global.json" "$ROOT/nuget.config" "$STAGE/"
 mkdir -p "$STAGE/.vscode"
-cp "$ROOT/.vscode/settings.json" "$STAGE/.vscode/"
+cp "$ROOT/.vscode/settings.json" "$ROOT/.vscode/launch.json" "$ROOT/.vscode/tasks.json" "$STAGE/.vscode/" 2>/dev/null || cp "$ROOT/.vscode/settings.json" "$STAGE/.vscode/"
 
 # Database + docs
 cp -r "$ROOT/database" "$STAGE/"
