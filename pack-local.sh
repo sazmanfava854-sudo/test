@@ -99,8 +99,9 @@ Version: ${VERSION}
 Build Date: $(date +%Y-%m-%d)
 .NET 8 SDK required
 
-شامل: src/ + sln + frontend + database
-بدون: app/ publish — برای توسعه لوکال
+UI در wwwroot از پیش build شده است.
+اگر دکمه «نمایش کوئری SQL» نیست: scripts\\build-ui.bat را اجرا کنید.
+تب MIS باید نشان دهد: نسخه UI: ${VERSION}
 EOF
 
 mkdir -p "$ROOT/releases"

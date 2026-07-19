@@ -33,6 +33,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
+const APP_VERSION = '2.8.2-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -319,6 +320,32 @@ export default function SettingsPage() {
 
       {tab === 1 && (
         <Paper elevation={0} sx={{ p: 3 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            نسخه UI: {APP_VERSION}
+          </Typography>
+
+          <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="large"
+              startIcon={<CodeIcon />}
+              onClick={() => void loadQueryPreview()}
+              disabled={syncing || !rangeIsValid}
+            >
+              نمایش کوئری SQL
+            </Button>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<SyncIcon />}
+              onClick={handleFetchMisData}
+              disabled={syncing || !rangeIsValid}
+            >
+              دریافت داده از MIS
+            </Button>
+          </Box>
+
           {!rangeIsValid && (
             <Alert severity="error" sx={{ mb: 2 }}>
               تاریخ پایان قبل از تاریخ شروع است.
@@ -375,27 +402,6 @@ export default function SettingsPage() {
               helperText="همیشه گروه 147 — ثابت سازمانی"
             />
           </Stack>
-
-          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Button
-              variant="outlined"
-              size="large"
-              startIcon={<CodeIcon />}
-              onClick={() => void loadQueryPreview()}
-              disabled={syncing || !rangeIsValid}
-            >
-              نمایش کوئری
-            </Button>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<SyncIcon />}
-              onClick={handleFetchMisData}
-              disabled={syncing || !rangeIsValid}
-            >
-              دریافت داده از MIS
-            </Button>
-          </Box>
 
           {attendanceRecords.length > 0 && (
             <TableContainer component={Paper} elevation={0} sx={{ mt: 3 }}>

@@ -33,7 +33,9 @@ if not exist "%DLL%" (
     dotnet build src\HRPerformance.API\HRPerformance.API.csproj -v minimal
     if errorlevel 1 goto :done
 ) else (
-    echo اجرا بدون Build مجدد ^(--no-build^)...
+    echo Build پروژه API ^(برای به‌روز UI^)...
+    dotnet build src\HRPerformance.API\HRPerformance.API.csproj -v minimal
+    if errorlevel 1 goto :done
 )
 
 echo.
@@ -51,7 +53,7 @@ if "%APP_PORT%"=="" (
 
 set ASPNETCORE_URLS=http://localhost:%APP_PORT%
 
-echo.
+echo   نسخه: 2.8.2-dev  ^(تب MIS: «نسخه UI: 2.8.2-dev» + دکمه «نمایش کوئری SQL»^)
 echo   Application: http://localhost:%APP_PORT%
 echo   Health:      http://localhost:%APP_PORT%/api/health
 echo   Swagger:     http://localhost:%APP_PORT%/swagger
