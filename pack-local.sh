@@ -25,7 +25,7 @@ cp "$ROOT/.vscode/settings.json" "$STAGE/.vscode/"
 # Database + docs
 cp -r "$ROOT/database" "$STAGE/"
 cp -r "$ROOT/docs" "$STAGE/"
-cp "$ROOT/app-CONNECTION_SETUP.txt" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/app-CONNECTION_SETUP.txt" "$ROOT/LOGIN.txt" "$STAGE/" 2>/dev/null || true
 
 # Frontend source (بدون node_modules)
 mkdir -p "$STAGE/frontend/hr-performance-web"
@@ -74,7 +74,7 @@ HR Performance — نسخه توسعه لوکال (سورس کامل)
   npm run dev
 
 لاگین: admin / Admin@123
-EOF
+اگر ورود ناموفق بود: database/11_RepairAuthentication.sql
 
 cat > "$STAGE/DEV-WORKFLOW.txt" << 'EOF'
 چرا اولین بار کند است؟

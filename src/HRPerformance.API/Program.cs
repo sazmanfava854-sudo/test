@@ -3,6 +3,7 @@ using AspNetCoreRateLimit;
 using HRPerformance.API.Middleware;
 using HRPerformance.Application;
 using HRPerformance.Infrastructure;
+using HRPerformance.Infrastructure.Services;
 using HRPerformance.Infrastructure.SignalR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -61,6 +62,7 @@ builder.Services.AddSwaggerGen(c => {
 });
 
 var app = builder.Build();
+await AuthBootstrap.EnsureDefaultAdminPasswordAsync(app.Services);
 app.UseMiddleware<ExceptionMiddleware>();
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseSerilogRequestLogging();

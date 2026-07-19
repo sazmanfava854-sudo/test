@@ -1,0 +1,25 @@
+HR Performance — اطلاعات ورود
+================================
+
+نام کاربری: admin
+رمز عبور:   Admin@123
+
+اگر «نام کاربری یا رمز عبور اشتباه است» دیدید:
+
+1) مطمئن شوید دیتابیس ساخته شده:
+   database/01_CreateDatabase.sql
+   database/02 تا 08_SeedData.sql
+   database/11_RepairAuthentication.sql
+
+2) یا فقط این اسکریپت را در SSMS اجرا کنید:
+   database/11_RepairAuthentication.sql
+
+3) API را یک بار Stop و دوباره start-local.bat را اجرا کنید.
+   (نسخه 2.7.5+ رمز را خودکار بازنشانی می‌کند.)
+
+4) اتصال SQL را در این فایل بررسی کنید:
+   src\HRPerformance.API\appsettings.Development.json
+
+تست سلامت:
+   http://localhost:5280/api/health
+   (پورت را از خروجی start-local.bat بخوانید)

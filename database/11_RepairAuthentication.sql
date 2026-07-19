@@ -1,20 +1,30 @@
 USE [HRPerformanceDB];
 GO
 
--- Repair the invalid placeholder hash shipped in older local packages.
--- Password after repair: Admin@123
+-- بازنشانی رمز admin — همیشه Admin@123
+-- Hash معتبر ASP.NET Core Identity برای Admin@123
 UPDATE [dbo].[Users]
 SET [PasswordHash] =
         'AQAAAAIAAYagAAAAEE6v9aYxxq5Mwu8wmjbwKyVue/lYmYNZ2Dte3bzJG6nNReQWP/s55XxgmbiSsqTvKw==',
     [SecurityStamp] = CONVERT(NVARCHAR(36), NEWID()),
     [ConcurrencyStamp] = CONVERT(NVARCHAR(36), NEWID()),
     [AccessFailedCount] = 0,
-    [LockoutEnd] = NULL
-WHERE [NormalizedUserName] = 'ADMIN'
-  AND [PasswordHash] = 'AQAAAAIAAYagAAAAEPlaceholderHashReplaceOnFirstLogin';
+    [LockoutEnd] = NULL,
+    [IsActive] = 1
+WHERE [NormalizedUserName] = 'ADMIN';
 GO
 
--- Older/incomplete databases may not contain the refresh-token table.
+IF @@ROWCOUNT = 0
+BEGIN
+    PRINT N'کاربر admin یافت نشد — ابتدا database/08_SeedData.sql را اجرا کنید.';
+END
+ELSE
+BEGIN
+    PRINT N'رمز admin به Admin@123 بازنشانی شد.';
+END
+GO
+
+-- جدول RefreshTokens در دیتابیس‌های قدیمی
 IF OBJECT_ID(N'[dbo].[RefreshTokens]', N'U') IS NULL
 BEGIN
     CREATE TABLE [dbo].[RefreshTokens] (

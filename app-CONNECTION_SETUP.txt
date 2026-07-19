@@ -9,3 +9,4 @@ database\01 تا 11 را روی SQL Server اجرا کنید.
 
 تست: http://localhost:5000/api/health
 لاگین: admin / Admin@123
+اگر خطای ورود داشتید: database/11_RepairAuthentication.sql را اجرا کنید (یا LOGIN.txt را بخوانید)

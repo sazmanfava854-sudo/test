@@ -1,12 +1,11 @@
 HR Performance — DEV (source)
-Version: 2.7.4-dev
+Version: 2.7.4.1-dev
 Build Date: 2026-07-19
 
-Fixes in 2.7.4-dev:
-  - Auto-select free port (5000 → 5280 → 5080 → 5180 → 5050)
-  - Safer port cleanup (only stops dotnet/HR processes)
-  - Fixes PowerShell <pid> parser error
-  - Uses ASPNETCORE_URLS instead of fixed launch profile
+Fix: empty port in start-local.bat (http://localhost:)
+  - PowerShell $matches reserved variable bug fixed
+  - Port written to temp file for reliable batch parsing
+  - Fallback port: 5280
 
 Download:
-https://github.com/sazmanfava854-sudo/test/releases/download/v2.7.4-dev/HRPerformance-2.7.4-dev.zip
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.7.4.1-dev/HRPerformance-2.7.4.1-dev.zip
