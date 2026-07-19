@@ -47,17 +47,21 @@ public class AttendanceSyncController : ControllerBase
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
-        if (request.ToDate < request.FromDate)
-            return BadRequest(new { success = false, message = "تاریخ پایان باید بعد از تاریخ شروع باشد" });
 
         try
         {
+            var range = MisSyncRequestMapper.ToSyncRange(request);
             var result = await _syncService.SyncDateRangeAsync(orgId, request, ct);
             return Ok(new
             {
                 success = true,
-                message = $"داده‌های بازه {request.FromDate:yyyy-MM-dd} تا {request.ToDate:yyyy-MM-dd} دریافت شد",
-                result
+                message = $"داده‌های بازه {range.Description} دریافت شد",
+                result,
+                gregorianRange = new
+                {
+                    from = range.SyncFrom.ToString("yyyy-MM-dd"),
+                    to = range.SyncToExclusive.AddDays(-1).ToString("yyyy-MM-dd")
+                }
             });
         }
         catch (Exception ex)
@@ -91,25 +95,36 @@ public class AttendanceSyncController : ControllerBase
 
     [HttpGet("diagnostic")]
     public async Task<IActionResult> Diagnostic(
-        [FromQuery] DateTime fromDate,
-        [FromQuery] DateTime toDate,
+        [FromQuery] int shamsiFromYear,
+        [FromQuery] int shamsiFromMonth,
+        [FromQuery] int shamsiFromDay,
+        [FromQuery] int shamsiToYear,
+        [FromQuery] int shamsiToMonth,
+        [FromQuery] int shamsiToDay,
         [FromQuery] int employeeLimit = 0,
         CancellationToken ct = default)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
         if (orgId == Guid.Empty)
             return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
-        if (toDate < fromDate)
-            return BadRequest(new { success = false, message = "تاریخ پایان باید بعد از تاریخ شروع باشد" });
 
-        var request = new MisSyncDateRangeRequest(fromDate, toDate, employeeLimit);
-        var runtimeSettings = _connectionService.BuildForSync(request);
-        var range = new MisSyncRange
+        MisSyncRange range;
+        try
         {
-            SyncFrom = fromDate.Date,
-            SyncToExclusive = toDate.Date.AddDays(1),
-            Description = $"بازه {fromDate:yyyy-MM-dd} تا {toDate:yyyy-MM-dd}"
-        };
+            var request = new MisSyncDateRangeRequest(
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay, employeeLimit);
+            range = MisSyncRequestMapper.ToSyncRange(request);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+
+        var runtimeSettings = _connectionService.BuildForSync(
+            new MisSyncDateRangeRequest(
+                shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+                shamsiToYear, shamsiToMonth, shamsiToDay, employeeLimit));
 
         var diagnostic = await _misHrDataReader.GetDiagnosticAsync(runtimeSettings, range, ct);
         diagnostic.EmployeesInHrDatabase = await _context.Employees
@@ -139,7 +154,7 @@ public class AttendanceSyncController : ControllerBase
         else if (d.CountAfterSyncFrom == 0)
         {
             var toInclusive = d.SyncTo?.AddDays(-1);
-            hints.Add($"هیچ رکوردی در بازه میلادی {d.SyncFrom:yyyy-MM-dd} تا {toInclusive:yyyy-MM-dd} نیست. بازه دیگری انتخاب کنید.");
+            hints.Add($"هیچ رکوردی در بازه شمسی انتخاب‌شده نیست (میلادی {d.SyncFrom:yyyy-MM-dd} تا {toInclusive:yyyy-MM-dd}). بازه دیگری انتخاب کنید.");
         }
         else if (d.CountAfterProvince == 0)
             hints.Add($"گروه پرسنلی {d.ProvinceCode} در این بازه داده‌ای ندارد.");
@@ -155,11 +170,19 @@ public class AttendanceSyncController : ControllerBase
 
     [HttpGet("records")]
     public async Task<IActionResult> Records(
-        [FromQuery] DateTime fromDate,
-        [FromQuery] DateTime toDate,
+        [FromQuery] int shamsiFromYear,
+        [FromQuery] int shamsiFromMonth,
+        [FromQuery] int shamsiFromDay,
+        [FromQuery] int shamsiToYear,
+        [FromQuery] int shamsiToMonth,
+        [FromQuery] int shamsiToDay,
         CancellationToken ct = default)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
+        var request = new MisSyncDateRangeRequest(
+            shamsiFromYear, shamsiFromMonth, shamsiFromDay,
+            shamsiToYear, shamsiToMonth, shamsiToDay);
+        var (fromDate, toDate) = MisSyncRequestMapper.ToGregorianRange(request);
         return Ok(await _mediator.Send(new GetAttendanceRecordsQuery(orgId, fromDate, toDate), ct));
     }
 }

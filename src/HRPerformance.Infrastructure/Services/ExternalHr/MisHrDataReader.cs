@@ -205,6 +205,12 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
             "[StartDate] < @SyncTo"
         };
 
+        if (range?.ShamsiFromYm is int fromYm && range.ShamsiToYm is int toYm)
+        {
+            conditions.Add("(CAST([year] AS INT) * 100 + CAST([Month] AS INT)) >= @ShamsiFromYm");
+            conditions.Add("(CAST([year] AS INT) * 100 + CAST([Month] AS INT)) <= @ShamsiToYm");
+        }
+
         if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
         {
             conditions.Add("CAST([year] AS INT) = @ShamsiYear");
@@ -255,6 +261,12 @@ WHERE [StartDate] >= @SyncFrom AND [StartDate] < @SyncTo
 
     private static void AddFilterParameters(SqlCommand command, MisFilterSettings filters, MisSyncRange? range = null)
     {
+        if (range?.ShamsiFromYm is int fromYm && range.ShamsiToYm is int toYm)
+        {
+            command.Parameters.Add("@ShamsiFromYm", SqlDbType.Int).Value = fromYm;
+            command.Parameters.Add("@ShamsiToYm", SqlDbType.Int).Value = toYm;
+        }
+
         if (range?.ShamsiYear is int shamsiYear && range.ShamsiMonth is int shamsiMonth)
         {
             command.Parameters.Add("@ShamsiYear", SqlDbType.Int).Value = shamsiYear;

@@ -289,8 +289,12 @@ export interface HolidayDto {
 }
 
 export interface MisSyncDateRangeRequest {
-  fromDate: string;
-  toDate: string;
+  shamsiFromYear: number;
+  shamsiFromMonth: number;
+  shamsiFromDay: number;
+  shamsiToYear: number;
+  shamsiToMonth: number;
+  shamsiToDay: number;
   employeeLimit?: number;
 }
 

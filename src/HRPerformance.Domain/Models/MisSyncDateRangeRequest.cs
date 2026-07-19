@@ -1,6 +1,10 @@
 namespace HRPerformance.Domain.Models;
 
 public record MisSyncDateRangeRequest(
-    DateTime FromDate,
-    DateTime ToDate,
+    int ShamsiFromYear,
+    int ShamsiFromMonth,
+    int ShamsiFromDay,
+    int ShamsiToYear,
+    int ShamsiToMonth,
+    int ShamsiToDay,
     int EmployeeLimit = 0);

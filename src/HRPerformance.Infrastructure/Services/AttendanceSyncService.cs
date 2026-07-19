@@ -48,8 +48,7 @@ public class AttendanceSyncService : IAttendanceSyncService
         CancellationToken ct = default)
     {
         var result = new AttendanceSyncResult();
-        if (request.ToDate < request.FromDate)
-            throw new ArgumentException("تاریخ پایان باید بعد از تاریخ شروع باشد");
+        var range = MisSyncRequestMapper.ToSyncRange(request);
 
         var runtimeSettings = _connectionService.BuildForSync(request);
         if (!runtimeSettings.IsConnectionConfigured)
@@ -58,13 +57,6 @@ public class AttendanceSyncService : IAttendanceSyncService
         var entity = await _context.AttendanceIntegrationSettings
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
         var sourceType = entity?.SourceType ?? runtimeSettings.SourceType;
-
-        var range = new MisSyncRange
-        {
-            SyncFrom = request.FromDate.Date,
-            SyncToExclusive = request.ToDate.Date.AddDays(1),
-            Description = $"بازه {request.FromDate:yyyy-MM-dd} تا {request.ToDate:yyyy-MM-dd}"
-        };
 
         var syncLog = new AttendanceSyncLog
         {

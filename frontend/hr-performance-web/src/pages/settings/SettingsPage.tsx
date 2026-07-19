@@ -19,20 +19,18 @@ import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import api from '../../services/api';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
+import ShamsiDatePicker from '../../components/common/ShamsiDatePicker';
 import type { SettingDto, HolidayDto, AttendanceRecordDto } from '../../types';
 import {
   formatGregorianDate,
-  getShamsiYearRangeLabel,
+  formatShamsiDate,
+  formatShamsiParts,
+  getDefaultShamsiRange,
+  toMisSyncRequestPayload,
+  type ShamsiDateParts,
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-
-function formatDateInput(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
 export default function SettingsPage() {
   const [searchParams] = useSearchParams();
@@ -48,17 +46,14 @@ export default function SettingsPage() {
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [connectionOk, setConnectionOk] = useState(false);
 
-  const today = new Date();
-  const monthAgo = new Date();
-  monthAgo.setDate(today.getDate() - 30);
-
-  const [fromDate, setFromDate] = useState(formatDateInput(monthAgo));
-  const [toDate, setToDate] = useState(formatDateInput(today));
+  const defaultRange = useMemo(() => getDefaultShamsiRange(), []);
+  const [fromShamsi, setFromShamsi] = useState<ShamsiDateParts>(defaultRange.from);
+  const [toShamsi, setToShamsi] = useState<ShamsiDateParts>(defaultRange.to);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
 
-  const shamsiYearLabel = useMemo(
-    () => getShamsiYearRangeLabel(fromDate, toDate),
-    [fromDate, toDate],
+  const syncPayload = useMemo(
+    () => toMisSyncRequestPayload(fromShamsi, toShamsi),
+    [fromShamsi, toShamsi],
   );
 
   useEffect(() => {
@@ -108,7 +103,7 @@ export default function SettingsPage() {
 
   const loadAttendanceRecords = async () => {
     const res = await api.get('/attendancesync/records', {
-      params: { fromDate, toDate },
+      params: syncPayload,
     });
     const data = res.data?.data ?? res.data;
     if (Array.isArray(data)) setAttendanceRecords(data);
@@ -120,14 +115,11 @@ export default function SettingsPage() {
     setSuccess('');
     setError('');
     try {
-      const res = await api.post('/attendancesync/run-range', {
-        fromDate,
-        toDate,
-      });
+      const res = await api.post('/attendancesync/run-range', syncPayload);
       const result = res.data?.result;
       const processed = result?.recordsProcessed ?? 0;
       if (processed === 0) {
-        setError('هیچ رکوردی دریافت نشد. بازه تاریخ میلادی را بررسی کنید.');
+        setError('هیچ رکوردی دریافت نشد. بازه تاریخ شمسی را بررسی کنید.');
       } else {
         setSuccess(
           res.data?.message ??
@@ -247,36 +239,32 @@ export default function SettingsPage() {
           )}
 
           <Alert severity="info" sx={{ mb: 3 }}>
-            بازه تاریخ میلادی را انتخاب کنید و «دریافت داده از MIS» را بزنید.
-            سال شمسی به‌صورت خودکار از تاریخ محاسبه می‌شود.
+            بازه تاریخ شمسی را انتخاب کنید و «دریافت داده از MIS» را بزنید.
+            جستجو در پایگاه MIS بر اساس تبدیل شمسی به میلادی انجام می‌شود.
           </Alert>
 
           <Stack spacing={2}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                type="date"
-                label="از تاریخ (میلادی)"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+              <ShamsiDatePicker
+                label="از تاریخ (شمسی)"
+                value={fromShamsi}
+                onChange={setFromShamsi}
+                disabled={syncing}
               />
-              <TextField
-                fullWidth
-                type="date"
-                label="تا تاریخ (میلادی)"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+              <ShamsiDatePicker
+                label="تا تاریخ (شمسی)"
+                value={toShamsi}
+                onChange={setToShamsi}
+                disabled={syncing}
               />
             </Stack>
 
             <TextField
               fullWidth
-              label="سال شمسی (محاسبه خودکار)"
-              value={shamsiYearLabel}
+              label="بازه انتخاب‌شده"
+              value={`${formatShamsiParts(fromShamsi)} تا ${formatShamsiParts(toShamsi)}`}
               slotProps={{ input: { readOnly: true } }}
-              helperText="از بازه تاریخ میلادی محاسبه می‌شود — نیازی به انتخاب جداگانه نیست"
+              helperText="برای جستجو در MIS به تاریخ میلادی تبدیل می‌شود"
             />
 
             <TextField
@@ -294,7 +282,7 @@ export default function SettingsPage() {
               size="large"
               startIcon={<SyncIcon />}
               onClick={handleFetchMisData}
-              disabled={syncing || !fromDate || !toDate}
+              disabled={syncing}
             >
               دریافت داده از MIS
             </Button>
@@ -310,7 +298,7 @@ export default function SettingsPage() {
                   <TableRow>
                     <TableCell>کد پرسنلی</TableCell>
                     <TableCell>نام</TableCell>
-                    <TableCell>تاریخ (میلادی)</TableCell>
+                    <TableCell>تاریخ (شمسی)</TableCell>
                     <TableCell>ورود</TableCell>
                     <TableCell>خروج</TableCell>
                     <TableCell>نوع</TableCell>
@@ -321,7 +309,7 @@ export default function SettingsPage() {
                     <TableRow key={r.id}>
                       <TableCell>{r.personnelCode}</TableCell>
                       <TableCell>{r.fullName}</TableCell>
-                      <TableCell>{formatGregorianDate(r.attendanceDate)}</TableCell>
+                      <TableCell>{formatShamsiDate(r.attendanceDate)}</TableCell>
                       <TableCell>{r.entryTime ?? '—'}</TableCell>
                       <TableCell>{r.exitTime ?? '—'}</TableCell>
                       <TableCell>{r.leaveType ?? r.source}</TableCell>

@@ -4,6 +4,8 @@ public class MisSyncRange
 {
     public DateTime SyncFrom { get; init; }
     public DateTime SyncToExclusive { get; init; }
+    public int? ShamsiFromYm { get; init; }
+    public int? ShamsiToYm { get; init; }
     public int? ShamsiYear { get; init; }
     public int? ShamsiMonth { get; init; }
     public string Description { get; init; } = string.Empty;
