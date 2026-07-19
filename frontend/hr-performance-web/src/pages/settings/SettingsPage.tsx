@@ -33,7 +33,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.2-dev';
+const APP_VERSION = '2.8.3-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
