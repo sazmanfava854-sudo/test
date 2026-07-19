@@ -119,7 +119,14 @@ public class HealthController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new
+            {
+                success = false,
+                message = ex.Message,
+                hint = "تاریخ باید شمسی باشد — from=1404/04/10&to=1404/04/11",
+                example =
+                    "/api/health/mis-preview-query?from=1404/04/10&to=1404/04/11"
+            });
         }
     }
 }

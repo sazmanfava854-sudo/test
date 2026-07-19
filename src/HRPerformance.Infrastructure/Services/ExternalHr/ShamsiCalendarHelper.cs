@@ -9,7 +9,16 @@ public static class ShamsiCalendarHelper
     public static DateTime ToGregorianDate(int year, int month, int day)
     {
         if (year < 1300 || year > 1500)
-            throw new ArgumentOutOfRangeException(nameof(year), "سال شمسی نامعتبر است");
+        {
+            if (year is >= 1990 and <= 2100)
+            {
+                throw new ArgumentOutOfRangeException(nameof(year),
+                    $"سال {year} میلادی است. تاریخ شمسی وارد کنید — مثلاً 1404/04/10 نه 2025/07/01.");
+            }
+
+            throw new ArgumentOutOfRangeException(nameof(year),
+                $"سال شمسی {year} نامعتبر است. بازه مجاز: 1300 تا 1500.");
+        }
         if (month is < 1 or > 12)
             throw new ArgumentOutOfRangeException(nameof(month), "ماه شمسی نامعتبر است");
 

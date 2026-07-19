@@ -45,6 +45,12 @@ public static class MisShamsiQueryParser
             return false;
         }
 
+        if (!ValidateShamsiYear(fy, "shamsiFromYear", out errorMessage))
+        {
+            request = default!;
+            return false;
+        }
+
         if (!TryParsePart(shamsiFromMonth, "shamsiFromMonth", out var fm, out errorMessage))
         {
             request = default!;
@@ -58,6 +64,12 @@ public static class MisShamsiQueryParser
         }
 
         if (!TryParsePart(shamsiToYear, "shamsiToYear", out var ty, out errorMessage))
+        {
+            request = default!;
+            return false;
+        }
+
+        if (!ValidateShamsiYear(ty, "shamsiToYear", out errorMessage))
         {
             request = default!;
             return false;
@@ -124,8 +136,33 @@ public static class MisShamsiQueryParser
             return false;
         }
 
+        if (!ValidateShamsiYear(year, "from/to", out errorMessage))
+            return false;
+
         parts = (year, month, day);
         errorMessage = string.Empty;
         return true;
+    }
+
+    private static bool ValidateShamsiYear(int year, string paramName, out string errorMessage)
+    {
+        if (year is >= 1300 and <= 1500)
+        {
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        if (year is >= 1990 and <= 2100)
+        {
+            errorMessage =
+                $"سال {year} میلادی است — این API فقط تاریخ شمسی می‌پذیرد. " +
+                $"مثال درست: from=1404/04/10&to=1404/04/11 (معادل میلادی 2025-07-01).";
+            return false;
+        }
+
+        errorMessage =
+            $"سال شمسی در {paramName} نامعتبر است ({year}). " +
+            "بازه مجاز: 1300 تا 1500 — مثال: from=1404/04/10&to=1404/04/11";
+        return false;
     }
 }

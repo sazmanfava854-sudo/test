@@ -33,4 +33,18 @@ public class MisShamsiQueryParserTests
         Assert.Contains("shamsiToDay", error);
         Assert.Contains("11 باید greg", error);
     }
+
+    [Fact]
+    public void TryParseRange_GregorianYear_Returns_Helpful_Error()
+    {
+        var ok = MisShamsiQueryParser.TryParseRange(
+            "2025/07/01", "2025/07/02",
+            null, null, null,
+            null, null, null,
+            out _, out var error);
+
+        Assert.False(ok);
+        Assert.Contains("میلادی", error);
+        Assert.Contains("1404/04/10", error);
+    }
 }
