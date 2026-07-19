@@ -1,13 +1,20 @@
+using HRPerformance.Infrastructure.Data;
+using HRPerformance.Infrastructure.Services.ExternalHr;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using HRPerformance.Infrastructure.Data;
 
 namespace HRPerformance.API.Controllers;
 [ApiController] [Route("api/[controller]")]
 public class HealthController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    public HealthController(ApplicationDbContext context) => _context = context;
+    private readonly HrIntegrationConnectionService _misConnection;
+
+    public HealthController(ApplicationDbContext context, HrIntegrationConnectionService misConnection)
+    {
+        _context = context;
+        _misConnection = misConnection;
+    }
 
     [HttpGet]
     public async Task<IActionResult> Get()
@@ -33,6 +40,22 @@ public class HealthController : ControllerBase
                 : "app\\appsettings.Development.json را تنظیم کنید و database/01 تا 11 را اجرا کنید",
             login = "admin / Admin@123",
             timestamp = DateTime.UtcNow
+        });
+    }
+
+    [HttpGet("mis")]
+    public IActionResult MisConnection()
+    {
+        var status = _misConnection.GetStatus();
+        return Ok(new
+        {
+            isConnectionConfigured = status.IsConnectionConfigured,
+            sourceType = status.SourceType,
+            missingFields = status.MissingFields,
+            server = status.Server,
+            database = status.Database,
+            userId = status.UserId,
+            passwordIsPlaceholder = status.PasswordIsPlaceholder
         });
     }
 }

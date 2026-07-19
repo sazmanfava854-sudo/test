@@ -84,10 +84,21 @@ public class AttendanceSyncController : ControllerBase
     public async Task<IActionResult> Status(CancellationToken ct)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
-        if (orgId == Guid.Empty)
-            return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد" });
-
         var connection = _connectionService.GetStatus();
+
+        if (orgId == Guid.Empty)
+        {
+            return Ok(new
+            {
+                success = true,
+                organizationId = (Guid?)null,
+                connection,
+                warning = "شناسه سازمان در حساب کاربری یافت نشد. database/08_SeedData.sql را اجرا کنید.",
+                lastSyncAt = (DateTime?)null,
+                employeesInDatabase = 0
+            });
+        }
+
         var lastSync = await _context.AttendanceIntegrationSettings
             .Where(s => s.OrganizationId == orgId)
             .Select(s => s.LastSyncAt)

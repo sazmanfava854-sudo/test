@@ -25,7 +25,7 @@ import {
   formatGregorianDate,
   formatShamsiDate,
   formatShamsiParts,
-  getDefaultShamsiRange,
+  getDefaultMisSyncRange,
   isShamsiRangeValid,
   toMisSyncRequestPayload,
   type ShamsiDateParts,
@@ -40,6 +40,19 @@ interface MisConnectionStatus {
   database?: string;
   userId?: string;
   passwordIsPlaceholder?: boolean;
+}
+
+function parseMisConnection(raw: unknown): MisConnectionStatus | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = raw as Record<string, unknown>;
+  return {
+    isConnectionConfigured: Boolean(data.isConnectionConfigured ?? data.IsConnectionConfigured),
+    missingFields: (data.missingFields ?? data.MissingFields) as string[] | undefined,
+    server: String(data.server ?? data.Server ?? ''),
+    database: String(data.database ?? data.Database ?? 'MIS'),
+    userId: String(data.userId ?? data.UserId ?? ''),
+    passwordIsPlaceholder: Boolean(data.passwordIsPlaceholder ?? data.PasswordIsPlaceholder),
+  };
 }
 
 export default function SettingsPage() {
@@ -57,9 +70,9 @@ export default function SettingsPage() {
   const [connectionOk, setConnectionOk] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<MisConnectionStatus | null>(null);
 
-  const defaultRange = useMemo(() => getDefaultShamsiRange(), []);
-  const [fromShamsi, setFromShamsi] = useState<ShamsiDateParts>(defaultRange.from);
-  const [toShamsi, setToShamsi] = useState<ShamsiDateParts>(defaultRange.to);
+  const defaultMisRange = useMemo(() => getDefaultMisSyncRange(), []);
+  const [fromShamsi, setFromShamsi] = useState<ShamsiDateParts>(defaultMisRange.from);
+  const [toShamsi, setToShamsi] = useState<ShamsiDateParts>(defaultMisRange.to);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordDto[]>([]);
   const [queryPreview, setQueryPreview] = useState('');
   const [gregorianRangeLabel, setGregorianRangeLabel] = useState('');
@@ -75,16 +88,20 @@ export default function SettingsPage() {
   );
 
   useEffect(() => {
+    if (searchParams.get('tab') === 'mis') setTab(1);
+  }, [searchParams]);
+
+  useEffect(() => {
     const load = async () => {
       try {
-        const [settingsRes, holidaysRes, statusRes] = await Promise.all([
+        const [settingsRes, holidaysRes, misHealthRes, statusRes] = await Promise.all([
           api.get('/settings'),
           api.get('/settings/holidays'),
-          api.get('/attendancesync/status'),
+          api.get('/health/mis'),
+          api.get('/attendancesync/status').catch(() => ({ data: null })),
         ]);
         const settingsData = settingsRes.data?.data ?? settingsRes.data;
         const holidaysData = holidaysRes.data?.data ?? holidaysRes.data;
-        const status = statusRes.data;
 
         if (Array.isArray(settingsData)) {
           setSettings(settingsData);
@@ -95,8 +112,11 @@ export default function SettingsPage() {
           setEditedValues(initial);
         }
         if (Array.isArray(holidaysData)) setHolidays(holidaysData);
-        const conn = status?.connection as MisConnectionStatus | undefined;
-        setConnectionStatus(conn ?? null);
+
+        const conn =
+          parseMisConnection(misHealthRes.data) ??
+          parseMisConnection((statusRes.data as { connection?: unknown } | null)?.connection);
+        setConnectionStatus(conn);
         setConnectionOk(conn?.isConnectionConfigured ?? false);
       } catch {
         /* empty */
@@ -303,6 +323,13 @@ export default function SettingsPage() {
 
       {tab === 1 && (
         <Paper elevation={0} sx={{ p: 3 }}>
+          {connectionOk && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              اتصال MIS پیکربندی شده — Server: {connectionStatus?.server} | User:{' '}
+              {connectionStatus?.userId}
+            </Alert>
+          )}
+
           {!connectionOk && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               اتصال MIS در سرور پیکربندی نشده است.
@@ -315,8 +342,8 @@ export default function SettingsPage() {
               <br />
               فایل: <strong>src\HRPerformance.API\appsettings.Development.json</strong>
               <br />
-              Server: {connectionStatus?.server ?? '—'} | Database:{' '}
-              {connectionStatus?.database ?? 'MIS'} | User: {connectionStatus?.userId ?? '—'}
+              Server: {connectionStatus?.server || '—'} | Database:{' '}
+              {connectionStatus?.database || 'MIS'} | User: {connectionStatus?.userId || '—'}
               {connectionStatus?.passwordIsPlaceholder ? (
                 <>
                   <br />

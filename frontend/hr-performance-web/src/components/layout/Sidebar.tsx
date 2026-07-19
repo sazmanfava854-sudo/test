@@ -52,8 +52,8 @@ const navItems: NavItem[] = [
   { label: 'اعتراضات', path: '/appeals', icon: <GavelIcon /> },
   { label: 'گزارش‌ها', path: '/reports', icon: <BarChartIcon /> },
   {
-    label: 'تنظیمات',
-    path: '/settings',
+    label: 'دریافت MIS',
+    path: '/settings?tab=mis',
     icon: <SettingsIcon />,
     roles: ['OrganizationAdministrator', 'SuperAdministrator'],
   },

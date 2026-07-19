@@ -31,6 +31,14 @@ export function getDefaultShamsiRange(): { from: ShamsiDateParts; to: ShamsiDate
   };
 }
 
+/** بازه پیش‌فرض تب دریافت از MIS */
+export function getDefaultMisSyncRange(): { from: ShamsiDateParts; to: ShamsiDateParts } {
+  return {
+    from: { year: 1404, month: 3, day: 29 },
+    to: { year: 1404, month: 4, day: 28 },
+  };
+}
+
 export function formatShamsiParts(parts: ShamsiDateParts): string {
   return `${parts.year}/${String(parts.month).padStart(2, '0')}/${String(parts.day).padStart(2, '0')}`;
 }
