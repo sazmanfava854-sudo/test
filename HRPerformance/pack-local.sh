@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-2.5.1-simple-local}"
+VERSION="${1:-2.6.0-dev}"
 STAGE="/tmp/HRPerformance-${VERSION}"
 OUT="$ROOT/releases/HRPerformance-${VERSION}.zip"
 PUBLISH_DIR="$STAGE/app"
@@ -52,9 +52,11 @@ cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$STAGE/scripts/" 2>/dev/null || t
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
 
 cat > "$STAGE/README-LOCAL.txt" << 'EOF'
-HR Performance — نسخه لوکال (بدون نیاز به Build)
+HR Performance — نسخه توسعه (DEV — شامل سورس)
 
-پیش‌نیاز: .NET 8 Runtime/SDK + SQL Server
+⚠ برای اجرای روزمره از pack-run-only.sh استفاده کنید — بدون Build.
+
+پیش‌نیاز: .NET 8 SDK + SQL Server
 
 1) database/01 تا 11 را روی SQL Server اجرا کنید
 2) app/appsettings.Development.json را تنظیم کنید (پسورد SQL و MIS)

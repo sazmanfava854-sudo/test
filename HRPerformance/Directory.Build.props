@@ -11,5 +11,8 @@
     <EnableNETAnalyzers>false</EnableNETAnalyzers>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <DebugType>portable</DebugType>
+    <BuildInParallel>true</BuildInParallel>
+    <UseSharedCompilation>true</UseSharedCompilation>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
   </PropertyGroup>
 </Project>

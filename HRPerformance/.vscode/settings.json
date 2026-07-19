@@ -1,19 +1,22 @@
 {
   "dotnet.defaultSolution": "HRPerformance.sln",
   "dotnet.server.useOmnisharp": false,
+  "dotnet.enableAutomaticRestore": false,
+  "dotnet.automaticallyCreateSolutionInWorkspace": false,
   "files.watcherExclude": {
     "**/bin/**": true,
     "**/obj/**": true,
     "**/.nuget/**": true,
     "**/node_modules/**": true,
-    "**/frontend/**/dist/**": true
+    "**/frontend/**": true,
+    "**/src/**": true
   },
   "search.exclude": {
     "**/bin": true,
     "**/obj": true,
     "**/.nuget": true,
     "**/node_modules": true,
-    "**/frontend/**/dist": true
+    "**/frontend": true
   },
   "files.exclude": {
     "**/bin": true,
