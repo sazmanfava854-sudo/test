@@ -158,13 +158,13 @@ public class AttendanceSyncController : ControllerBase
             return Ok(new
             {
                 success = true,
-                apiVersion = "2.8.7-dev",
+                apiVersion = "2.8.8-dev",
                 shamsiRange =
                     $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
                     $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",
                 shamsiFromKey = preview.ShamsiFromKey,
                 shamsiToKey = preview.ShamsiToKey,
-                preview.Note,
+                note = preview.Note,
                 sql = preview.SqlWithLiteralValues,
                 sqlWithParameters = preview.SqlWithParameters,
                 parameters = preview.Parameters.ToDictionary(

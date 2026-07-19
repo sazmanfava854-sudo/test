@@ -163,17 +163,47 @@ export default function SettingsPage() {
     }
   };
 
+  const extractApiError = (err: unknown): string => {
+    const ax = err as {
+      response?: { status?: number; data?: { message?: string; title?: string } };
+      message?: string;
+      code?: string;
+    };
+    const status = ax.response?.status;
+    const msg =
+      ax.response?.data?.message ??
+      ax.response?.data?.title ??
+      ax.message ??
+      'خطای نامشخص';
+    if (status) return `[HTTP ${status}] ${msg}`;
+    if (ax.code === 'ERR_NETWORK') {
+      return 'اتصال به API برقرار نشد — start-local.bat را اجرا کنید یا پورت API را بررسی کنید';
+    }
+    return msg;
+  };
+
   const loadQueryPreview = async () => {
     setQueryPreviewLoading(true);
     setError('');
     try {
       let res;
+      let lastError = '';
       try {
-        res = await api.get('/attendancesync/preview-query', { params: syncPayload });
-      } catch {
         res = await api.get('/health/mis-preview-query', { params: syncPayload });
+      } catch (errHealth) {
+        lastError = extractApiError(errHealth);
+        try {
+          res = await api.get('/attendancesync/preview-query', { params: syncPayload });
+        } catch (errAuth) {
+          throw new Error(`${lastError} | fallback: ${extractApiError(errAuth)}`);
+        }
       }
+
       const data = res.data;
+      if (data?.success === false) {
+        throw new Error(String(data.message ?? 'پیش‌نمایش کوئری ناموفق بود'));
+      }
+
       const sql = String(data?.sql ?? data?.sqlWithLiteralValues ?? '').trim();
       if (!sql) {
         const msg = 'کوئری خالی برگشت — پارامترهای تاریخ را بررسی کنید';
@@ -187,11 +217,9 @@ export default function SettingsPage() {
       } else if (data?.shamsiFromKey && data?.shamsiToKey) {
         setShamsiFilterLabel(`فیلتر ShamsiDate: ${data.shamsiFromKey} تا ${data.shamsiToKey}`);
       }
-      setSuccess('کوئری ساخته شد — فیلتر روی ستون ShamsiDate (شمسی)');
+      setSuccess(`کوئری ساخته شد (API ${data?.apiVersion ?? '?'})`);
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'خطا در ساخت کوئری — لاگ سرور را در logs/hr-performance-*.log ببینید';
+      const message = err instanceof Error ? err.message : extractApiError(err);
       setQueryPreview(`-- خطا: ${message}`);
       setError(message);
       setShamsiFilterLabel('');
