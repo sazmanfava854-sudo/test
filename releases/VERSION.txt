@@ -1,16 +1,12 @@
 HR Performance — DEV (source)
-Version: 2.7.2-dev
+Version: 2.7.4-dev
 Build Date: 2026-07-19
-.NET 8 SDK required
 
-Changes in 2.7.2-dev:
-  - Port changed from 5050 to 5000
-  - MIS sync by user-selected date range (Settings > دریافت از MIS)
-  - Attendance records table (personnel + entry/exit times)
-  - Per-employee indicator weights (Evaluation page)
-  - database/14_SeedEvaluationCategories.sql
-  - database/15_Migration_EmployeeIndicatorSettings.sql
-  - Removed background auto-sync
+Fixes in 2.7.4-dev:
+  - Auto-select free port (5000 → 5280 → 5080 → 5180 → 5050)
+  - Safer port cleanup (only stops dotnet/HR processes)
+  - Fixes PowerShell <pid> parser error
+  - Uses ASPNETCORE_URLS instead of fixed launch profile
 
-Includes: src/ + sln + frontend + database (01-15)
-Download: https://github.com/sazmanfava854-sudo/test/releases/download/v2.7.2-dev/HRPerformance-2.7.2-dev.zip
+Download:
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.7.4-dev/HRPerformance-2.7.4-dev.zip

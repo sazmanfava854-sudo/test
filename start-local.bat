@@ -18,14 +18,12 @@ set DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 set DOTNET_CLI_TELEMETRY_OPTOUT=1
 set ASPNETCORE_ENVIRONMENT=Development
 
-REM اولین بار فقط Restore (ممکن است چند دقیقه طول بکشد)
 if not exist "src\HRPerformance.API\obj\project.assets.json" (
     echo [اولین بار] Restore پکیج‌های NuGet...
     call scripts\restore-packages.bat
     if errorlevel 1 goto :done
 )
 
-REM Build فقط اگر DLL وجود ندارد یا سورس جدیدتر است
 set DLL=src\HRPerformance.API\bin\Debug\net8.0\HRPerformance.API.dll
 if not exist "%DLL%" (
     echo [اولین بار] Build پروژه API...
@@ -36,27 +34,27 @@ if not exist "%DLL%" (
 )
 
 echo.
-echo بررسی پورت 5000...
-call scripts\free-port-5000.bat
-if errorlevel 1 (
+echo انتخاب پورت آزاد...
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\resolve-app-port.ps1"`) do set APP_PORT=%%P
+if "%APP_PORT%"=="" (
     echo.
-    echo پورت 5000 آزاد نشد. احتمالاً یک نمونه قبلی HR Performance هنوز در حال اجراست.
-    echo   netstat -ano ^| findstr :5000
-    echo   taskkill /PID ^<pid^> /F
+    echo هیچ پورت آزادی یافت نشد.
     goto :done
 )
 
+set ASPNETCORE_URLS=http://localhost:%APP_PORT%
+
 echo.
-echo   Application: http://localhost:5000
-echo   Health:      http://localhost:5000/api/health
-echo   Swagger:     http://localhost:5000/swagger
+echo   Application: http://localhost:%APP_PORT%
+echo   Health:      http://localhost:%APP_PORT%/api/health
+echo   Swagger:     http://localhost:%APP_PORT%/swagger
 echo.
 echo تنظیمات: src\HRPerformance.API\appsettings.Development.json
 echo.
 echo برای توقف: Ctrl+C
 echo.
 
-dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --launch-profile http --no-build
+dotnet run --project src\HRPerformance.API\HRPerformance.API.csproj --no-launch-profile --no-build
 
 :done
 pause

@@ -2,29 +2,14 @@
 setlocal
 cd /d "%~dp0"
 
+set PORT=5000
+if not "%~1"=="" set PORT=%~1
+
 where powershell >nul 2>&1
 if %errorlevel% equ 0 (
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0free-port-5000.ps1"
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0free-port.ps1" -Port %PORT%
     exit /b %errorlevel%
 )
 
-setlocal enabledelayedexpansion
-set PORT=5000
-set FOUND=0
-
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":%PORT%" ^| findstr "LISTENING"') do (
-    set FOUND=1
-    echo [پورت %PORT%] در حال استفاده توسط PID %%P - در حال آزادسازی...
-    taskkill /PID %%P /F >nul 2>&1
-    if errorlevel 1 (
-        echo خطا: امکان توقف PID %%P نیست.
-        exit /b 1
-    )
-    echo پروسه %%P متوقف شد.
-)
-
-if !FOUND! equ 1 (
-    timeout /t 1 /nobreak >nul
-)
-
-exit /b 0
+echo PowerShell یافت نشد.
+exit /b 1

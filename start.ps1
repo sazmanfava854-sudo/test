@@ -15,22 +15,22 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host ""
-Write-Host "بررسی پورت 5000..." -ForegroundColor Yellow
-& "$PSScriptRoot/scripts/free-port-5000.ps1"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host ""
-    Write-Host "پورت 5000 آزاد نشد. یک نمونه قبلی ممکن است هنوز در حال اجرا باشد." -ForegroundColor Red
-    Write-Host "  netstat -ano | findstr :5000" -ForegroundColor White
-    Write-Host '  taskkill /PID <pid> /F' -ForegroundColor White
+Write-Host "انتخاب پورت آزاد..." -ForegroundColor Yellow
+$appPort = & "$PSScriptRoot/scripts/resolve-app-port.ps1" | Select-Object -Last 1
+if (-not $appPort -or $appPort -notmatch '^\d+$') {
+    Write-Host "هیچ پورت آزادی یافت نشد." -ForegroundColor Red
     exit 1
 }
 
+$env:ASPNETCORE_URLS = "http://localhost:$appPort"
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+
 Write-Host ""
 Write-Host "در حال اجرا..." -ForegroundColor Green
-Write-Host "  Application -> http://localhost:5000" -ForegroundColor White
-Write-Host "  Swagger     -> http://localhost:5000/swagger" -ForegroundColor White
+Write-Host "  Application -> http://localhost:$appPort" -ForegroundColor White
+Write-Host "  Swagger     -> http://localhost:$appPort/swagger" -ForegroundColor White
 Write-Host ""
 Write-Host "برای توقف: Ctrl+C" -ForegroundColor Gray
 Write-Host ""
 
-dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --launch-profile http
+dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --no-launch-profile
