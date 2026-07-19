@@ -17,6 +17,7 @@ import Alert from '@mui/material/Alert';
 import Stack from '@mui/material/Stack';
 import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
+import CodeIcon from '@mui/icons-material/Code';
 import api from '../../services/api';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
 import ShamsiDatePicker from '../../components/common/ShamsiDatePicker';
@@ -143,13 +144,16 @@ export default function SettingsPage() {
     try {
       const res = await api.get('/attendancesync/preview-query', { params: syncPayload });
       const data = res.data;
-      setQueryPreview(data?.sql ?? '');
+      setQueryPreview(data?.sql ?? data?.sqlWithLiteralValues ?? '');
       const gr = data?.gregorianRange;
       if (gr?.from && gr?.to) {
         setGregorianRangeLabel(`میلادی: ${gr.from} تا ${gr.to}`);
       }
-    } catch {
-      setQueryPreview('');
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'خطا در ساخت کوئری';
+      setQueryPreview(`-- خطا: ${message}`);
       setGregorianRangeLabel('');
     }
   };
@@ -354,17 +358,14 @@ export default function SettingsPage() {
               }
             />
 
-            {queryPreview && (
-              <TextField
-                fullWidth
-                multiline
-                minRows={8}
-                label="کوئری SQL ساخته‌شده"
-                value={queryPreview}
-                slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 12 } } }}
-                helperText="مثال: StartDate=2025-10-04 12:23:00 معادل شمسی 1404/07/12 است — نه 1404/04/28"
-              />
-            )}
+            <TextField
+              fullWidth
+              multiline
+              minRows={10}
+              label="کوئری SQL ساخته‌شده"
+              value={queryPreview || '— دکمه «نمایش کوئری» را بزنید —'}
+              slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 12 } } }}
+            />
 
             <TextField
               fullWidth
@@ -375,7 +376,16 @@ export default function SettingsPage() {
             />
           </Stack>
 
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<CodeIcon />}
+              onClick={() => void loadQueryPreview()}
+              disabled={syncing || !rangeIsValid}
+            >
+              نمایش کوئری
+            </Button>
             <Button
               variant="contained"
               size="large"
