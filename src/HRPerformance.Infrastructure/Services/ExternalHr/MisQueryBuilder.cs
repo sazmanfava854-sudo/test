@@ -5,6 +5,7 @@ namespace HRPerformance.Infrastructure.Services.ExternalHr;
 public static class MisQueryBuilder
 {
     private const string ViewName = "[MIS].[dbo].[HZG_View_HourlyLeave]";
+    internal const string FilteredCteName = "FilteredMis";
 
     /// <summary>
     /// ShamsiDate مثل 1404/04/10 یا 1404/4/10 — با PARSENAME ماه/روز بدون صفر هم درست مقایسه می‌شود
@@ -14,13 +15,37 @@ public static class MisQueryBuilder
         "CAST(PARSENAME(REPLACE([ShamsiDate], '/', '.'), 2) AS INT) * 100 + " +
         "CAST(PARSENAME(REPLACE([ShamsiDate], '/', '.'), 1) AS INT))";
 
-    public static string BuildSelectQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
+    public static string BuildFilteredCte(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
     {
         var conditions = BuildConditions(settings, range);
-        return $@"{MisHrDataReader.SelectColumnsSql}
-FROM {ViewName}
-WHERE {string.Join("\n  AND ", conditions)}
+        return $@"WITH {FilteredCteName} AS (
+  SELECT *
+  FROM {ViewName}
+  WHERE {string.Join("\n    AND ", conditions)}
+)";
+    }
+
+    public static string BuildSelectQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
+    {
+        return $@"{BuildFilteredCte(settings, range)}
+{MisHrDataReader.SelectColumnsSql}
+FROM {FilteredCteName}
 ORDER BY {ShamsiDateIntExpr} DESC";
+    }
+
+    public static string BuildDistinctEmployeesQuery(HrIntegrationRuntimeSettings settings, MisSyncRange? range = null)
+    {
+        return $@"{BuildFilteredCte(settings, range)}
+SELECT [PerCod], [LastName], [Name], [NationalIDNo], [ProvinceCode], [StartDate]
+FROM (
+  SELECT
+    [PerCod], [LastName], [Name], [NationalIDNo], [ProvinceCode], [StartDate],
+    ROW_NUMBER() OVER (PARTITION BY [PerCod] ORDER BY {ShamsiDateIntExpr} DESC) AS rn
+  FROM {FilteredCteName}
+  WHERE [PerCod] IS NOT NULL
+) ranked
+WHERE rn = 1
+ORDER BY [PerCod]";
     }
 
     public static MisQueryPreview BuildPreview(
@@ -30,14 +55,16 @@ ORDER BY {ShamsiDateIntExpr} DESC";
         var conditions = BuildConditions(settings, range);
         var parameters = BuildParameterValues(settings, range);
 
-        var sqlWithParams = $@"{MisHrDataReader.SelectColumnsSql}
-FROM {ViewName}
-WHERE {string.Join("\n  AND ", conditions)}
-ORDER BY {ShamsiDateIntExpr} DESC";
+        var sqlWithParams = BuildSelectQuery(settings, range);
 
-        var sqlLiteral = $@"{MisHrDataReader.SelectColumnsSql}
-FROM {ViewName}
-WHERE {string.Join("\n  AND ", conditions.Select(c => ReplaceParameters(c, parameters)))}
+        var literalConditions = conditions.Select(c => ReplaceParameters(c, parameters)).ToList();
+        var sqlLiteral = $@"WITH {FilteredCteName} AS (
+  SELECT *
+  FROM {ViewName}
+  WHERE {string.Join("\n    AND ", literalConditions)}
+)
+{MisHrDataReader.SelectColumnsSql}
+FROM {FilteredCteName}
 ORDER BY {ShamsiDateIntExpr} DESC";
 
         return new MisQueryPreview

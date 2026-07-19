@@ -1,6 +1,7 @@
 using AutoMapper;
 using HRPerformance.Application.Common;
 using HRPerformance.Application.DTOs.Evaluations;
+using HRPerformance.Application.Interfaces;
 using HRPerformance.Domain.Entities;
 using HRPerformance.Domain.Enums;
 using HRPerformance.Domain.Interfaces;
@@ -39,9 +40,19 @@ public class CreateEvaluationCommandHandler : IRequestHandler<CreateEvaluationCo
 public class GetCategoriesQueryHandler : IRequestHandler<GetCategoriesQuery, ApiResponse<IList<EvaluationCategoryDto>>>
 {
     private readonly IUnitOfWork _uow;
-    public GetCategoriesQueryHandler(IUnitOfWork uow) => _uow = uow;
+    private readonly IEvaluationCategorySeedService _categorySeed;
+
+    public GetCategoriesQueryHandler(IUnitOfWork uow, IEvaluationCategorySeedService categorySeed)
+    {
+        _uow = uow;
+        _categorySeed = categorySeed;
+    }
+
     public async Task<ApiResponse<IList<EvaluationCategoryDto>>> Handle(GetCategoriesQuery q, CancellationToken ct)
     {
+        if (q.OrganizationId != Guid.Empty)
+            await _categorySeed.EnsureSeededAsync(q.OrganizationId, ct);
+
         var cats = await _uow.Repository<EvaluationCategory>().Query().Include(c => c.Items).Where(c => c.OrganizationId == q.OrganizationId && !c.IsDeleted).ToListAsync(ct);
         var dtos = cats.Select(c => new EvaluationCategoryDto(c.Id, c.Name, c.Description, c.Color, c.Icon, c.Weight, c.IsActive, c.Items.Count)).ToList();
         return ApiResponse<IList<EvaluationCategoryDto>>.Ok(dtos);
@@ -77,13 +88,22 @@ public class CreateRuleCommandHandler : IRequestHandler<CreateRuleCommand, ApiRe
 public class GetEmployeeIndicatorsQueryHandler : IRequestHandler<GetEmployeeIndicatorsQuery, ApiResponse<IList<EmployeeIndicatorDto>>>
 {
     private readonly IUnitOfWork _uow;
-    public GetEmployeeIndicatorsQueryHandler(IUnitOfWork uow) => _uow = uow;
+    private readonly IEvaluationCategorySeedService _categorySeed;
+
+    public GetEmployeeIndicatorsQueryHandler(IUnitOfWork uow, IEvaluationCategorySeedService categorySeed)
+    {
+        _uow = uow;
+        _categorySeed = categorySeed;
+    }
 
     public async Task<ApiResponse<IList<EmployeeIndicatorDto>>> Handle(GetEmployeeIndicatorsQuery q, CancellationToken ct)
     {
         var emp = await _uow.Repository<Employee>().Query()
             .FirstOrDefaultAsync(e => e.Id == q.EmployeeId && e.OrganizationId == q.OrganizationId && !e.IsDeleted, ct);
         if (emp == null) return ApiResponse<IList<EmployeeIndicatorDto>>.Fail("کارمند یافت نشد");
+
+        if (q.OrganizationId != Guid.Empty)
+            await _categorySeed.EnsureSeededAsync(q.OrganizationId, ct);
 
         var categories = await _uow.Repository<EvaluationCategory>().Query()
             .Where(c => c.OrganizationId == q.OrganizationId && !c.IsDeleted && c.IsActive)
@@ -112,7 +132,13 @@ public class GetEmployeeIndicatorsQueryHandler : IRequestHandler<GetEmployeeIndi
 public class SaveEmployeeIndicatorsCommandHandler : IRequestHandler<SaveEmployeeIndicatorsCommand, ApiResponse<IList<EmployeeIndicatorDto>>>
 {
     private readonly IUnitOfWork _uow;
-    public SaveEmployeeIndicatorsCommandHandler(IUnitOfWork uow) => _uow = uow;
+    private readonly IEvaluationCategorySeedService _categorySeed;
+
+    public SaveEmployeeIndicatorsCommandHandler(IUnitOfWork uow, IEvaluationCategorySeedService categorySeed)
+    {
+        _uow = uow;
+        _categorySeed = categorySeed;
+    }
 
     public async Task<ApiResponse<IList<EmployeeIndicatorDto>>> Handle(SaveEmployeeIndicatorsCommand cmd, CancellationToken ct)
     {
@@ -153,7 +179,7 @@ public class SaveEmployeeIndicatorsCommandHandler : IRequestHandler<SaveEmployee
         }
 
         await _uow.SaveChangesAsync(ct);
-        return await new GetEmployeeIndicatorsQueryHandler(_uow).Handle(
+        return await new GetEmployeeIndicatorsQueryHandler(_uow, _categorySeed).Handle(
             new GetEmployeeIndicatorsQuery(cmd.EmployeeId, cmd.OrganizationId), ct);
     }
 }

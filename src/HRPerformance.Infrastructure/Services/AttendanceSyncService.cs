@@ -70,12 +70,23 @@ public class AttendanceSyncService : IAttendanceSyncService
             if (sourceType.Equals("SQLVIEW", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogInformation("MIS sync {Range} for organization {OrgId}", range.Description, organizationId);
+                await EvaluationCategoryBootstrap.EnsureForOrganizationAsync(_context, organizationId, ct);
+
+                var distinctEmployees = await _misHrDataReader.ReadDistinctEmployeesAsync(runtimeSettings, range, ct);
+                result.DistinctEmployeesInMis = distinctEmployees.Count;
+                result.EmployeesUpserted = await _employeeSync.SyncDistinctEmployeesAsync(organizationId, distinctEmployees, ct);
+                _logger.LogInformation(
+                    "MIS employee CTE sync: {Distinct} distinct PerCod, {Upserted} new employees for org {OrgId}",
+                    result.DistinctEmployeesInMis,
+                    result.EmployeesUpserted,
+                    organizationId);
+
                 var records = await _misHrDataReader.ReadHourlyLeavesAsync(runtimeSettings, range, ct);
                 result.MisRowsFetched = records.Count;
                 foreach (var record in records)
                     await ProcessMisHourlyLeaveAsync(organizationId, record, syncLog, ct);
 
-                result.SyncedRanges = [$"{range.Description} ({records.Count} رکورد)"];
+                result.SyncedRanges = [$"{range.Description} ({records.Count} رکورد، {result.DistinctEmployeesInMis} پرسنل)"];
                 result.RecordsProcessed = syncLog.RecordsProcessed;
                 result.RecordsFailed = syncLog.RecordsFailed;
             }

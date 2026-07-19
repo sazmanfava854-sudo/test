@@ -28,6 +28,7 @@ import {
   ScoreType,
   SCORE_TYPE_LABELS,
 } from '../../types';
+import { unwrapListItems, readApiMessage } from '../../utils/apiResponse';
 
 export default function EvaluationPage() {
   const theme = useTheme();
@@ -59,15 +60,23 @@ export default function EvaluationPage() {
           employeeService.getAll({ pageSize: 500 }),
           api.get('/evaluations/categories'),
         ]);
-        if (empRes.success && empRes.data) {
-          setEmployees(empRes.data.items);
+        const employeeItems = empRes.data?.items ?? [];
+        setEmployees(employeeItems);
+        const categories = unwrapListItems<EvaluationCategoryDto>(catRes.data);
+        setCategories(categories);
+
+        if (employeeItems.length === 0) {
+          setError(
+            'لیست کارمندان خالی است. از تنظیمات → MIS داده دریافت کنید یا database/08_SeedData.sql را اجرا کنید.',
+          );
+        } else if (categories.length === 0) {
+          setError('دسته‌بندی شاخص‌ها خالی است — پس از دریافت MIS دوباره این صفحه را باز کنید.');
+        } else {
+          setError(null);
         }
-        const catData = catRes.data?.data ?? catRes.data;
-        if (Array.isArray(catData)) {
-          setCategories(catData);
-        }
-      } catch {
-        /* use empty lists */
+      } catch (err: unknown) {
+        const ax = err as { response?: { data?: { message?: string } } };
+        setError(ax.response?.data?.message ?? readApiMessage(ax.response?.data) ?? 'خطا در بارگذاری داده‌های ارزیابی');
       } finally {
         setLoading(false);
       }
@@ -86,10 +95,7 @@ export default function EvaluationPage() {
       setError(null);
       try {
         const res = await api.get(`/evaluations/employees/${indicatorEmployeeId}/indicators`);
-        const data = res.data?.data ?? res.data;
-        if (Array.isArray(data)) {
-          setIndicators(data);
-        }
+        setIndicators(unwrapListItems<EmployeeIndicatorDto>(res.data));
       } catch {
         setError('خطا در بارگذاری شاخص‌های کارمند');
       } finally {

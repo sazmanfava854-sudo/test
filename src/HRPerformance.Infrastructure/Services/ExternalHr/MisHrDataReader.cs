@@ -108,6 +108,56 @@ public class MisHrDataReader
         return records;
     }
 
+    public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadDistinctEmployeesAsync(
+        HrIntegrationRuntimeSettings settings,
+        MisSyncRange range,
+        CancellationToken ct = default)
+    {
+        var records = new List<MisHourlyLeaveRecord>();
+        var query = MisQueryBuilder.BuildDistinctEmployeesQuery(settings, range);
+        var filters = GetFilterSettings(settings);
+        var connectionString = settings.MisConnectionString
+            ?? throw new InvalidOperationException("اتصال MIS پیکربندی نشده است");
+
+        try
+        {
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(ct);
+            await using var command = new SqlCommand(query, connection);
+            command.Parameters.AddWithValue("@ShamsiFromKey", range.ShamsiFromKey);
+            command.Parameters.AddWithValue("@ShamsiToKey", range.ShamsiToKey);
+            AddFilterParameters(command, filters, range);
+            command.CommandTimeout = 120;
+
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var perCod = ReadString(reader, "PerCod");
+                if (string.IsNullOrWhiteSpace(perCod))
+                    continue;
+
+                records.Add(new MisHourlyLeaveRecord
+                {
+                    PerCod = perCod,
+                    LastName = ReadString(reader, "LastName"),
+                    Name = ReadString(reader, "Name"),
+                    NationalIDNo = ReadString(reader, "NationalIDNo"),
+                    ProvinceCode = ReadString(reader, "ProvinceCode"),
+                    StartDate = reader.GetDateTime(reader.GetOrdinal("StartDate")),
+                    EndDate = reader.GetDateTime(reader.GetOrdinal("StartDate"))
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to read distinct MIS employees");
+            throw;
+        }
+
+        _logger.LogInformation("MIS distinct employee query returned {EmployeeCount} PerCod", records.Count);
+        return records;
+    }
+
     public MisQueryPreview BuildQueryPreview(HrIntegrationRuntimeSettings settings, MisSyncRange range) =>
         MisQueryBuilder.BuildPreview(settings, range);
 
@@ -124,9 +174,9 @@ public class MisHrDataReader
         {
             await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync(ct);
-            var sql = $@"SELECT COUNT(*)
-FROM [MIS].[dbo].[HZG_View_HourlyLeave]
-WHERE {string.Join("\n  AND ", MisQueryBuilder.BuildConditions(settings, range))}";
+            var sql = $@"{MisQueryBuilder.BuildFilteredCte(settings, range)}
+SELECT COUNT(*)
+FROM {MisQueryBuilder.FilteredCteName}";
             await using var command = new SqlCommand(sql, connection);
             command.Parameters.AddWithValue("@ShamsiFromKey", range.ShamsiFromKey);
             command.Parameters.AddWithValue("@ShamsiToKey", range.ShamsiToKey);
@@ -201,7 +251,9 @@ WHERE {MisQueryBuilder.ShamsiDateIntExpr} >= @ShamsiFromKey AND {MisQueryBuilder
             }
 
             var activeQuery = MisQueryBuilder.BuildSelectQuery(settings, range)
-                .Replace(MisHrDataReader.SelectColumnsSql, "SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod");
+                .Replace(
+                    $"{MisHrDataReader.SelectColumnsSql}\nFROM {MisQueryBuilder.FilteredCteName}",
+                    $"SELECT COUNT(*) AS Cnt, COUNT(DISTINCT [PerCod]) AS DistinctPerCod\nFROM {MisQueryBuilder.FilteredCteName}");
             await using var command = new SqlCommand(activeQuery, connection);
             command.Parameters.AddWithValue("@ShamsiFromKey", range.ShamsiFromKey);
             command.Parameters.AddWithValue("@ShamsiToKey", range.ShamsiToKey);

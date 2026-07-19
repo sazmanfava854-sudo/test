@@ -63,6 +63,8 @@ public class AttendanceSyncController : ControllerBase
                 message = $"داده‌های بازه {range.Description} دریافت شد",
                 result,
                 misRowsFetched = result.MisRowsFetched,
+                distinctEmployeesInMis = result.DistinctEmployeesInMis,
+                employeesUpserted = result.EmployeesUpserted,
                 shamsiRange = new
                 {
                     from = range.ShamsiFromText,
@@ -158,7 +160,7 @@ public class AttendanceSyncController : ControllerBase
             return Ok(new
             {
                 success = true,
-                apiVersion = "2.8.9-dev",
+                apiVersion = "2.8.10-dev",
                 shamsiRange =
                     $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
                     $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",

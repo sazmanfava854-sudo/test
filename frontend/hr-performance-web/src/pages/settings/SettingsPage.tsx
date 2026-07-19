@@ -33,7 +33,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.9-dev';
+const APP_VERSION = '2.8.10-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -266,6 +266,8 @@ export default function SettingsPage() {
       const result = res.data?.result;
       const processed = result?.recordsProcessed ?? 0;
       const misFetched = res.data?.misRowsFetched ?? result?.misRowsFetched ?? 0;
+      const employeesUpserted = res.data?.employeesUpserted ?? result?.employeesUpserted ?? 0;
+      const distinctEmployees = res.data?.distinctEmployeesInMis ?? result?.distinctEmployeesInMis ?? 0;
       const preview = res.data?.queryPreview;
       if (preview?.sqlWithLiteralValues) setQueryPreview(preview.sqlWithLiteralValues);
       const sr = res.data?.shamsiRange;
@@ -295,7 +297,7 @@ export default function SettingsPage() {
       } else {
         setSuccess(
           res.data?.message ??
-            `دریافت انجام شد: ${processed} رکورد، ${result?.recordsFailed ?? 0} خطا`,
+            `دریافت انجام شد: ${processed} رکورد، ${distinctEmployees} پرسنل MIS، ${employeesUpserted} کارمند جدید، ${result?.recordsFailed ?? 0} خطا`,
         );
       }
       await loadAttendanceRecords();

@@ -49,4 +49,25 @@ public class ShamsiCalendarHelperTests
         Assert.Contains("14040411", preview.SqlWithLiteralValues);
         Assert.DoesNotContain("[StartDate] >=", preview.SqlWithLiteralValues);
     }
+
+    [Fact]
+    public void MisQueryBuilder_Preview_Uses_FilteredMis_Cte()
+    {
+        var request = new MisSyncDateRangeRequest(1404, 4, 10, 1404, 4, 11);
+        var range = MisSyncRequestMapper.ToSyncRange(request);
+        var settings = new HrIntegrationRuntimeSettings
+        {
+            ProvinceCode = "147",
+            ApplyProvinceFilter = true,
+            ApplyShamsiYearFilter = false
+        };
+
+        var preview = MisQueryBuilder.BuildPreview(settings, range);
+        var distinctSql = MisQueryBuilder.BuildDistinctEmployeesQuery(settings, range);
+
+        Assert.Contains("WITH FilteredMis AS", preview.SqlWithLiteralValues);
+        Assert.Contains("FROM FilteredMis", preview.SqlWithLiteralValues);
+        Assert.Contains("ROW_NUMBER()", distinctSql);
+        Assert.Contains("PARTITION BY [PerCod]", distinctSql);
+    }
 }

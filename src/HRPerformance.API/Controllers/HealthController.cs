@@ -75,7 +75,7 @@ public class HealthController : ControllerBase
             return Ok(new
             {
                 success = true,
-                apiVersion = "2.8.9-dev",
+                apiVersion = "2.8.10-dev",
                 shamsi = $"{year}/{month:D2}/{day:D2}",
                 gregorian = gregorian.ToString("yyyy-MM-dd"),
                 ok = ShamsiCalendarHelper.IsGregorianDate(gregorian)
@@ -117,7 +117,7 @@ public class HealthController : ControllerBase
         return Ok(new
         {
             success = canConnect && string.IsNullOrEmpty(error),
-            apiVersion = "2.8.9-dev",
+            apiVersion = "2.8.10-dev",
             canConnect = canConnect && status.IsConnectionConfigured,
             isConnectionConfigured = status.IsConnectionConfigured,
             rowCount,
@@ -182,7 +182,7 @@ public class HealthController : ControllerBase
             return Ok(new
             {
                 success = true,
-                apiVersion = "2.8.9-dev",
+                apiVersion = "2.8.10-dev",
                 shamsiRange =
                     $"{request.ShamsiFromYear}/{request.ShamsiFromMonth:D2}/{request.ShamsiFromDay:D2} تا " +
                     $"{request.ShamsiToYear}/{request.ShamsiToMonth:D2}/{request.ShamsiToDay:D2}",
