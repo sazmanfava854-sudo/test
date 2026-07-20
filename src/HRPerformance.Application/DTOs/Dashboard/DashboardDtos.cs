@@ -20,6 +20,7 @@ public record AttendanceRecordDto(
     string? EntryTime,
     string? ExitTime,
     decimal? WorkingHours,
+    int DelayMinutes,
     bool IsOnLeave,
     string? LeaveType,
     string Source);

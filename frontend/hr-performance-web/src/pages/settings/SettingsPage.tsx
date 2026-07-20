@@ -35,7 +35,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.9.1-dev';
+const APP_VERSION = '2.9.2-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -557,6 +557,7 @@ export default function SettingsPage() {
                     <TableCell>تاریخ (شمسی)</TableCell>
                     <TableCell>ورود</TableCell>
                     <TableCell>خروج</TableCell>
+                    <TableCell>تاخیر (دقیقه)</TableCell>
                     <TableCell>نوع</TableCell>
                   </TableRow>
                 </TableHead>
@@ -568,6 +569,15 @@ export default function SettingsPage() {
                       <TableCell>{formatShamsiDate(r.attendanceDate)}</TableCell>
                       <TableCell>{r.entryTime ?? '—'}</TableCell>
                       <TableCell>{r.exitTime ?? '—'}</TableCell>
+                      <TableCell>
+                        {(r.delayMinutes ?? 0) > 0 ? (
+                          <Typography component="span" color="warning.main" sx={{ fontWeight: 600 }}>
+                            {r.delayMinutes}
+                          </Typography>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
                       <TableCell>{r.leaveType ?? r.source}</TableCell>
                     </TableRow>
                   ))}

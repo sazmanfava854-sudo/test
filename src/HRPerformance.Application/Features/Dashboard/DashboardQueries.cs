@@ -63,10 +63,12 @@ public class GetManagerDashboardQueryHandler : IRequestHandler<GetManagerDashboa
         var monthlyTrend = await BuildMonthlyTrendAsync(empIds, ct);
         var teamIndicators = await BuildTeamIndicatorsAsync(q.OrganizationId, emps, att, ct);
 
+        var todayDelays = att.Where(a => a.DelayMinutes > 0).Select(a => a.EmployeeId).Distinct().Count();
+
         return ApiResponse<ManagerDashboardDto>.Ok(new ManagerDashboardDto(
             emps.Count,
             att.Count(a => !a.IsAbsent && !a.IsOnLeave),
-            att.Count(a => a.DelayMinutes > 0),
+            todayDelays,
             att.Count(a => a.IsAbsent),
             avg,
             top,
@@ -222,6 +224,7 @@ public class GetAttendanceRecordsQueryHandler : IRequestHandler<GetAttendanceRec
                 a.EntryTime.HasValue ? a.EntryTime.Value.ToString(@"hh\:mm") : null,
                 a.ExitTime.HasValue ? a.ExitTime.Value.ToString(@"hh\:mm") : null,
                 a.WorkingHours,
+                a.DelayMinutes,
                 a.IsOnLeave,
                 a.LeaveType,
                 a.Source))

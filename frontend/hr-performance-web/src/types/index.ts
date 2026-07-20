@@ -168,6 +168,7 @@ export interface AttendanceRecordDto {
   entryTime?: string;
   exitTime?: string;
   workingHours?: number;
+  delayMinutes?: number;
   isOnLeave: boolean;
   leaveType?: string;
   source: string;

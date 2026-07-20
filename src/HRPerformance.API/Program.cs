@@ -101,6 +101,7 @@ var app = builder.Build();
 await DatabaseSchemaBootstrap.EnsureLatestSchemaAsync(app.Services);
 await AuthBootstrap.EnsureDefaultAdminPasswordAsync(app.Services);
 await EvaluationCategoryBootstrap.EnsureForAllOrganizationsAsync(app.Services);
+await AttendanceRuleBootstrap.EnsureForAllOrganizationsAsync(app.Services);
 app.UseMiddleware<ExceptionMiddleware>();
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseSerilogRequestLogging();

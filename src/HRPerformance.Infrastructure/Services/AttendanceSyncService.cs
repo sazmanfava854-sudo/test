@@ -135,6 +135,9 @@ public class AttendanceSyncService : IAttendanceSyncService
 
             var entryTime = ParseTime(record.StartTime);
             var exitTime = ParseTime(record.EndTime);
+            var delayMinutes = MisFirstHourLeaveHelper.ComputeDelayMinutes(
+                entryTime, record.LeaveDurationMinutes, record.FirstTimeType);
+            var leaveType = MisFirstHourLeaveHelper.BuildLeaveTypeLabel(record.FirstTimeType, delayMinutes);
             var workingHours = entryTime.HasValue && exitTime.HasValue
                 ? (decimal?)(exitTime.Value - entryTime.Value).TotalHours
                 : null;
@@ -149,11 +152,11 @@ public class AttendanceSyncService : IAttendanceSyncService
                     EntryTime = entryTime,
                     ExitTime = exitTime,
                     WorkingHours = workingHours,
-                    DelayMinutes = 0,
+                    DelayMinutes = delayMinutes,
                     IsAbsent = false,
                     IsOnLeave = true,
                     IsOnMission = false,
-                    LeaveType = $"مرخصی ساعتی - نوع {record.FirstTimeType}",
+                    LeaveType = leaveType,
                     Source = "MIS-SQLView",
                     ExternalId = externalId
                 };
@@ -164,14 +167,16 @@ public class AttendanceSyncService : IAttendanceSyncService
                 attendance.EntryTime = entryTime;
                 attendance.ExitTime = exitTime;
                 attendance.WorkingHours = workingHours;
+                attendance.DelayMinutes = delayMinutes;
                 attendance.IsOnLeave = true;
-                attendance.LeaveType = $"مرخصی ساعتی - نوع {record.FirstTimeType}";
+                attendance.LeaveType = leaveType;
                 attendance.UpdatedAt = DateTime.UtcNow;
                 attendance.IsProcessed = false;
             }
 
             await _context.SaveChangesAsync(ct);
-            await _ruleEngine.ProcessHourlyLeaveAsync(attendance, record.LeaveDurationMinutes, ct);
+            await AttendanceRuleBootstrap.EnsureForOrganizationAsync(_context, organizationId, ct);
+            await _ruleEngine.ProcessMisHourlyLeaveAsync(attendance, record.LeaveDurationMinutes, ct);
             log.RecordsProcessed++;
         }
         catch (Exception ex)
