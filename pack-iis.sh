@@ -24,6 +24,7 @@ dotnet publish "$ROOT/src/HRPerformance.API/HRPerformance.API.csproj" \
 mkdir -p "$STAGE/logs" "$STAGE/uploads"
 cp "$ROOT/src/HRPerformance.API/appsettings.Production.example.json" "$STAGE/appsettings.Production.json"
 cp "$ROOT/iis-fix-permissions.ps1" "$ROOT/iis-fix-permissions.bat" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/iis-bind-site-5050.ps1" "$ROOT/iis-bind-site-5050.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/LOGIN.txt" "$STAGE/" 2>/dev/null || true
 cp -r "$ROOT/database" "$STAGE/"
 
@@ -64,9 +65,19 @@ HR Performance — استقرار IIS
 ■ دسترسی پوشه (PowerShell Admin)
   iis-fix-permissions.bat
 
+■ پورت ثابت 5050 (بدون انتخاب پویا)
+  در IIS پورت از resolve-app-port استفاده نمی‌شود.
+  PowerShell Admin:
+    iis-bind-site-5050.bat
+  یا در IIS Manager → Site → Bindings → http → Port = 5050
+
+  Cors در appsettings.Production.json:
+    http://localhost:5050
+    http://YOUR_SERVER:5050
+
 ■ تست
-  http://YOUR_SERVER/api/health
-  http://YOUR_SERVER/          ← UI (wwwroot)
+  http://YOUR_SERVER:5050/api/health
+  http://YOUR_SERVER:5050/          ← UI (wwwroot)
 
 لاگین: admin / Admin@123
 EOF
