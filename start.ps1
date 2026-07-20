@@ -1,5 +1,5 @@
 # HR Performance - Windows (فقط .NET - بدون نیاز به Node.js)
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 Set-Location $PSScriptRoot
 
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -14,20 +14,22 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-$assetsFile = "src\HRPerformance.API\obj\project.assets.json"
-if (-not (Test-Path $assetsFile)) {
-    Write-Host ""
-    Write-Host "اولین اجرا: در حال restore پکیج‌های NuGet..." -ForegroundColor Yellow
-    & "$PSScriptRoot\scripts\restore-packages.ps1"
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
+Write-Host ""
+Write-Host "انتخاب پورت آزاد..." -ForegroundColor Yellow
+$portFile = Join-Path $env:TEMP 'hr-performance-port.txt'
+& "$PSScriptRoot/scripts/resolve-app-port.ps1" -OutFile $portFile | Out-Null
+$appPort = if (Test-Path $portFile) { (Get-Content $portFile -Raw).Trim() } else { '5280' }
+if ($appPort -notmatch '^\d+$') { $appPort = '5280' }
+
+$env:ASPNETCORE_URLS = "http://localhost:$appPort"
+$env:ASPNETCORE_ENVIRONMENT = "Development"
 
 Write-Host ""
 Write-Host "در حال اجرا..." -ForegroundColor Green
-Write-Host "  Application -> http://localhost:5000" -ForegroundColor White
-Write-Host "  Swagger     -> http://localhost:5000/swagger" -ForegroundColor White
+Write-Host "  Application -> http://localhost:$appPort" -ForegroundColor White
+Write-Host "  Swagger     -> http://localhost:$appPort/swagger" -ForegroundColor White
 Write-Host ""
 Write-Host "برای توقف: Ctrl+C" -ForegroundColor Gray
 Write-Host ""
 
-dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --launch-profile http
+dotnet run --project src/HRPerformance.API/HRPerformance.API.csproj --no-launch-profile

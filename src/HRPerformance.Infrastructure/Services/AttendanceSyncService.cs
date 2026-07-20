@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using HRPerformance.Domain.Entities;
 using HRPerformance.Domain.Enums;
 using HRPerformance.Domain.Interfaces;
+using HRPerformance.Domain.Models;
 using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Services.ExternalHr;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ public class AttendanceSyncService : IAttendanceSyncService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly MisHrDataReader _misHrDataReader;
     private readonly MisHrEmployeeSyncService _employeeSync;
+    private readonly HrIntegrationConnectionService _connectionService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AttendanceSyncService> _logger;
 
@@ -26,6 +28,7 @@ public class AttendanceSyncService : IAttendanceSyncService
         IHttpClientFactory httpClientFactory,
         MisHrDataReader misHrDataReader,
         MisHrEmployeeSyncService employeeSync,
+        HrIntegrationConnectionService connectionService,
         IConfiguration configuration,
         ILogger<AttendanceSyncService> logger)
     {
@@ -34,18 +37,26 @@ public class AttendanceSyncService : IAttendanceSyncService
         _httpClientFactory = httpClientFactory;
         _misHrDataReader = misHrDataReader;
         _employeeSync = employeeSync;
+        _connectionService = connectionService;
         _configuration = configuration;
         _logger = logger;
     }
 
-    public async Task SyncAsync(Guid organizationId, CancellationToken ct = default)
+    public async Task<AttendanceSyncResult> SyncDateRangeAsync(
+        Guid organizationId,
+        MisSyncDateRangeRequest request,
+        CancellationToken ct = default)
     {
-        var settings = await _context.AttendanceIntegrationSettings
-            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId && s.IsActive, ct);
+        var result = new AttendanceSyncResult();
+        var range = MisSyncRequestMapper.ToSyncRange(request);
 
-        var sourceType = settings?.SourceType ?? _configuration["HrIntegration:SourceType"] ?? "SQLView";
-        if (settings == null && !IsHrIntegrationEnabled())
-            return;
+        var runtimeSettings = _connectionService.BuildForSync(request);
+        if (!runtimeSettings.IsConnectionConfigured)
+            throw new InvalidOperationException("اتصال MIS پیکربندی نشده است");
+
+        var entity = await _context.AttendanceIntegrationSettings
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        var sourceType = entity?.SourceType ?? runtimeSettings.SourceType;
 
         var syncLog = new AttendanceSyncLog
         {
@@ -56,48 +67,54 @@ public class AttendanceSyncService : IAttendanceSyncService
 
         try
         {
-            switch (sourceType.ToUpperInvariant())
+            if (sourceType.Equals("SQLVIEW", StringComparison.OrdinalIgnoreCase))
             {
-                case "REST":
-                    if (settings != null && !string.IsNullOrEmpty(settings.EndpointUrl))
-                        await SyncFromRestAsync(settings, syncLog, ct);
-                    break;
-                case "SQLVIEW":
-                    await SyncFromMisSqlViewAsync(organizationId, syncLog, ct);
-                    break;
-                default:
-                    _logger.LogWarning("Unsupported attendance source type: {SourceType}", sourceType);
-                    break;
+                _logger.LogInformation("MIS sync {Range} for organization {OrgId}", range.Description, organizationId);
+                await EvaluationCategoryBootstrap.EnsureForOrganizationAsync(_context, organizationId, ct);
+
+                var distinctEmployees = await _misHrDataReader.ReadDistinctEmployeesAsync(runtimeSettings, range, ct);
+                result.DistinctEmployeesInMis = distinctEmployees.Count;
+                result.EmployeesUpserted = await _employeeSync.SyncDistinctEmployeesAsync(organizationId, distinctEmployees, ct);
+                _logger.LogInformation(
+                    "MIS employee CTE sync: {Distinct} distinct PerCod, {Upserted} new employees for org {OrgId}",
+                    result.DistinctEmployeesInMis,
+                    result.EmployeesUpserted,
+                    organizationId);
+
+                var records = await _misHrDataReader.ReadHourlyLeavesAsync(runtimeSettings, range, ct);
+                result.MisRowsFetched = records.Count;
+                foreach (var record in records)
+                    await ProcessMisHourlyLeaveAsync(organizationId, record, syncLog, ct);
+
+                result.SyncedRanges = [$"{range.Description} ({records.Count} رکورد، {result.DistinctEmployeesInMis} پرسنل)"];
+                result.RecordsProcessed = syncLog.RecordsProcessed;
+                result.RecordsFailed = syncLog.RecordsFailed;
+            }
+            else if (sourceType.Equals("REST", StringComparison.OrdinalIgnoreCase) && entity != null)
+            {
+                await SyncFromRestAsync(entity, syncLog, ct);
+                result.RecordsProcessed = syncLog.RecordsProcessed;
+                result.RecordsFailed = syncLog.RecordsFailed;
             }
 
             syncLog.Status = syncLog.RecordsFailed > 0 ? AttendanceSyncStatus.Partial : AttendanceSyncStatus.Success;
-            if (settings != null) settings.LastSyncAt = DateTime.UtcNow;
+            if (entity != null) entity.LastSyncAt = DateTime.UtcNow;
         }
         catch (Exception ex)
         {
             syncLog.Status = AttendanceSyncStatus.Failed;
             syncLog.ErrorMessage = ex.Message;
             _logger.LogError(ex, "Attendance sync failed for organization {OrgId}", organizationId);
+            throw;
+        }
+        finally
+        {
+            syncLog.SyncCompletedAt = DateTime.UtcNow;
+            _context.AttendanceSyncLogs.Add(syncLog);
+            await _context.SaveChangesAsync(ct);
         }
 
-        syncLog.SyncCompletedAt = DateTime.UtcNow;
-        _context.AttendanceSyncLogs.Add(syncLog);
-        await _context.SaveChangesAsync(ct);
-    }
-
-    private bool IsHrIntegrationEnabled() =>
-        _configuration.GetValue<bool>("HrIntegration:Enabled");
-
-    private async Task SyncFromMisSqlViewAsync(Guid organizationId, AttendanceSyncLog log, CancellationToken ct)
-    {
-        var syncDaysBack = _configuration.GetValue<int>("HrIntegration:SyncDaysBack", 30);
-        var syncFrom = DateTime.Today.AddDays(-syncDaysBack);
-
-        _logger.LogInformation("MIS SQL sync from {SyncFrom} for organization {OrgId}", syncFrom, organizationId);
-
-        var records = await _misHrDataReader.ReadHourlyLeavesAsync(syncFrom, ct);
-        foreach (var record in records)
-            await ProcessMisHourlyLeaveAsync(organizationId, record, log, ct);
+        return result;
     }
 
     private async Task ProcessMisHourlyLeaveAsync(Guid organizationId, MisHourlyLeaveRecord record, AttendanceSyncLog log, CancellationToken ct)
@@ -118,6 +135,9 @@ public class AttendanceSyncService : IAttendanceSyncService
 
             var entryTime = ParseTime(record.StartTime);
             var exitTime = ParseTime(record.EndTime);
+            var delayMinutes = MisFirstHourLeaveHelper.ComputeDelayMinutes(
+                entryTime, record.LeaveDurationMinutes, record.FirstTimeType);
+            var leaveType = MisFirstHourLeaveHelper.BuildLeaveTypeLabel(record.FirstTimeType, delayMinutes);
             var workingHours = entryTime.HasValue && exitTime.HasValue
                 ? (decimal?)(exitTime.Value - entryTime.Value).TotalHours
                 : null;
@@ -132,11 +152,11 @@ public class AttendanceSyncService : IAttendanceSyncService
                     EntryTime = entryTime,
                     ExitTime = exitTime,
                     WorkingHours = workingHours,
-                    DelayMinutes = 0,
+                    DelayMinutes = delayMinutes,
                     IsAbsent = false,
                     IsOnLeave = true,
                     IsOnMission = false,
-                    LeaveType = $"مرخصی ساعتی - نوع {record.FirstTimeType}",
+                    LeaveType = leaveType,
                     Source = "MIS-SQLView",
                     ExternalId = externalId
                 };
@@ -147,14 +167,16 @@ public class AttendanceSyncService : IAttendanceSyncService
                 attendance.EntryTime = entryTime;
                 attendance.ExitTime = exitTime;
                 attendance.WorkingHours = workingHours;
+                attendance.DelayMinutes = delayMinutes;
                 attendance.IsOnLeave = true;
-                attendance.LeaveType = $"مرخصی ساعتی - نوع {record.FirstTimeType}";
+                attendance.LeaveType = leaveType;
                 attendance.UpdatedAt = DateTime.UtcNow;
                 attendance.IsProcessed = false;
             }
 
             await _context.SaveChangesAsync(ct);
-            await _ruleEngine.ProcessHourlyLeaveAsync(attendance, record.LeaveDurationMinutes, ct);
+            await AttendanceRuleBootstrap.EnsureForOrganizationAsync(_context, organizationId, ct);
+            await _ruleEngine.ProcessMisHourlyLeaveAsync(attendance, record.LeaveDurationMinutes, ct);
             log.RecordsProcessed++;
         }
         catch (Exception ex)

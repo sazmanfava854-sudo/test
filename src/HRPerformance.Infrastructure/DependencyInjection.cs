@@ -1,6 +1,5 @@
 using HRPerformance.Application.Interfaces;
 using HRPerformance.Domain.Interfaces;
-using HRPerformance.Infrastructure.BackgroundServices;
 using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Repositories;
 using HRPerformance.Infrastructure.Services;
@@ -23,6 +22,7 @@ public static class DependencyInjection
             options.Password.RequiredLength = 8; options.Password.RequireDigit = true; options.Password.RequireUppercase = true;
             options.Lockout.MaxFailedAccessAttempts = 5; options.User.RequireUniqueEmail = true;
         }).AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
+        services.AddScoped<IEvaluationCategorySeedService, EvaluationCategorySeedService>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<ITokenService, TokenService>();
@@ -33,10 +33,12 @@ public static class DependencyInjection
         services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
         services.AddScoped<MisHrDataReader>();
         services.AddScoped<MisHrEmployeeSyncService>();
+        services.AddScoped<MisEmployeeRosterSyncService>();
+        services.AddScoped<HrIntegrationConnectionService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
+        services.AddScoped<IEmployeeAccountLinkService, EmployeeAccountLinkService>();
         services.AddHttpClient("AttendanceSync");
-        services.AddHostedService<AttendanceSyncBackgroundService>();
         return services;
     }
 }

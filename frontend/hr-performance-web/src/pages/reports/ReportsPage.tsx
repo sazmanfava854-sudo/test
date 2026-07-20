@@ -8,7 +8,6 @@ import MenuItem from '@mui/material/MenuItem';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Alert from '@mui/material/Alert';
-import DownloadIcon from '@mui/icons-material/Download';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import { useTheme } from '@mui/material/styles';
 import { glassCardSx } from '../../theme/theme';
@@ -25,10 +24,10 @@ export default function ReportsPage() {
   const [reportType, setReportType] = useState('employee');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [generated, setGenerated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = () => {
-    setGenerated(true);
+    setError('گزارش‌گیری هنوز به API متصل نشده است. داده‌ها از دیتابیس HRPerformanceDB خوانده می‌شوند.');
   };
 
   return (
@@ -66,7 +65,7 @@ export default function ReportsPage() {
               <TextField
                 fullWidth
                 type="date"
-                label="از تاریخ"
+                label="از تاریخ (میلادی)"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -76,7 +75,7 @@ export default function ReportsPage() {
               <TextField
                 fullWidth
                 type="date"
-                label="تا تاریخ"
+                label="تا تاریخ (میلادی)"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -103,23 +102,10 @@ export default function ReportsPage() {
                 پیش‌نمایش گزارش
               </Typography>
 
-              {generated ? (
-                <Box>
-                  <Alert severity="success" sx={{ mb: 2 }}>
-                    گزارش با موفقیت تولید شد
-                  </Alert>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    نوع: {reportTypes.find((r) => r.value === reportType)?.label}
-                    <br />
-                    بازه: {startDate} تا {endDate}
-                  </Typography>
-                  <Button variant="outlined" startIcon={<DownloadIcon />}>
-                    دانلود PDF
-                  </Button>
-                  <Button variant="outlined" startIcon={<DownloadIcon />} sx={{ mr: 1 }}>
-                    دانلود Excel
-                  </Button>
-                </Box>
+              {error ? (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
               ) : (
                 <Box
                   sx={{

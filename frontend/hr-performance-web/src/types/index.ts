@@ -55,6 +55,18 @@ export interface PagedResult<T> {
   hasPrevious: boolean;
 }
 
+export interface EmployeeLookupDto {
+  id: string;
+  personnelCode: string;
+  fullName: string;
+}
+
+export interface EmployeeLookupRequest {
+  query?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
 export interface LoginRequest {
   userName: string;
   password: string;
@@ -130,8 +142,8 @@ export interface EmployeeDashboardDto {
   ranking?: number;
   scoreTrend: ScoreTrendDto[];
   recentAttendance: AttendanceSummaryDto[];
-  positiveCount: number;
-  negativeCount: number;
+  positiveScore: number;
+  negativeScore: number;
 }
 
 export interface TopEmployeeDto {
@@ -147,6 +159,21 @@ export interface ChartDataDto {
   value: number;
 }
 
+export interface AttendanceRecordDto {
+  id: string;
+  employeeId: string;
+  personnelCode: string;
+  fullName: string;
+  attendanceDate: string;
+  entryTime?: string;
+  exitTime?: string;
+  workingHours?: number;
+  delayMinutes?: number;
+  isOnLeave: boolean;
+  leaveType?: string;
+  source: string;
+}
+
 export interface ManagerDashboardDto {
   employeeCount: number;
   todayPresent: number;
@@ -156,6 +183,7 @@ export interface ManagerDashboardDto {
   topEmployees: TopEmployeeDto[];
   weakEmployees: TopEmployeeDto[];
   monthlyTrend: ChartDataDto[];
+  teamIndicators: ChartDataDto[];
 }
 
 export interface DepartmentRankDto {
@@ -221,6 +249,14 @@ export interface EmployeeEvaluationDto {
   workflowStatus: WorkflowStatus;
 }
 
+export interface EmployeeIndicatorDto {
+  categoryId: string;
+  categoryName: string;
+  defaultWeight: number;
+  weight: number;
+  isActive: boolean;
+}
+
 export interface AppealDto {
   id: string;
   employeeId: string;
@@ -263,6 +299,16 @@ export interface HolidayDto {
   holidayDate: string;
   isRecurring: boolean;
   description?: string;
+}
+
+export interface MisSyncDateRangeRequest {
+  shamsiFromYear: number;
+  shamsiFromMonth: number;
+  shamsiFromDay: number;
+  shamsiToYear: number;
+  shamsiToMonth: number;
+  shamsiToDay: number;
+  employeeLimit?: number;
 }
 
 export interface ReportSummaryDto {

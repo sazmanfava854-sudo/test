@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using HRPerformance.Application.Common;
 
 namespace HRPerformance.API.Middleware;
 public class ExceptionMiddleware
@@ -13,9 +14,15 @@ public class ExceptionMiddleware
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception");
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            var message = DatabaseErrorHelper.IsDatabaseError(ex)
+                ? DatabaseErrorHelper.GetPersianMessage(ex)
+                : "خطای داخلی سرور";
+            var status = DatabaseErrorHelper.IsDatabaseError(ex)
+                ? HttpStatusCode.ServiceUnavailable
+                : HttpStatusCode.InternalServerError;
+            context.Response.StatusCode = (int)status;
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(JsonSerializer.Serialize(new { success = false, message = "خطای داخلی سرور" }));
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new { success = false, message }));
         }
     }
 }

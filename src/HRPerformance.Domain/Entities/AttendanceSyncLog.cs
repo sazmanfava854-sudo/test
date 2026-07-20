@@ -12,6 +12,10 @@ public class AttendanceSyncLog
     public AttendanceSyncStatus Status { get; set; }
     public int RecordsProcessed { get; set; }
     public int RecordsFailed { get; set; }
+    public int EmployeesInserted { get; set; }
+    public int EmployeesUpdated { get; set; }
+    public string? SyncType { get; set; }
+    public string? RequestedByUserName { get; set; }
     public string? ErrorMessage { get; set; }
     public string SourceType { get; set; } = "REST";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

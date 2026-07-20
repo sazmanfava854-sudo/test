@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
     icon: <AdminPanelSettingsIcon />,
     roles: ['OrganizationAdministrator', 'SuperAdministrator'],
   },
-  { label: 'کارمندان', path: '/employees', icon: <PeopleIcon /> },
+  { label: 'کارمندان', path: '/employees', icon: <PeopleIcon />, roles: ['Manager', 'OrganizationAdministrator', 'SuperAdministrator'] },
   {
     label: 'ارزیابی',
     path: '/evaluations',
@@ -52,8 +52,8 @@ const navItems: NavItem[] = [
   { label: 'اعتراضات', path: '/appeals', icon: <GavelIcon /> },
   { label: 'گزارش‌ها', path: '/reports', icon: <BarChartIcon /> },
   {
-    label: 'تنظیمات',
-    path: '/settings',
+    label: 'دریافت MIS',
+    path: '/settings?tab=mis',
     icon: <SettingsIcon />,
     roles: ['OrganizationAdministrator', 'SuperAdministrator'],
   },
