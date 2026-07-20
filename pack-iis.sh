@@ -25,6 +25,8 @@ mkdir -p "$STAGE/logs" "$STAGE/uploads"
 cp "$ROOT/src/HRPerformance.API/appsettings.Production.example.json" "$STAGE/appsettings.Production.json"
 cp "$ROOT/iis-fix-permissions.ps1" "$ROOT/iis-fix-permissions.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/iis-bind-site-5050.ps1" "$ROOT/iis-bind-site-5050.bat" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/iis-stop-for-update.ps1" "$ROOT/iis-stop-for-update.bat" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/iis-start-after-update.ps1" "$ROOT/iis-start-after-update.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/LOGIN.txt" "$STAGE/" 2>/dev/null || true
 cp -r "$ROOT/database" "$STAGE/"
 
@@ -64,6 +66,14 @@ HR Performance — استقرار IIS
 
 ■ دسترسی پوشه (PowerShell Admin)
   iis-fix-permissions.bat
+
+■ به‌روزرسانی فایل در inetpub (خطای «پوشه باز است»)
+  1) PowerShell Admin → iis-stop-for-update.bat
+  2) Explorer/VS/Cursor پوشه inetpub را ببندید
+  3) فایل‌های ZIP جدید را کپی/Extract کنید
+  4) iis-start-after-update.bat
+
+  یا در CMD Admin: iisreset /stop  → کپی → iisreset /start
 
 ■ پورت ثابت 5050 (بدون انتخاب پویا)
   در IIS پورت از resolve-app-port استفاده نمی‌شود.
