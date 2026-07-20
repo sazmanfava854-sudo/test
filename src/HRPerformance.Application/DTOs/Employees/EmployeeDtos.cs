@@ -8,4 +8,6 @@ public record CreateEmployeeRequest(string PersonnelCode, string NationalCode, s
     Guid? OrganizationUnitId, Guid? ManagerId, string? Position, string? Description);
 public record UpdateEmployeeRequest(Guid Id, string FirstName, string LastName, string? FatherName, DateTime? BirthDate,
     string? Phone, string? Email, string? Address, Guid? OrganizationUnitId, Guid? ManagerId, string? Position, EmployeeStatus Status, string? Description);
+public record EmployeeLookupDto(Guid Id, string PersonnelCode, string FullName);
+public record EmployeeLookupRequest(string? Query, int PageNumber = 1, int PageSize = 20);
 public record EmployeeSearchRequest(string? SearchTerm, Guid? DepartmentId, EmployeeStatus? Status, int PageNumber = 1, int PageSize = 20);

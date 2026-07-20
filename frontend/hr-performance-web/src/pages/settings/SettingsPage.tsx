@@ -18,7 +18,9 @@ import Stack from '@mui/material/Stack';
 import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import CodeIcon from '@mui/icons-material/Code';
+import PeopleIcon from '@mui/icons-material/People';
 import api from '../../services/api';
+import { employeeService } from '../../services/employeeService';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
 import ShamsiDatePicker from '../../components/common/ShamsiDatePicker';
 import type { SettingDto, HolidayDto, AttendanceRecordDto } from '../../types';
@@ -33,7 +35,7 @@ import {
 } from '../../utils/misDate';
 
 const PERSONNEL_GROUP_CODE = '147';
-const APP_VERSION = '2.8.10-dev';
+const APP_VERSION = '2.9.0-dev';
 
 interface MisConnectionStatus {
   isConnectionConfigured?: boolean;
@@ -66,6 +68,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [rosterSyncing, setRosterSyncing] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, string>>({});
@@ -250,6 +253,30 @@ export default function SettingsPage() {
     else setAttendanceRecords([]);
   };
 
+  const handleSyncRoster = async () => {
+    setRosterSyncing(true);
+    setSuccess('');
+    setError('');
+    try {
+      const res = await employeeService.syncRosterFromMis();
+      if (res.success === false) {
+        setError(res.message ?? 'خطا در دریافت فهرست پرسنل');
+        return;
+      }
+      setSuccess(
+        res.message ??
+          `فهرست پرسنل: ${res.inserted ?? 0} جدید، ${res.updated ?? 0} به‌روز، ${res.total ?? 0} از MIS (ProvinceCode ${PERSONNEL_GROUP_CODE})`,
+      );
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? 'خطا در دریافت فهرست پرسنل از MIS';
+      setError(message);
+    } finally {
+      setRosterSyncing(false);
+    }
+  };
+
   const handleFetchMisData = async () => {
     if (!rangeIsValid) {
       setError(
@@ -316,7 +343,7 @@ export default function SettingsPage() {
 
   return (
     <Box>
-      <LoadingOverlay open={loading || syncing} />
+      <LoadingOverlay open={loading || syncing || rosterSyncing} />
       <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
         تنظیمات سیستم
       </Typography>
@@ -409,14 +436,30 @@ export default function SettingsPage() {
             نسخه UI: {APP_VERSION}
           </Typography>
 
+          <Alert severity="info" sx={{ mb: 2 }}>
+            ابتدا «دریافت فهرست پرسنل» را بزنید تا dropdown کارمندان در فرم ارزیابی پر شود (فیلتر
+            ProvinceCode={PERSONNEL_GROUP_CODE}). سپس برای حضور/مرخصی «دریافت داده از MIS» را با
+            بازه تاریخ اجرا کنید.
+          </Alert>
+
           <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              startIcon={<PeopleIcon />}
+              onClick={() => void handleSyncRoster()}
+              disabled={rosterSyncing || syncing || !connectionOk}
+            >
+              {rosterSyncing ? 'در حال دریافت فهرست...' : 'دریافت فهرست پرسنل'}
+            </Button>
             <Button
               variant="outlined"
               color="secondary"
               size="large"
               startIcon={<CodeIcon />}
               onClick={() => void loadQueryPreview()}
-              disabled={syncing || queryPreviewLoading || !rangeIsValid}
+              disabled={syncing || rosterSyncing || queryPreviewLoading || !rangeIsValid}
             >
               {queryPreviewLoading ? 'در حال ساخت کوئری...' : 'نمایش کوئری SQL'}
             </Button>
@@ -425,7 +468,7 @@ export default function SettingsPage() {
               size="large"
               startIcon={<SyncIcon />}
               onClick={handleFetchMisData}
-              disabled={syncing || !rangeIsValid}
+              disabled={syncing || rosterSyncing || !rangeIsValid}
             >
               دریافت داده از MIS
             </Button>

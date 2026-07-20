@@ -76,7 +76,11 @@ export default function EmployeeListPage() {
       if (response.success && response.data) {
         setRows(response.data.items);
         setTotalCount(response.data.totalCount);
-        setError(null);
+        setError(
+          response.data.totalCount === 0
+            ? 'کارمندی ثبت نشده — از تنظیمات → MIS دکمه «دریافت فهرست پرسنل» را بزنید.'
+            : null,
+        );
       } else {
         setRows([]);
         setTotalCount(0);

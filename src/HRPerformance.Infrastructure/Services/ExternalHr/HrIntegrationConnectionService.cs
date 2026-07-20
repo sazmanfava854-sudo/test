@@ -1,3 +1,4 @@
+using HRPerformance.Domain.Entities;
 using HRPerformance.Domain.Models;
 using Microsoft.Extensions.Configuration;
 
@@ -66,6 +67,26 @@ public class HrIntegrationConnectionService
             ApplyProvinceFilter = true,
             ApplyShamsiYearFilter = false,
             EmployeeLimit = Math.Max(0, request.EmployeeLimit),
+            MisConnectionString = connectionString
+        };
+    }
+
+    public HrIntegrationRuntimeSettings BuildForRosterSync(AttendanceIntegrationSetting? integrationSettings)
+    {
+        var connectionString = BuildConnectionString();
+        var status = GetStatus();
+        var provinceCode = string.IsNullOrWhiteSpace(integrationSettings?.ProvinceCode)
+            ? MisSyncDefaults.PersonnelGroupCode
+            : integrationSettings.ProvinceCode.Trim();
+
+        return new HrIntegrationRuntimeSettings
+        {
+            IsConnectionConfigured = status.IsConnectionConfigured,
+            SourceType = status.SourceType,
+            ProvinceCode = provinceCode,
+            ApplyProvinceFilter = integrationSettings?.ApplyProvinceFilter ?? true,
+            ApplyShamsiYearFilter = false,
+            EmployeeLimit = 0,
             MisConnectionString = connectionString
         };
     }

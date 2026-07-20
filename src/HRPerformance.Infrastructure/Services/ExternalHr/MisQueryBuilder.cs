@@ -48,6 +48,30 @@ WHERE rn = 1
 ORDER BY [PerCod]";
     }
 
+    /// <summary>
+    /// فهرست پرسنل MIS — فقط ProvinceCode (بدون فیلتر تاریخ) برای Roster Sync
+    /// </summary>
+    public static string BuildRosterDistinctEmployeesQuery(HrIntegrationRuntimeSettings settings)
+    {
+        var conditions = new List<string>();
+        if (settings.ApplyProvinceFilter)
+            conditions.Add("CAST([ProvinceCode] AS NVARCHAR(20)) = @ProvinceCode");
+
+        var whereClause = conditions.Count > 0 ? string.Join("\n    AND ", conditions) : "1 = 1";
+
+        return $@"SELECT [PerCod], [LastName], [Name], [NationalIDNo], [ProvinceCode], [StartDate]
+FROM (
+  SELECT
+    [PerCod], [LastName], [Name], [NationalIDNo], [ProvinceCode], [StartDate],
+    ROW_NUMBER() OVER (PARTITION BY [PerCod] ORDER BY {ShamsiDateIntExpr} DESC) AS rn
+  FROM {ViewName}
+  WHERE {whereClause}
+    AND [PerCod] IS NOT NULL
+) ranked
+WHERE rn = 1
+ORDER BY [PerCod]";
+    }
+
     public static MisQueryPreview BuildPreview(
         HrIntegrationRuntimeSettings settings,
         MisSyncRange range)

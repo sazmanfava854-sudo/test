@@ -29,6 +29,7 @@ public class Employee : BaseEntity
     public decimal MonthlyScore { get; set; }
     public decimal YearlyScore { get; set; }
     public int? Ranking { get; set; }
+    public DateTime? LastSeenInRosterSyncAt { get; set; }
     public Organization? Organization { get; set; }
     public OrganizationUnit? OrganizationUnit { get; set; }
     public Employee? Manager { get; set; }

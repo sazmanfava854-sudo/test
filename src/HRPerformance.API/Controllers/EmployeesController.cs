@@ -1,6 +1,7 @@
 using HRPerformance.Application.DTOs.Employees;
 using HRPerformance.Application.Features.Employees;
 using HRPerformance.Domain.Interfaces;
+using HRPerformance.Infrastructure.Services;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,9 +12,44 @@ public class EmployeesController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUser;
-    public EmployeesController(IMediator mediator, ICurrentUserService currentUser) { _mediator = mediator; _currentUser = currentUser; }
+    private readonly MisEmployeeRosterSyncService _rosterSync;
+    public EmployeesController(IMediator mediator, ICurrentUserService currentUser, MisEmployeeRosterSyncService rosterSync)
+    {
+        _mediator = mediator;
+        _currentUser = currentUser;
+        _rosterSync = rosterSync;
+    }
     [HttpGet] public async Task<IActionResult> GetAll([FromQuery] EmployeeSearchRequest request) =>
         Ok(await _mediator.Send(new GetEmployeesQuery(request, _currentUser.OrganizationId ?? Guid.Empty)));
+    [HttpGet("lookup")] public async Task<IActionResult> Lookup([FromQuery] EmployeeLookupRequest request) =>
+        Ok(await _mediator.Send(new GetEmployeeLookupQuery(request, _currentUser.OrganizationId ?? Guid.Empty)));
+    [HttpPost("sync-from-mis")] [Authorize(Roles = "OrganizationAdministrator,SuperAdministrator")]
+    public async Task<IActionResult> SyncFromMis(CancellationToken ct)
+    {
+        var orgId = _currentUser.OrganizationId ?? Guid.Empty;
+        if (orgId == Guid.Empty)
+            return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد — دوباره وارد شوید" });
+
+        var result = await _rosterSync.SyncFromMisAsync(orgId, _currentUser.UserId, _currentUser.UserName, ct);
+        if (!result.Success && result.Inserted == 0 && result.Updated == 0)
+        {
+            if (result.ErrorMessage?.Contains("در حال اجرا") == true)
+                return Conflict(new { success = false, message = result.ErrorMessage });
+            return BadRequest(new { success = false, message = result.ErrorMessage ?? "خطا در دریافت فهرست پرسنل" });
+        }
+
+        return Ok(new
+        {
+            success = result.Success,
+            message = $"فهرست پرسنل: {result.Inserted} جدید، {result.Updated} به‌روز، {result.Total} از MIS",
+            inserted = result.Inserted,
+            updated = result.Updated,
+            total = result.Total,
+            durationMs = result.DurationMs,
+            provinceCode = result.ProvinceCode,
+            lastSyncAt = result.LastSyncAt
+        });
+    }
     [HttpGet("{id:guid}")] public async Task<IActionResult> GetById(Guid id) => Ok(await _mediator.Send(new GetEmployeeByIdQuery(id)));
     [HttpPost] [Authorize(Roles = "OrganizationAdministrator,SuperAdministrator,Manager")] public async Task<IActionResult> Create([FromBody] CreateEmployeeRequest request) =>
         Ok(await _mediator.Send(new CreateEmployeeCommand(request, _currentUser.OrganizationId ?? Guid.Empty)));

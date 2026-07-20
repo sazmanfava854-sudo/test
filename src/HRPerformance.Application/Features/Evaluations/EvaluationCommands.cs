@@ -50,8 +50,10 @@ public class GetCategoriesQueryHandler : IRequestHandler<GetCategoriesQuery, Api
 
     public async Task<ApiResponse<IList<EvaluationCategoryDto>>> Handle(GetCategoriesQuery q, CancellationToken ct)
     {
-        if (q.OrganizationId != Guid.Empty)
-            await _categorySeed.EnsureSeededAsync(q.OrganizationId, ct);
+        if (q.OrganizationId == Guid.Empty)
+            return ApiResponse<IList<EvaluationCategoryDto>>.Fail("شناسه سازمان یافت نشد — دوباره وارد شوید");
+
+        await _categorySeed.EnsureSeededAsync(q.OrganizationId, ct);
 
         var cats = await _uow.Repository<EvaluationCategory>().Query().Include(c => c.Items).Where(c => c.OrganizationId == q.OrganizationId && !c.IsDeleted).ToListAsync(ct);
         var dtos = cats.Select(c => new EvaluationCategoryDto(c.Id, c.Name, c.Description, c.Color, c.Icon, c.Weight, c.IsActive, c.Items.Count)).ToList();

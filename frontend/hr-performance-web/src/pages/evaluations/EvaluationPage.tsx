@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -13,6 +13,8 @@ import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import SaveIcon from '@mui/icons-material/Save';
 import TuneIcon from '@mui/icons-material/Tune';
+import { Link as RouterLink } from 'react-router-dom';
+import Link from '@mui/material/Link';
 import api from '../../services/api';
 import { employeeService } from '../../services/employeeService';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
@@ -21,7 +23,7 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import { useTheme } from '@mui/material/styles';
 import {
-  type EmployeeDto,
+  type EmployeeLookupDto,
   type EvaluationCategoryDto,
   type CreateEvaluationRequest,
   type EmployeeIndicatorDto,
@@ -33,7 +35,10 @@ import { unwrapListItems, readApiMessage } from '../../utils/apiResponse';
 export default function EvaluationPage() {
   const theme = useTheme();
   const [tab, setTab] = useState(0);
-  const [employees, setEmployees] = useState<EmployeeDto[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeLookupDto[]>([]);
+  const [employeeTotal, setEmployeeTotal] = useState(0);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [employeeSearchLoading, setEmployeeSearchLoading] = useState(false);
   const [categories, setCategories] = useState<EvaluationCategoryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,28 +54,45 @@ export default function EvaluationPage() {
     evaluationDate: new Date().toISOString().split('T')[0],
   });
 
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeLookupDto | null>(null);
+  const [selectedIndicatorEmployee, setSelectedIndicatorEmployee] = useState<EmployeeLookupDto | null>(null);
   const [indicatorEmployeeId, setIndicatorEmployeeId] = useState('');
   const [indicators, setIndicators] = useState<EmployeeIndicatorDto[]>([]);
   const [indicatorLoading, setIndicatorLoading] = useState(false);
 
+  const searchEmployees = useCallback(async (query: string) => {
+    setEmployeeSearchLoading(true);
+    try {
+      const res = await employeeService.lookup({ query: query || undefined, pageSize: 20 });
+      const items = res.data?.items ?? [];
+      setEmployeeOptions(items);
+      setEmployeeTotal(res.data?.totalCount ?? items.length);
+      return items;
+    } catch {
+      setEmployeeOptions([]);
+      setEmployeeTotal(0);
+      return [];
+    } finally {
+      setEmployeeSearchLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [empRes, catRes] = await Promise.all([
-          employeeService.getAll({ pageSize: 500 }),
+        const [empItems, catRes] = await Promise.all([
+          searchEmployees(''),
           api.get('/evaluations/categories'),
         ]);
-        const employeeItems = empRes.data?.items ?? [];
-        setEmployees(employeeItems);
         const categories = unwrapListItems<EvaluationCategoryDto>(catRes.data);
         setCategories(categories);
 
-        if (employeeItems.length === 0) {
+        if (empItems.length === 0) {
           setError(
-            'لیست کارمندان خالی است. از تنظیمات → MIS داده دریافت کنید یا database/08_SeedData.sql را اجرا کنید.',
+            'لیست کارمندان خالی است. از تنظیمات → MIS دکمه «دریافت فهرست پرسنل» را بزنید.',
           );
         } else if (categories.length === 0) {
-          setError('دسته‌بندی شاخص‌ها خالی است — پس از دریافت MIS دوباره این صفحه را باز کنید.');
+          setError('دسته‌بندی شاخص‌ها خالی است — دوباره وارد شوید یا database/14 را اجرا کنید.');
         } else {
           setError(null);
         }
@@ -82,7 +104,14 @@ export default function EvaluationPage() {
       }
     };
     load();
-  }, []);
+  }, [searchEmployees]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void searchEmployees(employeeSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [employeeSearch, searchEmployees]);
 
   useEffect(() => {
     if (!indicatorEmployeeId) {
@@ -149,8 +178,39 @@ export default function EvaluationPage() {
     }
   };
 
-  const selectedEmployee = employees.find((e) => e.id === form.employeeId);
-  const selectedIndicatorEmployee = employees.find((e) => e.id === indicatorEmployeeId);
+  const employeeAutocomplete = (
+    value: EmployeeLookupDto | null,
+    onSelect: (emp: EmployeeLookupDto | null) => void,
+  ) => (
+    <Autocomplete
+      options={employeeOptions}
+      loading={employeeSearchLoading}
+      getOptionLabel={(opt) => `${opt.fullName} (${opt.personnelCode})`}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      value={value}
+      onChange={(_, val) => onSelect(val)}
+      onInputChange={(_, val, reason) => {
+        if (reason === 'input') setEmployeeSearch(val);
+      }}
+      noOptionsText={
+        employeeTotal === 0
+          ? 'کارمندی یافت نشد — فهرست پرسنل را از MIS دریافت کنید'
+          : 'موردی یافت نشد'
+      }
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label="کارمند"
+          required
+          helperText={
+            employeeTotal > 0
+              ? `${employeeTotal} کارمند فعال — برای جستجو تایپ کنید`
+              : undefined
+          }
+        />
+      )}
+    />
+  );
 
   return (
     <Box>
@@ -175,6 +235,14 @@ export default function EvaluationPage() {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+          {employeeTotal === 0 && (
+            <>
+              {' '}
+              <Link component={RouterLink} to="/settings?tab=mis">
+                تنظیمات MIS
+              </Link>
+            </>
+          )}
         </Alert>
       )}
 
@@ -184,17 +252,10 @@ export default function EvaluationPage() {
             <Box component="form" onSubmit={handleSubmit}>
               <Grid container spacing={2.5}>
                 <Grid size={{ xs: 12 }}>
-                  <Autocomplete
-                    options={employees}
-                    getOptionLabel={(opt) => `${opt.fullName} (${opt.personnelCode})`}
-                    value={selectedEmployee ?? null}
-                    onChange={(_, val) =>
-                      setForm((prev) => ({ ...prev, employeeId: val?.id ?? '' }))
-                    }
-                    renderInput={(params) => (
-                      <TextField {...params} label="کارمند" required />
-                    )}
-                  />
+                  {employeeAutocomplete(selectedEmployee, (val) => {
+                    setSelectedEmployee(val);
+                    setForm((prev) => ({ ...prev, employeeId: val?.id ?? '' }));
+                  })}
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
@@ -255,8 +316,8 @@ export default function EvaluationPage() {
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
-                  type="date"
-                  label="تاریخ ارزیابی (میلادی)"
+                    type="date"
+                    label="تاریخ ارزیابی (میلادی)"
                     value={form.evaluationDate}
                     onChange={(e) =>
                       setForm((prev) => ({
@@ -300,15 +361,10 @@ export default function EvaluationPage() {
           <CardContent sx={{ p: 3 }}>
             <Grid container spacing={2.5}>
               <Grid size={{ xs: 12 }}>
-                <Autocomplete
-                  options={employees}
-                  getOptionLabel={(opt) => `${opt.fullName} (${opt.personnelCode})`}
-                  value={selectedIndicatorEmployee ?? null}
-                  onChange={(_, val) => setIndicatorEmployeeId(val?.id ?? '')}
-                  renderInput={(params) => (
-                    <TextField {...params} label="کارمند" required />
-                  )}
-                />
+                {employeeAutocomplete(selectedIndicatorEmployee, (val) => {
+                  setSelectedIndicatorEmployee(val);
+                  setIndicatorEmployeeId(val?.id ?? '');
+                })}
               </Grid>
               {indicators.map((indicator, index) => (
                 <Grid size={{ xs: 12 }} key={indicator.categoryId}>
@@ -369,7 +425,7 @@ export default function EvaluationPage() {
               {indicatorEmployeeId && indicators.length === 0 && !indicatorLoading && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
-                    شاخصی تعریف نشده است. اسکریپت database/14_SeedEvaluationCategories.sql را اجرا کنید.
+                    شاخصی تعریف نشده — پس از دریافت فهرست پرسنل از MIS، دسته‌بندی‌ها خودکار ساخته می‌شوند.
                   </Alert>
                 </Grid>
               )}

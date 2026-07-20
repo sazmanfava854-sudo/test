@@ -158,6 +158,58 @@ public class MisHrDataReader
         return records;
     }
 
+    public async Task<IReadOnlyList<MisHourlyLeaveRecord>> ReadRosterEmployeesAsync(
+        HrIntegrationRuntimeSettings settings,
+        CancellationToken ct = default)
+    {
+        var records = new List<MisHourlyLeaveRecord>();
+        var query = MisQueryBuilder.BuildRosterDistinctEmployeesQuery(settings);
+        var connectionString = settings.MisConnectionString
+            ?? throw new InvalidOperationException("اتصال MIS پیکربندی نشده است");
+
+        try
+        {
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(ct);
+            await using var command = new SqlCommand(query, connection);
+            if (settings.ApplyProvinceFilter)
+                command.Parameters.Add("@ProvinceCode", SqlDbType.NVarChar, 20).Value = settings.ProvinceCode;
+            command.CommandTimeout = 180;
+
+            _logger.LogInformation(
+                "MIS roster query: ProvinceFilter={ApplyProvince} ({ProvinceCode})",
+                settings.ApplyProvinceFilter,
+                settings.ProvinceCode);
+
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var perCod = ReadString(reader, "PerCod");
+                if (string.IsNullOrWhiteSpace(perCod))
+                    continue;
+
+                records.Add(new MisHourlyLeaveRecord
+                {
+                    PerCod = perCod,
+                    LastName = ReadString(reader, "LastName"),
+                    Name = ReadString(reader, "Name"),
+                    NationalIDNo = ReadString(reader, "NationalIDNo"),
+                    ProvinceCode = ReadString(reader, "ProvinceCode"),
+                    StartDate = reader.GetDateTime(reader.GetOrdinal("StartDate")),
+                    EndDate = reader.GetDateTime(reader.GetOrdinal("StartDate"))
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to read MIS roster employees");
+            throw;
+        }
+
+        _logger.LogInformation("MIS roster query returned {EmployeeCount} PerCod", records.Count);
+        return records;
+    }
+
     public MisQueryPreview BuildQueryPreview(HrIntegrationRuntimeSettings settings, MisSyncRange range) =>
         MisQueryBuilder.BuildPreview(settings, range);
 

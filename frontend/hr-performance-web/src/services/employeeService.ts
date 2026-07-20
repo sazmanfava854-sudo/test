@@ -2,12 +2,47 @@ import api from './api';
 import type {
   ApiResponse,
   EmployeeDto,
+  EmployeeLookupDto,
+  EmployeeLookupRequest,
   EmployeeSearchRequest,
   PagedResult,
 } from '../types';
 import { unwrapApiData, unwrapPagedItems, readApiSuccess, readApiMessage } from '../utils/apiResponse';
 
 export const employeeService = {
+  async lookup(
+    params: EmployeeLookupRequest,
+  ): Promise<ApiResponse<PagedResult<EmployeeLookupDto>>> {
+    const { data } = await api.get('/employees/lookup', { params });
+    const payload = unwrapApiData<PagedResult<EmployeeLookupDto>>(data);
+    const items = payload ? unwrapPagedItems<EmployeeLookupDto>({ data: payload }) : unwrapPagedItems<EmployeeLookupDto>(data);
+    const paged = payload ?? (data as PagedResult<EmployeeLookupDto>);
+    return {
+      success: readApiSuccess(data),
+      message: readApiMessage(data),
+      data: {
+        items,
+        totalCount: paged?.totalCount ?? items.length,
+        pageNumber: paged?.pageNumber ?? params.pageNumber ?? 1,
+        pageSize: paged?.pageSize ?? params.pageSize ?? 20,
+        totalPages: paged?.totalPages ?? 1,
+        hasNext: paged?.hasNext ?? false,
+        hasPrevious: paged?.hasPrevious ?? false,
+      },
+    };
+  },
+
+  async syncRosterFromMis(): Promise<{
+    success: boolean;
+    message?: string;
+    inserted?: number;
+    updated?: number;
+    total?: number;
+  }> {
+    const { data } = await api.post('/employees/sync-from-mis');
+    return data;
+  },
+
   async getAll(
     params: EmployeeSearchRequest,
   ): Promise<ApiResponse<PagedResult<EmployeeDto>>> {

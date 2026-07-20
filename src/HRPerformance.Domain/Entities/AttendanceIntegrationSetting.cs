@@ -17,6 +17,10 @@ public class AttendanceIntegrationSetting
     public int SyncIntervalMinutes { get; set; } = 5;
     public bool IsActive { get; set; } = true;
     public DateTime? LastSyncAt { get; set; }
+    public DateTime? LastEmployeeRosterSyncAt { get; set; }
+    public bool IsRosterSyncRunning { get; set; }
+    public string ProvinceCode { get; set; } = "147";
+    public bool ApplyProvinceFilter { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

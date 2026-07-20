@@ -55,6 +55,18 @@ export interface PagedResult<T> {
   hasPrevious: boolean;
 }
 
+export interface EmployeeLookupDto {
+  id: string;
+  personnelCode: string;
+  fullName: string;
+}
+
+export interface EmployeeLookupRequest {
+  query?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
 export interface LoginRequest {
   userName: string;
   password: string;

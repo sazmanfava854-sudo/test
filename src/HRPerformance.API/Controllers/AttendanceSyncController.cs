@@ -118,6 +118,14 @@ public class AttendanceSyncController : ControllerBase
             organizationId = orgId,
             connection,
             lastSyncAt = lastSync,
+            lastEmployeeRosterSyncAt = await _context.AttendanceIntegrationSettings
+                .Where(s => s.OrganizationId == orgId)
+                .Select(s => s.LastEmployeeRosterSyncAt)
+                .FirstOrDefaultAsync(ct),
+            isRosterSyncRunning = await _context.AttendanceIntegrationSettings
+                .Where(s => s.OrganizationId == orgId)
+                .Select(s => s.IsRosterSyncRunning)
+                .FirstOrDefaultAsync(ct),
             employeesInDatabase = await _context.Employees.CountAsync(e => e.OrganizationId == orgId && !e.IsDeleted, ct)
         });
     }

@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
         services.AddScoped<MisHrDataReader>();
         services.AddScoped<MisHrEmployeeSyncService>();
+        services.AddScoped<MisEmployeeRosterSyncService>();
         services.AddScoped<HrIntegrationConnectionService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
