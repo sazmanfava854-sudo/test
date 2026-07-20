@@ -1,10 +1,12 @@
 using HRPerformance.Application.DTOs.Employees;
 using HRPerformance.Application.Features.Employees;
 using HRPerformance.Domain.Interfaces;
+using HRPerformance.Infrastructure.Data;
 using HRPerformance.Infrastructure.Services;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace HRPerformance.API.Controllers;
 [ApiController] [Route("api/[controller]")] [Authorize]
@@ -13,16 +15,45 @@ public class EmployeesController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUser;
     private readonly MisEmployeeRosterSyncService _rosterSync;
-    public EmployeesController(IMediator mediator, ICurrentUserService currentUser, MisEmployeeRosterSyncService rosterSync)
+    private readonly ApplicationDbContext _context;
+
+    public EmployeesController(
+        IMediator mediator,
+        ICurrentUserService currentUser,
+        MisEmployeeRosterSyncService rosterSync,
+        ApplicationDbContext context)
     {
         _mediator = mediator;
         _currentUser = currentUser;
         _rosterSync = rosterSync;
+        _context = context;
     }
     [HttpGet] public async Task<IActionResult> GetAll([FromQuery] EmployeeSearchRequest request) =>
         Ok(await _mediator.Send(new GetEmployeesQuery(request, _currentUser.OrganizationId ?? Guid.Empty)));
     [HttpGet("lookup")] public async Task<IActionResult> Lookup([FromQuery] EmployeeLookupRequest request) =>
         Ok(await _mediator.Send(new GetEmployeeLookupQuery(request, _currentUser.OrganizationId ?? Guid.Empty)));
+    [HttpGet("summary")]
+    public async Task<IActionResult> Summary(CancellationToken ct)
+    {
+        var orgId = _currentUser.OrganizationId ?? Guid.Empty;
+        if (orgId == Guid.Empty)
+            return BadRequest(new { success = false, message = "شناسه سازمان یافت نشد — logout/login کنید" });
+
+        var settings = await _context.AttendanceIntegrationSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.OrganizationId == orgId, ct);
+
+        var count = await _context.Employees.CountAsync(e => e.OrganizationId == orgId && !e.IsDeleted, ct);
+        return Ok(new
+        {
+            success = true,
+            organizationId = orgId,
+            employeesInDatabase = count,
+            lastEmployeeRosterSyncAt = settings?.LastEmployeeRosterSyncAt,
+            isRosterSyncRunning = settings?.IsRosterSyncRunning ?? false,
+            provinceCode = settings?.ProvinceCode ?? "147"
+        });
+    }
     [HttpPost("sync-from-mis")] [Authorize(Roles = "OrganizationAdministrator,SuperAdministrator")]
     public async Task<IActionResult> SyncFromMis(CancellationToken ct)
     {

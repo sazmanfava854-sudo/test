@@ -98,6 +98,7 @@ builder.Services.AddSwaggerGen(c => {
 });
 
 var app = builder.Build();
+await DatabaseSchemaBootstrap.EnsureLatestSchemaAsync(app.Services);
 await AuthBootstrap.EnsureDefaultAdminPasswordAsync(app.Services);
 await EvaluationCategoryBootstrap.EnsureForAllOrganizationsAsync(app.Services);
 app.UseMiddleware<ExceptionMiddleware>();

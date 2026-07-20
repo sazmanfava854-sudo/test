@@ -43,6 +43,17 @@ export const employeeService = {
     return data;
   },
 
+  async getSummary(): Promise<{
+    success?: boolean;
+    employeesInDatabase?: number;
+    lastEmployeeRosterSyncAt?: string | null;
+    isRosterSyncRunning?: boolean;
+    message?: string;
+  }> {
+    const { data } = await api.get('/employees/summary');
+    return data;
+  },
+
   async getAll(
     params: EmployeeSearchRequest,
   ): Promise<ApiResponse<PagedResult<EmployeeDto>>> {
