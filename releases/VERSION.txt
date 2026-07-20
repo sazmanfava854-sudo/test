@@ -1,8 +1,17 @@
 HR Performance — DEV
-Version: 2.8.7-dev
-Build Date: 2026-07-19
+Version: 2.9.3-dev-local
+Build Date: 2026-07-20
 
-Fix: MIS filter on ShamsiDate column (1404/04/10) — no Gregorian conversion
+Fixes:
+- مرخصی ساعتی 07:00–08:00 در MIS به‌عنوان تاخیر ثبت می‌شود
+- رفع خطای AutoMapper در GET /api/employees (ConstructUsing برای EmployeeDto)
+- schema bootstrap + roster sync از MIS
 
-Download:
-https://github.com/sazmanfava854-sudo/test/releases/download/v2.8.7-dev/HRPerformance-2.8.7-dev.zip
+Download (local source):
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.3-dev-local/HRPerformance-2.9.3-dev-local.zip
+
+Download (run-only, no build):
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.3-dev/HRPerformance-2.9.3-dev.zip
+
+PR:
+https://github.com/sazmanfava854-sudo/test/pull/25

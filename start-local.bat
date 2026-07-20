@@ -53,7 +53,7 @@ if "%APP_PORT%"=="" (
 
 set ASPNETCORE_URLS=http://localhost:%APP_PORT%
 
-echo   نسخه: 2.9.1-dev  ^(auto schema + roster sync^)
+echo   نسخه: 2.9.3-dev-local  ^(تاخیر اول وقت + فهرست کارمندان^)
 echo   Application: http://localhost:%APP_PORT%
 echo   Health:      http://localhost:%APP_PORT%/api/health
 echo   Swagger:     http://localhost:%APP_PORT%/swagger
