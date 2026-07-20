@@ -51,8 +51,8 @@ const emptyData: EmployeeDashboardDto = {
   ranking: undefined,
   scoreTrend: [],
   recentAttendance: [],
-  positiveCount: 0,
-  negativeCount: 0,
+  positiveScore: 0,
+  negativeScore: 0,
 };
 
 export default function EmployeeDashboard() {
@@ -142,10 +142,10 @@ export default function EmployeeDashboard() {
         <Grid size={{ xs: 12, md: 4 }}>
           <Grid container spacing={2}>
             <Grid size={{ xs: 6, md: 12 }}>
-              <StatCard title="امتیازات مثبت" value={data.positiveCount} icon={<ThumbUpIcon />} color={theme.palette.success.main} />
+              <StatCard title="امتیازات مثبت" value={data.positiveScore?.toFixed(1) ?? '0'} icon={<ThumbUpIcon />} color={theme.palette.success.main} />
             </Grid>
             <Grid size={{ xs: 6, md: 12 }}>
-              <StatCard title="امتیازات منفی" value={data.negativeCount} icon={<ThumbDownIcon />} color={theme.palette.error.main} />
+              <StatCard title="امتیازات منفی" value={data.negativeScore?.toFixed(1) ?? '0'} icon={<ThumbDownIcon />} color={theme.palette.error.main} />
             </Grid>
           </Grid>
         </Grid>
@@ -161,7 +161,14 @@ export default function EmployeeDashboard() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {data.recentAttendance.map((row, i) => (
+                  {data.recentAttendance.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        رکورد حضور یافت نشد — از مدیر بخواهید داده MIS را برای بازه تاریخ مربوطه دریافت کند
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    data.recentAttendance.map((row, i) => (
                     <TableRow key={i}>
                       <TableCell>{new Date(row.date).toLocaleDateString('fa-IR')}</TableCell>
                       <TableCell>
@@ -175,7 +182,7 @@ export default function EmployeeDashboard() {
                       </TableCell>
                       <TableCell>{row.delayMinutes}</TableCell>
                     </TableRow>
-                  ))}
+                  )))}
                 </TableBody>
               </Table>
             </TableContainer>

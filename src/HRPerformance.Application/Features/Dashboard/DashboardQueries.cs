@@ -26,9 +26,9 @@ public class GetEmployeeDashboardQueryHandler : IRequestHandler<GetEmployeeDashb
         var attendance = await _uow.Repository<AttendanceLog>().Query().Where(a => a.EmployeeId == q.EmployeeId).OrderByDescending(a => a.AttendanceDate).Take(30).ToListAsync(ct);
         var trend = scores.GroupBy(s => $"{s.Year}/{s.Month}").Select(g => new ScoreTrendDto(g.Key, g.Sum(x => x.Score))).ToList();
         var attSummary = attendance.Select(a => new AttendanceSummaryDto(a.AttendanceDate, !a.IsAbsent, a.DelayMinutes, a.IsAbsent)).ToList();
-        var pos = scores.Count(s => s.ScoreType == Domain.Enums.ScoreType.Positive);
-        var neg = scores.Count(s => s.ScoreType == Domain.Enums.ScoreType.Negative);
-        return ApiResponse<EmployeeDashboardDto>.Ok(new EmployeeDashboardDto(emp.CurrentScore, emp.MonthlyScore, emp.YearlyScore, emp.Ranking, trend, attSummary, pos, neg));
+        var positiveScore = scores.Where(s => s.ScoreType == Domain.Enums.ScoreType.Positive).Sum(s => s.Score);
+        var negativeScore = scores.Where(s => s.ScoreType == Domain.Enums.ScoreType.Negative).Sum(s => Math.Abs(s.Score));
+        return ApiResponse<EmployeeDashboardDto>.Ok(new EmployeeDashboardDto(emp.CurrentScore, emp.MonthlyScore, emp.YearlyScore, emp.Ranking, trend, attSummary, positiveScore, negativeScore));
     }
 }
 

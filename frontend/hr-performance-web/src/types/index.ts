@@ -142,8 +142,8 @@ export interface EmployeeDashboardDto {
   ranking?: number;
   scoreTrend: ScoreTrendDto[];
   recentAttendance: AttendanceSummaryDto[];
-  positiveCount: number;
-  negativeCount: number;
+  positiveScore: number;
+  negativeScore: number;
 }
 
 export interface TopEmployeeDto {

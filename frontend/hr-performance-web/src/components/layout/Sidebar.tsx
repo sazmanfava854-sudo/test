@@ -42,7 +42,7 @@ const navItems: NavItem[] = [
     icon: <AdminPanelSettingsIcon />,
     roles: ['OrganizationAdministrator', 'SuperAdministrator'],
   },
-  { label: 'کارمندان', path: '/employees', icon: <PeopleIcon /> },
+  { label: 'کارمندان', path: '/employees', icon: <PeopleIcon />, roles: ['Manager', 'OrganizationAdministrator', 'SuperAdministrator'] },
   {
     label: 'ارزیابی',
     path: '/evaluations',

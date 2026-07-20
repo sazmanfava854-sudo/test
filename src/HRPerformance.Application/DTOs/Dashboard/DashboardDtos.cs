@@ -1,6 +1,6 @@
 namespace HRPerformance.Application.DTOs.Dashboard;
 public record EmployeeDashboardDto(decimal CurrentScore, decimal MonthlyScore, decimal YearlyScore, int? Ranking,
-    IList<ScoreTrendDto> ScoreTrend, IList<AttendanceSummaryDto> RecentAttendance, int PositiveCount, int NegativeCount);
+    IList<ScoreTrendDto> ScoreTrend, IList<AttendanceSummaryDto> RecentAttendance, decimal PositiveScore, decimal NegativeScore);
 public record ManagerDashboardDto(int EmployeeCount, int TodayPresent, int TodayDelays, int TodayAbsent, decimal AverageScore,
     IList<TopEmployeeDto> TopEmployees, IList<TopEmployeeDto> WeakEmployees, IList<ChartDataDto> MonthlyTrend,
     IList<ChartDataDto> TeamIndicators);

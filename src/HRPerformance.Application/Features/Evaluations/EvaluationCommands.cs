@@ -26,7 +26,10 @@ public class CreateEvaluationCommandHandler : IRequestHandler<CreateEvaluationCo
             CategoryId = cmd.Request.CategoryId, ItemId = cmd.Request.ItemId, Score = cmd.Request.Score, ScoreType = cmd.Request.ScoreType,
             Notes = cmd.Request.Notes, EvaluationDate = cmd.Request.EvaluationDate };
         await _uow.Repository<EmployeeEvaluation>().AddAsync(eval, ct);
-        var score = new EmployeeScore { EmployeeId = eval.EmployeeId, OrganizationId = cmd.OrganizationId, Score = eval.Score, ScoreType = eval.ScoreType,
+        var signedScore = cmd.Request.ScoreType == ScoreType.Negative
+            ? -Math.Abs(cmd.Request.Score)
+            : Math.Abs(cmd.Request.Score);
+        var score = new EmployeeScore { EmployeeId = eval.EmployeeId, OrganizationId = cmd.OrganizationId, Score = signedScore, ScoreType = eval.ScoreType,
             CategoryId = eval.CategoryId, ItemId = eval.ItemId,
             Title = "ارزیابی دستی", Description = eval.Notes, ScoreDate = eval.EvaluationDate, Year = eval.EvaluationDate.Year, Month = eval.EvaluationDate.Month };
         await _uow.Repository<EmployeeScore>().AddAsync(score, ct);

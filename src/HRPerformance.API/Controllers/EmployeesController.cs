@@ -28,11 +28,16 @@ public class EmployeesController : ControllerBase
         _rosterSync = rosterSync;
         _context = context;
     }
-    [HttpGet] public async Task<IActionResult> GetAll([FromQuery] EmployeeSearchRequest request) =>
+    [HttpGet]
+    [Authorize(Roles = "Manager,OrganizationAdministrator,SuperAdministrator")]
+    public async Task<IActionResult> GetAll([FromQuery] EmployeeSearchRequest request) =>
         Ok(await _mediator.Send(new GetEmployeesQuery(request, _currentUser.OrganizationId ?? Guid.Empty)));
-    [HttpGet("lookup")] public async Task<IActionResult> Lookup([FromQuery] EmployeeLookupRequest request) =>
+    [HttpGet("lookup")]
+    [Authorize(Roles = "Manager,OrganizationAdministrator,SuperAdministrator")]
+    public async Task<IActionResult> Lookup([FromQuery] EmployeeLookupRequest request) =>
         Ok(await _mediator.Send(new GetEmployeeLookupQuery(request, _currentUser.OrganizationId ?? Guid.Empty)));
     [HttpGet("summary")]
+    [Authorize(Roles = "Manager,OrganizationAdministrator,SuperAdministrator")]
     public async Task<IActionResult> Summary(CancellationToken ct)
     {
         var orgId = _currentUser.OrganizationId ?? Guid.Empty;
@@ -81,7 +86,9 @@ public class EmployeesController : ControllerBase
             lastSyncAt = result.LastSyncAt
         });
     }
-    [HttpGet("{id:guid}")] public async Task<IActionResult> GetById(Guid id) => Ok(await _mediator.Send(new GetEmployeeByIdQuery(id)));
+    [HttpGet("{id:guid}")]
+    [Authorize(Roles = "Manager,OrganizationAdministrator,SuperAdministrator")]
+    public async Task<IActionResult> GetById(Guid id) => Ok(await _mediator.Send(new GetEmployeeByIdQuery(id)));
     [HttpPost] [Authorize(Roles = "OrganizationAdministrator,SuperAdministrator,Manager")] public async Task<IActionResult> Create([FromBody] CreateEmployeeRequest request) =>
         Ok(await _mediator.Send(new CreateEmployeeCommand(request, _currentUser.OrganizationId ?? Guid.Empty)));
     [HttpPut] [Authorize(Roles = "OrganizationAdministrator,SuperAdministrator,Manager")] public async Task<IActionResult> Update([FromBody] UpdateEmployeeRequest request) =>

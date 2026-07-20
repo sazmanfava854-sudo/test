@@ -14,17 +14,20 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, ApiResponse<Log
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITokenService _tokenService;
     private readonly IAuditService _auditService;
+    private readonly IEmployeeAccountLinkService _employeeLink;
     private readonly ILogger<LoginCommandHandler> _logger;
 
     public LoginCommandHandler(
         UserManager<ApplicationUser> um,
         ITokenService ts,
         IAuditService audit,
+        IEmployeeAccountLinkService employeeLink,
         ILogger<LoginCommandHandler> logger)
     {
         _userManager = um;
         _tokenService = ts;
         _auditService = audit;
+        _employeeLink = employeeLink;
         _logger = logger;
     }
 
@@ -38,6 +41,9 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, ApiResponse<Log
 
             if (!await _userManager.CheckPasswordAsync(user, cmd.Request.Password))
                 return ApiResponse<LoginResponse>.Fail("نام کاربری یا رمز عبور اشتباه است");
+
+            await _employeeLink.ResolveEmployeeIdAsync(user.Id, user.UserName, user.OrganizationId, ct);
+            user = await _userManager.FindByNameAsync(cmd.Request.UserName) ?? user;
 
             var (access, refresh, expires) = await _tokenService.GenerateTokensAsync(user, ct);
             user.LastLoginAt = DateTime.UtcNow;

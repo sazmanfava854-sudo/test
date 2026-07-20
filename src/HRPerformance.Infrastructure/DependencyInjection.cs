@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<HrIntegrationConnectionService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IFileStorageService, FileStorageService>();
+        services.AddScoped<IEmployeeAccountLinkService, EmployeeAccountLinkService>();
         services.AddHttpClient("AttendanceSync");
         return services;
     }
