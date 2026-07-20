@@ -18,6 +18,7 @@ import Link from '@mui/material/Link';
 import api from '../../services/api';
 import { employeeService } from '../../services/employeeService';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
+import ShamsiDatePicker from '../../components/common/ShamsiDatePicker';
 import { glassCardSx } from '../../theme/theme';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -31,6 +32,7 @@ import {
   SCORE_TYPE_LABELS,
 } from '../../types';
 import { unwrapListItems, readApiMessage } from '../../utils/apiResponse';
+import { formatGregorianDate, fromShamsiParts, toShamsiParts, type ShamsiDateParts } from '../../utils/misDate';
 
 export default function EvaluationPage() {
   const theme = useTheme();
@@ -45,14 +47,16 @@ export default function EvaluationPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState<CreateEvaluationRequest>({
+  const [form, setForm] = useState<Omit<CreateEvaluationRequest, 'evaluationDate'>>({
     employeeId: '',
     categoryId: undefined,
     score: 0,
     scoreType: ScoreType.Positive,
     notes: '',
-    evaluationDate: new Date().toISOString().split('T')[0],
   });
+  const [evaluationDateShamsi, setEvaluationDateShamsi] = useState<ShamsiDateParts>(() =>
+    toShamsiParts(new Date()),
+  );
 
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeLookupDto | null>(null);
   const [selectedIndicatorEmployee, setSelectedIndicatorEmployee] = useState<EmployeeLookupDto | null>(null);
@@ -144,7 +148,8 @@ export default function EvaluationPage() {
     setError(null);
     setSuccess(false);
     try {
-      await api.post('/evaluations', form);
+      const evaluationDate = formatGregorianDate(fromShamsiParts(evaluationDateShamsi).toISOString());
+      await api.post('/evaluations', { ...form, evaluationDate });
       setSuccess(true);
       setForm((prev) => ({ ...prev, score: 0, notes: '' }));
     } catch {
@@ -314,18 +319,11 @@ export default function EvaluationPage() {
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    label="تاریخ ارزیابی (میلادی)"
-                    value={form.evaluationDate}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        evaluationDate: e.target.value,
-                      }))
-                    }
-                    slotProps={{ inputLabel: { shrink: true } }}
+                  <ShamsiDatePicker
+                    label="تاریخ ارزیابی (شمسی)"
+                    value={evaluationDateShamsi}
+                    onChange={setEvaluationDateShamsi}
+                    disabled={saving}
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }}>
