@@ -27,7 +27,7 @@ cp "$ROOT/iis-fix-permissions.ps1" "$ROOT/iis-fix-permissions.bat" "$STAGE/" 2>/
 cp "$ROOT/iis-bind-site-5050.ps1" "$ROOT/iis-bind-site-5050.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/iis-stop-for-update.ps1" "$ROOT/iis-stop-for-update.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/iis-start-after-update.ps1" "$ROOT/iis-start-after-update.bat" "$STAGE/" 2>/dev/null || true
-cp "$ROOT/LOGIN.txt" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/test-sql-connection.ps1" "$ROOT/test-sql-connection.bat" "$STAGE/" 2>/dev/null || true
 cp -r "$ROOT/database" "$STAGE/"
 
 cat > "$STAGE/IIS-SETUP.txt" << 'EOF'
