@@ -43,7 +43,7 @@ public class HealthController : ControllerBase
             databaseError = dbError,
             hint = dbHealthy
                 ? (string?)null
-                : "app\\appsettings.Development.json را تنظیم کنید و database/01 تا 11 را اجرا کنید",
+                : "appsettings.Production.json (IIS) یا App Pool Identity — database/01 تا 11 و 17 را اجرا کنید",
             login = "admin / Admin@123",
             timestamp = DateTime.UtcNow
         });

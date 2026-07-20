@@ -17,7 +17,15 @@ public static class DatabaseErrorHelper
         if (name == "SqlException")
         {
             if (message.Contains("login failed", StringComparison.OrdinalIgnoreCase))
-                return "اتصال به SQL Server ناموفق بود. User Id یا Password در app\\appsettings.Development.json را بررسی کنید.";
+            {
+                if (message.Contains("Integrated Security", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("trusted connection", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("NT AUTHORITY", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains('\\'))
+                    return "اتصال SQL با Windows Auth ناموفق بود. در IIS: App Pool Identity (مثلاً ITC\\sys-hoseine-sh) باید Login در SQL Server داشته باشد — database/17_GrantSqlAccess_WindowsUser.sql را اجرا کنید. تنظیمات: appsettings.Production.json (IIS) نه Development.json.";
+
+                return "اتصال به SQL Server ناموفق بود. User Id/Password را در appsettings.Production.json (IIS) یا web.config بررسی کنید.";
+            }
 
             if (message.Contains("cannot open database", StringComparison.OrdinalIgnoreCase))
                 return "پایگاه HRPerformanceDB یافت نشد. اسکریپت‌های database/01 تا 08 را اجرا کنید.";
@@ -25,7 +33,7 @@ public static class DatabaseErrorHelper
             if (message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase))
                 return "جداول سیستم ناقص است. اسکریپت‌های database/01 تا 11 را اجرا کنید.";
 
-            return "خطا در اتصال به SQL Server. سرور، پورت، و پسورد را در app\\appsettings.Development.json بررسی کنید.";
+            return "خطا در اتصال به SQL Server. appsettings.Production.json (IIS) یا App Pool Identity را بررسی کنید.";
         }
 
         if (name == "DbUpdateException")
