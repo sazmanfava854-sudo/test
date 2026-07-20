@@ -1,19 +1,15 @@
 HR Performance — DEV
-Version: 2.9.4-dev-local
+Version: 2.9.5-dev-local
 Build Date: 2026-07-20
 
-Changes:
-- تاریخ ارزیابی شمسی (ShamsiDatePicker) در فرم ارزیابی
-- فهرست کارمندان فقط Manager / Admin (منو، مسیر، API)
-- اتصال خودکار User به PerCod + نمایش تاخیر در کارتابل کارمند
-- جمع امتیاز مثبت/منفی (نه تعداد)
-- تاخیر MIS 07:00–08:00 + AutoMapper EmployeeDto
+Fix: ZIP includes published app/wwwroot + src/HRPerformance.API/wwwroot
+Use start-published.bat for run without build.
 
-Download (local source):
+Download (local source + publish):
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.5-dev-local/HRPerformance-2.9.5-dev-local.zip
+
+Updated v2.9.4 asset (same fix):
 https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.4-dev-local/HRPerformance-2.9.4-dev-local.zip
-
-Download (run-only, no build):
-https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.4-dev/HRPerformance-2.9.4-dev.zip
 
 PR:
 https://github.com/sazmanfava854-sudo/test/pull/25

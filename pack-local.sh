@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# بسته توسعه لوکال — سورس کامل برای کار در Cursor/Visual Studio
+# بسته توسعه لوکال — سورس + wwwroot از پیش build + app/ publish
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -7,15 +7,39 @@ VERSION="${1:-2.7.0-dev}"
 STAGE="/tmp/HRPerformance-${VERSION}"
 OUT="$ROOT/releases/HRPerformance-${VERSION}.zip"
 
+echo "==> Building UI into src/HRPerformance.API/wwwroot ..."
+bash "$ROOT/scripts/build-ui.sh"
+
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 
-# سورس backend (بدون bin/obj)
+# سورس backend (بدون bin/obj) — شامل wwwroot
 mkdir -p "$STAGE/src"
 for proj in HRPerformance.Domain HRPerformance.Application HRPerformance.Infrastructure HRPerformance.API; do
   cp -r "$ROOT/src/$proj" "$STAGE/src/"
   rm -rf "$STAGE/src/$proj/bin" "$STAGE/src/$proj/obj"
 done
+
+if [ ! -f "$STAGE/src/HRPerformance.API/wwwroot/index.html" ]; then
+  echo "ERROR: src/HRPerformance.API/wwwroot/index.html missing after UI build"
+  exit 1
+fi
+
+echo "==> Publishing app/ (includes wwwroot) ..."
+dotnet publish "$ROOT/src/HRPerformance.API/HRPerformance.API.csproj" \
+  -c Release \
+  -o "$STAGE/app" \
+  --no-self-contained \
+  -v minimal
+
+if [ ! -f "$STAGE/app/wwwroot/index.html" ]; then
+  echo "ERROR: app/wwwroot/index.html missing after publish"
+  exit 1
+fi
+
+# appsettings Development alongside publish output
+cp "$ROOT/src/HRPerformance.API/appsettings.Development.json" "$STAGE/app/" 2>/dev/null || true
+cp "$ROOT/src/HRPerformance.API/appsettings.json" "$STAGE/app/" 2>/dev/null || true
 
 # بهینه‌سازی Build
 cp "$ROOT/Directory.Build.props" "$ROOT/global.json" "$ROOT/nuget.config" "$STAGE/"
@@ -37,7 +61,7 @@ done
 
 # Solution + scripts
 cp "$ROOT/HRPerformance.sln" "$STAGE/"
-cp "$ROOT/start.bat" "$ROOT/start-local.bat" "$ROOT/start.sh" "$ROOT/run-api.bat" "$STAGE/" 2>/dev/null || true
+cp "$ROOT/start.bat" "$ROOT/start-local.bat" "$ROOT/start-published.bat" "$ROOT/start.sh" "$ROOT/run-api.bat" "$STAGE/" 2>/dev/null || true
 cp "$ROOT/publish-iis.bat" "$ROOT/publish-iis.ps1" "$ROOT/iis-fix-permissions.bat" "$STAGE/" 2>/dev/null || true
 mkdir -p "$STAGE/scripts"
 cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$ROOT/scripts/"*.ps1 "$STAGE/scripts/" 2>/dev/null || true
@@ -45,63 +69,63 @@ cp "$ROOT/scripts/"*.bat "$ROOT/scripts/"*.sh "$ROOT/scripts/"*.ps1 "$STAGE/scri
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
 
 cat > "$STAGE/README-LOCAL.txt" << 'EOF'
-HR Performance — نسخه توسعه لوکال (سورس کامل)
-
-این ZIP برای کار روی سیستم خودتان است — مثل v2.0.0-simple.
+HR Performance — نسخه توسعه لوکال (سورس + Publish)
 
 شامل:
-  HRPerformance.sln
-  src/ (4 پروژه: Domain, Application, Infrastructure, API)
-  frontend/hr-performance-web
+  HRPerformance.sln + src/ (با wwwroot از پیش build)
+  app/ — خروجی dotnet publish (wwwroot + DLL) — بدون Build
+  frontend/hr-performance-web — سورس UI
   database/
 
-پیش‌نیاز: .NET 8 SDK + SQL Server + (اختیاری) Node.js برای UI
+─── اجرای سریع (بدون Build) ───
+  start-published.bat  → از app\ با wwwroot آماده
 
-─── راه‌اندازی اولین بار ───
-1) Extract کنید — ترجیحاً C:\Projects\HRPerformance (نه Downloads)
-2) database/01 تا 15 را روی SQL Server اجرا کنید
-3) src\HRPerformance.API\appsettings.Development.json — پسورد SQL
-4) scripts\restore-packages.bat  (فقط اولین بار — ممکن است چند دقیقه)
-5) start-local.bat  یا  HRPerformance.sln را در Cursor باز کنید
+─── توسعه با سورس ───
+  start-local.bat  → dotnet build + run از src\
 
-─── اجراهای بعدی ───
-  start-local.bat  → بدون Build مجدد (--no-build)
-  یا F5 در Cursor/Visual Studio
+مسیر wwwroot:
+  src\HRPerformance.API\wwwroot\   (سورس)
+  app\wwwroot\                     (publish)
 
-─── توسعه UI ───
-  cd frontend\hr-performance-web
-  npm install
-  npm run dev
+پیش‌نیاز: .NET 8 SDK + SQL Server
+
+1) Extract — ترجیحاً C:\Projects\HRPerformance
+2) database/01 تا 16 روی SQL Server
+3) appsettings.Development.json — پسورد SQL (در src\... و app\)
+4) scripts\restore-packages.bat (فقط برای start-local.bat)
+5) start-published.bat  یا  start-local.bat
 
 لاگین: admin / Admin@123
-اگر ورود ناموفق بود: database/11_RepairAuthentication.sql
 EOF
 
 cat > "$STAGE/DEV-WORKFLOW.txt" << 'EOF'
-چرا اولین بار کند است؟
-  فقط اولین Restore/Build چند دقیقه طول می‌کشد (دانلود NuGet).
-  بعد از آن اجرا با --no-build است — چند ثانیه.
+دو روش اجرا:
 
-چرا publish نداریم؟
-  شما سورس می‌خواهید — در Cursor/VS کار کنید.
-  پوشه app/ فقط برای deploy است، نه توسعه.
+A) start-published.bat
+   - از app\ اجرا می‌شود
+   - wwwroot داخل app\wwwroot\ است
+   - Build لازم نیست
 
-اگر Build دوباره کند شد:
-  - پوشه را از Downloads خارج کنید
-  - آنتی‌ویروس را برای این پوشه استثنا کنید
-  - scripts\restore-packages.bat را یک بار اجرا کنید
-  - فقط src\HRPerformance.API را Build کنید، نه کل solution
+B) start-local.bat
+   - از src\ build می‌گیرد
+   - wwwroot در src\HRPerformance.API\wwwroot\
+
+اگر UI قدیمی بود:
+  scripts\build-ui.bat
 EOF
 
 cat > "$STAGE/VERSION.txt" << EOF
-HR Performance — DEV (source)
+HR Performance — DEV (source + publish)
 Version: ${VERSION}
 Build Date: $(date +%Y-%m-%d)
 .NET 8 SDK required
 
-UI در wwwroot از پیش build شده است.
-اگر دکمه «نمایش کوئری SQL» نیست: scripts\\build-ui.bat را اجرا کنید.
-تب MIS باید نشان دهد: نسخه UI: ${VERSION}
+شامل:
+  src/HRPerformance.API/wwwroot/  (UI build)
+  app/wwwroot/                      (publish)
+
+اجرا بدون Build: start-published.bat
+توسعه: start-local.bat
 EOF
 
 mkdir -p "$ROOT/releases"
