@@ -1,15 +1,11 @@
-HR Performance — DEV
-Version: 2.9.5-dev-local
+HR Performance — IIS
+Version: 2.9.5-iis
 Build Date: 2026-07-20
 
-Fix: ZIP includes published app/wwwroot + src/HRPerformance.API/wwwroot
-Use start-published.bat for run without build.
+Download:
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.5-iis/HRPerformance-2.9.5-iis.zip
 
-Download (local source + publish):
-https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.5-dev-local/HRPerformance-2.9.5-dev-local.zip
+Legacy name:
+https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.5-iis/HRPerformance-IIS-Ready.zip
 
-Updated v2.9.4 asset (same fix):
-https://github.com/sazmanfava854-sudo/test/releases/download/v2.9.4-dev-local/HRPerformance-2.9.4-dev-local.zip
-
-PR:
-https://github.com/sazmanfava854-sudo/test/pull/25
+Settings: appsettings.Production.json (IIS Physical Path root)
