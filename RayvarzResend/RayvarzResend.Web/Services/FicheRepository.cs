@@ -39,10 +39,11 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
            CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
            CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
            CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-           CAST(b.Apartment AS varchar) + '-' + CAST(b.Shop AS varchar)
+           CAST(b.Apartment AS varchar)
          )), '-'),
          ''
-       ) AS BnkAcntNo
+       ) AS BnkAcntNo,
+       NULLIF(LTRIM(RTRIM(CAST(b.CI_City AS nvarchar(20)))), '') AS IncomeRegion
 FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
 LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
@@ -76,7 +77,8 @@ WHERE {where}";
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
-            BnkAcntNoSource = "کد نوسازی — از Base_NosaziCode (فیش درآمد)",
+            BnkAcntNoSource = "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
+            IncomeRegion = reader.IsDBNull(reader.GetOrdinal("IncomeRegion")) ? null : reader.GetString(reader.GetOrdinal("IncomeRegion")),
             DocTyp = docTyp,
             DocDsc = "اسناد شهرسازی"
         };
@@ -179,11 +181,17 @@ WHERE {where}";
             DocDsc = isSenfi ? "اسناد صنفی" : "اسناد نوسازی"
         };
 
-        dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, ct);
+        if (isSenfi)
+        {
+            dto.BnkAcntNo = "7-14-55-1-1-0-1";
+            dto.BnkAcntNoSource = "کد ثابت صنفی — Rayvarz (7-14-55-1-1-0-1)";
+        }
+
+        dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, exportType, ct);
         return dto;
     }
 
-    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(Guid nidFiche, decimal payable, bool isSenfi, CancellationToken ct)
+    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(Guid nidFiche, decimal payable, bool isSenfi, int exportType, CancellationToken ct)
     {
         const string sql = @"
 SELECT CI_DutyFormula, CI_DutyFormulaFiche, Price
@@ -217,8 +225,19 @@ WHERE NidFiche = @nid";
         decimal Garbage = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == 0).Sum(s => s.Price);
         decimal Nosazi = payable - Atash - Garbage - Afzodeh;
 
-        var mainIncm = isSenfi ? 100062 : 2003;
-        var mainDsc = isSenfi ? "صنفی" : "نوسازی";
+        // ExportType=14 (بانک‌ها): IncmNo=2005 — تأیید 021204/19379176
+        var mainIncm = isSenfi switch
+        {
+            true when exportType == 14 => 2005,
+            true => 100062,
+            false => 2003
+        };
+        var mainDsc = mainIncm switch
+        {
+            2005 => "عوارض ساليانه بانک ها و موسسات اعتباري",
+            100062 => "صنفي",
+            _ => "نوسازی"
+        };
 
         var rows = new List<IncmRowDto>();
         if (Nosazi != 0)

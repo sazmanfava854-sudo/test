@@ -10,6 +10,25 @@ const categoryLabels = {
   Unknown: 'نامشخص'
 };
 
+function branchFromRegion(regionStr) {
+  const r = parseInt(regionStr, 10);
+  if (Number.isNaN(r)) return null;
+  if (r === 218) return 218;
+  if (r >= 1 && r <= 12) return 200 + r;
+  return null;
+}
+
+function applyBranchFromFiche(f) {
+  const region = f.dutyRegion || f.incomeRegion;
+  const branchId = region ? branchFromRegion(region) : null;
+  if (!branchId) return;
+  const match = config.branches.find(b => b.id === branchId);
+  if (match) {
+    $('branch').value = branchId;
+    syncFundFromBranch();
+  }
+}
+
 function syncFundFromBranch() {
   const branchId = parseInt($('branch').value);
   const item = config.branches.find(b => b.id === branchId);
@@ -66,7 +85,7 @@ function buildMappingRows(f) {
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
-    { field: 'منطقه فیش (راهنما)', source: 'OtherFields → منطقه (فقط نوسازی/صنفی)', value: f.dutyRegion ? `منطقه ${f.dutyRegion} → branch=${200 + parseInt(f.dutyRegion)}` : '(درآمد — از شعبه فرم)' },
+    { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.CI_City', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
     { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند (فرم)', value: docDate },
@@ -196,14 +215,7 @@ $('btnLoad').onclick = async () => {
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
     currentFiche = data;
-    if (data.dutyRegion) {
-      const branchId = 200 + parseInt(data.dutyRegion, 10);
-      const match = config.branches.find(b => b.id === branchId);
-      if (match) {
-        $('branch').value = branchId;
-        syncFundFromBranch();
-      }
-    }
+    applyBranchFromFiche(data);
     renderFiche(data);
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;

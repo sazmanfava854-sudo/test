@@ -100,10 +100,10 @@ public class SoapBuilder
 
     private static string ResolveDocTypDsc(int docTyp) => docTyp switch
     {
-        1 => "عوارض نوسازی",
-        2 => "عوارض صنفی",
-        11 => "عوارض سرا",
-        _ => "عوارض سرا"
+        1 => "اسناد نوسازی",
+        2 => "اسناد صنفی",
+        3 or 11 => "اسناد شهرسازی",
+        _ => "اسناد شهرسازی"
     };
 
     private static string XmlOptional(string name, string? value) =>
