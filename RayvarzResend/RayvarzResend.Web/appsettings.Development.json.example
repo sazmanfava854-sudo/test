@@ -1,9 +1,12 @@
 {
   "ConnectionStrings": {
-    "Sara": "Server=tcp:NAME-OR-IP-SARA,1433;Database=Sara8M03;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
-    "Rayvarz": "Server=tcp:mdc-acc-hq-lis,1433;Database=Ray_CityHall;User Id=ITCShahrsaziUser;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
+    "Sara": "Server=tcp:YOUR_SARA_SERVER,1433;Database=Sara8M03;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
+    "Rayvarz": "Server=tcp:YOUR_RAY_SERVER,1433;Database=Ray_CityHall;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
   },
   "Rayvarz": {
-    "DryRun": true
+    "ServiceUrl": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
+    "DryRun": true,
+    "AllowInvalidSsl": false,
+    "ProxyUrl": ""
   }
 }

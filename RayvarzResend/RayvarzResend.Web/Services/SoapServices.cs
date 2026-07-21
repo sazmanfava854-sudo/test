@@ -142,13 +142,8 @@ public class RayvarzClient
 
     public RayvarzClient(IConfiguration config) => _config = config;
 
-    public string ResolveServiceUrl()
-    {
-        var useTest = _config.GetValue<bool>("Rayvarz:UseTestUrl");
-        return useTest
-            ? (_config["Rayvarz:ServiceUrlTest"] ?? "")
-            : (_config["Rayvarz:ServiceUrl"] ?? "");
-    }
+    public string ResolveServiceUrl() =>
+        _config["Rayvarz:ServiceUrl"] ?? "";
 
     public async Task<object> PingAsync(CancellationToken ct = default)
     {
