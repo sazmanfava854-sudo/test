@@ -126,16 +126,21 @@ WHERE ic.NidIncome = @nid";
 
         var sql = $@"
 SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
+       d.EumDutyType,
        '18' AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(d.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
        COALESCE(d.BankPaymentDate, d.PaymentDate, d.PrintDate, d.ExportDate) AS RowDate,
        d.EumDutyFicheStatus, d.CI_DutyFicheExportType,
        COALESCE(
+           NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""حوزه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""بلوک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-0-0-0'
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ساختمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+           ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""آپارتمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+           ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""واحد صنفی""]/Value)[1]', 'nvarchar(20)'))), ''), '0')
        ) AS BnkAcntNo,
        NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS DutyRegion
 FROM dbo.Duty_Fiche d
@@ -151,7 +156,8 @@ WHERE {where}";
 
         var exportType = reader.IsDBNull(reader.GetOrdinal("CI_DutyFicheExportType"))
             ? 0 : ReadInt32(reader, "CI_DutyFicheExportType");
-        var isSenfi = exportType == 14;
+        var dutyType = ReadInt32(reader, "EumDutyType");
+        var isSenfi = dutyType == 2;
 
         var dto = new FicheHeaderDto
         {
@@ -199,9 +205,9 @@ WHERE NidFiche = @nid";
             ));
         }
 
-        // منطق تأییدشده تابع Nosazi() در Sara + کوئری فیش 101104/9881711
+        // تأیید: نوسازی 101104/9881711 | صنفی 051204/19920388
         // 100003 ← SUM(F3,F0) | 206098003 ← SUM(F3,F16) | 100002 ← SUM(F5,F0)
-        // 2003 ← PayablePrice − آتش‌نشانی − پسماند − ارزش‌افزوده (نه SUM(F1,F0))
+        // 2003/100062 ← PayablePrice − آتش‌نشانی − پسماند − ارزش‌افزوده
         const int GarbageFormula = 3;
         const int AtashFormula = 5;
         const int AfzodehFiche = 16;
