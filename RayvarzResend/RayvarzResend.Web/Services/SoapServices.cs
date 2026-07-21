@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Security;
+using System.Security.Authentication;
 using System.Text;
 using System.Xml.Linq;
 using RayvarzResend.Web.Models;
@@ -153,37 +155,73 @@ public class RayvarzClient
             };
         }
 
-        var url = _config["Rayvarz:ServiceUrl"] ?? "";
+        var useTest = _config.GetValue<bool>("Rayvarz:UseTestUrl");
+        var url = useTest
+            ? (_config["Rayvarz:ServiceUrlTest"] ?? "")
+            : (_config["Rayvarz:ServiceUrl"] ?? "");
         var action = _config["Rayvarz:SoapAction"] ?? "";
-
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
-        using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
-        content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
-
-        var response = await client.PostAsync(url, content, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-
-        var result = new SendResultDto
-        {
-            SoapResponse = body,
-            PreviewXml = soapXml,
-            DryRun = false
-        };
+        var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
 
         try
         {
-            var doc = XDocument.Parse(body);
-            XNamespace wcf = "http://schemas.datacontract.org/2004/07/WCFServer";
-            result.Success = doc.Descendants(wcf + "Success").FirstOrDefault()?.Value == "true";
-            result.Message = doc.Descendants(wcf + "Message").FirstOrDefault()?.Value ?? "";
-            result.PursuitDocNo = doc.Descendants(wcf + "PursuitDocNo").FirstOrDefault()?.Value;
-        }
-        catch
-        {
-            result.Success = response.IsSuccessStatusCode;
-            result.Message = response.IsSuccessStatusCode ? "پاسخ دریافت شد" : $"HTTP {(int)response.StatusCode}";
-        }
+            using var client = CreateHttpClient(allowInvalidSsl);
+            using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
+            content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
 
-        return result;
+            var response = await client.PostAsync(url, content, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+
+            var result = new SendResultDto
+            {
+                SoapResponse = body,
+                PreviewXml = soapXml,
+                DryRun = false
+            };
+
+            try
+            {
+                var doc = XDocument.Parse(body);
+                XNamespace wcf = "http://schemas.datacontract.org/2004/07/WCFServer";
+                result.Success = doc.Descendants(wcf + "Success").FirstOrDefault()?.Value == "true";
+                result.Message = doc.Descendants(wcf + "Message").FirstOrDefault()?.Value ?? "";
+                result.PursuitDocNo = doc.Descendants(wcf + "PursuitDocNo").FirstOrDefault()?.Value;
+            }
+            catch
+            {
+                result.Success = response.IsSuccessStatusCode;
+                result.Message = response.IsSuccessStatusCode ? "پاسخ دریافت شد" : $"HTTP {(int)response.StatusCode}";
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            var inner = ex.InnerException?.Message;
+            var hint = ex.Message.Contains("SSL", StringComparison.OrdinalIgnoreCase)
+                ? " SSL: VPN/شبکه داخلی را چک کنید؛ یا موقتاً UseTestUrl=true (HTTP)؛ یا AllowInvalidSsl=true فقط برای تست."
+                : "";
+            return new SendResultDto
+            {
+                Success = false,
+                DryRun = false,
+                PreviewXml = soapXml,
+                Message = inner != null ? $"{ex.Message} | Inner: {inner}{hint}" : $"{ex.Message}{hint}"
+            };
+        }
+    }
+
+    private static HttpClient CreateHttpClient(bool allowInvalidSsl)
+    {
+        var handler = new SocketsHttpHandler
+        {
+            SslOptions = new SslClientAuthenticationOptions
+            {
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+            }
+        };
+        if (allowInvalidSsl)
+            handler.SslOptions.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
+
+        return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(120) };
     }
 }
