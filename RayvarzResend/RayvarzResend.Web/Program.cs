@@ -76,11 +76,15 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
         }
         catch (Exception ex)
         {
-            results.Add(new { name, ok = false, error = ex.Message });
+            var hint = ConnectionHint(name, cs, ex);
+            results.Add(new { name, ok = false, error = ex.Message, inner = ex.InnerException?.Message, hint });
         }
     }
     return Results.Ok(new { connections = results });
 });
+
+app.MapGet("/api/rayvarz-ping", async (RayvarzClient client, CancellationToken ct) =>
+    Results.Ok(await client.PingAsync(ct)));
 
 app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, CancellationToken ct) =>
 {
@@ -151,5 +155,25 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
 
     return Results.Ok(result);
 });
+
+static string? ConnectionHint(string name, string cs, Exception ex)
+{
+    var msg = (ex.Message + " " + (ex.InnerException?.Message ?? "")).ToLowerInvariant();
+    var usesIntegrated = cs.Contains("Integrated Security", StringComparison.OrdinalIgnoreCase)
+        || cs.Contains("Trusted_Connection", StringComparison.OrdinalIgnoreCase);
+    var usesIp = System.Text.RegularExpressions.Regex.IsMatch(cs, @"Server=tcp:\d+\.\d+\.\d+\.\d+");
+
+    if (msg.Contains("login failed") && usesIntegrated)
+        return "Sara با Integrated Security: برنامه باید با همان کاربر ویندوزی/دامنه اجرا شود که به SQL دسترسی دارد. اگر با IP وصل می‌شوید، به‌جای IP از نام سرور استفاده کنید یا SQL User/Password بگذارید.";
+    if (msg.Contains("sspi") || msg.Contains("kerberos"))
+        return "خطای احراز هویت ویندوزی (SSPI/Kerberos). نام سرور را به‌جای IP امتحان کنید یا از SQL Authentication استفاده کنید.";
+    if (msg.Contains("network-related") || msg.Contains("could not open") || msg.Contains("timeout"))
+        return $"سرور SQL ({name}) از این ماشین در دسترس نیست — VPN/فایروال/پورت 1433 را چک کنید.";
+    if (msg.Contains("json") || msg.Contains("configuration"))
+        return "خطای خواندن appsettings.json — ویرگول/کاما/گیومه در Password یا ساختار JSON را چک کنید.";
+    if (name == "Rayvarz" && msg.Contains("login failed"))
+        return "User Id یا Password رایورز اشتباه است. اگر Password کاراکتر ; یا \" دارد، در JSON باید escape شود.";
+    return null;
+}
 
 app.Run();

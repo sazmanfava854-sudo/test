@@ -1,7 +1,7 @@
 {
   "ConnectionStrings": {
-    "Sara": "Server=YOUR_SQL_SERVER;Database=Sara8M03;Trusted_Connection=True;TrustServerCertificate=True;",
-    "Rayvarz": "Server=YOUR_SQL_SERVER;Database=Ray_CityHall;Trusted_Connection=True;TrustServerCertificate=True;"
+    "Sara": "Server=tcp:NAME-OR-IP-SARA,1433;Database=Sara8M03;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
+    "Rayvarz": "Server=tcp:mdc-acc-hq-lis,1433;Database=Ray_CityHall;User Id=ITCShahrsaziUser;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
   },
   "Rayvarz": {
     "DryRun": true

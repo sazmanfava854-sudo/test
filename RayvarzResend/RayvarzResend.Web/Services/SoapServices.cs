@@ -142,6 +142,53 @@ public class RayvarzClient
 
     public RayvarzClient(IConfiguration config) => _config = config;
 
+    public string ResolveServiceUrl()
+    {
+        var useTest = _config.GetValue<bool>("Rayvarz:UseTestUrl");
+        return useTest
+            ? (_config["Rayvarz:ServiceUrlTest"] ?? "")
+            : (_config["Rayvarz:ServiceUrl"] ?? "");
+    }
+
+    public async Task<object> PingAsync(CancellationToken ct = default)
+    {
+        var baseUrl = ResolveServiceUrl().TrimEnd('/');
+        var wsdlUrl = baseUrl.Contains('?') ? baseUrl : baseUrl + "?wsdl";
+        var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            using var client = CreateHttpClient(allowInvalidSsl);
+            using var response = await client.GetAsync(wsdlUrl, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            sw.Stop();
+            return new
+            {
+                ok = response.IsSuccessStatusCode,
+                url = wsdlUrl,
+                statusCode = (int)response.StatusCode,
+                elapsedMs = sw.ElapsedMilliseconds,
+                bodyPreview = body.Length > 200 ? body[..200] : body,
+                allowInvalidSsl
+            };
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            return new
+            {
+                ok = false,
+                url = wsdlUrl,
+                elapsedMs = sw.ElapsedMilliseconds,
+                error = ex.Message,
+                inner = ex.InnerException?.Message,
+                allowInvalidSsl,
+                hint = BuildNetworkHint(ex)
+            };
+        }
+    }
+
     public async Task<SendResultDto> SendAsync(string soapXml, bool dryRun, CancellationToken ct = default)
     {
         if (dryRun)
@@ -155,10 +202,7 @@ public class RayvarzClient
             };
         }
 
-        var useTest = _config.GetValue<bool>("Rayvarz:UseTestUrl");
-        var url = useTest
-            ? (_config["Rayvarz:ServiceUrlTest"] ?? "")
-            : (_config["Rayvarz:ServiceUrl"] ?? "");
+        var url = ResolveServiceUrl();
         var action = _config["Rayvarz:SoapAction"] ?? "";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
 
@@ -197,31 +241,48 @@ public class RayvarzClient
         catch (Exception ex)
         {
             var inner = ex.InnerException?.Message;
-            var hint = ex.Message.Contains("SSL", StringComparison.OrdinalIgnoreCase)
-                ? " SSL: VPN/شبکه داخلی را چک کنید؛ یا موقتاً UseTestUrl=true (HTTP)؛ یا AllowInvalidSsl=true فقط برای تست."
-                : "";
             return new SendResultDto
             {
                 Success = false,
                 DryRun = false,
                 PreviewXml = soapXml,
-                Message = inner != null ? $"{ex.Message} | Inner: {inner}{hint}" : $"{ex.Message}{hint}"
+                Message = inner != null
+                    ? $"{ex.Message} | Inner: {inner} | {BuildNetworkHint(ex)}"
+                    : $"{ex.Message} | {BuildNetworkHint(ex)}"
             };
         }
     }
 
-    private static HttpClient CreateHttpClient(bool allowInvalidSsl)
+    private HttpClient CreateHttpClient(bool allowInvalidSsl)
     {
+        var proxyUrl = _config["Rayvarz:ProxyUrl"];
         var handler = new SocketsHttpHandler
         {
+            AutomaticDecompression = DecompressionMethods.All,
             SslOptions = new SslClientAuthenticationOptions
             {
                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
             }
         };
+
+        if (!string.IsNullOrWhiteSpace(proxyUrl))
+        {
+            handler.Proxy = new WebProxy(proxyUrl);
+            handler.UseProxy = true;
+        }
+
         if (allowInvalidSsl)
             handler.SslOptions.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
 
         return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(120) };
+    }
+
+    private static string BuildNetworkHint(Exception ex)
+    {
+        var msg = (ex.Message + " " + (ex.InnerException?.Message ?? "")).ToLowerInvariant();
+        if (msg.Contains("ssl") || msg.Contains("certificate") || msg.Contains("tls")
+            || msg.Contains("connection was closed") || msg.Contains("unexpected error occurred on a send"))
+            return "شبکه: از همان سروری که سامانه شهرسازی ارسال می‌کند اجرا کنید؛ VPN؛ AllowInvalidSsl=true؛ یا ProxyUrl در appsettings.";
+        return "شبکه/فایروال را با IT چک کنید.";
     }
 }
