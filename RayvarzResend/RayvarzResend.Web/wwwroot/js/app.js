@@ -269,6 +269,16 @@ $('btnSend').onclick = async () => {
     if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
     $('resultBox').textContent = msg;
 
+    if (data.dryRun) {
+      alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
+    } else if (data.success && data.verifiedInRayvarz === false) {
+      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+    } else if (!data.success) {
+      alert('ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
+    } else if (data.success && data.verifiedInRayvarz) {
+      alert('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
+    }
+
     if (data.previewXml || data.soapResponse) {
       $('xmlSection').hidden = false;
       $('xmlBox').textContent = data.soapResponse || data.previewXml;

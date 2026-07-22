@@ -150,7 +150,16 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
         result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
 
     if (!dryRun && !result.VerifiedInRayvarz)
+    {
         result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+        if (result.Success)
+        {
+            result.Success = false;
+            result.Message = string.IsNullOrWhiteSpace(result.Message)
+                ? "SOAP موفق گزارش شد ولی فیش در incmdocsys ثبت نشد"
+                : result.Message + " — ولی فیش در incmdocsys ثبت نشد";
+        }
+    }
 
     return Results.Ok(result);
 });

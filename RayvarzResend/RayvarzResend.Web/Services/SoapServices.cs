@@ -227,8 +227,10 @@ public class RayvarzClient
             }
             catch
             {
-                result.Success = response.IsSuccessStatusCode;
-                result.Message = response.IsSuccessStatusCode ? "پاسخ دریافت شد" : $"HTTP {(int)response.StatusCode}";
+                result.Success = false;
+                result.Message = response.IsSuccessStatusCode
+                    ? "پاسخ HTTP موفق بود ولی SOAP معتبر نبود — در رایورز ثبت نشده"
+                    : $"HTTP {(int)response.StatusCode}";
             }
 
             return result;
