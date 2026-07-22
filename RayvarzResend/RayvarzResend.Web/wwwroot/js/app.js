@@ -74,11 +74,11 @@ function buildMappingRows(f) {
   const branch = config.branches.find(b => b.id === parseInt($('branch').value));
   const fund = $('fund').value;
   const docDate = $('docDate').value;
-  const sourceId = config.sourceSystemId || '11111';
+  const sourceId = config.sourceSystemId ?? null;
 
   return [
     { field: 'TransactionId (سند)', source: 'Income_Fiche / Duty_Fiche → NidFiche (GUID)', value: f.nidFiche || '-' },
-    { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
+    { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
     { field: 'RefRowDocNo (دیتیل)', source: 'DocRow هدر (۱) — ارجاع به ردیف سند', value: '1' },

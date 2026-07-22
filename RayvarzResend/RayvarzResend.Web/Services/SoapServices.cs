@@ -20,8 +20,7 @@ public class SoapBuilder
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
 
-        // Id سامانه مبدا — کد ثابت سامانه (مثلاً 11111)
-        var sourceSystemId = _config["Rayvarz:SourceSystemId"] ?? "11111";
+        var sourceSystemId = _config["Rayvarz:SourceSystemId"];
         // شناسه یکتای تراکنش/فیش — GUID فیش
         var transactionId = fiche.NidFiche.ToString();
 
@@ -96,7 +95,7 @@ public class SoapBuilder
                 <wcf:Qty>{payable:0}</wcf:Qty>
                 <wcf:Ref>{Escape(ficheNo)}</wcf:Ref>
                 <wcf:RefRowDocNo>{parentDocRow}</wcf:RefRowDocNo>
-                <wcf:SourceId>{Escape(sourceSystemId)}</wcf:SourceId>
+                {XmlOptional("SourceId", sourceSystemId)}
                 <wcf:Val>{row.Val:0}</wcf:Val>
               </wcf:DocumentItemIncm>";
 
