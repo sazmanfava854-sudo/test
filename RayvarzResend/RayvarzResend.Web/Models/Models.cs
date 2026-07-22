@@ -34,6 +34,7 @@ public class FicheHeaderDto
     public string BnkAcntNo { get; set; } = "";
     public string BnkAcntNoSource { get; set; } = "";
     public string? DutyRegion { get; set; }
+    public string? IncomeRegion { get; set; }
     public string? RefReconstructionNo { get; set; }
     public string PaymentBranch { get; set; } = "18";
     public string? BankCode { get; set; }
@@ -80,7 +81,7 @@ public class AppConfig
 {
     public string ServiceUrl { get; set; } = "";
     public string SoapAction { get; set; } = "";
-    public string SourceSystemId { get; set; } = "11111";
+    public string? SourceSystemId { get; set; }
     public bool DryRun { get; set; }
     public int SendDelayMs { get; set; } = 2000;
 }

@@ -10,6 +10,25 @@ const categoryLabels = {
   Unknown: 'نامشخص'
 };
 
+function branchFromRegion(regionStr) {
+  const r = parseInt(regionStr, 10);
+  if (Number.isNaN(r)) return null;
+  if (r === 218) return 218;
+  if (r >= 1 && r <= 12) return 200 + r;
+  return null;
+}
+
+function applyBranchFromFiche(f) {
+  const region = f.dutyRegion || f.incomeRegion;
+  const branchId = region ? branchFromRegion(region) : null;
+  if (!branchId) return;
+  const match = config.branches.find(b => b.id === branchId);
+  if (match) {
+    $('branch').value = branchId;
+    syncFundFromBranch();
+  }
+}
+
 function syncFundFromBranch() {
   const branchId = parseInt($('branch').value);
   const item = config.branches.find(b => b.id === branchId);
@@ -55,18 +74,18 @@ function buildMappingRows(f) {
   const branch = config.branches.find(b => b.id === parseInt($('branch').value));
   const fund = $('fund').value;
   const docDate = $('docDate').value;
-  const sourceId = config.sourceSystemId || '11111';
+  const sourceId = config.sourceSystemId ?? null;
 
   return [
     { field: 'TransactionId (سند)', source: 'Income_Fiche / Duty_Fiche → NidFiche (GUID)', value: f.nidFiche || '-' },
-    { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId', value: sourceId },
+    { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
     { field: 'RefRowDocNo (دیتیل)', source: 'DocRow هدر (۱) — ارجاع به ردیف سند', value: '1' },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
-    { field: 'منطقه فیش (راهنما)', source: 'OtherFields → منطقه (فقط نوسازی/صنفی)', value: f.dutyRegion ? `منطقه ${f.dutyRegion} → branch=${200 + parseInt(f.dutyRegion)}` : '(درآمد — از شعبه فرم)' },
+    { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.CI_City', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
     { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند (فرم)', value: docDate },
@@ -145,11 +164,11 @@ async function init() {
     return;
   }
   const badge = $('configBadge');
-  const envLabel = config.isProduction ? 'وب‌سرویس اصلی (Production)' : 'وب‌سرویس تست';
+  const envLabel = 'MSB رایورز (Production)';
   badge.textContent = config.dryRun
     ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
     : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
-  if (config.isProduction && !config.dryRun) {
+  if (!config.dryRun) {
     badge.style.background = 'rgba(220, 53, 69, 0.35)';
   }
 
@@ -196,14 +215,7 @@ $('btnLoad').onclick = async () => {
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
     currentFiche = data;
-    if (data.dutyRegion) {
-      const branchId = 200 + parseInt(data.dutyRegion, 10);
-      const match = config.branches.find(b => b.id === branchId);
-      if (match) {
-        $('branch').value = branchId;
-        syncFundFromBranch();
-      }
-    }
+    applyBranchFromFiche(data);
     renderFiche(data);
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
@@ -256,6 +268,16 @@ $('btnSend').onclick = async () => {
     if (data.verifiedInRayvarz !== undefined) msg += `VerifiedInRayvarz: ${data.verifiedInRayvarz}\n`;
     if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
     $('resultBox').textContent = msg;
+
+    if (data.dryRun) {
+      alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
+    } else if (data.success && data.verifiedInRayvarz === false) {
+      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+    } else if (!data.success) {
+      alert('ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
+    } else if (data.success && data.verifiedInRayvarz) {
+      alert('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
+    }
 
     if (data.previewXml || data.soapResponse) {
       $('xmlSection').hidden = false;
