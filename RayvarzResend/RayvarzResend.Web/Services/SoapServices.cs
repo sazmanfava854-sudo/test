@@ -221,9 +221,26 @@ public class RayvarzClient
             {
                 var doc = XDocument.Parse(body);
                 XNamespace wcf = "http://schemas.datacontract.org/2004/07/WCFServer";
+                XNamespace con = "http://www.bea.com/wli/sb/context";
+
+                var faultCode = doc.Descendants(con + "errorCode").FirstOrDefault()?.Value
+                    ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultcode")?.Value;
+                var faultReason = doc.Descendants(con + "reason").FirstOrDefault()?.Value
+                    ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultstring")?.Value;
+
+                if (!string.IsNullOrWhiteSpace(faultCode) || !string.IsNullOrWhiteSpace(faultReason))
+                {
+                    result.Success = false;
+                    result.Message = $"SOAP Fault: {faultCode} — {faultReason}".Trim(' ', '—');
+                    return result;
+                }
+
                 result.Success = doc.Descendants(wcf + "Success").FirstOrDefault()?.Value == "true";
                 result.Message = doc.Descendants(wcf + "Message").FirstOrDefault()?.Value ?? "";
                 result.PursuitDocNo = doc.Descendants(wcf + "PursuitDocNo").FirstOrDefault()?.Value;
+
+                if (!result.Success && string.IsNullOrWhiteSpace(result.Message))
+                    result.Message = "پاسخ رایورز Success=false — جزئیات در SoapResponse";
             }
             catch
             {
