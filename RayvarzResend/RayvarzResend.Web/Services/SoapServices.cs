@@ -60,7 +60,7 @@ public class SoapBuilder
             <wcf:IncmMkrTyp>1</wcf:IncmMkrTyp>
             <wcf:Incms>{incmItems}
             </wcf:Incms>
-            <wcf:PhasTyp>7</wcf:PhasTyp>
+            <wcf:PhasTyp>4</wcf:PhasTyp>
             <wcf:Ref2>{Escape(fiche.BillId)}</wcf:Ref2>
             <wcf:Ref3>{Escape(fiche.PaymentId)}</wcf:Ref3>
             <wcf:RefownrDsc>{Escape(fiche.FicheNo)}</wcf:RefownrDsc>
