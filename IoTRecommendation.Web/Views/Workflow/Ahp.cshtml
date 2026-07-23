@@ -93,7 +93,7 @@ else
             <div class="table-responsive">
                 <table class="table table-sm mb-0">
                     <thead>
-                        <tr><th>Expert</th><th>CR</th><th>Status</th></tr>
+                        <tr><th>Expert</th><th>CR</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var ec in Model.Result.ExpertConsistencies)
@@ -101,16 +101,6 @@ else
                             <tr>
                                 <td>@ec.ExpertName</td>
                                 <td class="font-monospace">@ec.ConsistencyRatio.ToString("F4")</td>
-                                <td>
-                                    @if (ec.IsConsistent)
-                                    {
-                                        <span class="badge bg-success">OK</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-warning text-dark">Review</span>
-                                    }
-                                </td>
                             </tr>
                         }
                     </tbody>
