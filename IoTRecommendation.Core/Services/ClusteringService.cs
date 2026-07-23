@@ -6,24 +6,27 @@ using IoTRecommendation.Core.Models.Enums;
 namespace IoTRecommendation.Core.Services;
 
 /// <summary>
-/// Orchestrates Phase 1: feature preparation, scaling, clustering,
-/// and centroid back-transformation to original units.
+/// Orchestrates Phase 1: feature preparation, K-Means evaluation metrics,
+/// and domain-recommended cluster assignments from ClusterTaxonomy.json.
 ///
-/// AHP weights are deliberately NOT used here — clustering is purely data-driven.
+/// AHP weights are deliberately NOT used here.
 /// </summary>
 public sealed class ClusteringService
 {
     private readonly ITechnologyRepository _technologyRepository;
     private readonly ISettingsRepository _settingsRepository;
+    private readonly IClusterTaxonomyRepository _clusterTaxonomyRepository;
     private readonly IClusteringAlgorithm _clusteringAlgorithm;
 
     public ClusteringService(
         ITechnologyRepository technologyRepository,
         ISettingsRepository settingsRepository,
+        IClusterTaxonomyRepository clusterTaxonomyRepository,
         IClusteringAlgorithm clusteringAlgorithm)
     {
         _technologyRepository = technologyRepository;
         _settingsRepository = settingsRepository;
+        _clusterTaxonomyRepository = clusterTaxonomyRepository;
         _clusteringAlgorithm = clusteringAlgorithm;
     }
 
@@ -48,19 +51,21 @@ public sealed class ClusteringService
         // Z-score standardisation (mean=0, std=1)
         var (scaled, means, stds) = Standardize(transformed);
 
-        // Run clustering algorithm (implementation is injected — swappable)
+        // Run K-Means for k-evaluation metrics (elbow / silhouette table in UI)
         var output = _clusteringAlgorithm.Run(scaled, settings.KMeansMin, settings.KMeansMax);
 
-        // Back-transform centroids to original units for display
-        var clusters = BuildClusters(output, technologies, clusteringCriteria, means, stds);
+        var taxonomy = await _clusterTaxonomyRepository.GetAsync();
+        var clusters = BuildClustersFromTaxonomy(taxonomy, technologies, clusteringCriteria);
 
         return new ClusteringResult
         {
-            OptimalK = output.OptimalK,
+            OptimalK = clusters.Count,
             Clusters = clusters,
             KMetrics = output.AllKMetrics,
             ElbowK = output.ElbowK,
-            SelectionRationale = output.SelectionRationale
+            SelectionRationale =
+                $"k={clusters.Count} recommended from domain taxonomy (ClusterTaxonomy.json). " +
+                $"K-Means reference: {output.SelectionRationale}"
         };
     }
 
@@ -121,76 +126,66 @@ public sealed class ClusteringService
 
     // ──────────────────────────────────────────────────────── Cluster building
 
-    private static List<ClusterInfo> BuildClusters(
-        ClusteringAlgorithmOutput output,
+    private static List<ClusterInfo> BuildClustersFromTaxonomy(
+        IReadOnlyList<ClusterTaxonomyEntry> taxonomy,
         IReadOnlyList<Technology> technologies,
-        List<CriterionDefinition> clusteringCriteria,
-        double[] means,
-        double[] stds)
+        List<CriterionDefinition> clusteringCriteria)
     {
+        var techById = technologies.ToDictionary(t => t.Id, StringComparer.OrdinalIgnoreCase);
+        var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var clusters = new List<ClusterInfo>();
-        int k = output.OptimalK;
 
-        for (int c = 0; c < k; c++)
+        foreach (var entry in taxonomy.OrderBy(e => e.ClusterId))
         {
-            var memberTechs = technologies
-                .Where((_, idx) => output.Labels[idx] == c)
-                .ToList();
-
-            // Back-transform centroid: scaled → transformed → original
-            var centroidOriginal = new Dictionary<string, double>();
-            for (int j = 0; j < clusteringCriteria.Count; j++)
+            var memberTechs = new List<Technology>();
+            foreach (var techId in entry.TechnologyIds)
             {
-                double scaled = output.ScaledCentroids[c][j];
-                double transformed = scaled * stds[j] + means[j];
-                double original = clusteringCriteria[j].Transform == CriterionTransform.Log1p
-                    ? Math.Exp(transformed) - 1.0
-                    : transformed;
-                centroidOriginal[clusteringCriteria[j].Key] = original;
+                if (!techById.TryGetValue(techId, out var tech))
+                    throw new InvalidOperationException(
+                        $"Cluster taxonomy references unknown technology '{techId}'.");
+
+                if (!assigned.Add(techId))
+                    throw new InvalidOperationException(
+                        $"Technology '{techId}' appears in more than one taxonomy cluster.");
+
+                memberTechs.Add(tech);
             }
 
             clusters.Add(new ClusterInfo
             {
-                ClusterId = c,
-                Label = InferLabel(centroidOriginal, clusteringCriteria),
+                ClusterId = entry.ClusterId,
+                Label = entry.Label,
                 TechnologyIds = memberTechs.Select(t => t.Id).ToList(),
                 TechnologyNames = memberTechs.Select(t => t.Name).ToList(),
-                CentroidValues = centroidOriginal
+                CentroidValues = ComputeMeanCentroid(memberTechs, clusteringCriteria)
             });
         }
+
+        var missing = technologies
+            .Where(t => !assigned.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToList();
+
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"Cluster taxonomy does not assign all technologies. Missing: {string.Join(", ", missing)}");
+
         return clusters;
     }
 
-    /// <summary>
-    /// Infers a human-readable cluster label from centroid values.
-    /// Rules are descriptive — not tied to AHP weights.
-    /// </summary>
-    private static string InferLabel(
-        Dictionary<string, double> centroid,
-        List<CriterionDefinition> criteria)
+    private static Dictionary<string, double> ComputeMeanCentroid(
+        IReadOnlyList<Technology> members,
+        List<CriterionDefinition> clusteringCriteria)
     {
-        centroid.TryGetValue("DataRate", out double dr);
-        centroid.TryGetValue("TransmissionRange", out double range);
-        centroid.TryGetValue("EnergyConsumption", out double energy);
-        centroid.TryGetValue("RTTLatency", out double latency);
-        centroid.TryGetValue("CellularSupport", out double cellular);
+        if (members.Count == 0)
+            return new Dictionary<string, double>();
 
-        bool highDataRate = dr >= 100;
-        bool longRange = range >= 5000;
-        bool lowEnergy = energy < 150;
-        bool highLatency = latency > 1000;
-        bool isCellular = cellular >= 0.5;
-
-        if (highDataRate && !longRange)
-            return "Short-range High-throughput (WLAN)";
-        if (isCellular && dr >= 1)
-            return "Wide-area Cellular IoT";
-        if (longRange && highLatency)
-            return "Long-range Low-data-rate (LPWAN)";
-        if (lowEnergy && !isCellular)
-            return "Low-power Mesh / PAN";
-        if (longRange)
-            return "Long-range Mixed Profile";
-        return "Mixed Profile";
+        var centroid = new Dictionary<string, double>();
+        foreach (var criterion in clusteringCriteria)
+        {
+            double mean = members.Average(t => t.Criteria.GetValueOrDefault(criterion.Key, 0.0));
+            centroid[criterion.Key] = mean;
+        }
+        return centroid;
     }
 }

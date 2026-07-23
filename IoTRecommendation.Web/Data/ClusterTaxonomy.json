@@ -1,0 +1,22 @@
+[
+  {
+    "clusterId": 0,
+    "label": "High-Throughput WLAN",
+    "technologyIds": ["wifi7", "wifi6"]
+  },
+  {
+    "clusterId": 1,
+    "label": "Ultra-Low-Power PAN/Mesh",
+    "technologyIds": ["ble54", "zigbee", "thread", "zwaveLR"]
+  },
+  {
+    "clusterId": 2,
+    "label": "Long-Range LPWAN",
+    "technologyIds": ["nbiot", "lorawan", "sigfox", "ltem"]
+  },
+  {
+    "clusterId": 3,
+    "label": "Mixed Mid-Range",
+    "technologyIds": ["wifihalow", "fiveg_redcap", "wisun"]
+  }
+]

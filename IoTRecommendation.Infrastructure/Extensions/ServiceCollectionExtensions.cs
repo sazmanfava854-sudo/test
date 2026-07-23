@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IExpertRepository, JsonExpertRepository>();
         services.AddSingleton<IQuestionRepository, JsonQuestionRepository>();
         services.AddSingleton<ISettingsRepository, JsonSettingsRepository>();
+        services.AddSingleton<IClusterTaxonomyRepository, JsonClusterTaxonomyRepository>();
 
         return services;
     }
