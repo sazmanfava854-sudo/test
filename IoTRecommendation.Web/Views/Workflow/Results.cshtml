@@ -35,6 +35,20 @@
     }
 </div>
 
+@if (Model.EligibilityResult?.Excluded.Count > 0)
+{
+    <div class="alert alert-info small mb-4">
+        <strong>Questionnaire eligibility:</strong> the following technologies were
+        <em>excluded</em> before TOPSIS/VIKOR/COPRAS (hard constraint, not weight adjustment):
+        <ul class="mb-0 mt-2">
+            @foreach (var ex in Model.EligibilityResult.Excluded)
+            {
+                <li><strong>@ex.TechnologyName</strong> — @ex.Reason</li>
+            }
+        </ul>
+    </div>
+}
+
 <div class="d-flex flex-wrap gap-3 mb-4">
     @if (Model.MultiMethodComparison.AllWinnersAgree)
     {

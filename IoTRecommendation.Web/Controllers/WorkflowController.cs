@@ -24,6 +24,7 @@ public sealed class WorkflowController : Controller
     private readonly RankingComparisonService _rankingComparisonService;
     private readonly MultiMethodComparisonService _multiMethodComparisonService;
     private readonly ISettingsRepository _settingsRepository;
+    private readonly QuestionnaireEligibilityService _eligibilityService;
 
     public WorkflowController(
         ClusteringService clusteringService,
@@ -34,7 +35,8 @@ public sealed class WorkflowController : Controller
         CoprasService coprasService,
         RankingComparisonService rankingComparisonService,
         MultiMethodComparisonService multiMethodComparisonService,
-        ISettingsRepository settingsRepository)
+        ISettingsRepository settingsRepository,
+        QuestionnaireEligibilityService eligibilityService)
     {
         _clusteringService = clusteringService;
         _ahpService = ahpService;
@@ -45,6 +47,7 @@ public sealed class WorkflowController : Controller
         _rankingComparisonService = rankingComparisonService;
         _multiMethodComparisonService = multiMethodComparisonService;
         _settingsRepository = settingsRepository;
+        _eligibilityService = eligibilityService;
     }
 
     // ──────────────────────────────────────────────────────── Phase 1: Clustering
@@ -194,18 +197,19 @@ public sealed class WorkflowController : Controller
 
         var cluster = session.ClusteringResult!.Clusters.First(c => c.ClusterId == session.SelectedClusterId);
 
-        // TOPSIS, VIKOR, and COPRAS all run on identical inputs (same cluster +
-        // adaptive weights) so their rankings are directly comparable.
+        var eligibility = await _eligibilityService.FilterClusterAsync(cluster.TechnologyIds, answers);
+
+        // TOPSIS, VIKOR, and COPRAS run on eligible technologies only (same adaptive weights).
         var topsisResult = await _topsisService.RunAsync(
-            cluster.TechnologyIds,
+            eligibility.EligibleTechnologyIds,
             adaptiveResult.AdaptiveWeights,
             session.SelectedClusterId!.Value);
         var vikorResult = await _vikorService.RunAsync(
-            cluster.TechnologyIds,
+            eligibility.EligibleTechnologyIds,
             adaptiveResult.AdaptiveWeights,
             session.SelectedClusterId!.Value);
         var coprasResult = await _coprasService.RunAsync(
-            cluster.TechnologyIds,
+            eligibility.EligibleTechnologyIds,
             adaptiveResult.AdaptiveWeights,
             session.SelectedClusterId!.Value);
 
@@ -213,6 +217,7 @@ public sealed class WorkflowController : Controller
         var multiMethodComparison = _multiMethodComparisonService.Compare(topsisResult, vikorResult, coprasResult);
 
         session.Answers = answers;
+        session.EligibilityResult = eligibility;
         session.AdaptiveWeightResult = adaptiveResult;
         session.TopsisResult = topsisResult;
         session.VikorResult = vikorResult;
@@ -247,6 +252,7 @@ public sealed class WorkflowController : Controller
             Comparison = session.RankingComparison,
             MultiMethodComparison = session.MultiMethodComparison,
             AdaptiveWeightResult = session.AdaptiveWeightResult!,
+            EligibilityResult = session.EligibilityResult,
             SelectedCluster = selectedCluster,
             CriteriaDefinitions = settings.CriteriaDefinitions.Where(c => c.UsedInTopsis).ToList()
         };

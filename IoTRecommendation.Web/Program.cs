@@ -67,6 +67,7 @@ builder.Services.AddSingleton<ICoprasCalculator, CoprasCalculator>();
 builder.Services.AddScoped<ClusteringService>();
 builder.Services.AddScoped<AhpService>();
 builder.Services.AddScoped<AdaptiveWeightingService>();
+builder.Services.AddScoped<QuestionnaireEligibilityService>();
 builder.Services.AddScoped<TopsisService>();
 builder.Services.AddScoped<VikorService>();
 builder.Services.AddScoped<CoprasService>();

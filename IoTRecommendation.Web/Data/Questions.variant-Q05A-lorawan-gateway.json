@@ -126,9 +126,7 @@
       {
         "id": "Q05_B",
         "text": "With limitations",
-        "effects": [
-          { "criterionKey": "CellularSupport",          "delta": 0 }
-        ]
+        "effects": []
       },
       {
         "id": "Q05_C",
@@ -148,7 +146,7 @@
         "id": "Q06_A",
         "text": "Good coverage and allowed usage",
         "effects": [
-          { "criterionKey": "CellularSupport",          "delta": -1 }
+          { "criterionKey": "CellularSupport",          "delta": 1 }
         ]
       },
       {
@@ -161,9 +159,7 @@
       {
         "id": "Q06_C",
         "text": "Poor coverage or cellular not possible",
-        "effects": [
-          { "criterionKey": "CellularSupport",          "delta": -1 }
-        ]
+        "effects": []
       }
     ]
   },
