@@ -49,7 +49,7 @@
       "displayName": "RTT Latency",
       "unit": "ms",
       "type": "Cost",
-      "usedInClustering": true,
+      "usedInClustering": false,
       "usedInTopsis": true,
       "transform": "Log1p"
     },
@@ -64,21 +64,21 @@
     },
     {
       "key": "AnnualConnectivityOPEX",
-      "displayName": "Annual Connectivity OPEX",
-      "unit": "USD/node/yr",
+      "displayName": "Annual Mandatory Connectivity OPEX",
+      "unit": "ordinal (1–5)",
       "type": "Cost",
       "usedInClustering": true,
       "usedInTopsis": true,
-      "transform": "Log1p"
+      "transform": "None"
     },
     {
       "key": "HardwareCAPEX",
-      "displayName": "Hardware CAPEX",
-      "unit": "USD/node",
+      "displayName": "Connectivity Hardware CAPEX",
+      "unit": "ordinal (1–5)",
       "type": "Cost",
-      "usedInClustering": true,
+      "usedInClustering": false,
       "usedInTopsis": true,
-      "transform": "Log1p"
+      "transform": "None"
     }
   ]
 }
