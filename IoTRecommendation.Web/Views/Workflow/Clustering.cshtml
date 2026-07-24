@@ -5,7 +5,7 @@
 
 <div class="page-header d-flex align-items-center gap-2">
     <h2 class="h4 mb-0">Phase 1 – Technology Clustering</h2>
-    <span class="badge bg-primary step-badge">Domain Taxonomy</span>
+    <span class="badge bg-primary step-badge">K-Means</span>
 </div>
 
 @if (Model is null)
@@ -47,9 +47,9 @@ else
     </div>
 
     <div class="alert alert-secondary small">
-        <strong>Note:</strong> Cluster assignments are recommended from the domain taxonomy
-        (<code>Data/ClusterTaxonomy.json</code>). The k-evaluation table below still shows
-        K-Means metrics for reference; AHP weights are not used in clustering.
+        <strong>Note:</strong> Clustering uses only objective technical features (K-Means on z-scored
+        criteria marked <code>usedInClustering</code> in Settings). AHP weights are not used here.
+        Cluster labels are inferred from centroids for display only.
     </div>
 
     <h5>k Evaluation Metrics</h5>

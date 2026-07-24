@@ -12,5 +12,4 @@ public sealed class DataPathOptions
     public string QuestionsFile { get; set; } = "Questions.json";
     public string SettingsFile { get; set; } = "Settings.json";
     public string ExpertsDirectory { get; set; } = "Experts";
-    public string ClusterTaxonomyFile { get; set; } = "ClusterTaxonomy.json";
 }
