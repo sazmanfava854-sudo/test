@@ -19,7 +19,9 @@
       "id": "Q06_C",
       "text": "Poor coverage or cellular not possible",
       "effects": [
-        { "criterionKey": "CellularSupport", "delta": 2 }
+        { "criterionKey": "CellularSupport", "delta": 3 },
+        { "criterionKey": "RTTLatency", "delta": 2 },
+        { "criterionKey": "AnnualConnectivityOPEX", "delta": 1 }
       ]
     }
   ]
