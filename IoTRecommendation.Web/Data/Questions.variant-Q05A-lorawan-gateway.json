@@ -120,24 +120,20 @@
         "id": "Q05_A",
         "text": "Easy",
         "effects": [
-          { "criterionKey": "CellularSupport",          "delta": -1 },
-          { "criterionKey": "TransmissionRange",       "delta": 1 },
-          { "criterionKey": "LinkBudget",               "delta": 1 }
+          { "criterionKey": "CellularSupport",          "delta": -1 }
         ]
       },
       {
         "id": "Q05_B",
         "text": "With limitations",
         "effects": [
-          { "criterionKey": "HardwareCAPEX",            "delta": 1 }
+          { "criterionKey": "CellularSupport",          "delta": 0 }
         ]
       },
       {
         "id": "Q05_C",
         "text": "Very difficult",
         "effects": [
-          { "criterionKey": "HardwareCAPEX",            "delta": 1 },
-          { "criterionKey": "AnnualConnectivityOPEX",   "delta": 1 },
           { "criterionKey": "CellularSupport",          "delta": 1 }
         ]
       }
