@@ -45,7 +45,7 @@ public sealed class ClusteringService
         var (scaled, means, stds) = Standardize(transformed);
 
         var output = _clusteringAlgorithm.Run(scaled, settings.KMeansMin, settings.KMeansMax);
-        var clusters = BuildClusters(output, technologies, clusteringCriteria, means, stds);
+        var clusters = BuildClusters(output, technologies, clusteringCriteria, means, stds, scaled);
 
         return new ClusteringResult
         {
@@ -115,27 +115,31 @@ public sealed class ClusteringService
         IReadOnlyList<Technology> technologies,
         List<CriterionDefinition> clusteringCriteria,
         double[] means,
-        double[] stds)
+        double[] stds,
+        double[][] scaled)
     {
         var clusters = new List<ClusterInfo>();
         int k = output.OptimalK;
 
         for (int c = 0; c < k; c++)
         {
-            var memberTechs = technologies
-                .Where((_, idx) => output.Labels[idx] == c)
+            var memberIndices = Enumerable.Range(0, technologies.Count)
+                .Where(idx => output.Labels[idx] == c)
                 .ToList();
+            var memberTechs = memberIndices.Select(i => technologies[i]).ToList();
 
             var centroidOriginal = new Dictionary<string, double>();
             for (int j = 0; j < clusteringCriteria.Count; j++)
             {
-                double scaled = output.ScaledCentroids[c][j];
-                double transformed = scaled * stds[j] + means[j];
+                double scaledCentroid = output.ScaledCentroids[c][j];
+                double transformed = scaledCentroid * stds[j] + means[j];
                 double original = clusteringCriteria[j].Transform == CriterionTransform.Log1p
                     ? Math.Exp(transformed) - 1.0
                     : transformed;
                 centroidOriginal[clusteringCriteria[j].Key] = original;
             }
+
+            double dispersion = ComputeIntraClusterDispersion(scaled, memberIndices, output.ScaledCentroids[c]);
 
             clusters.Add(new ClusterInfo
             {
@@ -143,11 +147,39 @@ public sealed class ClusteringService
                 Label = string.Empty,
                 TechnologyIds = memberTechs.Select(t => t.Id).ToList(),
                 TechnologyNames = memberTechs.Select(t => t.Name).ToList(),
-                CentroidValues = centroidOriginal
+                CentroidValues = centroidOriginal,
+                IntraClusterDispersion = dispersion
             });
         }
 
+        double maxDispersion = clusters.Max(cl => cl.IntraClusterDispersion);
+        foreach (var cluster in clusters)
+            cluster.IsHighestDispersion = cluster.IntraClusterDispersion >= maxDispersion - 1e-9;
+
         ClusterCentroidLabeler.ApplyLabels(clusters);
         return clusters;
+    }
+
+    private static double ComputeIntraClusterDispersion(
+        double[][] scaled,
+        IReadOnlyList<int> memberIndices,
+        double[] centroidScaled)
+    {
+        if (memberIndices.Count == 0)
+            return 0;
+
+        double sum = 0;
+        foreach (int i in memberIndices)
+        {
+            double dist2 = 0;
+            for (int j = 0; j < scaled[i].Length; j++)
+            {
+                double d = scaled[i][j] - centroidScaled[j];
+                dist2 += d * d;
+            }
+            sum += dist2;
+        }
+
+        return sum / memberIndices.Count;
     }
 }

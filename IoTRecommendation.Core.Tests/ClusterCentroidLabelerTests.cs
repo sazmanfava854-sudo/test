@@ -17,7 +17,7 @@ public sealed class ClusterCentroidLabelerTests
         Assert.Equal("Short-Range Ultra-Low-Power PAN", ClusterCentroidLabeler.InferPrimaryLabel(pan));
         Assert.Equal("Cellular IoT (LTE-M / NR-Light)", ClusterCentroidLabeler.InferPrimaryLabel(cellular));
         Assert.Equal("Long-Range LPWAN", ClusterCentroidLabeler.InferPrimaryLabel(lpwan));
-        Assert.Equal("Long-Range Low-Power Mesh", ClusterCentroidLabeler.InferPrimaryLabel(mesh));
+        Assert.Equal(ClusterCentroidLabeler.ExtendedRangeLowPowerLabel, ClusterCentroidLabeler.InferPrimaryLabel(mesh));
         Assert.Equal("High-Throughput WLAN", ClusterCentroidLabeler.InferPrimaryLabel(wlan));
 
         Assert.DoesNotContain("Mixed", ClusterCentroidLabeler.InferPrimaryLabel(pan));

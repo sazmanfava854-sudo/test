@@ -15,4 +15,13 @@ public sealed class ClusterInfo
 
     /// <summary>Centroid values in original (non-scaled) space, keyed by CriterionDefinition.Key.</summary>
     public Dictionary<string, double> CentroidValues { get; set; } = new();
+
+    /// <summary>
+    /// Mean squared distance of members to the cluster centroid in z-scored feature space (within-cluster spread).
+    /// Higher values suggest a more heterogeneous or residual grouping.
+    /// </summary>
+    public double IntraClusterDispersion { get; set; }
+
+    /// <summary>True when this cluster has the highest dispersion among all clusters at the chosen k.</summary>
+    public bool IsHighestDispersion { get; set; }
 }

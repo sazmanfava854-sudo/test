@@ -8,6 +8,8 @@ namespace IoTRecommendation.Core.Algorithms.Clustering;
 /// </summary>
 public static class ClusterCentroidLabeler
 {
+    public const string ExtendedRangeLowPowerLabel = "Extended-Range Low-Power (Star/FAN/Mesh)";
+    public const string ShortRangePanLabel = "Short-Range Ultra-Low-Power PAN";
     /// <summary>Assigns a descriptive label to each cluster from its centroid, then resolves duplicate labels.</summary>
     public static void ApplyLabels(IList<ClusterInfo> clusters)
     {
@@ -71,10 +73,10 @@ public static class ClusterCentroidLabeler
             return "Cellular IoT (LTE-M / NR-Light)";
 
         if (energy < panEnergyMaxMw && range >= meshRangeMinM && shortRange)
-            return "Long-Range Low-Power Mesh";
+            return ExtendedRangeLowPowerLabel;
 
         if (energy < panEnergyMaxMw && range < shortRangeMaxM)
-            return "Short-Range Ultra-Low-Power PAN";
+            return ShortRangePanLabel;
 
         if (longRange)
             return "Long-Range Wide-Area";
@@ -93,15 +95,15 @@ public static class ClusterCentroidLabeler
         var groups = clusters.GroupBy(c => c.Label).Where(g => g.Count() > 1);
         foreach (var group in groups)
         {
-            if (group.Key is "Short-Range Ultra-Low-Power PAN" or "Ultra-Low-Power PAN/Mesh")
+            if (group.Key is ShortRangePanLabel or "Ultra-Low-Power PAN/Mesh")
             {
-                RelabelByRange(group, "Short-Range Ultra-Low-Power PAN", "Long-Range Low-Power Mesh", 500);
+                RelabelByRange(group, ShortRangePanLabel, ExtendedRangeLowPowerLabel, 500);
                 continue;
             }
 
-            if (group.Key is "Long-Range Low-Power Mesh")
+            if (group.Key is ExtendedRangeLowPowerLabel or "Long-Range Low-Power Mesh")
             {
-                RelabelByRange(group, "Short-Range Ultra-Low-Power PAN", "Long-Range Low-Power Mesh", 500);
+                RelabelByRange(group, ShortRangePanLabel, ExtendedRangeLowPowerLabel, 500);
                 continue;
             }
 
