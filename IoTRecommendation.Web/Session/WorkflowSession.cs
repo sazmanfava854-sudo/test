@@ -4,7 +4,6 @@ using IoTRecommendation.Core.Models.Clustering;
 using IoTRecommendation.Core.Models.Comparison;
 using IoTRecommendation.Core.Models.Copras;
 using IoTRecommendation.Core.Models.Questionnaire;
-using IoTRecommendation.Core.Services;
 using IoTRecommendation.Core.Models.Topsis;
 using IoTRecommendation.Core.Models.Vikor;
 
@@ -20,7 +19,6 @@ public sealed class WorkflowSession
     public AhpResult? AhpResult { get; set; }
     public int? SelectedClusterId { get; set; }
     public List<QuestionnaireAnswer> Answers { get; set; } = new();
-    public EligibilityResult? EligibilityResult { get; set; }
     public AdaptiveWeightResult? AdaptiveWeightResult { get; set; }
     public TopsisResult? TopsisResult { get; set; }
     public VikorResult? VikorResult { get; set; }

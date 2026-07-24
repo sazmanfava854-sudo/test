@@ -33,20 +33,21 @@
 
 ---
 
-## Diff (فقط Q05_A)
+## Diff (فقط Q05 — هر سه گزینه فقط `CellularSupport`)
 
-```diff
-         "id": "Q05_A",
-         "text": "Easy",
-         "effects": [
--          { "criterionKey": "HardwareCAPEX",            "delta": -1 },
--          { "criterionKey": "AnnualConnectivityOPEX",   "delta": -1 },
--          { "criterionKey": "CellularSupport",          "delta": -1 }
-+          { "criterionKey": "CellularSupport",          "delta": -1 },
-+          { "criterionKey": "TransmissionRange",       "delta": 1 },
-+          { "criterionKey": "LinkBudget",               "delta": 1 }
-         ]
+| گزینه | effects |
+|--------|---------|
+| **Q05_A Easy** | `CellularSupport` **−1** — گیت‌وی/نقطه دسترسی محلی؛ کمتر به سلولار متکی |
+| **Q05_B With limitations** | `[]` — بدون تغییر وزن سلولار |
+| **Q05_C Very difficult** | `CellularSupport` **+1** — نصب سخت؛ بیشتر به backhaul سلولار متکی |
+
+```json
+"Q05_A": "effects": [ { "criterionKey": "CellularSupport", "delta": -1 } ]
+"Q05_B": "effects": []
+"Q05_C": "effects": [ { "criterionKey": "CellularSupport", "delta": 1 } ]
 ```
+
+نسخهٔ قبلی این سند که Range/Link روی Q05_A داشت، حذف شد — فقط سلولار.
 
 ---
 
