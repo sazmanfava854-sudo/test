@@ -1,6 +1,6 @@
 {
   "expertId": "Expert2",
-  "expertName": "Expert 2 – شبکه، دوربین مداربسته (fACg3)",
+  "expertName": "Expert 2 – شبکه، دوربین مداربسته",
   "matrix": [
     [1,    0.333, 3,    1,    2,    0.5,  3,    3   ],
     [3,    1,     2,    2,    3,    3,    3,    3   ],
