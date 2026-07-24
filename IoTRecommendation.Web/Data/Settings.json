@@ -19,9 +19,9 @@
     },
     {
       "key": "CellularSupport",
-      "displayName": "Cellular Support",
+      "displayName": "Cellular dependency (operator modem)",
       "unit": "0/1",
-      "type": "Benefit",
+      "type": "Cost",
       "usedInClustering": false,
       "usedInTopsis": true,
       "transform": "None"

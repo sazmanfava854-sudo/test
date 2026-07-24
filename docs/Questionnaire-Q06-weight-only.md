@@ -59,20 +59,25 @@
       "id": "Q06_C",
       "text": "Poor coverage or cellular not possible",
       "effects": [
-        { "criterionKey": "CellularSupport", "delta": 3 },
-        { "criterionKey": "RTTLatency", "delta": 2 },
-        { "criterionKey": "AnnualConnectivityOPEX", "delta": 1 }
+        { "criterionKey": "CellularSupport", "delta": 3 }
       ]
     }
   ]
 }
 ```
 
+**حداقل پیکربندی (همان چیزی که در `Questions.json` commit شده):** فقط `CellularSupport` با **+3** در Q06_C. برای نزدیک‌تر شدن رتبهٔ **VIKOR** به TOPSIS/COPRAS می‌توانید اختیاری اضافه کنید:
+
+```json
+{ "criterionKey": "RTTLatency", "delta": 2 },
+{ "criterionKey": "AnnualConnectivityOPEX", "delta": 1 }
+```
+
 | گزینه | delta | با نوع **Cost** |
 |--------|--------|------------------|
 | **A** پوشش خوب | **−1** | وزن «وابستگی سلولار» **کمتر** |
 | **B** متوسط | خالی | فقط وزن پایه AHP |
-| **C** بدون سلولار | **+3 سلولار، +2 RTT، +1 OPEX** | جریمهٔ NB در **همهٔ روش‌ها** (به‌ویژه VIKOR) |
+| **C** بدون سلولار | **+3 سلولار** (اختیاری: +2 RTT، +1 OPEX) | جریمهٔ NB در TOPSIS/COPRAS؛ VIKOR ممکن است به تقویت RTT نیاز داشته باشد |
 
 `CellularSupport` فقط **+1** (مثلاً اگر Q05_A هم `Cellular −1` بدهد) برای **TOPSIS** کافی است؛ برای **VIKOR** معمولاً **کافی نیست** — به **+3** برسانید یا RTT را تقویت کنید.
 

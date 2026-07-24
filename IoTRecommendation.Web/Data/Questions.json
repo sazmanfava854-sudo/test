@@ -158,15 +158,13 @@
       {
         "id": "Q06_B",
         "text": "Moderate coverage or minor restrictions",
-        "effects": [
-          { "criterionKey": "CellularSupport",          "delta": 1 }
-        ]
+        "effects": []
       },
       {
         "id": "Q06_C",
         "text": "Poor coverage or cellular not possible",
         "effects": [
-          { "criterionKey": "CellularSupport",          "delta": -1 }
+          { "criterionKey": "CellularSupport",          "delta": 3 }
         ]
       }
     ]
