@@ -1,3 +1,4 @@
+using IoTRecommendation.Core.Algorithms.Clustering;
 using IoTRecommendation.Core.Interfaces;
 using IoTRecommendation.Core.Models;
 using IoTRecommendation.Core.Models.Clustering;
@@ -6,7 +7,7 @@ using IoTRecommendation.Core.Models.Enums;
 namespace IoTRecommendation.Core.Services;
 
 /// <summary>
-/// Orchestrates Phase 1: feature preparation, scaling, clustering,
+/// Orchestrates Phase 1: feature preparation, scaling, K-Means clustering,
 /// and centroid back-transformation to original units.
 ///
 /// AHP weights are deliberately NOT used here — clustering is purely data-driven.
@@ -39,20 +40,12 @@ public sealed class ClusteringService
         if (clusteringCriteria.Count < 2)
             throw new InvalidOperationException("At least 2 criteria must be marked UsedInClustering.");
 
-        // Build raw feature matrix
         double[][] raw = BuildRawMatrix(technologies, clusteringCriteria);
-
-        // Apply per-criterion transforms (log1p for wide-range columns)
         double[][] transformed = ApplyTransforms(raw, clusteringCriteria);
-
-        // Z-score standardisation (mean=0, std=1)
         var (scaled, means, stds) = Standardize(transformed);
 
-        // Run clustering algorithm (implementation is injected — swappable)
         var output = _clusteringAlgorithm.Run(scaled, settings.KMeansMin, settings.KMeansMax);
-
-        // Back-transform centroids to original units for display
-        var clusters = BuildClusters(output, technologies, clusteringCriteria, means, stds);
+        var clusters = BuildClusters(output, technologies, clusteringCriteria, means, stds, scaled);
 
         return new ClusteringResult
         {
@@ -63,8 +56,6 @@ public sealed class ClusteringService
             SelectionRationale = output.SelectionRationale
         };
     }
-
-    // ──────────────────────────────────────────────────────── Feature matrix
 
     private static double[][] BuildRawMatrix(
         IReadOnlyList<Technology> technologies,
@@ -119,78 +110,76 @@ public sealed class ClusteringService
         return (scaled, means, stds);
     }
 
-    // ──────────────────────────────────────────────────────── Cluster building
-
     private static List<ClusterInfo> BuildClusters(
         ClusteringAlgorithmOutput output,
         IReadOnlyList<Technology> technologies,
         List<CriterionDefinition> clusteringCriteria,
         double[] means,
-        double[] stds)
+        double[] stds,
+        double[][] scaled)
     {
         var clusters = new List<ClusterInfo>();
         int k = output.OptimalK;
 
         for (int c = 0; c < k; c++)
         {
-            var memberTechs = technologies
-                .Where((_, idx) => output.Labels[idx] == c)
+            var memberIndices = Enumerable.Range(0, technologies.Count)
+                .Where(idx => output.Labels[idx] == c)
                 .ToList();
+            var memberTechs = memberIndices.Select(i => technologies[i]).ToList();
 
-            // Back-transform centroid: scaled → transformed → original
             var centroidOriginal = new Dictionary<string, double>();
             for (int j = 0; j < clusteringCriteria.Count; j++)
             {
-                double scaled = output.ScaledCentroids[c][j];
-                double transformed = scaled * stds[j] + means[j];
+                double scaledCentroid = output.ScaledCentroids[c][j];
+                double transformed = scaledCentroid * stds[j] + means[j];
                 double original = clusteringCriteria[j].Transform == CriterionTransform.Log1p
                     ? Math.Exp(transformed) - 1.0
                     : transformed;
                 centroidOriginal[clusteringCriteria[j].Key] = original;
             }
 
+            double dispersion = ComputeIntraClusterDispersion(scaled, memberIndices, output.ScaledCentroids[c]);
+
             clusters.Add(new ClusterInfo
             {
                 ClusterId = c,
-                Label = InferLabel(centroidOriginal, clusteringCriteria),
+                Label = string.Empty,
                 TechnologyIds = memberTechs.Select(t => t.Id).ToList(),
                 TechnologyNames = memberTechs.Select(t => t.Name).ToList(),
-                CentroidValues = centroidOriginal
+                CentroidValues = centroidOriginal,
+                IntraClusterDispersion = dispersion
             });
         }
+
+        double maxDispersion = clusters.Max(cl => cl.IntraClusterDispersion);
+        foreach (var cluster in clusters)
+            cluster.IsHighestDispersion = cluster.IntraClusterDispersion >= maxDispersion - 1e-9;
+
+        ClusterCentroidLabeler.ApplyLabels(clusters);
         return clusters;
     }
 
-    /// <summary>
-    /// Infers a human-readable cluster label from centroid values.
-    /// Rules are descriptive — not tied to AHP weights.
-    /// </summary>
-    private static string InferLabel(
-        Dictionary<string, double> centroid,
-        List<CriterionDefinition> criteria)
+    private static double ComputeIntraClusterDispersion(
+        double[][] scaled,
+        IReadOnlyList<int> memberIndices,
+        double[] centroidScaled)
     {
-        centroid.TryGetValue("DataRate", out double dr);
-        centroid.TryGetValue("TransmissionRange", out double range);
-        centroid.TryGetValue("EnergyConsumption", out double energy);
-        centroid.TryGetValue("RTTLatency", out double latency);
-        centroid.TryGetValue("CellularSupport", out double cellular);
+        if (memberIndices.Count == 0)
+            return 0;
 
-        bool highDataRate = dr >= 100;
-        bool longRange = range >= 5000;
-        bool lowEnergy = energy < 150;
-        bool highLatency = latency > 1000;
-        bool isCellular = cellular >= 0.5;
+        double sum = 0;
+        foreach (int i in memberIndices)
+        {
+            double dist2 = 0;
+            for (int j = 0; j < scaled[i].Length; j++)
+            {
+                double d = scaled[i][j] - centroidScaled[j];
+                dist2 += d * d;
+            }
+            sum += dist2;
+        }
 
-        if (highDataRate && !longRange)
-            return "Short-range High-throughput (WLAN)";
-        if (isCellular && dr >= 1)
-            return "Wide-area Cellular IoT";
-        if (longRange && highLatency)
-            return "Long-range Low-data-rate (LPWAN)";
-        if (lowEnergy && !isCellular)
-            return "Low-power Mesh / PAN";
-        if (longRange)
-            return "Long-range Mixed Profile";
-        return "Mixed Profile";
+        return sum / memberIndices.Count;
     }
 }

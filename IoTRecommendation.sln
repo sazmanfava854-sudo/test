@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IoTRecommendation.Infrastru
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IoTRecommendation.Web", "IoTRecommendation.Web\IoTRecommendation.Web.csproj", "{D5270AEC-44EC-4100-BC49-075CCA546261}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IoTRecommendation.Core.Tests", "IoTRecommendation.Core.Tests\IoTRecommendation.Core.Tests.csproj", "{32B4C568-CF33-447E-8D48-DFC05E201C77}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{D5270AEC-44EC-4100-BC49-075CCA546261}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D5270AEC-44EC-4100-BC49-075CCA546261}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D5270AEC-44EC-4100-BC49-075CCA546261}.Release|Any CPU.Build.0 = Release|Any CPU
+		{32B4C568-CF33-447E-8D48-DFC05E201C77}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32B4C568-CF33-447E-8D48-DFC05E201C77}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32B4C568-CF33-447E-8D48-DFC05E201C77}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32B4C568-CF33-447E-8D48-DFC05E201C77}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

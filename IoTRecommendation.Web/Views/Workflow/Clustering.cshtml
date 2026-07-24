@@ -47,8 +47,11 @@ else
     </div>
 
     <div class="alert alert-secondary small">
-        <strong>Note:</strong> Clustering uses only objective technical features and does not use AHP weights.
-        Clusters are descriptive groupings, not definitive classifications.
+        <strong>Note:</strong> Clustering uses only objective technical features (K-Means on z-scored
+        criteria marked <code>usedInClustering</code> in Settings). AHP weights are not used here.
+        Cluster labels are interpretation rules applied to K-Means centroids (after clustering) for display only.
+        <strong>Intra-cluster dispersion</strong> is mean squared distance to the centroid in z-scored space;
+        the highest value often marks a heterogeneous Sub-GHz / extended-range group (e.g. HaLow, Z-Wave LR, Wi-SUN), not a uniform topology class.
     </div>
 
     <h5>k Evaluation Metrics</h5>
@@ -88,12 +91,22 @@ else
         {
             <div class="col-md-6">
                 <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-1">
                         <strong>Cluster @cluster.ClusterId</strong>
-                        <span class="badge bg-secondary">@cluster.TechnologyNames.Count technologies</span>
+                        <span class="d-flex gap-1 flex-wrap">
+                            @if (cluster.IsHighestDispersion && cluster.TechnologyNames.Count > 1)
+                            {
+                                <span class="badge bg-warning text-dark" title="Highest within-cluster spread at this k — interpret as possibly heterogeneous / residual, not a single topology family.">High dispersion</span>
+                            }
+                            <span class="badge bg-secondary">@cluster.TechnologyNames.Count nodes</span>
+                        </span>
                     </div>
                     <div class="card-body">
                         <p class="text-muted small mb-2 fst-italic">@cluster.Label</p>
+                        @if (cluster.TechnologyNames.Count > 0)
+                        {
+                            <p class="small text-muted mb-2">Dispersion (z-space): @cluster.IntraClusterDispersion.ToString("F3")</p>
+                        }
                         <ul class="list-unstyled mb-2">
                             @foreach (var t in cluster.TechnologyNames)
                             {
