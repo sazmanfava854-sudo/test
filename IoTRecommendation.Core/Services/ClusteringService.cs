@@ -1,3 +1,4 @@
+using IoTRecommendation.Core.Algorithms.Clustering;
 using IoTRecommendation.Core.Interfaces;
 using IoTRecommendation.Core.Models;
 using IoTRecommendation.Core.Models.Clustering;
@@ -139,41 +140,14 @@ public sealed class ClusteringService
             clusters.Add(new ClusterInfo
             {
                 ClusterId = c,
-                Label = InferLabel(centroidOriginal),
+                Label = string.Empty,
                 TechnologyIds = memberTechs.Select(t => t.Id).ToList(),
                 TechnologyNames = memberTechs.Select(t => t.Name).ToList(),
                 CentroidValues = centroidOriginal
             });
         }
+
+        ClusterCentroidLabeler.ApplyLabels(clusters);
         return clusters;
-    }
-
-    /// <summary>
-    /// Descriptive label from cluster centroid (not expert taxonomy).
-    /// </summary>
-    private static string InferLabel(Dictionary<string, double> centroid)
-    {
-        centroid.TryGetValue("DataRate", out double dr);
-        centroid.TryGetValue("TransmissionRange", out double range);
-        centroid.TryGetValue("EnergyConsumption", out double energy);
-        centroid.TryGetValue("RTTLatency", out double latency);
-
-        bool highDataRate = dr >= 100;
-        bool longRange = range >= 5000;
-        bool lowEnergy = energy < 150;
-        bool lowDataRate = dr < 5;
-        bool highLatency = latency > 1000;
-
-        if (highDataRate && !longRange)
-            return "High-Throughput WLAN";
-        if (longRange && (lowDataRate || highLatency))
-            return "Long-Range LPWAN";
-        if (lowEnergy && !longRange)
-            return "Ultra-Low-Power PAN/Mesh";
-        if (!highDataRate && !lowEnergy)
-            return "Mixed Mid-Range";
-        if (longRange)
-            return "Long-Range Mixed Profile";
-        return "Mixed Profile";
     }
 }

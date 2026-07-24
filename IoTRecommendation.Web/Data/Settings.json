@@ -49,7 +49,7 @@
       "displayName": "RTT Latency",
       "unit": "ms",
       "type": "Cost",
-      "usedInClustering": false,
+      "usedInClustering": true,
       "usedInTopsis": true,
       "transform": "Log1p"
     },
@@ -76,7 +76,7 @@
       "displayName": "Connectivity Hardware CAPEX",
       "unit": "ordinal (1–5)",
       "type": "Cost",
-      "usedInClustering": false,
+      "usedInClustering": true,
       "usedInTopsis": true,
       "transform": "None"
     }
