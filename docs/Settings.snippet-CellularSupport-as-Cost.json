@@ -1,0 +1,9 @@
+{
+  "key": "CellularSupport",
+  "displayName": "Cellular dependency (operator modem)",
+  "unit": "0/1",
+  "type": "Cost",
+  "usedInClustering": false,
+  "usedInTopsis": true,
+  "transform": "None"
+}

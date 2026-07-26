@@ -9,8 +9,8 @@
       "LinkBudget": 73,
       "RTTLatency": 1,
       "EnergyConsumption": 39000,
-      "AnnualConnectivityOPEX": 46.4,
-      "HardwareCAPEX": 400
+      "AnnualConnectivityOPEX": 3,
+      "HardwareCAPEX": 5
     }
   },
   {
@@ -23,8 +23,8 @@
       "LinkBudget": 113,
       "RTTLatency": 20,
       "EnergyConsumption": 1495,
-      "AnnualConnectivityOPEX": 4.7,
-      "HardwareCAPEX": 150
+      "AnnualConnectivityOPEX": 3,
+      "HardwareCAPEX": 4
     }
   },
   {
@@ -37,8 +37,8 @@
       "LinkBudget": 114.5,
       "RTTLatency": 48,
       "EnergyConsumption": 115.5,
-      "AnnualConnectivityOPEX": 22.6,
-      "HardwareCAPEX": 80
+      "AnnualConnectivityOPEX": 2,
+      "HardwareCAPEX": 4
     }
   },
   {
@@ -51,8 +51,8 @@
       "LinkBudget": 144,
       "RTTLatency": 14,
       "EnergyConsumption": 366.3,
-      "AnnualConnectivityOPEX": 132.2,
-      "HardwareCAPEX": 300
+      "AnnualConnectivityOPEX": 5,
+      "HardwareCAPEX": 4
     }
   },
   {
@@ -65,8 +65,8 @@
       "LinkBudget": 151,
       "RTTLatency": 5800,
       "EnergyConsumption": 87,
-      "AnnualConnectivityOPEX": 13,
-      "HardwareCAPEX": 25
+      "AnnualConnectivityOPEX": 4,
+      "HardwareCAPEX": 3
     }
   },
   {
@@ -79,8 +79,8 @@
       "LinkBudget": 146,
       "RTTLatency": 15,
       "EnergyConsumption": 295,
-      "AnnualConnectivityOPEX": 30,
-      "HardwareCAPEX": 30
+      "AnnualConnectivityOPEX": 4,
+      "HardwareCAPEX": 3
     }
   },
   {
@@ -93,8 +93,8 @@
       "LinkBudget": 154,
       "RTTLatency": 1200,
       "EnergyConsumption": 102.3,
-      "AnnualConnectivityOPEX": 10,
-      "HardwareCAPEX": 20
+      "AnnualConnectivityOPEX": 2,
+      "HardwareCAPEX": 4
     }
   },
   {
@@ -107,8 +107,8 @@
       "LinkBudget": 159,
       "RTTLatency": 60000,
       "EnergyConsumption": 33,
-      "AnnualConnectivityOPEX": 3.5,
-      "HardwareCAPEX": 15
+      "AnnualConnectivityOPEX": 4,
+      "HardwareCAPEX": 2
     }
   },
   {
@@ -121,8 +121,8 @@
       "LinkBudget": 117.1,
       "RTTLatency": 30,
       "EnergyConsumption": 18,
-      "AnnualConnectivityOPEX": 5,
-      "HardwareCAPEX": 20
+      "AnnualConnectivityOPEX": 1,
+      "HardwareCAPEX": 1
     }
   },
   {
@@ -135,8 +135,8 @@
       "LinkBudget": 119.5,
       "RTTLatency": 60,
       "EnergyConsumption": 28.2,
-      "AnnualConnectivityOPEX": 3.75,
-      "HardwareCAPEX": 15
+      "AnnualConnectivityOPEX": 1,
+      "HardwareCAPEX": 2
     }
   },
   {
@@ -149,8 +149,8 @@
       "LinkBudget": 124.9,
       "RTTLatency": 75,
       "EnergyConsumption": 15.9,
-      "AnnualConnectivityOPEX": 3.7,
-      "HardwareCAPEX": 18
+      "AnnualConnectivityOPEX": 1,
+      "HardwareCAPEX": 2
     }
   },
   {
@@ -163,8 +163,8 @@
       "LinkBudget": 101,
       "RTTLatency": 400,
       "EnergyConsumption": 15.2,
-      "AnnualConnectivityOPEX": 11.5,
-      "HardwareCAPEX": 35
+      "AnnualConnectivityOPEX": 2,
+      "HardwareCAPEX": 3
     }
   },
   {
@@ -177,8 +177,8 @@
       "LinkBudget": 111.3,
       "RTTLatency": 1860,
       "EnergyConsumption": 40.3,
-      "AnnualConnectivityOPEX": 37.2,
-      "HardwareCAPEX": 45
+      "AnnualConnectivityOPEX": 2,
+      "HardwareCAPEX": 4
     }
   }
 ]

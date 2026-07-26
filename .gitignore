@@ -1,8 +1,14 @@
-# HR Performance System - .gitignore
+# IoTRecommendation / shared .NET
 
-## .NET
+## Build output
 bin/
 obj/
+**/bin/
+**/obj/
+
+## Packaged drops (use GitHub Releases instead)
+*.zip
+!releases/.gitkeep
 *.user
 *.suo
 logs/

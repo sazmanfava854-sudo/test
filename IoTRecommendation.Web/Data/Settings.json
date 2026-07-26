@@ -19,9 +19,9 @@
     },
     {
       "key": "CellularSupport",
-      "displayName": "Cellular Support",
+      "displayName": "Cellular dependency (operator modem)",
       "unit": "0/1",
-      "type": "Benefit",
+      "type": "Cost",
       "usedInClustering": false,
       "usedInTopsis": true,
       "transform": "None"
@@ -64,21 +64,21 @@
     },
     {
       "key": "AnnualConnectivityOPEX",
-      "displayName": "Annual Connectivity OPEX",
-      "unit": "USD/node/yr",
+      "displayName": "Annual Mandatory Connectivity OPEX",
+      "unit": "ordinal (1–5)",
       "type": "Cost",
       "usedInClustering": true,
       "usedInTopsis": true,
-      "transform": "Log1p"
+      "transform": "None"
     },
     {
       "key": "HardwareCAPEX",
-      "displayName": "Hardware CAPEX",
-      "unit": "USD/node",
+      "displayName": "Connectivity Hardware CAPEX",
+      "unit": "ordinal (1–5)",
       "type": "Cost",
       "usedInClustering": true,
       "usedInTopsis": true,
-      "transform": "Log1p"
+      "transform": "None"
     }
   ]
 }

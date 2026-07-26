@@ -120,24 +120,18 @@
         "id": "Q05_A",
         "text": "Easy",
         "effects": [
-          { "criterionKey": "HardwareCAPEX",            "delta": -1 },
-          { "criterionKey": "AnnualConnectivityOPEX",   "delta": -1 },
           { "criterionKey": "CellularSupport",          "delta": -1 }
         ]
       },
       {
         "id": "Q05_B",
         "text": "With limitations",
-        "effects": [
-          { "criterionKey": "HardwareCAPEX",            "delta": 1 }
-        ]
+        "effects": []
       },
       {
         "id": "Q05_C",
         "text": "Very difficult",
         "effects": [
-          { "criterionKey": "HardwareCAPEX",            "delta": 1 },
-          { "criterionKey": "AnnualConnectivityOPEX",   "delta": 1 },
           { "criterionKey": "CellularSupport",          "delta": 1 }
         ]
       }
@@ -152,20 +146,20 @@
         "id": "Q06_A",
         "text": "Good coverage and allowed usage",
         "effects": [
-          { "criterionKey": "CellularSupport",          "delta": -1 }
+          { "criterionKey": "CellularSupport",          "delta": 1 }
         ]
       },
       {
         "id": "Q06_B",
         "text": "Moderate coverage or minor restrictions",
-        "effects": []
+        "effects": [
+          { "criterionKey": "CellularSupport",          "delta": 1 }
+        ]
       },
       {
         "id": "Q06_C",
         "text": "Poor coverage or cellular not possible",
-        "effects": [
-          { "criterionKey": "CellularSupport",          "delta": 3 }
-        ]
+        "effects": []
       }
     ]
   },
