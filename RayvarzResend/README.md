@@ -112,16 +112,16 @@ WSDL: همان آدرس + `?wsdl`
   "ServiceUrl": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
   "WsAddressingTo": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
   "SoapAction": "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
-  "PhasTyp": "ptDraftRegion",
-  "VchrTyp": "pfRecieve",
+  "PhasTyp": "7",
+  "VchrTyp": "0",
   "IncmMkrTyp": "0",
   "DryRun": true
 }
 ```
 
-XML ارسالی با نمونه مستندات رایورز هم‌راستا است (SOAP 1.2 + WS-Addressing، پیشوند `b:` برای قرارداد WCF، `PhasTyp`/`VchrTyp` به‌صورت نام enum).
+`PhasTyp` / `VchrTyp` در SOAP به‌صورت **عدد smallint** (طبق PDF راهنمای DLL) — پیش‌فرض: `7` (حواله شهرستان / ptDraftRegion)، `0` (دریافت / pfRecieve). نام enum در config هم پذیرفته می‌شود و به عدد تبدیل می‌شود.
 
-### Rayvarz Ping چیست؟
+برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"` در appsettings.
 
 یک **GET ساده به آدرس WSDL** همان `ServiceUrl` (مثلاً `...?wsdl`) است — بدون ارسال `SaveDocument`. فقط می‌گوید از این ماشین به MSB/رایورز **راه شبکه و SSL** باز است یا نه.
 

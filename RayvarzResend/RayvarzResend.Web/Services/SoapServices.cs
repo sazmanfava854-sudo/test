@@ -34,8 +34,20 @@ public class SoapBuilder
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
-        var phasTyp = _config["Rayvarz:PhasTyp"] ?? "ptDraftRegion";
-        var vchrTyp = _config["Rayvarz:VchrTyp"] ?? "pfRecieve";
+        var phasTyp = ResolveSoapSmallInt(_config["Rayvarz:PhasTyp"], "7", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ptCash"] = "1",
+            ["ptDraft"] = "2",
+            ["ptCheque"] = "3",
+            ["ptChequeDuration"] = "4",
+            ["ptDraftRegion"] = "7"
+        });
+        var vchrTyp = ResolveSoapSmallInt(_config["Rayvarz:VchrTyp"], "0", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["pfRecieve"] = "0",
+            ["pfReceive"] = "0",
+            ["pfPay"] = "1"
+        });
         var incmMkrTyp = _config["Rayvarz:IncmMkrTyp"] ?? "0";
         var bank = ResolveBankCode(fiche.BankCode);
 
@@ -75,14 +87,14 @@ public class SoapBuilder
                 <b:IncmMkrTyp>{incmMkrTyp}</b:IncmMkrTyp>
                 <b:Incms>{incmItems}
                 </b:Incms>
-                <b:PhasTyp>{Escape(phasTyp)}</b:PhasTyp>
+                <b:PhasTyp>{phasTyp}</b:PhasTyp>
                 {XmlOptionalElement("b", "Ref2", fiche.BillId, nilIfEmpty: true)}
                 {XmlOptionalElement("b", "Ref3", fiche.PaymentId, nilIfEmpty: true)}
                 {XmlOptionalElement("b", "RefownrDsc", fiche.FicheNo, nilIfEmpty: true)}
                 {refRecon}
                 <b:RowDate>{rowDateRay}</b:RowDate>
                 <b:RowDocNo>{Escape(fiche.FicheNo)}</b:RowDocNo>
-                <b:VchrTyp>{Escape(vchrTyp)}</b:VchrTyp>
+                <b:VchrTyp>{vchrTyp}</b:VchrTyp>
               </b:DocumentItem>
             </b:Items>
             <b:Rcvr>0</b:Rcvr>
@@ -121,6 +133,15 @@ public class SoapBuilder
 
     private static int ResolveBankCode(string? bankCode) =>
         int.TryParse(bankCode, out var bank) ? bank : 0;
+
+    /// <summary>مقادیر SOAP smallint — طبق PDF راهنما (مثلاً PhasTyp=7 برای ptDraftRegion).</summary>
+    private static string ResolveSoapSmallInt(string? configured, string defaultValue, IReadOnlyDictionary<string, string> nameToCode)
+    {
+        var raw = string.IsNullOrWhiteSpace(configured) ? defaultValue : configured.Trim();
+        if (int.TryParse(raw, out _))
+            return raw;
+        return nameToCode.TryGetValue(raw, out var code) ? code : defaultValue;
+    }
 
     private static string BuildIncmRow(
         IncmRowDto row,

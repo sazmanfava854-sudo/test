@@ -135,7 +135,22 @@ app.MapPost("/api/fiche/preview", (SendFicheRequest req, SoapBuilder soap) =>
 app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, SoapBuilder soap, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
 {
     var fiche = req.Fiche;
-    if (fiche.ExistsInRayvarz || await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct))
+
+    bool existsInRayvarz;
+    try
+    {
+        existsInRayvarz = fiche.ExistsInRayvarz || await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new
+        {
+            error = $"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}",
+            hint = ConnectionHint("Rayvarz", config.GetConnectionString("Rayvarz") ?? "", ex)
+        }, statusCode: 503);
+    }
+
+    if (existsInRayvarz)
         return Results.BadRequest(new { error = "فیش در رایورز موجود است — ارسال نشد" });
 
     if (req.ResetStatus)
@@ -149,17 +164,35 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     var result = await client.SendAsync(xml, dryRun, ct);
 
     if (!dryRun && result.Success)
-        result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+    {
+        try
+        {
+            result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+        }
+        catch (SqlException ex)
+        {
+            result.VerifiedInRayvarz = false;
+            result.Message = (result.Message ?? "") + $" | تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}";
+        }
+    }
 
     if (!dryRun && !result.VerifiedInRayvarz)
     {
-        result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+        try
+        {
+            result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+        }
+        catch (SqlException ex)
+        {
+            result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+        }
+
         if (result.Success)
         {
             result.Success = false;
             result.Message = string.IsNullOrWhiteSpace(result.Message)
                 ? "SOAP موفق گزارش شد ولی فیش در incmdocsys ثبت نشد"
-                : result.Message + " — ولی فیش در incmdocsys ثبت نشد";
+                : result.Message + " — ولی فیش در incmdocsys ثبت نشده";
         }
     }
 
