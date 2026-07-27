@@ -258,6 +258,10 @@ async function init() {
 
   const today = new Date();
   $('docDate').value = `140${today.getFullYear() - 2020}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+
+  if (config.uiVersion !== '2' || !config.features?.rayvarzPostTest) {
+    console.warn('Backend قدیمی — دکمه POST Test ممکن است 404 بدهد. git pull rayvarz-resend');
+  }
 }
 
 function showRayvarzTestWaiting(title) {
@@ -402,12 +406,14 @@ function setupEventHandlers() {
       `ElapsedMs: ${data.elapsedMs}`,
       data.error ? `Error: ${data.error}` : '',
       data.inner ? `Inner: ${data.inner}` : '',
-      data.hint ? `Hint: ${data.hint}` : ''
+      data.hint ? `Hint: ${data.hint}` : '',
+      data.warning ? `Warning: ${data.warning}` : ''
     ].filter(Boolean).join('\n');
     $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
     $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (!data.ok) alert('Ping ناموفق — جزئیات در بخش نتیجه و کنسول dotnet (لاگ RayvarzClient).');
-    else alert('Ping موفق — مسیر شبکه تا MSB/WSDL باز است.');
+    if (!data.ok) alert('Ping ناموفق — اتصال TCP/HTTP برقرار نشد. POST Test را هم چک کنید.');
+    else if (data.warning) alert(data.warning);
+    else alert('Ping موفق — WSDL در دسترس است.');
   } catch (e) {
     alert(e.message);
   } finally {

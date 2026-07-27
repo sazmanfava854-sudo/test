@@ -143,6 +143,8 @@ WSDL: همان آدرس + `?wsdl`
 
 | مشکل | راه‌حل |
 |------|--------|
+اگر **Ping** با `502` روی `?wsdl` خطا داد ولی **تست POST (بدون ثبت)** موفق بود، طبیعی است — پروکسی MSB گاهی WSDL را 502 می‌دهد ولی `SaveDocument` با POST کار می‌کند. معیار ارسال: POST Test و سپس ارسال فیش.
+
 | Ping OK ولی Send با `forcibly closed` | دکمه **تست POST (بدون ثبت)** یا `GET /api/rayvarz-post-test`: اگر POST خالی هم reset شد → فایروال/WAF مسیر POST را می‌بندد (با IT مجوز IP بگیرید)؛ اگر POST خالی جواب گرفت (حتی Fault) → مشکل از محتوا/اندازه XML واقعی است |
 | Ping: `SSL connection could not be established` / `forcibly closed` | **شبکه/MSB** — WSDL بدون SOAP است؛ `SoapEnvelopeStyle` و XML بی‌اثرند. اجرا از سرور شهرسازی + VPN؛ `UseSystemProxy: true` یا `ProxyUrl`؛ تست مرورگر/curl به `ServiceUrl?wsdl` از همان PC |
 | BnkAcntNo خالی | برای نوسازی: `OtherFields` — برای درآمد: join `Base_NosaziCode` |

@@ -110,6 +110,8 @@ public class RayvarzPingResultDto
     public string? Error { get; set; }
     public string? Inner { get; set; }
     public string? Hint { get; set; }
+    /// <summary>مثلاً WSDL با 502 ولی مسیر HTTP تا MSB باز است.</summary>
+    public string? Warning { get; set; }
     public RayvarzTransportDiagnostics? Diagnostics { get; set; }
 }
 

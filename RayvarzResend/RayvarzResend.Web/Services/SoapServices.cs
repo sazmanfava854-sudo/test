@@ -239,7 +239,7 @@ public class RayvarzClient
         var diagnostics = new RayvarzTransportDiagnostics
         {
             PostUrl = wsdlUrl,
-            EnvelopeStyle = "(ping — بدون SOAP)"
+            EnvelopeStyle = "(ping — GET ?wsdl)"
         };
 
         try
@@ -250,28 +250,47 @@ public class RayvarzClient
             var body = await response.Content.ReadAsStringAsync(ct);
             sw.Stop();
 
-            diagnostics = RayvarzDiagnosticsHelper.ForSuccess(
-                sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode, body.Length);
-            diagnostics.Category = response.IsSuccessStatusCode ? "PingOk" : "PingHttpError";
+            var status = (int)response.StatusCode;
+            var wsdlOk = response.IsSuccessStatusCode;
+            var httpReached = wsdlOk || IsHttpReachable(status, body);
+
+            diagnostics = RayvarzDiagnosticsHelper.ForSuccess(sw.ElapsedMilliseconds, diagnostics, status, body.Length);
             diagnostics.Stage = "GetWsdl";
-            if (!response.IsSuccessStatusCode)
+
+            string? warning = null;
+            if (httpReached && !wsdlOk)
             {
-                diagnostics.LikelyCause = $"WSDL با HTTP {(int)response.StatusCode} برگشت — مسیر یا احراز MSB.";
-                diagnostics.Hint = "ServiceUrl و VPN را چک کنید.";
+                diagnostics.Category = "PingWsdlDegraded";
+                diagnostics.LikelyCause =
+                    $"پاسخ HTTP {status} از MSB/پروکسی دریافت شد — مسیر شبکه باز است، ولی ?wsdl خطا داد (در این محیط طبیعی است).";
+                diagnostics.Hint = "معیار اصلی: «تست POST (بدون ثبت)» و ارسال SaveDocument — نه WSDL.";
+                warning = $"WSDL: HTTP {status} — اتصال برقرار؛ برای ارسال فیش به POST Test تکیه کنید.";
+            }
+            else if (wsdlOk)
+            {
+                diagnostics.Category = "PingOk";
+            }
+            else
+            {
+                diagnostics.Category = "PingHttpError";
+                diagnostics.LikelyCause = $"WSDL با HTTP {status} و بدنه خالی/کوتاه — مسیر نامشخص.";
+                diagnostics.Hint = "VPN و ServiceUrl را چک کنید؛ سپس POST Test.";
             }
 
             _logger.LogInformation(
-                "Rayvarz ping پایان — Ok={Ok} Status={Status} ElapsedMs={ElapsedMs}",
-                response.IsSuccessStatusCode, (int)response.StatusCode, sw.ElapsedMilliseconds);
+                "Rayvarz ping پایان — Reachable={Reachable} WsdlOk={WsdlOk} Status={Status} ElapsedMs={ElapsedMs}",
+                httpReached, wsdlOk, status, sw.ElapsedMilliseconds);
 
             return new RayvarzPingResultDto
             {
-                Ok = response.IsSuccessStatusCode,
+                Ok = httpReached,
                 Url = wsdlUrl,
-                StatusCode = (int)response.StatusCode,
+                StatusCode = status,
                 ElapsedMs = sw.ElapsedMilliseconds,
                 BodyPreview = body.Length > 200 ? body[..200] : body,
                 AllowInvalidSsl = allowInvalidSsl,
+                Warning = warning,
+                Hint = diagnostics.Hint,
                 Diagnostics = diagnostics
             };
         }
@@ -296,6 +315,10 @@ public class RayvarzClient
             };
         }
     }
+
+    /// <summary>پاسخ HTTP از پروکسی (حتی 502) یعنی مسیر شبکه باز است؛ برعکس connection reset.</summary>
+    private static bool IsHttpReachable(int statusCode, string body) =>
+        body.Length > 50 && statusCode is 502 or 405 or 401 or 403 or 500 or 400;
 
     /// <summary>POST آزمایشی بی‌خطر: envelope حداقلی که سندی ثبت نمی‌کند؛ فقط مسیر POST تا MSB را می‌سنجد.</summary>
     public async Task<RayvarzPingResultDto> PostProbeAsync(CancellationToken ct = default)
