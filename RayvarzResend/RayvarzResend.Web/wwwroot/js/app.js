@@ -98,6 +98,8 @@ function showSendResult(data) {
   msg += formatDiagnostics(data.diagnostics);
   $('resultBox').textContent = msg;
 }
+
+function bnkAcntNoSource(f) {
   if (f.bnkAcntNoSource) return f.bnkAcntNoSource;
   if (f.category === 'Income') return 'کد نوسازی — Base_NosaziCode (فیش درآمد)';
   if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') return 'کد نوسازی — Duty_Fiche.OtherFields (فیش نوسازی/صنفی)';
