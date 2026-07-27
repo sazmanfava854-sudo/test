@@ -91,26 +91,29 @@ WHERE f.FicheNo = @FicheNo;
 | `101104/9881711` | `10-8-276-11-0-0-0` | 210 | 200210020 |
 | `071101/6174383` | `7-14-55-1-0-0-0` | 207 | 200207009 |
 
-## وب‌سرویس اصلی (Production)
+## وب‌سرویس (پیش‌فرض — همان WinTestService موفق)
 
 ```
-https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices
+http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc
 ```
 
-WSDL: همان آدرس + `?wsdl`
+WSDL: همان آدرس + `?wsdl` (از شبکه داخلی / VPN ITC).
 
-### جریان تست با Production
+### MSB (Production — فقط وقتی IT مسیر را باز کرد)
 
-1. `DryRun: true` — فقط XML (بدون ثبت سند)
-2. فیش **غیرتکراری** (در `incmdocsys` نیست)
-3. `DryRun: false` — ارسال واقعی
-4. بررسی در `ray.incmdocsys`
-5. **حذف سند تست** از رایورز
+```
+http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices.svc
+```
+
+در `appsettings.json` مقدار `ServiceUrlMsb` نگه داشته شده؛ برای سوئیچ به MSB، `ServiceUrl` و `WsAddressingTo` را با همان آدرس MSB عوض کنید (ترجیحاً از سرور مجاز شهرسازی).
+
+### نمونه appsettings
 
 ```json
 "Rayvarz": {
-  "ServiceUrl": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
-  "WsAddressingTo": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
+  "ServiceUrl": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
+  "WsAddressingTo": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
+  "ServiceUrlMsb": "http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices.svc",
   "SoapAction": "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
   "PhasTyp": "7",
   "VchrTyp": "0",
@@ -118,6 +121,13 @@ WSDL: همان آدرس + `?wsdl`
   "DryRun": true
 }
 ```
+
+### جریان تست
+
+1. `DryRun: true` — فقط XML
+2. فیش **غیرتکراری**
+3. `DryRun: false` — ارسال واقعی (روی ITC سند ثبت می‌شود — سند تست را حذف کنید)
+4. بررسی در `ray.incmdocsys`
 
 `PhasTyp` / `VchrTyp` در SOAP به‌صورت **عدد smallint** (طبق PDF راهنمای DLL) — پیش‌فرض: `7` (حواله شهرستان / ptDraftRegion)، `0` (دریافت / pfRecieve). نام enum در config هم پذیرفته می‌شود و به عدد تبدیل می‌شود.
 

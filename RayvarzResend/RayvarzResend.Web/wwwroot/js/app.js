@@ -229,7 +229,7 @@ async function init() {
     return;
   }
   const badge = $('configBadge');
-  const envLabel = 'MSB رایورز (Production)';
+  const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
   badge.textContent = config.dryRun
     ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
     : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;

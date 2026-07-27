@@ -32,6 +32,7 @@ app.MapGet("/api/config", (IConfiguration config) => new
 {
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrl"]),
+    serviceUrlMsb = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrlMsb"] ?? ""),
     wsAddressingTo = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:WsAddressingTo"] ?? config["Rayvarz:ServiceUrl"]),
     useHttp = config.GetValue("Rayvarz:UseHttp", true),
     soapEnvelopeStyle = config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing",

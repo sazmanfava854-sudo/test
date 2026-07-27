@@ -4,7 +4,8 @@
     "Rayvarz": "Server=tcp:YOUR_RAY_SERVER,1433;Database=Ray_CityHall;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
   },
   "Rayvarz": {
-    "ServiceUrl": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
+    "ServiceUrl": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
+    "WsAddressingTo": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
     "DryRun": true,
     "AllowInvalidSsl": false,
     "ProxyUrl": ""
