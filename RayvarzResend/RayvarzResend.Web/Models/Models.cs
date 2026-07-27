@@ -75,6 +75,41 @@ public class SendResultDto
     public bool DryRun { get; set; }
     public bool VerifiedInRayvarz { get; set; }
     public string? DocNotSentError { get; set; }
+    public RayvarzTransportDiagnostics? Diagnostics { get; set; }
+}
+
+/// <summary>جزئیات فنی ارسال/اتصال برای UI و لاگ (بدون ذخیره کل XML در لاگ فایل).</summary>
+public class RayvarzTransportDiagnostics
+{
+    public string Category { get; set; } = "";
+    public string Stage { get; set; } = "";
+    public long ElapsedMs { get; set; }
+    public string? PostUrl { get; set; }
+    public string? WsAddressingTo { get; set; }
+    public string? SoapAction { get; set; }
+    public string? ContentType { get; set; }
+    public int RequestBodyBytes { get; set; }
+    public bool HasWsAddressingHeader { get; set; }
+    public string? EnvelopeStyle { get; set; }
+    public int? HttpStatusCode { get; set; }
+    public int? ResponseBodyBytes { get; set; }
+    public List<string> ExceptionChain { get; set; } = new();
+    public string? LikelyCause { get; set; }
+    public string? Hint { get; set; }
+}
+
+public class RayvarzPingResultDto
+{
+    public bool Ok { get; set; }
+    public string Url { get; set; } = "";
+    public int? StatusCode { get; set; }
+    public long ElapsedMs { get; set; }
+    public string? BodyPreview { get; set; }
+    public bool AllowInvalidSsl { get; set; }
+    public string? Error { get; set; }
+    public string? Inner { get; set; }
+    public string? Hint { get; set; }
+    public RayvarzTransportDiagnostics? Diagnostics { get; set; }
 }
 
 public class AppConfig

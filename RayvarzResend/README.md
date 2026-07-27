@@ -121,13 +121,29 @@ WSDL: همان آدرس + `?wsdl`
 
 XML ارسالی با نمونه مستندات رایورز هم‌راستا است (SOAP 1.2 + WS-Addressing، پیشوند `b:` برای قرارداد WCF، `PhasTyp`/`VchrTyp` به‌صورت نام enum).
 
+### Rayvarz Ping چیست؟
+
+یک **GET ساده به آدرس WSDL** همان `ServiceUrl` (مثلاً `...?wsdl`) است — بدون ارسال `SaveDocument`. فقط می‌گوید از این ماشین به MSB/رایورز **راه شبکه و SSL** باز است یا نه.
+
+- API: `GET /api/rayvarz-ping`
+- UI: دکمه **«تست اتصال رایورز (Ping)»**
+
+اگر Ping خطا دهد، مشکل SOAP/هدر نیست. اگر Ping موفق و Send خطا دهد، روی XML/هدر تمرکز کنید.
+
+### لاگ و Diagnostics
+
+- کنسول `dotnet run`: لاگ‌های `RayvarzClient` (سطح `Debug` در appsettings)
+- پس از ارسال: فیلد `Diagnostics` در JSON (Category، Stage، HasWsAddressingHeader، ExceptionChain، LikelyCause)
+
+برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"` در appsettings.
+
 وب‌سرویس تست قدیمی در `ServiceUrlTest` نگه داشته شده است.
 
 ## عیب‌یابی
 
 | مشکل | راه‌حل |
 |------|--------|
-| `connection was forcibly closed` / `copying content to a stream` | ابتدا `GET /api/rayvarz-ping` — اگر ping ناموفق: VPN، فایروال، `AllowInvalidSsl`، `ProxyUrl`. اگر ping موفق و send خطا: پیش‌نمایش XML را با مستندات مقایسه کنید؛ `WsAddressingTo` را با آدرس سرویس واقعی (معمولاً همان `ServiceUrl`) تنظیم کنید |
+| `connection was forcibly closed` / `copying content to a stream` | **Ping** (`دکمه تست اتصال` یا `GET /api/rayvarz-ping`): ping ناموفق = شبکه؛ ping موفق + send خطا = احتمال SOAP (هدر `SoapEnvelopeStyle`: `addressing` یا `empty-header`، یا Body). در UI و کنسول بخش **Diagnostics** را ببینید |
 | BnkAcntNo خالی | برای نوسازی: `OtherFields` — برای درآمد: join `Base_NosaziCode` |
 | تکراری | فیش در `ray.incmdocsys` هست |
 | فیش یافت نشد | `Income_Fiche` سپس `Duty_Fiche` |

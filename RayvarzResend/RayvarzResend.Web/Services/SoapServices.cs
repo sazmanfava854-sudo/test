@@ -3,6 +3,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Text;
 using System.Xml.Linq;
+using Microsoft.Extensions.Logging;
 using RayvarzResend.Web.Models;
 
 namespace RayvarzResend.Web.Services;
@@ -42,18 +43,11 @@ public class SoapBuilder
             r, i + 1, docRow, docDateRay, rowDateRay, sourceSystemId)));
 
         var refRecon = XmlOptionalElement("b", "RefreconstructionNo", fiche.RefReconstructionNo);
+        var headerXml = BuildSoapHeader(action, serviceUrl);
 
         return $@"<s:Envelope xmlns:s=""{SoapNs}""
       xmlns:a=""{AddressingNs}"">
-
-      <s:Header>
-        <a:Action s:mustUnderstand=""1"">{Escape(action)}</a:Action>
-        <a:MessageID>urn:uuid:{Guid.NewGuid()}</a:MessageID>
-        <a:ReplyTo>
-          <a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>
-        </a:ReplyTo>
-        <a:To s:mustUnderstand=""1"">{Escape(serviceUrl)}</a:To>
-      </s:Header>
+{headerXml}
       <s:Body>
         <SaveDocument xmlns=""{TempUriNs}"">
           <branch>{branch}</branch>
@@ -103,6 +97,27 @@ public class SoapBuilder
         _config["Rayvarz:WsAddressingTo"]
         ?? _config["Rayvarz:ServiceUrl"]
         ?? "";
+
+    public string ResolveEnvelopeStyle() =>
+        (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
+
+    private string BuildSoapHeader(string action, string serviceUrl)
+    {
+        var style = ResolveEnvelopeStyle();
+        if (style is "empty" or "empty-header" or "minimal" or "none")
+        {
+            return "      <s:Header/>";
+        }
+
+        return $@"      <s:Header>
+        <a:Action s:mustUnderstand=""1"">{Escape(action)}</a:Action>
+        <a:MessageID>urn:uuid:{Guid.NewGuid()}</a:MessageID>
+        <a:ReplyTo>
+          <a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>
+        </a:ReplyTo>
+        <a:To s:mustUnderstand=""1"">{Escape(serviceUrl)}</a:To>
+      </s:Header>";
+    }
 
     private static int ResolveBankCode(string? bankCode) =>
         int.TryParse(bankCode, out var bank) ? bank : 0;
@@ -182,47 +197,80 @@ public class SoapBuilder
 public class RayvarzClient
 {
     private readonly IConfiguration _config;
+    private readonly ILogger<RayvarzClient> _logger;
 
-    public RayvarzClient(IConfiguration config) => _config = config;
+    public RayvarzClient(IConfiguration config, ILogger<RayvarzClient> logger)
+    {
+        _config = config;
+        _logger = logger;
+    }
 
     public string ResolveServiceUrl() =>
         _config["Rayvarz:ServiceUrl"] ?? "";
 
-    public async Task<object> PingAsync(CancellationToken ct = default)
+    public async Task<RayvarzPingResultDto> PingAsync(CancellationToken ct = default)
     {
         var baseUrl = ResolveServiceUrl().TrimEnd('/');
         var wsdlUrl = baseUrl.Contains('?') ? baseUrl : baseUrl + "?wsdl";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        var diagnostics = new RayvarzTransportDiagnostics
+        {
+            PostUrl = wsdlUrl,
+            EnvelopeStyle = "(ping — بدون SOAP)"
+        };
 
         try
         {
+            _logger.LogInformation("Rayvarz ping شروع — {Url} AllowInvalidSsl={AllowInvalidSsl}", wsdlUrl, allowInvalidSsl);
             using var client = CreateHttpClient(allowInvalidSsl);
             using var response = await client.GetAsync(wsdlUrl, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             sw.Stop();
-            return new
+
+            diagnostics = RayvarzDiagnosticsHelper.ForSuccess(
+                sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode, body.Length);
+            diagnostics.Category = response.IsSuccessStatusCode ? "PingOk" : "PingHttpError";
+            diagnostics.Stage = "GetWsdl";
+            if (!response.IsSuccessStatusCode)
             {
-                ok = response.IsSuccessStatusCode,
-                url = wsdlUrl,
-                statusCode = (int)response.StatusCode,
-                elapsedMs = sw.ElapsedMilliseconds,
-                bodyPreview = body.Length > 200 ? body[..200] : body,
-                allowInvalidSsl
+                diagnostics.LikelyCause = $"WSDL با HTTP {(int)response.StatusCode} برگشت — مسیر یا احراز MSB.";
+                diagnostics.Hint = "ServiceUrl و VPN را چک کنید.";
+            }
+
+            _logger.LogInformation(
+                "Rayvarz ping پایان — Ok={Ok} Status={Status} ElapsedMs={ElapsedMs}",
+                response.IsSuccessStatusCode, (int)response.StatusCode, sw.ElapsedMilliseconds);
+
+            return new RayvarzPingResultDto
+            {
+                Ok = response.IsSuccessStatusCode,
+                Url = wsdlUrl,
+                StatusCode = (int)response.StatusCode,
+                ElapsedMs = sw.ElapsedMilliseconds,
+                BodyPreview = body.Length > 200 ? body[..200] : body,
+                AllowInvalidSsl = allowInvalidSsl,
+                Diagnostics = diagnostics
             };
         }
         catch (Exception ex)
         {
             sw.Stop();
-            return new
+            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "GetWsdl", sw.ElapsedMilliseconds, diagnostics);
+            _logger.LogWarning(ex,
+                "Rayvarz ping خطا — Category={Category} ElapsedMs={ElapsedMs} Hint={Hint}",
+                diagnostics.Category, sw.ElapsedMilliseconds, diagnostics.Hint);
+
+            return new RayvarzPingResultDto
             {
-                ok = false,
-                url = wsdlUrl,
-                elapsedMs = sw.ElapsedMilliseconds,
-                error = ex.Message,
-                inner = ex.InnerException?.Message,
-                allowInvalidSsl,
-                hint = BuildNetworkHint(ex)
+                Ok = false,
+                Url = wsdlUrl,
+                ElapsedMs = sw.ElapsedMilliseconds,
+                Error = ex.Message,
+                Inner = ex.InnerException?.Message,
+                AllowInvalidSsl = allowInvalidSsl,
+                Hint = diagnostics.Hint ?? BuildNetworkHint(ex),
+                Diagnostics = diagnostics
             };
         }
     }
@@ -243,24 +291,69 @@ public class RayvarzClient
         var url = ResolveServiceUrl();
         var action = _config["Rayvarz:SoapAction"] ?? "";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
+        var envelopeStyle = (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
         var sendDelayMs = _config.GetValue<int>("Rayvarz:SendDelayMs");
         if (sendDelayMs > 0)
             await Task.Delay(sendDelayMs, ct);
 
+        var diagnostics = new RayvarzTransportDiagnostics
+        {
+            PostUrl = url,
+            SoapAction = action,
+            EnvelopeStyle = envelopeStyle
+        };
+        RayvarzDiagnosticsHelper.ApplySoapRequestMeta(diagnostics, soapXml, envelopeStyle);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
+            _logger.LogInformation(
+                "Rayvarz SendDocument شروع — Url={Url} Bytes={Bytes} HasWsAddressing={HasWs} To={To} Style={Style}",
+                url, diagnostics.RequestBodyBytes, diagnostics.HasWsAddressingHeader,
+                diagnostics.WsAddressingTo ?? "(empty-header)", envelopeStyle);
+
             using var client = CreateHttpClient(allowInvalidSsl);
             using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
             content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
+            diagnostics.ContentType = content.Headers.ContentType?.ToString();
 
-            var response = await client.PostAsync(url, content, ct);
-            var body = await response.Content.ReadAsStringAsync(ct);
+            using var response = await client.PostAsync(url, content, ct);
+
+            string body;
+            try
+            {
+                body = await response.Content.ReadAsStringAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                diagnostics.HttpStatusCode = (int)response.StatusCode;
+                diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "ReadResponseBody", sw.ElapsedMilliseconds, diagnostics);
+                _logger.LogWarning(ex,
+                    "Rayvarz SendDocument خطا در خواندن پاسخ — HttpStatus={Status} Category={Category}",
+                    (int)response.StatusCode, diagnostics.Category);
+
+                return new SendResultDto
+                {
+                    Success = false,
+                    DryRun = false,
+                    PreviewXml = soapXml,
+                    Diagnostics = diagnostics,
+                    Message = FormatUserMessage(ex, diagnostics)
+                };
+            }
+
+            sw.Stop();
+            diagnostics.ResponseBodyBytes = body.Length;
+            diagnostics.HttpStatusCode = (int)response.StatusCode;
 
             var result = new SendResultDto
             {
                 SoapResponse = body,
                 PreviewXml = soapXml,
-                DryRun = false
+                DryRun = false,
+                Diagnostics = diagnostics
             };
 
             try
@@ -278,6 +371,8 @@ public class RayvarzClient
                 {
                     result.Success = false;
                     result.Message = $"SOAP Fault: {faultCode} — {faultReason}".Trim(' ', '—');
+                    result.Diagnostics = RayvarzDiagnosticsHelper.ForSoapFault(sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode);
+                    _logger.LogWarning("Rayvarz SOAP Fault — {FaultCode} {FaultReason}", faultCode, faultReason);
                     return result;
                 }
 
@@ -287,30 +382,76 @@ public class RayvarzClient
 
                 if (!result.Success && string.IsNullOrWhiteSpace(result.Message))
                     result.Message = "پاسخ رایورز Success=false — جزئیات در SoapResponse";
+
+                result.Diagnostics = result.Success
+                    ? RayvarzDiagnosticsHelper.ForSuccess(sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode, body.Length)
+                    : diagnostics;
+                result.Diagnostics.Category = result.Success ? "SoapSuccess" : "SoapBusinessError";
+                result.Diagnostics.ElapsedMs = sw.ElapsedMilliseconds;
+                if (!result.Success)
+                {
+                    result.Diagnostics.LikelyCause = "رایورز Success=false — معمولاً فیلد Body (Fund، IncmNo، تاریخ، …).";
+                    result.Diagnostics.Hint = "Message و SoapResponse را ببینید.";
+                }
+
+                _logger.LogInformation(
+                    "Rayvarz SendDocument پایان — Success={Success} Http={Http} ElapsedMs={ElapsedMs}",
+                    result.Success, (int)response.StatusCode, sw.ElapsedMilliseconds);
             }
-            catch
+            catch (Exception parseEx)
             {
                 result.Success = false;
                 result.Message = response.IsSuccessStatusCode
                     ? "پاسخ HTTP موفق بود ولی SOAP معتبر نبود — در رایورز ثبت نشده"
                     : $"HTTP {(int)response.StatusCode}";
+                result.Diagnostics!.Category = "InvalidSoapResponse";
+                result.Diagnostics.Stage = "ParseResponse";
+                result.Diagnostics.LikelyCause = "پاسخ HTTP دریافت شد ولی XML SOAP قابل parse نبود.";
+                result.Diagnostics.ExceptionChain = new List<string> { $"{parseEx.GetType().Name}: {parseEx.Message}" };
+                _logger.LogWarning(parseEx, "Rayvarz پاسخ غیرقابل parse — HttpStatus={Status}", (int)response.StatusCode);
             }
 
             return result;
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
-            var inner = ex.InnerException?.Message;
+            sw.Stop();
+            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "PostSoap", sw.ElapsedMilliseconds, diagnostics);
+            _logger.LogWarning(ex,
+                "Rayvarz SendDocument خطا در POST — Category={Category} Chain={Chain}",
+                diagnostics.Category, string.Join(" | ", diagnostics.ExceptionChain));
             return new SendResultDto
             {
                 Success = false,
                 DryRun = false,
                 PreviewXml = soapXml,
-                Message = inner != null
-                    ? $"{ex.Message} | Inner: {inner} | {BuildNetworkHint(ex)}"
-                    : $"{ex.Message} | {BuildNetworkHint(ex)}"
+                Diagnostics = diagnostics,
+                Message = FormatUserMessage(ex, diagnostics)
             };
         }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "SendUnhandled", sw.ElapsedMilliseconds, diagnostics);
+            _logger.LogError(ex, "Rayvarz SendDocument خطای پیش‌بینی‌نشده");
+            return new SendResultDto
+            {
+                Success = false,
+                DryRun = false,
+                PreviewXml = soapXml,
+                Diagnostics = diagnostics,
+                Message = FormatUserMessage(ex, diagnostics)
+            };
+        }
+    }
+
+    private static string FormatUserMessage(Exception ex, RayvarzTransportDiagnostics d)
+    {
+        var inner = ex.InnerException?.Message;
+        var core = inner != null ? $"{ex.Message} | Inner: {inner}" : ex.Message;
+        var extra = d.LikelyCause;
+        var hint = d.Hint;
+        return string.Join(" | ", new[] { core, extra, hint }.Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 
     private HttpClient CreateHttpClient(bool allowInvalidSsl)

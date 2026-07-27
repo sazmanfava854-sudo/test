@@ -63,7 +63,41 @@ async function parseJsonResponse(res) {
   }
 }
 
-function bnkAcntNoSource(f) {
+function formatDiagnostics(d) {
+  if (!d) return '';
+  const lines = [
+    '--- Diagnostics ---',
+    `Category: ${d.category || '-'}`,
+    `Stage: ${d.stage || '-'}`,
+    `ElapsedMs: ${d.elapsedMs ?? '-'}`,
+    `PostUrl: ${d.postUrl || '-'}`,
+    `HasWsAddressingHeader: ${d.hasWsAddressingHeader}`,
+    `WsAddressingTo: ${d.wsAddressingTo || '-'}`,
+    `EnvelopeStyle: ${d.envelopeStyle || '-'}`,
+    `SoapAction: ${d.soapAction || '-'}`,
+    `ContentType: ${d.contentType || '-'}`,
+    `RequestBodyBytes: ${d.requestBodyBytes ?? '-'}`,
+    `HttpStatusCode: ${d.httpStatusCode ?? '-'}`,
+    `ResponseBodyBytes: ${d.responseBodyBytes ?? '-'}`
+  ];
+  if (d.likelyCause) lines.push(`LikelyCause: ${d.likelyCause}`);
+  if (d.hint) lines.push(`Hint: ${d.hint}`);
+  if (d.exceptionChain?.length) {
+    lines.push('ExceptionChain:');
+    d.exceptionChain.forEach((x) => lines.push(`  - ${x}`));
+  }
+  return lines.join('\n') + '\n';
+}
+
+function showSendResult(data) {
+  $('resultSection').hidden = false;
+  let msg = `Success: ${data.success}\nMessage: ${data.message || '-'}\nDryRun: ${data.dryRun}\n`;
+  if (data.pursuitDocNo) msg += `PursuitDocNo: ${data.pursuitDocNo}\n`;
+  if (data.verifiedInRayvarz !== undefined) msg += `VerifiedInRayvarz: ${data.verifiedInRayvarz}\n`;
+  if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
+  msg += formatDiagnostics(data.diagnostics);
+  $('resultBox').textContent = msg;
+}
   if (f.bnkAcntNoSource) return f.bnkAcntNoSource;
   if (f.category === 'Income') return 'کد نوسازی — Base_NosaziCode (فیش درآمد)';
   if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') return 'کد نوسازی — Duty_Fiche.OtherFields (فیش نوسازی/صنفی)';
@@ -263,11 +297,7 @@ $('btnSend').onclick = async () => {
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
     $('resultSection').hidden = false;
-    let msg = `Success: ${data.success}\nMessage: ${data.message || '-'}\nDryRun: ${data.dryRun}\n`;
-    if (data.pursuitDocNo) msg += `PursuitDocNo: ${data.pursuitDocNo}\n`;
-    if (data.verifiedInRayvarz !== undefined) msg += `VerifiedInRayvarz: ${data.verifiedInRayvarz}\n`;
-    if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
-    $('resultBox').textContent = msg;
+    showSendResult(data);
 
     if (data.dryRun) {
       alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
@@ -288,6 +318,33 @@ $('btnSend').onclick = async () => {
     alert(e.message);
   } finally {
     $('btnSend').disabled = false;
+  }
+};
+
+$('btnPing').onclick = async () => {
+  $('btnPing').disabled = true;
+  try {
+    const res = await fetch('/api/rayvarz-ping');
+    const data = await parseJsonResponse(res);
+    $('resultSection').hidden = false;
+    const head = [
+      `Rayvarz Ping`,
+      `Ok: ${data.ok}`,
+      `Url: ${data.url}`,
+      `StatusCode: ${data.statusCode ?? '-'}`,
+      `ElapsedMs: ${data.elapsedMs}`,
+      data.error ? `Error: ${data.error}` : '',
+      data.inner ? `Inner: ${data.inner}` : '',
+      data.hint ? `Hint: ${data.hint}` : ''
+    ].filter(Boolean).join('\n');
+    $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
+    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!data.ok) alert('Ping ناموفق — جزئیات در بخش نتیجه و کنسول dotnet (لاگ RayvarzClient).');
+    else alert('Ping موفق — مسیر شبکه تا MSB/WSDL باز است.');
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $('btnPing').disabled = false;
   }
 };
 

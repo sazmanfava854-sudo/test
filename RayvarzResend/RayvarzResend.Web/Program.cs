@@ -32,6 +32,8 @@ app.MapGet("/api/config", (IConfiguration config) => new
 {
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = config["Rayvarz:ServiceUrl"],
+    wsAddressingTo = config["Rayvarz:WsAddressingTo"],
+    soapEnvelopeStyle = config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
     branches = new[] {
