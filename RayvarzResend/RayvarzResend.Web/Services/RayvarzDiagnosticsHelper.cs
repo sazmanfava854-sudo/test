@@ -42,17 +42,22 @@ internal static class RayvarzDiagnosticsHelper
             baseInfo.Hint =
                 "برنامه را روی همان سرور/شبکه‌ای اجرا کنید که سامانه شهرسازی از آن به MSB می‌زند؛ VPN سازمان؛ ProxyUrl یا UseSystemProxy؛ با IT خروجی به https://msb.mashhad.ir را باز کنید. AllowInvalidSsl معمولاً این خطا را حل نمی‌کند.";
         }
-        else if (text.Contains("forcibly closed") || text.Contains("copying content to a stream"))
+        else         if (text.Contains("forcibly closed") || text.Contains("copying content to a stream"))
         {
             baseInfo.Category = "ConnectionReset";
+            var largePayload = baseInfo.RequestBodyBytes > 1500;
             baseInfo.LikelyCause = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
                 ? "MSB اتصال را در handshake یا WSDL قطع کرد — فایروال، IP مجاز، یا مسیر شبکه."
-                : baseInfo.HasWsAddressingHeader
-                    ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
-                    : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
-            baseInfo.Hint = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
-                ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
-                : "پس از Ping موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";
+                : largePayload
+                    ? "POST با بدنه بزرگ قطع شد — اگر POST Test کوچک OK بود: مبلغ منفی، Bank نامعتبر، یا رد محتوا توسط MSB (نسخه جدید مبالغ دریافت را مثبت و Bank را ۱–۱۲ می‌کند)."
+                    : baseInfo.HasWsAddressingHeader
+                        ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
+                        : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
+            baseInfo.Hint = stage.Equals("PostSoap", StringComparison.OrdinalIgnoreCase) && largePayload
+                ? "پیش‌نمایش XML: Qty/Val منفی نباشد؛ Bank بین ۱–۱۲ یا ۰؛ SoapEnvelopeStyle=empty-header را یک‌بار امتحان کنید."
+                : stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
+                    ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
+                    : "پس از POST Test موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";
         }
         else if (text.Contains("ssl") || text.Contains("certificate") || text.Contains("tls") || text.Contains("authentication"))
         {

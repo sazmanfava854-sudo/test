@@ -146,7 +146,7 @@ function buildMappingRows(f) {
     { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
-    { field: 'RefRowDocNo (دیتیل)', source: 'DocRow هدر (۱) — ارجاع به ردیف سند', value: '1' },
+    { field: 'RefRowDocNo (دیتیل)', source: 'شماره فیش (FicheNo)', value: '(از فیش)' },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },

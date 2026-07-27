@@ -223,7 +223,12 @@ WHERE NidFiche = @nid";
         decimal Afzodeh = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == AfzodehFiche).Sum(s => s.Price);
         decimal Atash = subs.Where(s => s.Formula == AtashFormula && s.Fiche == 0).Sum(s => s.Price);
         decimal Garbage = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == 0).Sum(s => s.Price);
-        decimal Nosazi = payable - Atash - Garbage - Afzodeh;
+        decimal NosaziFromFormula1 = subs.Where(s => s.Formula == 1 && s.Fiche == 0).Sum(s => s.Price);
+        decimal Nosazi = isSenfi
+            ? payable - Atash - Garbage - Afzodeh
+            : NosaziFromFormula1 != 0
+                ? NosaziFromFormula1
+                : payable - Atash - Garbage - Afzodeh;
 
         // ExportType=14 (بانک‌ها): IncmNo=2005 — تأیید 021204/19379176
         var mainIncm = isSenfi switch
