@@ -110,10 +110,16 @@ WSDL: همان آدرس + `?wsdl`
 ```json
 "Rayvarz": {
   "ServiceUrl": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
+  "WsAddressingTo": "https://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices",
   "SoapAction": "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+  "PhasTyp": "ptDraftRegion",
+  "VchrTyp": "pfRecieve",
+  "IncmMkrTyp": "0",
   "DryRun": true
 }
 ```
+
+XML ارسالی با نمونه مستندات رایورز هم‌راستا است (SOAP 1.2 + WS-Addressing، پیشوند `b:` برای قرارداد WCF، `PhasTyp`/`VchrTyp` به‌صورت نام enum).
 
 وب‌سرویس تست قدیمی در `ServiceUrlTest` نگه داشته شده است.
 
@@ -121,6 +127,7 @@ WSDL: همان آدرس + `?wsdl`
 
 | مشکل | راه‌حل |
 |------|--------|
+| `connection was forcibly closed` / `copying content to a stream` | ابتدا `GET /api/rayvarz-ping` — اگر ping ناموفق: VPN، فایروال، `AllowInvalidSsl`، `ProxyUrl`. اگر ping موفق و send خطا: پیش‌نمایش XML را با مستندات مقایسه کنید؛ `WsAddressingTo` را با آدرس سرویس واقعی (معمولاً همان `ServiceUrl`) تنظیم کنید |
 | BnkAcntNo خالی | برای نوسازی: `OtherFields` — برای درآمد: join `Base_NosaziCode` |
 | تکراری | فیش در `ray.incmdocsys` هست |
 | فیش یافت نشد | `Income_Fiche` سپس `Duty_Fiche` |

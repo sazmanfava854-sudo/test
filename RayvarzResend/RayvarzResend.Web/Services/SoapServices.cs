@@ -9,6 +9,12 @@ namespace RayvarzResend.Web.Services;
 
 public class SoapBuilder
 {
+    private const string SoapNs = "http://www.w3.org/2003/05/soap-envelope";
+    private const string AddressingNs = "http://www.w3.org/2005/08/addressing";
+    private const string TempUriNs = "http://tempuri.org/";
+    private const string WcfNs = "http://schemas.datacontract.org/2004/07/WCFServer";
+    private const string XsiNs = "http://www.w3.org/2001/XMLSchema-instance";
+
     private readonly IConfiguration _config;
 
     public SoapBuilder(IConfiguration config) => _config = config;
@@ -21,94 +27,133 @@ public class SoapBuilder
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
-        // شناسه یکتای تراکنش/فیش — GUID فیش
         var transactionId = fiche.NidFiche.ToString();
+        var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
+        var serviceUrl = ResolveWsAddressingTo();
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
-        var docTypDsc = ResolveDocTypDsc(fiche.DocTyp);
+        var phasTyp = _config["Rayvarz:PhasTyp"] ?? "ptDraftRegion";
+        var vchrTyp = _config["Rayvarz:VchrTyp"] ?? "pfRecieve";
+        var incmMkrTyp = _config["Rayvarz:IncmMkrTyp"] ?? "0";
+        var bank = ResolveBankCode(fiche.BankCode);
 
         var incmItems = string.Join("\n", rows.Select((r, i) => BuildIncmRow(
-            r, i + 1, docRow, docDateRay, fiche.FicheNo, fiche.Payable, transactionId, sourceSystemId)));
+            r, i + 1, docRow, docDateRay, rowDateRay, sourceSystemId)));
 
-        var refRecon = XmlOptional("RefreconstructionNo", fiche.RefReconstructionNo);
-        var bankXml = XmlOptional("Bank", fiche.BankCode);
+        var refRecon = XmlOptionalElement("b", "RefreconstructionNo", fiche.RefReconstructionNo);
 
-        return $@"<soap:Envelope xmlns:soap=""http://www.w3.org/2003/05/soap-envelope""
-  xmlns:tem=""http://tempuri.org/""
-  xmlns:wcf=""http://schemas.datacontract.org/2004/07/WCFServer""
-  xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"">
-  <soap:Header/>
-  <soap:Body>
-    <tem:SaveDocument>
-      <tem:branch>{branch}</tem:branch>
-      <tem:doc>
-        <wcf:AllowChange>false</wcf:AllowChange>
-        <wcf:DocDate>{docDateRay}</wcf:DocDate>
-        <wcf:DocDsc>{Escape(fiche.DocDsc)}</wcf:DocDsc>
-        <wcf:DocTyp>{fiche.DocTyp}</wcf:DocTyp>
-        <wcf:DocTypDsc>{Escape(docTypDsc)}</wcf:DocTypDsc>
-        <wcf:Items>
-          <wcf:DocumentItem>
-            <wcf:ActDate>{docDateRay}</wcf:ActDate>
-            <wcf:ActTyp>3</wcf:ActTyp>
-            {bankXml}
-            <wcf:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</wcf:BnkAcntNo>
-            <wcf:DocRow>{docRow}</wcf:DocRow>
-            <wcf:DocTypDsc>{Escape(docTypDsc)}</wcf:DocTypDsc>
-            <wcf:Fund>{fund}</wcf:Fund>
-            <wcf:IncmMkrTyp>1</wcf:IncmMkrTyp>
-            <wcf:Incms>{incmItems}
-            </wcf:Incms>
-            <wcf:PhasTyp>4</wcf:PhasTyp>
-            <wcf:Ref2>{Escape(fiche.BillId)}</wcf:Ref2>
-            <wcf:Ref3>{Escape(fiche.PaymentId)}</wcf:Ref3>
-            <wcf:RefownrDsc>{Escape(fiche.FicheNo)}</wcf:RefownrDsc>
-            {refRecon}
-            <wcf:RowDate>{rowDateRay}</wcf:RowDate>
-            <wcf:RowDocNo>{Escape(fiche.FicheNo)}</wcf:RowDocNo>
-            <wcf:VchrTyp>0</wcf:VchrTyp>
-          </wcf:DocumentItem>
-        </wcf:Items>
-        <wcf:TransactionId>{Escape(transactionId)}</wcf:TransactionId>
-      </tem:doc>
-    </tem:SaveDocument>
-  </soap:Body>
-</soap:Envelope>";
+        return $@"<s:Envelope xmlns:s=""{SoapNs}""
+      xmlns:a=""{AddressingNs}"">
+
+      <s:Header>
+        <a:Action s:mustUnderstand=""1"">{Escape(action)}</a:Action>
+        <a:MessageID>urn:uuid:{Guid.NewGuid()}</a:MessageID>
+        <a:ReplyTo>
+          <a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>
+        </a:ReplyTo>
+        <a:To s:mustUnderstand=""1"">{Escape(serviceUrl)}</a:To>
+      </s:Header>
+      <s:Body>
+        <SaveDocument xmlns=""{TempUriNs}"">
+          <branch>{branch}</branch>
+          <doc xmlns:b=""{WcfNs}""
+               xmlns:i=""{XsiNs}"">
+            <b:AllowChange>false</b:AllowChange>
+            <b:DocDate>{docDateRay}</b:DocDate>
+            <b:DocDsc>{Escape(fiche.DocDsc)}</b:DocDsc>
+            <b:DocTyp>{fiche.DocTyp}</b:DocTyp>
+            <b:DocTypDsc/>
+            <b:Items>
+              <b:DocumentItem>
+                <b:ActDate>{docDateRay}</b:ActDate>
+                <b:ActTyp>3</b:ActTyp>
+                <b:Bank>{bank}</b:Bank>
+                <b:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</b:BnkAcntNo>
+                <b:BnkAcntOwnr i:nil=""true""/>
+                <b:BnkBrnch i:nil=""true""/>
+                <b:Center>0</b:Center>
+                <b:Customer i:nil=""true""/>
+                <b:CustomerNationalCode i:nil=""true""/>
+                <b:DocRow>{docRow}</b:DocRow>
+                <b:Fund>{fund}</b:Fund>
+                <b:IncmMkr>0</b:IncmMkr>
+                <b:IncmMkrTyp>{incmMkrTyp}</b:IncmMkrTyp>
+                <b:Incms>{incmItems}
+                </b:Incms>
+                <b:PhasTyp>{Escape(phasTyp)}</b:PhasTyp>
+                {XmlOptionalElement("b", "Ref2", fiche.BillId, nilIfEmpty: true)}
+                {XmlOptionalElement("b", "Ref3", fiche.PaymentId, nilIfEmpty: true)}
+                {XmlOptionalElement("b", "RefownrDsc", fiche.FicheNo, nilIfEmpty: true)}
+                {refRecon}
+                <b:RowDate>{rowDateRay}</b:RowDate>
+                <b:RowDocNo>{Escape(fiche.FicheNo)}</b:RowDocNo>
+                <b:VchrTyp>{Escape(vchrTyp)}</b:VchrTyp>
+              </b:DocumentItem>
+            </b:Items>
+            <b:Rcvr>0</b:Rcvr>
+            <b:TransactionId>{Escape(transactionId)}</b:TransactionId>
+          </doc>
+        </SaveDocument>
+      </s:Body>
+    </s:Envelope>";
     }
+
+    private string ResolveWsAddressingTo() =>
+        _config["Rayvarz:WsAddressingTo"]
+        ?? _config["Rayvarz:ServiceUrl"]
+        ?? "";
+
+    private static int ResolveBankCode(string? bankCode) =>
+        int.TryParse(bankCode, out var bank) ? bank : 0;
 
     private static string BuildIncmRow(
         IncmRowDto row,
         int incmRow,
         int parentDocRow,
         string docDateRay,
-        string ficheNo,
-        decimal payable,
-        string transactionId,
-        string sourceSystemId) => $@"
-              <wcf:DocumentItemIncm>
-                <wcf:Due>{docDateRay}</wcf:Due>
-                <wcf:Id>{Escape(transactionId)}</wcf:Id>
-                <wcf:IncmNo>{row.IncmNo}</wcf:IncmNo>
-                <wcf:IncmRow>{incmRow}</wcf:IncmRow>
-                <wcf:IncmRowDsc>{Escape(row.IncmRowDsc)}</wcf:IncmRowDsc>
-                <wcf:Qty>{payable:0}</wcf:Qty>
-                <wcf:Ref>{Escape(ficheNo)}</wcf:Ref>
-                <wcf:RefRowDocNo>{parentDocRow}</wcf:RefRowDocNo>
-                {XmlOptional("SourceId", sourceSystemId)}
-                <wcf:Val>{row.Val:0}</wcf:Val>
-              </wcf:DocumentItemIncm>";
-
-    private static string ResolveDocTypDsc(int docTyp) => docTyp switch
+        string rowDateRay,
+        string? sourceSystemId)
     {
-        1 => "اسناد نوسازی",
-        2 => "اسناد صنفی",
-        3 or 11 => "اسناد شهرسازی",
-        _ => "اسناد شهرسازی"
-    };
+        var reasonDsc = string.IsNullOrWhiteSpace(row.IncmRowDsc) ? "" : Escape(row.IncmRowDsc);
+        var incmNoDsc = string.IsNullOrWhiteSpace(row.IncmRowDsc)
+            ? row.IncmNo.ToString()
+            : Escape(row.IncmRowDsc);
 
-    private static string XmlOptional(string name, string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "" : $"<wcf:{name}>{Escape(value)}</wcf:{name}>";
+        return $@"
+              <b:DocumentItemIncm>
+                <b:Center1>0</b:Center1>
+                <b:Center2>0</b:Center2>
+                <b:Center3>0</b:Center3>
+                <b:Crncy i:nil=""true""/>
+                <b:CrncyDate i:nil=""true""/>
+                <b:CrncyPrice>0</b:CrncyPrice>
+                <b:CrncyVal>0</b:CrncyVal>
+                <b:Due>{docDateRay}</b:Due>
+                <b:Id i:nil=""true""/>
+                <b:IncmNo>{row.IncmNo}</b:IncmNo>
+                <b:IncmNoDsc>{incmNoDsc}</b:IncmNoDsc>
+                <b:IncmRow>{incmRow}</b:IncmRow>
+                <b:IncmRowDsc i:nil=""true""/>
+                <b:Num i:nil=""true""/>
+                <b:Qty>{row.Val:0}</b:Qty>
+                <b:Reason>1</b:Reason>
+                <b:ReasonDsc>{reasonDsc}</b:ReasonDsc>
+                <b:Ref i:nil=""true""/>
+                <b:RefRowDate>{rowDateRay}</b:RefRowDate>
+                <b:RefRowDocNo>{parentDocRow}</b:RefRowDocNo>
+                {XmlOptionalElement("b", "SourceId", sourceSystemId, nilIfEmpty: true)}
+                <b:Val>{row.Val:0}</b:Val>
+              </b:DocumentItemIncm>";
+    }
+
+    private static string XmlOptionalElement(string prefix, string name, string? value, bool nilIfEmpty = false)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return nilIfEmpty ? $"<{prefix}:{name} i:nil=\"true\"/>" : "";
+
+        return $"<{prefix}:{name}>{Escape(value)}</{prefix}:{name}>";
+    }
 
     private static List<IncmRowDto> NormalizeRows(FicheHeaderDto fiche)
     {
@@ -116,7 +161,6 @@ public class SoapBuilder
         if (rows.Count == 0)
             rows.Add(new IncmRowDto { IncmNo = 0, Val = fiche.Payable, IncmRowDsc = "کل" });
 
-        // فیش نوسازی/صنفی: مبالغ از Duty_FicheSub خوانده می‌شوند؛ نرمال‌سازی آن‌ها را خراب می‌کند (مثلاً جایزه)
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
             return rows;
 
@@ -199,6 +243,9 @@ public class RayvarzClient
         var url = ResolveServiceUrl();
         var action = _config["Rayvarz:SoapAction"] ?? "";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
+        var sendDelayMs = _config.GetValue<int>("Rayvarz:SendDelayMs");
+        if (sendDelayMs > 0)
+            await Task.Delay(sendDelayMs, ct);
 
         try
         {
@@ -293,6 +340,8 @@ public class RayvarzClient
     private static string BuildNetworkHint(Exception ex)
     {
         var msg = (ex.Message + " " + (ex.InnerException?.Message ?? "")).ToLowerInvariant();
+        if (msg.Contains("forcibly closed") || msg.Contains("copying content to a stream"))
+            return "شبکه: ابتدا GET /api/rayvarz-ping؛ اگر ping OK و send خطا دارد XML را با مستندات مقایسه کنید؛ WsAddressingTo را در appsettings تنظیم کنید.";
         if (msg.Contains("ssl") || msg.Contains("certificate") || msg.Contains("tls")
             || msg.Contains("connection was closed") || msg.Contains("unexpected error occurred on a send"))
             return "شبکه: از همان سروری که سامانه شهرسازی ارسال می‌کند اجرا کنید؛ VPN؛ AllowInvalidSsl=true؛ یا ProxyUrl در appsettings.";
