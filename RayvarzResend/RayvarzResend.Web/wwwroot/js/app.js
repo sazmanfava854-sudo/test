@@ -260,7 +260,31 @@ async function init() {
   $('docDate').value = `140${today.getFullYear() - 2020}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
 }
 
-$('btnLoad').onclick = async () => {
+function showRayvarzTestWaiting(title) {
+  $('resultSection').hidden = false;
+  $('resultBox').textContent =
+    `${title}\n\nدر حال اتصال به MSB…\n(ممکن است ۱۵ تا ۱۲۰ ثانیه طول بکشد — صبر کنید)`;
+  $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function bindClick(id, handler) {
+  const el = $(id);
+  if (!el) {
+    console.error(`دکمه #${id} در HTML یافت نشد — index.html را به‌روز کنید.`);
+    return false;
+  }
+  el.addEventListener('click', handler);
+  return true;
+}
+
+function setupEventHandlers() {
+  const required = ['btnPing', 'btnPostTest', 'btnLoad', 'btnPreview', 'btnSend'];
+  const missing = required.filter((id) => !$(id));
+  if (missing.length) {
+    alert(`فایل index.html قدیمی است یا ناقص.\nدکمه‌های گم‌شده: ${missing.join(', ')}\nاز شاخه rayvarz-resend دوباره کپی کنید.`);
+  }
+
+  bindClick('btnLoad', async () => {
   const value = $('identifierValue').value.trim();
   if (!value) return alert('شناسه فیش را وارد کنید');
 
@@ -296,9 +320,9 @@ $('btnLoad').onclick = async () => {
   } finally {
     $('btnLoad').disabled = false;
   }
-};
+  });
 
-$('btnPreview').onclick = async () => {
+  bindClick('btnPreview', async () => {
   if (!currentFiche) return;
   $('btnPreview').disabled = true;
   try {
@@ -317,9 +341,9 @@ $('btnPreview').onclick = async () => {
   } finally {
     $('btnPreview').disabled = false;
   }
-};
+  });
 
-$('btnSend').onclick = async () => {
+  bindClick('btnSend', async () => {
   if (!currentFiche) return;
   if (currentFiche.existsInRayvarz) return alert('فیش تکراری است');
   if (!confirm(`ارسال فیش ${currentFiche.ficheNo} به رایورز؟`)) return;
@@ -358,12 +382,16 @@ $('btnSend').onclick = async () => {
     $('btnSend').disabled = false;
     updateSendButton(currentFiche);
   }
-};
+  });
 
-$('btnPing').onclick = async () => {
+  bindClick('btnPing', async () => {
   $('btnPing').disabled = true;
+  showRayvarzTestWaiting('Rayvarz Ping (GET ?wsdl)');
   try {
     const res = await fetch('/api/rayvarz-ping');
+    if (res.status === 404) {
+      throw new Error('API /api/rayvarz-ping یافت نشد — برنامه را از شاخه rayvarz-resend دوباره build و dotnet run کنید.');
+    }
     const data = await parseJsonResponse(res);
     $('resultSection').hidden = false;
     const head = [
@@ -385,12 +413,16 @@ $('btnPing').onclick = async () => {
   } finally {
     $('btnPing').disabled = false;
   }
-};
+  });
 
-$('btnPostTest').onclick = async () => {
+  bindClick('btnPostTest', async () => {
   $('btnPostTest').disabled = true;
+  showRayvarzTestWaiting('Rayvarz POST Test (بدون ثبت سند)');
   try {
     const res = await fetch('/api/rayvarz-post-test');
+    if (res.status === 404) {
+      throw new Error('API /api/rayvarz-post-test یافت نشد — نسخه قدیمی backend است. git pull rayvarz-resend و dotnet run مجدد.');
+    }
     const data = await parseJsonResponse(res);
     $('resultSection').hidden = false;
     const head = [
@@ -413,6 +445,8 @@ $('btnPostTest').onclick = async () => {
   } finally {
     $('btnPostTest').disabled = false;
   }
-};
+  });
+}
 
+setupEventHandlers();
 init();

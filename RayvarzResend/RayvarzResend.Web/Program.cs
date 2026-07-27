@@ -37,6 +37,8 @@ app.MapGet("/api/config", (IConfiguration config) => new
     soapEnvelopeStyle = config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
+    uiVersion = "2",
+    features = new { rayvarzPing = true, rayvarzPostTest = true },
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
