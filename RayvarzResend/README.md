@@ -147,7 +147,7 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 
 برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"` در appsettings.
 
-وب‌سرویس تست قدیمی در `ServiceUrlTest` نگه داشته شده است.
+آدرس MSB در `ServiceUrlMsb` برای سوئیچ Production نگه داشته شده است.
 
 ## عیب‌یابی
 
