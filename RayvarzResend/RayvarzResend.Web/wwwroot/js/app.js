@@ -387,4 +387,32 @@ $('btnPing').onclick = async () => {
   }
 };
 
+$('btnPostTest').onclick = async () => {
+  $('btnPostTest').disabled = true;
+  try {
+    const res = await fetch('/api/rayvarz-post-test');
+    const data = await parseJsonResponse(res);
+    $('resultSection').hidden = false;
+    const head = [
+      `Rayvarz POST Test (بدون ثبت سند)`,
+      `Ok: ${data.ok}`,
+      `Url: ${data.url}`,
+      `StatusCode: ${data.statusCode ?? '-'}`,
+      `ElapsedMs: ${data.elapsedMs}`,
+      data.error ? `Error: ${data.error}` : '',
+      data.inner ? `Inner: ${data.inner}` : '',
+      data.hint ? `Hint: ${data.hint}` : '',
+      data.bodyPreview ? `BodyPreview: ${data.bodyPreview}` : ''
+    ].filter(Boolean).join('\n');
+    $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
+    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (data.ok) alert('POST تا MSB رسید (پاسخ HTTP گرفت) — مسیر POST باز است.');
+    else alert('POST هم قطع شد — مسیر POST به MSB بسته است؛ با IT مجوز IP/فایروال را چک کنید.');
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $('btnPostTest').disabled = false;
+  }
+};
+
 init();

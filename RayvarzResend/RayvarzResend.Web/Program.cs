@@ -88,6 +88,9 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
 app.MapGet("/api/rayvarz-ping", async (RayvarzClient client, CancellationToken ct) =>
     Results.Ok(await client.PingAsync(ct)));
 
+app.MapGet("/api/rayvarz-post-test", async (RayvarzClient client, CancellationToken ct) =>
+    Results.Ok(await client.PostProbeAsync(ct)));
+
 app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, CancellationToken ct) =>
 {
     if (req == null || string.IsNullOrWhiteSpace(req.IdentifierValue))

@@ -297,6 +297,89 @@ public class RayvarzClient
         }
     }
 
+    /// <summary>POST آزمایشی بی‌خطر: envelope حداقلی که سندی ثبت نمی‌کند؛ فقط مسیر POST تا MSB را می‌سنجد.</summary>
+    public async Task<RayvarzPingResultDto> PostProbeAsync(CancellationToken ct = default)
+    {
+        var url = ResolveServiceUrl();
+        var action = _config["Rayvarz:SoapAction"] ?? "";
+        var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
+
+        var probeXml = $@"<s:Envelope xmlns:s=""http://www.w3.org/2003/05/soap-envelope""
+      xmlns:a=""http://www.w3.org/2005/08/addressing"">
+      <s:Header>
+        <a:Action s:mustUnderstand=""1"">{action}</a:Action>
+        <a:MessageID>urn:uuid:{Guid.NewGuid()}</a:MessageID>
+        <a:ReplyTo><a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address></a:ReplyTo>
+        <a:To s:mustUnderstand=""1"">{url}</a:To>
+      </s:Header>
+      <s:Body></s:Body>
+    </s:Envelope>";
+
+        var diagnostics = new RayvarzTransportDiagnostics
+        {
+            PostUrl = url,
+            SoapAction = action,
+            EnvelopeStyle = "(post-probe — Body خالی، سندی ثبت نمی‌شود)"
+        };
+        RayvarzDiagnosticsHelper.ApplySoapRequestMeta(diagnostics, probeXml, "probe");
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            _logger.LogInformation("Rayvarz post-probe شروع — {Url} Bytes={Bytes}", url, diagnostics.RequestBodyBytes);
+            using var client = CreateHttpClient(allowInvalidSsl);
+            using var content = new StringContent(probeXml, Encoding.UTF8, "application/soap+xml");
+            content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
+
+            using var response = await client.PostAsync(url, content, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            sw.Stop();
+
+            diagnostics.HttpStatusCode = (int)response.StatusCode;
+            diagnostics.ResponseBodyBytes = body.Length;
+            diagnostics.ElapsedMs = sw.ElapsedMilliseconds;
+            diagnostics.Stage = "PostProbe";
+            diagnostics.Category = "PostProbeReached";
+            diagnostics.LikelyCause =
+                "POST تا MSB رسید و پاسخ HTTP گرفت (حتی اگر Fault باشد طبیعی است چون Body خالی بود). یعنی مسیر POST باز است — اگر Send واقعی reset می‌شود مشکل از محتوا/اندازه XML است.";
+
+            _logger.LogInformation("Rayvarz post-probe پایان — Status={Status} ElapsedMs={Elapsed}", (int)response.StatusCode, sw.ElapsedMilliseconds);
+
+            return new RayvarzPingResultDto
+            {
+                Ok = true,
+                Url = url,
+                StatusCode = (int)response.StatusCode,
+                ElapsedMs = sw.ElapsedMilliseconds,
+                BodyPreview = body.Length > 400 ? body[..400] : body,
+                AllowInvalidSsl = allowInvalidSsl,
+                Diagnostics = diagnostics
+            };
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "PostProbe", sw.ElapsedMilliseconds, diagnostics);
+            diagnostics.LikelyCause =
+                "حتی POST کوچک با Body خالی هم قطع شد — یعنی مسیر POST به MSB بسته است (فایروال/WAF/مجوز IP)، ربطی به محتوای فیش ندارد.";
+            diagnostics.Hint =
+                "با IT: از IP این سرور، POST به MSB (همان مسیر پروکسی) باید مجاز شود — GET/WSDL باز است ولی POST reset می‌شود.";
+            _logger.LogWarning(ex, "Rayvarz post-probe خطا — Category={Category}", diagnostics.Category);
+
+            return new RayvarzPingResultDto
+            {
+                Ok = false,
+                Url = url,
+                ElapsedMs = sw.ElapsedMilliseconds,
+                Error = ex.Message,
+                Inner = ex.InnerException?.Message,
+                AllowInvalidSsl = allowInvalidSsl,
+                Hint = diagnostics.Hint,
+                Diagnostics = diagnostics
+            };
+        }
+    }
+
     public async Task<SendResultDto> SendAsync(string soapXml, bool dryRun, CancellationToken ct = default)
     {
         if (dryRun)
