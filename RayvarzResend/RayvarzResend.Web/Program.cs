@@ -35,10 +35,12 @@ app.MapGet("/api/config", (IConfiguration config) => new
     wsAddressingTo = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:WsAddressingTo"] ?? config["Rayvarz:ServiceUrl"]),
     useHttp = config.GetValue("Rayvarz:UseHttp", true),
     soapEnvelopeStyle = config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing",
+    soapVersion = config["Rayvarz:SoapVersion"] ?? "soap12",
+    refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
-    uiVersion = "2",
-    features = new { rayvarzPing = true, rayvarzPostTest = true },
+    uiVersion = "3",
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
@@ -92,6 +94,9 @@ app.MapGet("/api/rayvarz-ping", async (RayvarzClient client, CancellationToken c
 
 app.MapGet("/api/rayvarz-post-test", async (RayvarzClient client, CancellationToken ct) =>
     Results.Ok(await client.PostProbeAsync(ct)));
+
+app.MapGet("/api/rayvarz-post-minimal-save", async (RayvarzClient client, CancellationToken ct) =>
+    Results.Ok(await client.PostMinimalSaveDocumentAsync(ct)));
 
 app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, CancellationToken ct) =>
 {

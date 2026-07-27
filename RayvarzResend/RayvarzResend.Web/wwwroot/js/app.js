@@ -146,7 +146,7 @@ function buildMappingRows(f) {
     { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
-    { field: 'RefRowDocNo (دیتیل)', source: 'شماره فیش (FicheNo)', value: '(از فیش)' },
+    { field: 'RefRowDocNo (دیتیل)', source: 'appsettings RefRowDocNoInDetail (پیش‌فرض headerDocRow=1 مثل شهرسازی)', value: (config?.refRowDocNoInDetail === 'ficheNo' ? '(FicheNo)' : '1') },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
@@ -259,8 +259,12 @@ async function init() {
   const today = new Date();
   $('docDate').value = `140${today.getFullYear() - 2020}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
 
-  if (config.uiVersion !== '2' || !config.features?.rayvarzPostTest) {
-    console.warn('Backend قدیمی — دکمه POST Test ممکن است 404 بدهد. git pull rayvarz-resend');
+  if (config.uiVersion !== '3' || !config.features?.rayvarzPostTest) {
+    console.warn('Backend قدیمی — دکمه‌های تست POST ممکن است 404 بدهند. git pull و dotnet run مجدد');
+  }
+  if (!config.features?.rayvarzPostMinimalSave) {
+    const btn = $('btnPostMinimalSave');
+    if (btn) btn.hidden = true;
   }
 }
 
@@ -450,6 +454,38 @@ function setupEventHandlers() {
     alert(e.message);
   } finally {
     $('btnPostTest').disabled = false;
+  }
+  });
+
+  bindClick('btnPostMinimalSave', async () => {
+  $('btnPostMinimalSave').disabled = true;
+  showRayvarzTestWaiting('Rayvarz SaveDocument حداقلی (ممکن است Fault — سند واقعی نیست)');
+  try {
+    const res = await fetch('/api/rayvarz-post-minimal-save');
+    if (res.status === 404) {
+      throw new Error('API /api/rayvarz-post-minimal-save یافت نشد — git pull و dotnet run مجدد.');
+    }
+    const data = await parseJsonResponse(res);
+    $('resultSection').hidden = false;
+    const head = [
+      `Rayvarz SaveDocument حداقلی`,
+      `Ok: ${data.ok}`,
+      `Url: ${data.url}`,
+      `StatusCode: ${data.statusCode ?? '-'}`,
+      `ElapsedMs: ${data.elapsedMs}`,
+      data.error ? `Error: ${data.error}` : '',
+      data.inner ? `Inner: ${data.inner}` : '',
+      data.hint ? `Hint: ${data.hint}` : '',
+      data.bodyPreview ? `BodyPreview: ${data.bodyPreview}` : ''
+    ].filter(Boolean).join('\n');
+    $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
+    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (data.ok) alert('SaveDocument حداقلی تا MSB رسید — اگر ارسال فیش واقعی reset می‌شود، محتوای فیش/WAF را بررسی کنید.');
+    else alert('SaveDocument حداقلی هم reset شد — SoapVersion=soap11 و empty-header را در appsettings امتحان کنید.');
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $('btnPostMinimalSave').disabled = false;
   }
   });
 }

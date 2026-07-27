@@ -121,7 +121,7 @@ WSDL: همان آدرس + `?wsdl`
 
 `PhasTyp` / `VchrTyp` در SOAP به‌صورت **عدد smallint** (طبق PDF راهنمای DLL) — پیش‌فرض: `7` (حواله شهرستان / ptDraftRegion)، `0` (دریافت / pfRecieve). نام enum در config هم پذیرفته می‌شود و به عدد تبدیل می‌شود.
 
-برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"` در appsettings.
+برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"`. برای binding شبیه WCF قدیمی: `"SoapVersion": "soap11"`. `RefRowDocNoInDetail`: `headerDocRow` (۱) یا `ficheNo`.
 
 یک **GET ساده به آدرس WSDL** همان `ServiceUrl` (مثلاً `...?wsdl`) است — بدون ارسال `SaveDocument`. فقط می‌گوید از این ماشین به MSB/رایورز **راه شبکه و SSL** باز است یا نه.
 
@@ -145,7 +145,7 @@ WSDL: همان آدرس + `?wsdl`
 |------|--------|
 اگر **Ping** با `502` روی `?wsdl` خطا داد ولی **تست POST (بدون ثبت)** موفق بود، طبیعی است — پروکسی MSB گاهی WSDL را 502 می‌دهد ولی `SaveDocument` با POST کار می‌کند. معیار ارسال: POST Test و سپس ارسال فیش.
 
-| Ping OK ولی Send با `forcibly closed` | دکمه **تست POST (بدون ثبت)** یا `GET /api/rayvarz-post-test`: اگر POST خالی هم reset شد → فایروال/WAF مسیر POST را می‌بندد (با IT مجوز IP بگیرید)؛ اگر POST خالی جواب گرفت (حتی Fault) → مشکل از محتوا/اندازه XML واقعی است |
+| Ping OK ولی Send با `forcibly closed` | ۱) **تست POST (بدون ثبت)** ۲) **تست SaveDocument حداقلی** ۳) ارسال فیش. اگر (۱) OK و (۲) reset → `SoapVersion=soap11` و `SoapEnvelopeStyle=empty-header`. اگر (۲) OK و (۳) reset → محتوای فیش/WAF. اگر هر دو reset → IT/فایروال |
 | Ping: `SSL connection could not be established` / `forcibly closed` | **شبکه/MSB** — WSDL بدون SOAP است؛ `SoapEnvelopeStyle` و XML بی‌اثرند. اجرا از سرور شهرسازی + VPN؛ `UseSystemProxy: true` یا `ProxyUrl`؛ تست مرورگر/curl به `ServiceUrl?wsdl` از همان PC |
 | BnkAcntNo خالی | برای نوسازی: `OtherFields` — برای درآمد: join `Base_NosaziCode` |
 | تکراری | فیش در `ray.incmdocsys` هست |

@@ -52,16 +52,10 @@ public class SoapBuilder
         var bank = ResolveBankCode(fiche.BankCode);
 
         var incmItems = string.Join("\n", rows.Select((r, i) => BuildIncmRow(
-            r, i + 1, fiche.FicheNo, docDateRay, rowDateRay, sourceSystemId)));
+            r, i + 1, ResolveDetailRefRowDocNo(fiche.FicheNo), docDateRay, rowDateRay, sourceSystemId)));
 
         var refRecon = XmlOptionalElement("b", "RefreconstructionNo", fiche.RefReconstructionNo);
-        var headerXml = BuildSoapHeader(action, serviceUrl);
-
-        return $@"<s:Envelope xmlns:s=""{SoapNs}""
-      xmlns:a=""{AddressingNs}"">
-{headerXml}
-      <s:Body>
-        <SaveDocument xmlns=""{TempUriNs}"">
+        var bodyXml = $@"        <SaveDocument xmlns=""{TempUriNs}"">
           <branch>{branch}</branch>
           <doc xmlns:b=""{WcfNs}""
                xmlns:i=""{XsiNs}"">
@@ -100,9 +94,115 @@ public class SoapBuilder
             <b:Rcvr>0</b:Rcvr>
             <b:TransactionId>{Escape(transactionId)}</b:TransactionId>
           </doc>
-        </SaveDocument>
-      </s:Body>
-    </s:Envelope>";
+        </SaveDocument>";
+
+        return WrapEnvelope(action, serviceUrl, bodyXml);
+    }
+
+    /// <summary>POST خالی — همان تست قبلی.</summary>
+    public string BuildPostProbeEnvelope()
+    {
+        var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
+        var serviceUrl = ResolveWsAddressingTo();
+        return WrapEnvelope(action, serviceUrl, "");
+    }
+
+    /// <summary>SaveDocument حداقلی — برای تشخیص reset به‌خاطر ساختار/اندازه (ممکن است Fault بدهد؛ سند واقعی ثبت نشود).</summary>
+    public string BuildMinimalSaveDocumentProbe(int branch = 207, int fund = 200207009)
+    {
+        var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
+        var serviceUrl = ResolveWsAddressingTo();
+        var phasTyp = ResolveSoapSmallInt(_config["Rayvarz:PhasTyp"], "7", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ptDraftRegion"] = "7"
+        });
+        var vchrTyp = ResolveSoapSmallInt(_config["Rayvarz:VchrTyp"], "0", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["pfReceive"] = "0"
+        });
+        var sourceSystemId = _config["Rayvarz:SourceSystemId"];
+        var transactionId = Guid.NewGuid().ToString();
+        const string docDateRay = "14000101";
+        const string rowDateRay = "14000101";
+        const string probeFiche = "000000/0000000";
+
+        var incm = BuildIncmRow(
+            new IncmRowDto { IncmNo = 2003, Val = 1, IncmRowDsc = "probe" },
+            1,
+            ResolveDetailRefRowDocNo(probeFiche),
+            docDateRay,
+            rowDateRay,
+            sourceSystemId);
+
+        var bodyXml = $@"        <SaveDocument xmlns=""{TempUriNs}"">
+          <branch>{branch}</branch>
+          <doc xmlns:b=""{WcfNs}""
+               xmlns:i=""{XsiNs}"">
+            <b:AllowChange>false</b:AllowChange>
+            <b:DocDate>{docDateRay}</b:DocDate>
+            <b:DocDsc>RayvarzResend probe</b:DocDsc>
+            <b:DocTyp>1</b:DocTyp>
+            <b:DocTypDsc/>
+            <b:Items>
+              <b:DocumentItem>
+                <b:ActDate>{docDateRay}</b:ActDate>
+                <b:ActTyp>3</b:ActTyp>
+                <b:Bank>0</b:Bank>
+                <b:BnkAcntNo>0-0-0-0-0-0-0</b:BnkAcntNo>
+                <b:BnkAcntOwnr i:nil=""true""/>
+                <b:BnkBrnch i:nil=""true""/>
+                <b:Center>0</b:Center>
+                <b:Customer i:nil=""true""/>
+                <b:CustomerNationalCode i:nil=""true""/>
+                <b:DocRow>1</b:DocRow>
+                <b:Fund>{fund}</b:Fund>
+                <b:IncmMkr>0</b:IncmMkr>
+                <b:IncmMkrTyp>0</b:IncmMkrTyp>
+                <b:Incms>{incm}
+                </b:Incms>
+                <b:PhasTyp>{phasTyp}</b:PhasTyp>
+                <b:RowDate>{rowDateRay}</b:RowDate>
+                <b:RowDocNo>{probeFiche}</b:RowDocNo>
+                <b:VchrTyp>{vchrTyp}</b:VchrTyp>
+              </b:DocumentItem>
+            </b:Items>
+            <b:Rcvr>0</b:Rcvr>
+            <b:TransactionId>{Escape(transactionId)}</b:TransactionId>
+          </doc>
+        </SaveDocument>";
+
+        return WrapEnvelope(action, serviceUrl, bodyXml);
+    }
+
+    private string ResolveDetailRefRowDocNo(string ficheNo)
+    {
+        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow").Trim();
+        if (mode.Equals("ficheNo", StringComparison.OrdinalIgnoreCase)
+            || mode.Equals("fiche", StringComparison.OrdinalIgnoreCase))
+            return ficheNo;
+        return "1";
+    }
+
+    private (string env, string envNs, bool soap11) ResolveEnvelopeNs()
+    {
+        var soap11 = RayvarzSoapHttp.ResolveSoapVersion(_config) == RayvarzSoapVersion.Soap11;
+        return soap11
+            ? ("soap", "http://schemas.xmlsoap.org/soap/envelope/", true)
+            : ("s", SoapNs, false);
+    }
+
+    private string WrapEnvelope(string action, string serviceUrl, string bodyXml)
+    {
+        var (env, envNs, soap11) = ResolveEnvelopeNs();
+        var headerXml = BuildSoapHeader(action, serviceUrl, env);
+        var xmlDecl = soap11 ? "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" : "";
+        var bodyInner = string.IsNullOrEmpty(bodyXml) ? "" : bodyXml + "\n";
+        return $@"{xmlDecl}<{env}:Envelope xmlns:{env}=""{envNs}""
+      xmlns:a=""{AddressingNs}"">
+{headerXml}
+      <{env}:Body>
+{bodyInner}      </{env}:Body>
+    </{env}:Envelope>";
     }
 
     private string ResolveWsAddressingTo() =>
@@ -114,22 +214,20 @@ public class SoapBuilder
     public string ResolveEnvelopeStyle() =>
         (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
 
-    private string BuildSoapHeader(string action, string serviceUrl)
+    private string BuildSoapHeader(string action, string serviceUrl, string env)
     {
         var style = ResolveEnvelopeStyle();
         if (style is "empty" or "empty-header" or "minimal" or "none")
-        {
-            return "      <s:Header/>";
-        }
+            return $"      <{env}:Header/>";
 
-        return $@"      <s:Header>
-        <a:Action s:mustUnderstand=""1"">{Escape(action)}</a:Action>
+        return $@"      <{env}:Header>
+        <a:Action {env}:mustUnderstand=""1"">{Escape(action)}</a:Action>
         <a:MessageID>urn:uuid:{Guid.NewGuid()}</a:MessageID>
         <a:ReplyTo>
           <a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>
         </a:ReplyTo>
-        <a:To s:mustUnderstand=""1"">{Escape(serviceUrl)}</a:To>
-      </s:Header>";
+        <a:To {env}:mustUnderstand=""1"">{Escape(serviceUrl)}</a:To>
+      </{env}:Header>";
     }
 
     /// <summary>کد بانک از PaymentBank / ConfirmBankCode دیتابیس شهرسازی (مثلاً ۱۸) بدون تغییر به رایورز می‌رود.</summary>
@@ -225,11 +323,13 @@ public class RayvarzClient
 {
     private readonly IConfiguration _config;
     private readonly ILogger<RayvarzClient> _logger;
+    private readonly SoapBuilder _soapBuilder;
 
-    public RayvarzClient(IConfiguration config, ILogger<RayvarzClient> logger)
+    public RayvarzClient(IConfiguration config, ILogger<RayvarzClient> logger, SoapBuilder soapBuilder)
     {
         _config = config;
         _logger = logger;
+        _soapBuilder = soapBuilder;
     }
 
     public string ResolveServiceUrl() =>
@@ -325,53 +425,73 @@ public class RayvarzClient
     private static bool IsHttpReachable(int statusCode, string body) =>
         body.Length > 50 && statusCode is 502 or 405 or 401 or 403 or 500 or 400;
 
-    /// <summary>POST آزمایشی بی‌خطر: envelope حداقلی که سندی ثبت نمی‌کند؛ فقط مسیر POST تا MSB را می‌سنجد.</summary>
-    public async Task<RayvarzPingResultDto> PostProbeAsync(CancellationToken ct = default)
+    public async Task<RayvarzPingResultDto> PostProbeAsync(CancellationToken ct = default) =>
+        await PostSoapDiagnosticAsync(
+            _soapBuilder.BuildPostProbeEnvelope(),
+            "PostProbe",
+            "(post-probe — Body خالی، سندی ثبت نمی‌شود)",
+            reachedCause:
+                "POST تا MSB رسید و پاسخ HTTP گرفت (حتی اگر Fault باشد طبیعی است چون Body خالی بود). یعنی مسیر POST باز است — اگر Send واقعی reset می‌شود مشکل از محتوا/اندازه XML است.",
+            resetCause:
+                "حتی POST کوچک با Body خالی هم قطع شد — یعنی مسیر POST به MSB بسته است (فایروال/WAF/مجوز IP)، ربطی به محتوای فیش ندارد.",
+            resetHint:
+                "با IT: از IP این سرور، POST به MSB (همان مسیر پروکسی) باید مجاز شود — GET/WSDL باز است ولی POST reset می‌شود.",
+            ct);
+
+    public async Task<RayvarzPingResultDto> PostMinimalSaveDocumentAsync(CancellationToken ct = default) =>
+        await PostSoapDiagnosticAsync(
+            _soapBuilder.BuildMinimalSaveDocumentProbe(),
+            "PostMinimalSaveDocument",
+            "(minimal SaveDocument — یک ردیف تست، ممکن است Fault)",
+            reachedCause:
+                "POST با ساختار SaveDocument (حداقلی) تا MSB رسید — اگر ارسال فیش واقعی reset می‌شود، احتمالاً WAF/اندازه/کاراکتر فارسی یا فیلد خاص فیش است نه مسیر POST.",
+            resetCause:
+                "SaveDocument حداقلی هم قطع شد — MSB/WAF احتمالاً هر بدنهٔ SaveDocument را می‌بندد یا نسخه SOAP/هدر با سرویس نمی‌خواند؛ SoapVersion=soap11 و SoapEnvelopeStyle=empty-header را امتحان کنید.",
+            resetHint:
+                "appsettings: SoapVersion=soap11؛ SoapEnvelopeStyle=empty-header؛ UseSystemProxy=true اگر شهرسازی از پروکسی سیستم استفاده می‌کند.",
+            ct);
+
+    private async Task<RayvarzPingResultDto> PostSoapDiagnosticAsync(
+        string probeXml,
+        string stage,
+        string envelopeLabel,
+        string reachedCause,
+        string resetCause,
+        string resetHint,
+        CancellationToken ct)
     {
         var url = ResolveServiceUrl();
         var action = _config["Rayvarz:SoapAction"] ?? "";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
-
-        var probeXml = $@"<s:Envelope xmlns:s=""http://www.w3.org/2003/05/soap-envelope""
-      xmlns:a=""http://www.w3.org/2005/08/addressing"">
-      <s:Header>
-        <a:Action s:mustUnderstand=""1"">{action}</a:Action>
-        <a:MessageID>urn:uuid:{Guid.NewGuid()}</a:MessageID>
-        <a:ReplyTo><a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address></a:ReplyTo>
-        <a:To s:mustUnderstand=""1"">{url}</a:To>
-      </s:Header>
-      <s:Body></s:Body>
-    </s:Envelope>";
+        var envelopeStyle = _soapBuilder.ResolveEnvelopeStyle();
+        var soapVersion = RayvarzSoapHttp.ResolveSoapVersion(_config);
 
         var diagnostics = new RayvarzTransportDiagnostics
         {
             PostUrl = url,
             SoapAction = action,
-            EnvelopeStyle = "(post-probe — Body خالی، سندی ثبت نمی‌شود)"
+            EnvelopeStyle = $"{envelopeStyle}+{RayvarzSoapHttp.SoapVersionLabel(soapVersion)} ({envelopeLabel})"
         };
-        RayvarzDiagnosticsHelper.ApplySoapRequestMeta(diagnostics, probeXml, "probe");
+        RayvarzDiagnosticsHelper.ApplySoapRequestMeta(diagnostics, probeXml, diagnostics.EnvelopeStyle);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            _logger.LogInformation("Rayvarz post-probe شروع — {Url} Bytes={Bytes}", url, diagnostics.RequestBodyBytes);
+            _logger.LogInformation("Rayvarz {Stage} شروع — {Url} Bytes={Bytes}", stage, url, diagnostics.RequestBodyBytes);
             using var client = CreateHttpClient(allowInvalidSsl);
-            using var content = new StringContent(probeXml, Encoding.UTF8, "application/soap+xml");
-            content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
-
-            using var response = await client.PostAsync(url, content, ct);
+            using var response = await RayvarzSoapHttp.PostAsync(client, url, probeXml, action, soapVersion, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             sw.Stop();
 
             diagnostics.HttpStatusCode = (int)response.StatusCode;
             diagnostics.ResponseBodyBytes = body.Length;
             diagnostics.ElapsedMs = sw.ElapsedMilliseconds;
-            diagnostics.Stage = "PostProbe";
-            diagnostics.Category = "PostProbeReached";
-            diagnostics.LikelyCause =
-                "POST تا MSB رسید و پاسخ HTTP گرفت (حتی اگر Fault باشد طبیعی است چون Body خالی بود). یعنی مسیر POST باز است — اگر Send واقعی reset می‌شود مشکل از محتوا/اندازه XML است.";
+            diagnostics.Stage = stage;
+            diagnostics.Category = stage + "Reached";
+            diagnostics.LikelyCause = reachedCause;
+            diagnostics.ContentType = response.Content.Headers.ContentType?.ToString();
 
-            _logger.LogInformation("Rayvarz post-probe پایان — Status={Status} ElapsedMs={Elapsed}", (int)response.StatusCode, sw.ElapsedMilliseconds);
+            _logger.LogInformation("Rayvarz {Stage} پایان — Status={Status} ElapsedMs={Elapsed}", stage, (int)response.StatusCode, sw.ElapsedMilliseconds);
 
             return new RayvarzPingResultDto
             {
@@ -387,12 +507,10 @@ public class RayvarzClient
         catch (Exception ex)
         {
             sw.Stop();
-            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "PostProbe", sw.ElapsedMilliseconds, diagnostics);
-            diagnostics.LikelyCause =
-                "حتی POST کوچک با Body خالی هم قطع شد — یعنی مسیر POST به MSB بسته است (فایروال/WAF/مجوز IP)، ربطی به محتوای فیش ندارد.";
-            diagnostics.Hint =
-                "با IT: از IP این سرور، POST به MSB (همان مسیر پروکسی) باید مجاز شود — GET/WSDL باز است ولی POST reset می‌شود.";
-            _logger.LogWarning(ex, "Rayvarz post-probe خطا — Category={Category}", diagnostics.Category);
+            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, stage, sw.ElapsedMilliseconds, diagnostics);
+            diagnostics.LikelyCause = resetCause;
+            diagnostics.Hint = resetHint;
+            _logger.LogWarning(ex, "Rayvarz {Stage} خطا — Category={Category}", stage, diagnostics.Category);
 
             return new RayvarzPingResultDto
             {
@@ -425,6 +543,7 @@ public class RayvarzClient
         var action = _config["Rayvarz:SoapAction"] ?? "";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
         var envelopeStyle = (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
+        var soapVersion = RayvarzSoapHttp.ResolveSoapVersion(_config);
         var sendDelayMs = _config.GetValue<int>("Rayvarz:SendDelayMs");
         if (sendDelayMs > 0)
             await Task.Delay(sendDelayMs, ct);
@@ -433,9 +552,9 @@ public class RayvarzClient
         {
             PostUrl = url,
             SoapAction = action,
-            EnvelopeStyle = envelopeStyle
+            EnvelopeStyle = $"{envelopeStyle}+{RayvarzSoapHttp.SoapVersionLabel(soapVersion)}"
         };
-        RayvarzDiagnosticsHelper.ApplySoapRequestMeta(diagnostics, soapXml, envelopeStyle);
+        RayvarzDiagnosticsHelper.ApplySoapRequestMeta(diagnostics, soapXml, diagnostics.EnvelopeStyle);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -447,11 +566,8 @@ public class RayvarzClient
                 diagnostics.WsAddressingTo ?? "(empty-header)", envelopeStyle);
 
             using var client = CreateHttpClient(allowInvalidSsl);
-            using var content = new StringContent(soapXml, Encoding.UTF8, "application/soap+xml");
-            content.Headers.ContentType!.Parameters.Add(new System.Net.Http.Headers.NameValueHeaderValue("action", $"\"{action}\""));
-            diagnostics.ContentType = content.Headers.ContentType?.ToString();
-
-            using var response = await client.PostAsync(url, content, ct);
+            using var response = await RayvarzSoapHttp.PostAsync(client, url, soapXml, action, soapVersion, ct);
+            diagnostics.ContentType = response.RequestMessage?.Content?.Headers.ContentType?.ToString();
 
             string body;
             try
