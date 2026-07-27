@@ -478,6 +478,7 @@ public class RayvarzClient
     private HttpClient CreateHttpClient(bool allowInvalidSsl)
     {
         var proxyUrl = _config["Rayvarz:ProxyUrl"];
+        var useSystemProxy = _config.GetValue<bool>("Rayvarz:UseSystemProxy");
         var handler = new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
@@ -492,6 +493,12 @@ public class RayvarzClient
             handler.Proxy = new WebProxy(proxyUrl);
             handler.UseProxy = true;
         }
+        else if (useSystemProxy)
+        {
+            handler.Proxy = HttpClient.DefaultProxy;
+            handler.UseProxy = true;
+            handler.DefaultProxyCredentials = CredentialCache.DefaultCredentials;
+        }
 
         if (allowInvalidSsl)
             handler.SslOptions.RemoteCertificateValidationCallback = static (_, _, _, _) => true;
@@ -502,8 +509,10 @@ public class RayvarzClient
     private static string BuildNetworkHint(Exception ex)
     {
         var msg = (ex.Message + " " + (ex.InnerException?.Message ?? "")).ToLowerInvariant();
+        if (msg.Contains("ssl connection could not be established"))
+            return "MSB/TLS: از همان سرور/شبکه شهرسازی اجرا کنید؛ VPN؛ ProxyUrl یا UseSystemProxy=true؛ با IT دسترسی به https://msb.mashhad.ir.";
         if (msg.Contains("forcibly closed") || msg.Contains("copying content to a stream"))
-            return "شبکه: ابتدا GET /api/rayvarz-ping؛ اگر ping OK و send خطا دارد XML را با مستندات مقایسه کنید؛ WsAddressingTo را در appsettings تنظیم کنید.";
+            return "شبکه: Ping باید OK شود قبل از Send؛ SoapEnvelopeStyle فقط بعد از Ping موفق.";
         if (msg.Contains("ssl") || msg.Contains("certificate") || msg.Contains("tls")
             || msg.Contains("connection was closed") || msg.Contains("unexpected error occurred on a send"))
             return "شبکه: از همان سروری که سامانه شهرسازی ارسال می‌کند اجرا کنید؛ VPN؛ AllowInvalidSsl=true؛ یا ProxyUrl در appsettings.";

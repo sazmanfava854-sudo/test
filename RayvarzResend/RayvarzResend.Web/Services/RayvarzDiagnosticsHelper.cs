@@ -31,13 +31,28 @@ internal static class RayvarzDiagnosticsHelper
         baseInfo.ExceptionChain = ExceptionChain(ex);
 
         var text = string.Join(" ", baseInfo.ExceptionChain).ToLowerInvariant();
-        if (text.Contains("forcibly closed") || text.Contains("copying content to a stream"))
+        var isPingOrTls = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("ssl connection could not be established");
+
+        if (isPingOrTls && (text.Contains("ssl") || text.Contains("tls") || text.Contains("certificate")))
+        {
+            baseInfo.Category = "MsbTlsOrNetwork";
+            baseInfo.LikelyCause =
+                "اتصال TLS به msb.mashhad.ir برقرار نشد — این مرحله فقط WSDL است (بدون SOAP). مشکل XML/هدر/PhasTyp نیست.";
+            baseInfo.Hint =
+                "برنامه را روی همان سرور/شبکه‌ای اجرا کنید که سامانه شهرسازی از آن به MSB می‌زند؛ VPN سازمان؛ ProxyUrl یا UseSystemProxy؛ با IT خروجی به https://msb.mashhad.ir را باز کنید. AllowInvalidSsl معمولاً این خطا را حل نمی‌کند.";
+        }
+        else if (text.Contains("forcibly closed") || text.Contains("copying content to a stream"))
         {
             baseInfo.Category = "ConnectionReset";
-            baseInfo.LikelyCause = baseInfo.HasWsAddressingHeader
-                ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد شدن درخواست توسط MSB (گاهی هدر SOAP/آدرس To)."
-                : "اتصال قطع شد — احتمال شبکه بالاست؛ اگر ping موفق است SoapEnvelopeStyle=addressing را امتحان کنید.";
-            baseInfo.Hint = "GET /api/rayvarz-ping؛ مقایسه ping با send؛ WsAddressingTo و SoapEnvelopeStyle (addressing | empty-header).";
+            baseInfo.LikelyCause = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
+                ? "MSB اتصال را در handshake یا WSDL قطع کرد — فایروال، IP مجاز، یا مسیر شبکه."
+                : baseInfo.HasWsAddressingHeader
+                    ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
+                    : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
+            baseInfo.Hint = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
+                ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
+                : "پس از Ping موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";
         }
         else if (text.Contains("ssl") || text.Contains("certificate") || text.Contains("tls") || text.Contains("authentication"))
         {

@@ -143,7 +143,7 @@ WSDL: همان آدرس + `?wsdl`
 
 | مشکل | راه‌حل |
 |------|--------|
-| `connection was forcibly closed` / `copying content to a stream` | **Ping** (`دکمه تست اتصال` یا `GET /api/rayvarz-ping`): ping ناموفق = شبکه؛ ping موفق + send خطا = احتمال SOAP (هدر `SoapEnvelopeStyle`: `addressing` یا `empty-header`، یا Body). در UI و کنسول بخش **Diagnostics** را ببینید |
+| Ping: `SSL connection could not be established` / `forcibly closed` | **شبکه/MSB** — WSDL بدون SOAP است؛ `SoapEnvelopeStyle` و XML بی‌اثرند. اجرا از سرور شهرسازی + VPN؛ `UseSystemProxy: true` یا `ProxyUrl`؛ تست مرورگر/curl به `ServiceUrl?wsdl` از همان PC |
 | BnkAcntNo خالی | برای نوسازی: `OtherFields` — برای درآمد: join `Base_NosaziCode` |
 | تکراری | فیش در `ray.incmdocsys` هست |
 | فیش یافت نشد | `Income_Fiche` سپس `Duty_Fiche` |
