@@ -97,7 +97,7 @@ internal static class RayvarzDiagnosticsHelper
         return baseInfo;
     }
 
-    public static RayvarzTransportDiagnostics ForSoapFault(long elapsedMs, RayvarzTransportDiagnostics baseInfo, int? httpStatus)
+    public static RayvarzTransportDiagnostics ForSoapFault(long elapsedMs, RayvarzTransportDiagnostics baseInfo, int? httpStatus, string? soapBody = null)
     {
         baseInfo.Category = "SoapFault";
         baseInfo.Stage = "ParseResponse";
@@ -105,6 +105,18 @@ internal static class RayvarzDiagnosticsHelper
         baseInfo.HttpStatusCode = httpStatus;
         baseInfo.LikelyCause = "پاسخ SOAP Fault از MSB/رایورز — معمولاً محتوای Body یا فیلدهای سند.";
         baseInfo.Hint = "SoapResponse را بخوانید؛ XML Body را با مستندات مقایسه کنید (نه لزوماً هدر).";
+
+        var body = soapBody ?? "";
+        if (body.Contains("DeserializationFailed", StringComparison.OrdinalIgnoreCase)
+            || body.Contains("cannot be deserialized into type", StringComparison.OrdinalIgnoreCase))
+        {
+            baseInfo.Category = "SoapDeserializationFault";
+            baseInfo.LikelyCause =
+                "رایورز نتوانست XML را deserialize کند — اغلب PhasTyp/VchrTyp/ActTyp باید نام enum در SOAP باشد (مثلاً ptDraftRegion)، نه عدد.";
+            baseInfo.Hint =
+                "appsettings: PhasTyp=7 یا ptDraftRegion؛ VchrTyp=0 یا pfRecieve. اگر خطا ActTyp بود، نام enum را از WinTestService/Reference.cs در ActTyp بگذارید.";
+        }
+
         return baseInfo;
     }
 

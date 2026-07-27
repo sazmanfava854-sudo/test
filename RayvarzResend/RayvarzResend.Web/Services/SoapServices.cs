@@ -16,6 +16,24 @@ public class SoapBuilder
     private const string WcfNs = "http://schemas.datacontract.org/2004/07/WCFServer";
     private const string XsiNs = "http://www.w3.org/2001/XMLSchema-instance";
 
+    /// <summary>مقادیر عددی PDF/DLL → نام عضو enum در XML (DataContractSerializer).</summary>
+    private static readonly IReadOnlyDictionary<string, string> PhasTypCodeToWireName =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["1"] = "ptCash",
+            ["2"] = "ptDraft",
+            ["3"] = "ptCheque",
+            ["4"] = "ptChequeDuration",
+            ["7"] = "ptDraftRegion"
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> VchrTypCodeToWireName =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["0"] = "pfRecieve",
+            ["1"] = "pfPay"
+        };
+
     private readonly IConfiguration _config;
 
     public SoapBuilder(IConfiguration config) => _config = config;
@@ -39,20 +57,9 @@ public class SoapBuilder
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
-        var phasTyp = ResolveSoapSmallInt(_config["Rayvarz:PhasTyp"], "7", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["ptCash"] = "1",
-            ["ptDraft"] = "2",
-            ["ptCheque"] = "3",
-            ["ptChequeDuration"] = "4",
-            ["ptDraftRegion"] = "7"
-        });
-        var vchrTyp = ResolveSoapSmallInt(_config["Rayvarz:VchrTyp"], "0", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["pfRecieve"] = "0",
-            ["pfReceive"] = "0",
-            ["pfPay"] = "1"
-        });
+        var phasTyp = ResolveSoapDataContractEnum(_config["Rayvarz:PhasTyp"], "7", PhasTypCodeToWireName);
+        var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
+        var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
         var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category);
         var bank = ResolveBankCode(fiche.BankCode);
 
@@ -76,7 +83,7 @@ public class SoapBuilder
             <b:Items>
               <b:DocumentItem>
                 <b:ActDate>{headerActDate}</b:ActDate>
-                <b:ActTyp>3</b:ActTyp>
+                <b:ActTyp>{actTyp}</b:ActTyp>
                 <b:Bank>{bank}</b:Bank>
                 <b:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</b:BnkAcntNo>
                 <b:BnkAcntOwnr i:nil=""true""/>
@@ -121,14 +128,9 @@ public class SoapBuilder
     {
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
-        var phasTyp = ResolveSoapSmallInt(_config["Rayvarz:PhasTyp"], "7", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["ptDraftRegion"] = "7"
-        });
-        var vchrTyp = ResolveSoapSmallInt(_config["Rayvarz:VchrTyp"], "0", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["pfReceive"] = "0"
-        });
+        var phasTyp = ResolveSoapDataContractEnum(_config["Rayvarz:PhasTyp"], "7", PhasTypCodeToWireName);
+        var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
+        var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
         var transactionId = Guid.NewGuid().ToString();
         const string docDateRay = "14000101";
@@ -163,7 +165,7 @@ public class SoapBuilder
             <b:Items>
               <b:DocumentItem>
                 <b:ActDate>{docDateRay}</b:ActDate>
-                <b:ActTyp>3</b:ActTyp>
+                <b:ActTyp>{actTyp}</b:ActTyp>
                 <b:Bank>0</b:Bank>
                 <b:BnkAcntNo>0-0-0-0-0-0-0</b:BnkAcntNo>
                 <b:BnkAcntOwnr i:nil=""true""/>
@@ -276,14 +278,35 @@ public class SoapBuilder
     private static string FormatRayvarzMoney(decimal val) =>
         val.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>مقادیر SOAP smallint — طبق PDF راهنما (مثلاً PhasTyp=7 برای ptDraftRegion).</summary>
-    private static string ResolveSoapSmallInt(string? configured, string defaultValue, IReadOnlyDictionary<string, string> nameToCode)
+    /// <summary>
+    /// WCF DataContract enum در XML باید نام عضو باشد (مثلاً ptDraftRegion)، نه عدد 7 —
+    /// همان‌طور که WinTestService با DataContractSerializer ارسال می‌کند.
+    /// در appsettings می‌توان عدد PDF یا نام enum گذاشت.
+    /// </summary>
+    private static string ResolveSoapDataContractEnum(
+        string? configured,
+        string defaultCode,
+        IReadOnlyDictionary<string, string> codeToWireName)
     {
-        var raw = string.IsNullOrWhiteSpace(configured) ? defaultValue : configured.Trim();
+        var raw = string.IsNullOrWhiteSpace(configured) ? defaultCode : configured.Trim();
         if (int.TryParse(raw, out _))
-            return raw;
-        return nameToCode.TryGetValue(raw, out var code) ? code : defaultValue;
+            return codeToWireName.TryGetValue(raw, out var fromCode) ? fromCode : codeToWireName[defaultCode];
+
+        foreach (var (code, wireName) in codeToWireName)
+        {
+            if (wireName.Equals(raw, StringComparison.OrdinalIgnoreCase))
+                return wireName;
+        }
+
+        if (raw.Equals("pfReceive", StringComparison.OrdinalIgnoreCase))
+            return "pfRecieve";
+
+        return codeToWireName.TryGetValue(defaultCode, out var fallback) ? fallback : raw;
     }
+
+    /// <summary>ActTyp: عدد پیش‌فرض یا نام enum از config (در صورت نیاز WCF).</summary>
+    private static string ResolveSoapActTyp(string? configured, string defaultCode) =>
+        string.IsNullOrWhiteSpace(configured) ? defaultCode : configured.Trim();
 
     private sealed record IncmContext(
         IncmRowDto Row,
@@ -757,7 +780,7 @@ public class RayvarzClient
                 {
                     result.Success = false;
                     result.Message = fault;
-                    result.Diagnostics = RayvarzDiagnosticsHelper.ForSoapFault(sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode);
+                    result.Diagnostics = RayvarzDiagnosticsHelper.ForSoapFault(sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode, body);
                     _logger.LogWarning("Rayvarz SOAP Fault — {Fault}", fault);
                     return result;
                 }

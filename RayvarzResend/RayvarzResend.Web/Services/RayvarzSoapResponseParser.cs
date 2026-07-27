@@ -14,7 +14,8 @@ internal static class RayvarzSoapResponseParser
         var faultCode = doc.Descendants(con + "errorCode").FirstOrDefault()?.Value
             ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultcode")?.Value;
         var faultReason = doc.Descendants(con + "reason").FirstOrDefault()?.Value
-            ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultstring")?.Value;
+            ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultstring")?.Value
+            ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Text" && e.Parent?.Name.LocalName == "Reason")?.Value;
 
         if (!string.IsNullOrWhiteSpace(faultCode) || !string.IsNullOrWhiteSpace(faultReason))
         {

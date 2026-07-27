@@ -115,8 +115,8 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
   "WsAddressingTo": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
   "ServiceUrlMsb": "http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServer.ReceiveIncmVchrServices.svc",
   "SoapAction": "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
-  "PhasTyp": "7",
-  "VchrTyp": "0",
+  "PhasTyp": "ptDraftRegion",
+  "VchrTyp": "pfRecieve",
   "IncmMkrTyp": "auto",
   "SoapEnvelopeStyle": "addressing",
   "SoapVersion": "soap12",
@@ -131,7 +131,7 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 3. `DryRun: false` — ارسال واقعی (روی ITC سند ثبت می‌شود — سند تست را حذف کنید)
 4. بررسی در `ray.incmdocsys`
 
-`PhasTyp` / `VchrTyp` در SOAP به‌صورت **عدد smallint** (طبق PDF راهنمای DLL) — پیش‌فرض: `7` (حواله شهرستان / ptDraftRegion)، `0` (دریافت / pfRecieve). نام enum در config هم پذیرفته می‌شود و به عدد تبدیل می‌شود.
+`PhasTyp` / `VchrTyp` در **XML SOAP** به‌صورت **نام عضو enum** ارسال می‌شوند (مثل WinTestService / DataContractSerializer)، نه عدد خام — پیش‌فرض: `ptDraftRegion` (حواله شهرستان، معادل PDF=7)، `pfRecieve` (دریافت، معادل PDF=0). در appsettings می‌توانید همان نام enum یا عدد PDF را بگذارید؛ برنامه عدد را به نام تبدیل می‌کند.
 
 برای endpoint داخلی ITC (`mdc-rayvarzsvc`) حالت هم‌راستا با سامانه اصلی: `"SoapEnvelopeStyle": "addressing"` + `"SoapVersion": "soap12"`.
 `IncmMkrTyp` را روی `"auto"` بگذارید: برای نوسازی/صنفی مقدار `1` و برای درآمد مقدار `0` تنظیم می‌شود.
