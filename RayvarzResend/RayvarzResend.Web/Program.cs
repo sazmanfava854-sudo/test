@@ -31,8 +31,9 @@ app.UseStaticFiles();
 app.MapGet("/api/config", (IConfiguration config) => new
 {
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
-    serviceUrl = config["Rayvarz:ServiceUrl"],
-    wsAddressingTo = config["Rayvarz:WsAddressingTo"],
+    serviceUrl = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrl"]),
+    wsAddressingTo = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:WsAddressingTo"] ?? config["Rayvarz:ServiceUrl"]),
+    useHttp = config.GetValue("Rayvarz:UseHttp", true),
     soapEnvelopeStyle = config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
@@ -137,17 +138,24 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     var fiche = req.Fiche;
 
     bool existsInRayvarz;
+    string? sendWarning = null;
     try
     {
         existsInRayvarz = fiche.ExistsInRayvarz || await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
     }
     catch (SqlException ex)
     {
-        return Results.Json(new
+        if (config.GetValue<bool>("Rayvarz:RequireRayvarzDbForSend"))
         {
-            error = $"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}",
-            hint = ConnectionHint("Rayvarz", config.GetConnectionString("Rayvarz") ?? "", ex)
-        }, statusCode: 503);
+            return Results.Json(new
+            {
+                error = $"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}",
+                hint = ConnectionHint("Rayvarz", config.GetConnectionString("Rayvarz") ?? "", ex)
+            }, statusCode: 503);
+        }
+
+        existsInRayvarz = fiche.ExistsInRayvarz;
+        sendWarning = $"چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت: {ex.Message}";
     }
 
     if (existsInRayvarz)
@@ -162,6 +170,7 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     var xml = soap.Build(fiche, req.Branch, req.Fund, req.DocDate);
     var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
     var result = await client.SendAsync(xml, dryRun, ct);
+    result.Warning = sendWarning;
 
     if (!dryRun && result.Success)
     {

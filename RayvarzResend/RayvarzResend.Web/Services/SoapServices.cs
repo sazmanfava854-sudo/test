@@ -106,9 +106,10 @@ public class SoapBuilder
     }
 
     private string ResolveWsAddressingTo() =>
-        _config["Rayvarz:WsAddressingTo"]
-        ?? _config["Rayvarz:ServiceUrl"]
-        ?? "";
+        RayvarzUrlNormalizer.Normalize(_config,
+            _config["Rayvarz:WsAddressingTo"]
+            ?? _config["Rayvarz:ServiceUrl"]
+            ?? "");
 
     public string ResolveEnvelopeStyle() =>
         (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
@@ -227,7 +228,7 @@ public class RayvarzClient
     }
 
     public string ResolveServiceUrl() =>
-        _config["Rayvarz:ServiceUrl"] ?? "";
+        RayvarzUrlNormalizer.Normalize(_config, _config["Rayvarz:ServiceUrl"] ?? "");
 
     public async Task<RayvarzPingResultDto> PingAsync(CancellationToken ct = default)
     {

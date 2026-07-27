@@ -75,6 +75,7 @@ public class SendResultDto
     public bool DryRun { get; set; }
     public bool VerifiedInRayvarz { get; set; }
     public string? DocNotSentError { get; set; }
+    public string? Warning { get; set; }
     public RayvarzTransportDiagnostics? Diagnostics { get; set; }
 }
 

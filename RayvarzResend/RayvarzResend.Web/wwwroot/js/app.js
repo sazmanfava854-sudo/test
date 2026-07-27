@@ -89,12 +89,41 @@ function formatDiagnostics(d) {
   return lines.join('\n') + '\n';
 }
 
+function updateSendButton(f) {
+  const btn = $('btnSend');
+  if (!f) {
+    btn.disabled = true;
+    btn.title = 'ابتدا فیش را دریافت کنید';
+    return;
+  }
+  if (f.existsInRayvarz) {
+    btn.disabled = true;
+    btn.title = 'فیش در رایورز تکراری است';
+    return;
+  }
+  if (f.payable <= 0) {
+    btn.disabled = true;
+    btn.title = 'مبلغ قابل پرداخت صفر است';
+    return;
+  }
+  if (!f.rows?.length) {
+    btn.disabled = true;
+    btn.title = 'ردیف IncmNo یافت نشد';
+    return;
+  }
+  btn.disabled = false;
+  btn.title = config?.dryRun
+    ? 'DryRun فعال — SOAP ساخته می‌شود ولی به MSB POST نمی‌شود'
+    : 'ارسال SaveDocument به MSB';
+}
+
 function showSendResult(data) {
   $('resultSection').hidden = false;
   let msg = `Success: ${data.success}\nMessage: ${data.message || '-'}\nDryRun: ${data.dryRun}\n`;
   if (data.pursuitDocNo) msg += `PursuitDocNo: ${data.pursuitDocNo}\n`;
   if (data.verifiedInRayvarz !== undefined) msg += `VerifiedInRayvarz: ${data.verifiedInRayvarz}\n`;
   if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
+  if (data.warning) msg += `Warning: ${data.warning}\n`;
   msg += formatDiagnostics(data.diagnostics);
   $('resultBox').textContent = msg;
 }
@@ -255,7 +284,7 @@ $('btnLoad').onclick = async () => {
     renderFiche(data);
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
-    $('btnSend').disabled = !canSend;
+    updateSendButton(data);
     $('resultSection').hidden = true;
     $('xmlSection').hidden = true;
   } catch (e) {
@@ -263,7 +292,7 @@ $('btnLoad').onclick = async () => {
     currentFiche = null;
     $('ficheSection').hidden = true;
     $('btnPreview').disabled = true;
-    $('btnSend').disabled = true;
+    updateSendButton(null);
   } finally {
     $('btnLoad').disabled = false;
   }
@@ -271,16 +300,23 @@ $('btnLoad').onclick = async () => {
 
 $('btnPreview').onclick = async () => {
   if (!currentFiche) return;
-  const res = await fetch('/api/fiche/preview', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(getPayload(false))
-  });
-  const data = await parseJsonResponse(res);
-  if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
-  $('xmlSection').hidden = false;
-  $('xmlBox').textContent = data.xml;
-  $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('btnPreview').disabled = true;
+  try {
+    const res = await fetch('/api/fiche/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getPayload(false))
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
+    $('xmlSection').hidden = false;
+    $('xmlBox').textContent = data.xml;
+    $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $('btnPreview').disabled = false;
+  }
 };
 
 $('btnSend').onclick = async () => {
@@ -320,6 +356,7 @@ $('btnSend').onclick = async () => {
     alert(e.message);
   } finally {
     $('btnSend').disabled = false;
+    updateSendButton(currentFiche);
   }
 };
 

@@ -34,3 +34,16 @@ public static class FundResolver
         return bankCode == "1" ? 1200 : 1300;
     }
 }
+
+/// <summary>هم‌راستا با appsettings — در شبکه داخلی MSB اغلب http است نه https.</summary>
+public static class RayvarzUrlNormalizer
+{
+    public static string Normalize(IConfiguration config, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return "";
+        var u = url.Trim();
+        if (config.GetValue("Rayvarz:UseHttp", true))
+            u = u.Replace("https://", "http://", StringComparison.OrdinalIgnoreCase);
+        return u;
+    }
+}
