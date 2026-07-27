@@ -63,7 +63,7 @@ internal static class RayvarzDiagnosticsHelper
                             ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
                             : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
                 baseInfo.Hint = stage.Equals("PostSoap", StringComparison.OrdinalIgnoreCase) && largePayload
-                    ? "ترتیب تست: POST خالی → «تست SaveDocument حداقلی» → ارسال فیش. appsettings: SoapVersion=soap11؛ SoapEnvelopeStyle=empty-header؛ RefRowDocNoInDetail=headerDocRow (مثل شهرسازی)."
+                    ? "ترتیب تست: POST خالی → «تست SaveDocument حداقلی» → ارسال فیش. در ITC: SoapVersion=soap12 و SoapEnvelopeStyle=addressing (هم‌راستا با WCF شهرسازی)."
                     : stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
                         ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
                         : "پس از POST Test موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";

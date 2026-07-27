@@ -6,6 +6,9 @@
   "Rayvarz": {
     "ServiceUrl": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
     "WsAddressingTo": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
+    "SoapEnvelopeStyle": "addressing",
+    "SoapVersion": "soap12",
+    "IncmMkrTyp": "auto",
     "DryRun": true,
     "AllowInvalidSsl": false,
     "ProxyUrl": ""

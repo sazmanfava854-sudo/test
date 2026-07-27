@@ -117,7 +117,9 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
   "SoapAction": "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
   "PhasTyp": "7",
   "VchrTyp": "0",
-  "IncmMkrTyp": "0",
+  "IncmMkrTyp": "auto",
+  "SoapEnvelopeStyle": "addressing",
+  "SoapVersion": "soap12",
   "DryRun": true
 }
 ```
@@ -131,7 +133,9 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 
 `PhasTyp` / `VchrTyp` در SOAP به‌صورت **عدد smallint** (طبق PDF راهنمای DLL) — پیش‌فرض: `7` (حواله شهرستان / ptDraftRegion)، `0` (دریافت / pfRecieve). نام enum در config هم پذیرفته می‌شود و به عدد تبدیل می‌شود.
 
-برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"`. برای binding شبیه WCF قدیمی: `"SoapVersion": "soap11"`. `RefRowDocNoInDetail`: `headerDocRow` (۱) یا `ficheNo`.
+برای endpoint داخلی ITC (`mdc-rayvarzsvc`) حالت هم‌راستا با سامانه اصلی: `"SoapEnvelopeStyle": "addressing"` + `"SoapVersion": "soap12"`.
+`IncmMkrTyp` را روی `"auto"` بگذارید: برای نوسازی/صنفی مقدار `1` و برای درآمد مقدار `0` تنظیم می‌شود.
+`RefRowDocNoInDetail` فقط برای درآمد کاربرد دارد؛ برای نوسازی/صنفی خودکار `0` ارسال می‌شود (مطابق نمونه‌های موفق).
 
 یک **GET ساده به آدرس WSDL** همان `ServiceUrl` (مثلاً `...?wsdl`) است — بدون ارسال `SaveDocument`. فقط می‌گوید از این ماشین به MSB/رایورز **راه شبکه و SSL** باز است یا نه.
 
@@ -145,7 +149,7 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 - کنسول `dotnet run`: لاگ‌های `RayvarzClient` (سطح `Debug` در appsettings)
 - پس از ارسال: فیلد `Diagnostics` در JSON (Category، Stage، HasWsAddressingHeader، ExceptionChain، LikelyCause)
 
-برای تست هدر SOAP بدون WS-Addressing: `"SoapEnvelopeStyle": "empty-header"` در appsettings.
+اگر endpoint خطای 415 (Unsupported Media Type) داد: اول `SoapVersion=soap12` و `SoapEnvelopeStyle=addressing` را چک کنید.
 
 آدرس MSB در `ServiceUrlMsb` برای سوئیچ Production نگه داشته شده است.
 
@@ -155,7 +159,7 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 |------|--------|
 اگر **Ping** با `502` روی `?wsdl` خطا داد ولی **تست POST (بدون ثبت)** موفق بود، طبیعی است — پروکسی MSB گاهی WSDL را 502 می‌دهد ولی `SaveDocument` با POST کار می‌کند. معیار ارسال: POST Test و سپس ارسال فیش.
 
-| Ping OK ولی Send با `forcibly closed` | ۱) **تست POST (بدون ثبت)** ۲) **تست SaveDocument حداقلی** ۳) ارسال فیش. اگر (۱) OK و (۲) reset → `SoapVersion=soap11` و `SoapEnvelopeStyle=empty-header`. اگر (۲) OK و (۳) reset → محتوای فیش/WAF. اگر هر دو reset → IT/فایروال |
+| Ping OK ولی Send با `forcibly closed` | ۱) **تست POST (بدون ثبت)** ۲) **تست SaveDocument حداقلی** ۳) ارسال فیش. اگر 415 گرفتید → `SoapVersion=soap12` + `SoapEnvelopeStyle=addressing`. اگر (۱) و (۲) OK ولی (۳) reset/502 شد → محتوای فیش را با نمونهٔ موفق مقایسه کنید (IncmMkrTyp/Reason/Ref/Qty/RefRowDocNo). |
 | Ping: `SSL connection could not be established` / `forcibly closed` | **شبکه/MSB** — WSDL بدون SOAP است؛ `SoapEnvelopeStyle` و XML بی‌اثرند. اجرا از سرور شهرسازی + VPN؛ `UseSystemProxy: true` یا `ProxyUrl`؛ تست مرورگر/curl به `ServiceUrl?wsdl` از همان PC |
 | BnkAcntNo خالی | برای نوسازی: `OtherFields` — برای درآمد: join `Base_NosaziCode` |
 | تکراری | فیش در `ray.incmdocsys` هست |

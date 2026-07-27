@@ -24,6 +24,7 @@ public class SoapBuilder
     {
         var docDateRay = DateHelper.ToRayvarzDate(docDate);
         var rowDateRay = DateHelper.ToRayvarzDate(fiche.RowDate);
+        var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
 
@@ -48,11 +49,15 @@ public class SoapBuilder
             ["pfReceive"] = "0",
             ["pfPay"] = "1"
         });
-        var incmMkrTyp = _config["Rayvarz:IncmMkrTyp"] ?? "0";
+        var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category);
         var bank = ResolveBankCode(fiche.BankCode);
 
-        var incmItems = string.Join("\n", rows.Select((r, i) => BuildIncmRow(
-            r, i + 1, ResolveDetailRefRowDocNo(fiche.FicheNo), docDateRay, rowDateRay, sourceSystemId)));
+        var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, docDateRay, rowDateRay)
+            .Select(c => BuildIncmRow(c, sourceSystemId)));
+        var customerXml = isDuty ? "<b:Customer></b:Customer>" : "<b:Customer i:nil=\"true\"/>";
+        var customerNationalCodeXml = isDuty
+            ? "<b:CustomerNationalCode></b:CustomerNationalCode>"
+            : "<b:CustomerNationalCode i:nil=\"true\"/>";
 
         var refRecon = XmlOptionalElement("b", "RefreconstructionNo", fiche.RefReconstructionNo);
         var bodyXml = $@"        <SaveDocument xmlns=""{TempUriNs}"">
@@ -73,8 +78,8 @@ public class SoapBuilder
                 <b:BnkAcntOwnr i:nil=""true""/>
                 <b:BnkBrnch i:nil=""true""/>
                 <b:Center>0</b:Center>
-                <b:Customer i:nil=""true""/>
-                <b:CustomerNationalCode i:nil=""true""/>
+                {customerXml}
+                {customerNationalCodeXml}
                 <b:DocRow>{docRow}</b:DocRow>
                 <b:Fund>{fund}</b:Fund>
                 <b:IncmMkr>0</b:IncmMkr>
@@ -127,11 +132,18 @@ public class SoapBuilder
         const string probeFiche = "000000/0000000";
 
         var incm = BuildIncmRow(
-            new IncmRowDto { IncmNo = 2003, Val = 1, IncmRowDsc = "probe" },
-            1,
-            ResolveDetailRefRowDocNo(probeFiche),
-            docDateRay,
-            rowDateRay,
+            new IncmContext(
+                new IncmRowDto { IncmNo = 2003, Val = 1, IncmRowDsc = "probe" },
+                1,
+                "1",
+                docDateRay,
+                1,
+                "فیش",
+                null,
+                null,
+                ResolveDetailRefRowDocNo(probeFiche),
+                rowDateRay,
+                false),
             sourceSystemId);
 
         var bodyXml = $@"        <SaveDocument xmlns=""{TempUriNs}"">
@@ -177,10 +189,22 @@ public class SoapBuilder
     private string ResolveDetailRefRowDocNo(string ficheNo)
     {
         var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow").Trim();
+        if (mode.Equals("zero", StringComparison.OrdinalIgnoreCase)
+            || mode.Equals("0", StringComparison.OrdinalIgnoreCase))
+            return "0";
         if (mode.Equals("ficheNo", StringComparison.OrdinalIgnoreCase)
             || mode.Equals("fiche", StringComparison.OrdinalIgnoreCase))
             return ficheNo;
         return "1";
+    }
+
+    private string ResolveIncmMkrTyp(FicheCategory category)
+    {
+        var configured = _config["Rayvarz:IncmMkrTyp"];
+        if (!string.IsNullOrWhiteSpace(configured)
+            && !configured.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return configured!;
+        return category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? "1" : "0";
     }
 
     private (string env, string envNs, bool soap11) ResolveEnvelopeNs()
@@ -246,19 +270,100 @@ public class SoapBuilder
         return nameToCode.TryGetValue(raw, out var code) ? code : defaultValue;
     }
 
-    private static string BuildIncmRow(
-        IncmRowDto row,
-        int incmRow,
-        string refRowDocNo,
+    private sealed record IncmContext(
+        IncmRowDto Row,
+        int IncmRow,
+        string Qty,
+        string Due,
+        int Reason,
+        string? ReasonDsc,
+        string? Ref,
+        string? Num,
+        string RefRowDocNo,
+        string? RefRowDate,
+        bool NilIncmNoDsc);
+
+    private List<IncmContext> BuildIncmContexts(
+        FicheHeaderDto fiche,
+        IReadOnlyList<IncmRowDto> rows,
         string docDateRay,
-        string rowDateRay,
+        string rowDateRay)
+    {
+        var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
+        var detailRefRow = ResolveDetailRefRowDocNo(fiche.FicheNo);
+        var dutyQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
+
+        return rows.Select((r, i) =>
+        {
+            var incmRow = ResolveIncmRowNo(fiche.Category, r.IncmNo, i + 1);
+            if (isDuty)
+            {
+                return new IncmContext(
+                    r,
+                    incmRow,
+                    dutyQty,
+                    docDateRay,
+                    0,
+                    null,
+                    fiche.FicheNo,
+                    "",
+                    "0",
+                    null,
+                    true);
+            }
+
+            return new IncmContext(
+                r,
+                incmRow,
+                FormatRayvarzMoney(r.Val),
+                docDateRay,
+                1,
+                string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
+                null,
+                null,
+                detailRefRow,
+                rowDateRay,
+                false);
+        }).ToList();
+    }
+
+    private static int ResolveIncmRowNo(FicheCategory category, int incmNo, int fallback)
+    {
+        if (category is not (FicheCategory.DutyNosazi or FicheCategory.DutySenfi))
+            return fallback;
+
+        return incmNo switch
+        {
+            2003 or 100062 or 2005 => 1,
+            100002 => 2,
+            100003 => 3,
+            206098003 => 4,
+            _ => fallback
+        };
+    }
+
+    private static string BuildIncmRow(
+        IncmContext ctx,
         string? sourceSystemId)
     {
-        var reasonDsc = string.IsNullOrWhiteSpace(row.IncmRowDsc) ? "" : Escape(row.IncmRowDsc);
-        var incmNoDsc = string.IsNullOrWhiteSpace(row.IncmRowDsc)
-            ? row.IncmNo.ToString()
-            : Escape(row.IncmRowDsc);
-        var money = FormatRayvarzMoney(row.Val);
+        var reasonDsc = string.IsNullOrWhiteSpace(ctx.ReasonDsc)
+            ? "<b:ReasonDsc i:nil=\"true\"/>"
+            : $"<b:ReasonDsc>{Escape(ctx.ReasonDsc)}</b:ReasonDsc>";
+        var incmNoDsc = ctx.NilIncmNoDsc
+            ? "<b:IncmNoDsc i:nil=\"true\"/>"
+            : (string.IsNullOrWhiteSpace(ctx.Row.IncmRowDsc)
+                ? $"<b:IncmNoDsc>{ctx.Row.IncmNo}</b:IncmNoDsc>"
+                : $"<b:IncmNoDsc>{Escape(ctx.Row.IncmRowDsc)}</b:IncmNoDsc>");
+        var val = FormatRayvarzMoney(ctx.Row.Val);
+        var refXml = string.IsNullOrWhiteSpace(ctx.Ref)
+            ? "<b:Ref i:nil=\"true\"/>"
+            : $"<b:Ref>{Escape(ctx.Ref)}</b:Ref>";
+        var numXml = ctx.Num is null
+            ? "<b:Num i:nil=\"true\"/>"
+            : $"<b:Num>{Escape(ctx.Num)}</b:Num>";
+        var refRowDateXml = string.IsNullOrWhiteSpace(ctx.RefRowDate)
+            ? "<b:RefRowDate i:nil=\"true\"/>"
+            : $"<b:RefRowDate>{ctx.RefRowDate}</b:RefRowDate>";
 
         return $@"
               <b:DocumentItemIncm>
@@ -269,21 +374,21 @@ public class SoapBuilder
                 <b:CrncyDate i:nil=""true""/>
                 <b:CrncyPrice>0</b:CrncyPrice>
                 <b:CrncyVal>0</b:CrncyVal>
-                <b:Due>{docDateRay}</b:Due>
+                <b:Due>{ctx.Due}</b:Due>
                 <b:Id i:nil=""true""/>
-                <b:IncmNo>{row.IncmNo}</b:IncmNo>
-                <b:IncmNoDsc>{incmNoDsc}</b:IncmNoDsc>
-                <b:IncmRow>{incmRow}</b:IncmRow>
+                <b:IncmNo>{ctx.Row.IncmNo}</b:IncmNo>
+                {incmNoDsc}
+                <b:IncmRow>{ctx.IncmRow}</b:IncmRow>
                 <b:IncmRowDsc i:nil=""true""/>
-                <b:Num i:nil=""true""/>
-                <b:Qty>{money}</b:Qty>
-                <b:Reason>1</b:Reason>
-                <b:ReasonDsc>{reasonDsc}</b:ReasonDsc>
-                <b:Ref i:nil=""true""/>
-                <b:RefRowDate>{rowDateRay}</b:RefRowDate>
-                <b:RefRowDocNo>{Escape(refRowDocNo)}</b:RefRowDocNo>
+                {numXml}
+                <b:Qty>{ctx.Qty}</b:Qty>
+                <b:Reason>{ctx.Reason}</b:Reason>
+                {reasonDsc}
+                {refXml}
+                {refRowDateXml}
+                <b:RefRowDocNo>{Escape(ctx.RefRowDocNo)}</b:RefRowDocNo>
                 {XmlOptionalElement("b", "SourceId", sourceSystemId, nilIfEmpty: true)}
-                <b:Val>{money}</b:Val>
+                <b:Val>{val}</b:Val>
               </b:DocumentItemIncm>";
     }
 
@@ -446,9 +551,9 @@ public class RayvarzClient
             reachedCause:
                 "POST با ساختار SaveDocument (حداقلی) تا MSB رسید — اگر ارسال فیش واقعی reset می‌شود، احتمالاً WAF/اندازه/کاراکتر فارسی یا فیلد خاص فیش است نه مسیر POST.",
             resetCause:
-                "SaveDocument حداقلی هم قطع شد — MSB/WAF احتمالاً هر بدنهٔ SaveDocument را می‌بندد یا نسخه SOAP/هدر با سرویس نمی‌خواند؛ SoapVersion=soap11 و SoapEnvelopeStyle=empty-header را امتحان کنید.",
+                "SaveDocument حداقلی هم قطع شد — نسخه SOAP/هدر یا مسیر شبکه با endpoint سازگار نیست؛ در ITC معمولاً SoapVersion=soap12 و SoapEnvelopeStyle=addressing لازم است.",
             resetHint:
-                "appsettings: SoapVersion=soap11؛ SoapEnvelopeStyle=empty-header؛ UseSystemProxy=true اگر شهرسازی از پروکسی سیستم استفاده می‌کند.",
+                "appsettings: SoapVersion=soap12؛ SoapEnvelopeStyle=addressing؛ UseSystemProxy فقط وقتی لازم است که WinTestService هم از پروکسی سیستم استفاده کند.",
             ct);
 
     private async Task<RayvarzPingResultDto> PostSoapDiagnosticAsync(
@@ -606,6 +711,23 @@ public class RayvarzClient
                 DryRun = false,
                 Diagnostics = diagnostics
             };
+
+            if (!response.IsSuccessStatusCode && string.IsNullOrWhiteSpace(body))
+            {
+                result.Success = false;
+                result.Message = $"HTTP {(int)response.StatusCode}";
+                result.Diagnostics.Category = response.StatusCode == HttpStatusCode.UnsupportedMediaType
+                    ? "UnsupportedMediaType"
+                    : "HttpStatusError";
+                result.Diagnostics.Stage = "ReadResponseBody";
+                result.Diagnostics.LikelyCause = response.StatusCode == HttpStatusCode.UnsupportedMediaType
+                    ? "HTTP 415 — endpoint با MediaType/MessageVersion فعلی سازگار نیست."
+                    : $"HTTP {(int)response.StatusCode} بدون بدنه از سرویس/پروکسی.";
+                result.Diagnostics.Hint = response.StatusCode == HttpStatusCode.UnsupportedMediaType
+                    ? "برای ITC: SoapVersion=soap12 و SoapEnvelopeStyle=addressing (هم‌راستا با WCF شهرسازی) را بگذارید."
+                    : "همان فیش را در WinTestService تست کنید و XML/هدر را مقایسه کنید.";
+                return result;
+            }
 
             try
             {
