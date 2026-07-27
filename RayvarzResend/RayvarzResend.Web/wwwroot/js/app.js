@@ -76,6 +76,7 @@ function formatDiagnostics(d) {
     `EnvelopeStyle: ${d.envelopeStyle || '-'}`,
     `SoapAction: ${d.soapAction || '-'}`,
     `ContentType: ${d.contentType || '-'}`,
+    `ProxyMode: ${d.proxyMode || '-'}`,
     `RequestBodyBytes: ${d.requestBodyBytes ?? '-'}`,
     `HttpStatusCode: ${d.httpStatusCode ?? '-'}`,
     `ResponseBodyBytes: ${d.responseBodyBytes ?? '-'}`

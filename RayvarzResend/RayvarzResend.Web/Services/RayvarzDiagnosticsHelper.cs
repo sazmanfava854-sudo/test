@@ -49,9 +49,9 @@ internal static class RayvarzDiagnosticsHelper
             if (baseInfo.HttpStatusCode == 502)
             {
                 baseInfo.LikelyCause =
-                    "HTTP 502 از سرور — درخواست رسید ولی پاسخ ناقص/قطع شد. روی ITC (mdc-rayvarzsvc) WinTestService با SOAP 1.1/basicHttp کار می‌کند؛ RayvarzResend با soap12+addressing اغلب 502 می‌گیرد.";
+                    "HTTP 502 — پاسخ از یک واسطه (پروکسی/gateway) است نه خود سرویس؛ WinTestService از همان PC موفق است پس مسیر مستقیم باز است. احتمالاً درخواست از پروکسی سیستم ویندوز رد می‌شود.";
                 baseInfo.Hint =
-                    "appsettings: SoapVersion=soap11 و SoapEnvelopeStyle=empty-header (پیش‌فرض جدید برای ITC). برنامه را restart کنید؛ در پیش‌نمایش Header خالی باشد و Content-Type=text/xml.";
+                    "نسخه جدید پیش‌فرض ProxyMode=direct دارد (بدون پروکسی سیستم). git pull/zip جدید + restart؛ در Diagnostics باید ProxyMode: direct ببینید. اگر شبکه فقط با پروکسی کار می‌کند: UseSystemProxy=true و به IT بگویید mdc-rayvarzsvc.itc.mashhad.ir در bypass پروکسی قرار گیرد.";
             }
             else
             {

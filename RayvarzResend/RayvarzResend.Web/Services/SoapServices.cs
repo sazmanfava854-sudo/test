@@ -478,7 +478,8 @@ public class RayvarzClient
         try
         {
             _logger.LogInformation("Rayvarz {Stage} شروع — {Url} Bytes={Bytes}", stage, url, diagnostics.RequestBodyBytes);
-            using var client = CreateHttpClient(allowInvalidSsl);
+            using var client = CreateHttpClient(allowInvalidSsl, out var probeProxyMode);
+            diagnostics.ProxyMode = probeProxyMode;
             using var response = await RayvarzSoapHttp.PostAsync(client, url, probeXml, action, soapVersion, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             sw.Stop();
@@ -565,7 +566,8 @@ public class RayvarzClient
                 url, diagnostics.RequestBodyBytes, diagnostics.HasWsAddressingHeader,
                 diagnostics.WsAddressingTo ?? "(empty-header)", envelopeStyle);
 
-            using var client = CreateHttpClient(allowInvalidSsl);
+            using var client = CreateHttpClient(allowInvalidSsl, out var proxyMode);
+            diagnostics.ProxyMode = proxyMode;
             using var response = await RayvarzSoapHttp.PostAsync(client, url, soapXml, action, soapVersion, ct);
             diagnostics.ContentType = response.RequestMessage?.Content?.Headers.ContentType?.ToString();
 
@@ -703,7 +705,10 @@ public class RayvarzClient
         return string.Join(" | ", new[] { core, extra, hint }.Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 
-    private HttpClient CreateHttpClient(bool allowInvalidSsl)
+    private HttpClient CreateHttpClient(bool allowInvalidSsl) => CreateHttpClient(allowInvalidSsl, out _);
+
+    /// <summary>پیش‌فرض: اتصال مستقیم (بدون پروکسی سیستم ویندوز) — 502 اغلب از پروکسی سازمانی می‌آید نه سرویس.</summary>
+    private HttpClient CreateHttpClient(bool allowInvalidSsl, out string proxyMode)
     {
         var proxyUrl = _config["Rayvarz:ProxyUrl"];
         var useSystemProxy = _config.GetValue<bool>("Rayvarz:UseSystemProxy");
@@ -720,12 +725,19 @@ public class RayvarzClient
         {
             handler.Proxy = new WebProxy(proxyUrl);
             handler.UseProxy = true;
+            proxyMode = $"custom({proxyUrl})";
         }
         else if (useSystemProxy)
         {
             handler.Proxy = HttpClient.DefaultProxy;
             handler.UseProxy = true;
             handler.DefaultProxyCredentials = CredentialCache.DefaultCredentials;
+            proxyMode = "system";
+        }
+        else
+        {
+            handler.UseProxy = false;
+            proxyMode = "direct";
         }
 
         if (allowInvalidSsl)

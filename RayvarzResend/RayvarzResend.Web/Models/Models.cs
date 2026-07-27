@@ -89,6 +89,7 @@ public class RayvarzTransportDiagnostics
     public string? WsAddressingTo { get; set; }
     public string? SoapAction { get; set; }
     public string? ContentType { get; set; }
+    public string? ProxyMode { get; set; }
     public int RequestBodyBytes { get; set; }
     public bool HasWsAddressingHeader { get; set; }
     public string? EnvelopeStyle { get; set; }
