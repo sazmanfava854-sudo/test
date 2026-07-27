@@ -49,12 +49,12 @@ internal static class RayvarzDiagnosticsHelper
             baseInfo.LikelyCause = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
                 ? "MSB اتصال را در handshake یا WSDL قطع کرد — فایروال، IP مجاز، یا مسیر شبکه."
                 : largePayload
-                    ? "POST با بدنه بزرگ قطع شد — اگر POST Test کوچک OK بود: مبلغ منفی، Bank نامعتبر، یا رد محتوا توسط MSB (نسخه جدید مبالغ دریافت را مثبت و Bank را ۱–۱۲ می‌کند)."
+                    ? "POST با بدنه بزرگ قطع شد — اگر POST Test کوچک OK بود: ساختار/فیلد SOAP، اندازه بدنه، یا رد محتوا توسط MSB/WAF (مبالغ منفی بستانکاری و کد بانک دیتابیس معتبرند)."
                     : baseInfo.HasWsAddressingHeader
                         ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
                         : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
             baseInfo.Hint = stage.Equals("PostSoap", StringComparison.OrdinalIgnoreCase) && largePayload
-                ? "پیش‌نمایش XML: Qty/Val منفی نباشد؛ Bank بین ۱–۱۲ یا ۰؛ SoapEnvelopeStyle=empty-header را یک‌بار امتحان کنید."
+                ? "پیش‌نمایش XML را با نمونهٔ موفق شهرسازی مقایسه کنید؛ RefRowDocNo، SoapEnvelopeStyle=empty-header، یا مجوز POST با بدنهٔ بزرگ از IT."
                 : stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
                     ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
                     : "پس از POST Test موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";

@@ -52,7 +52,7 @@ public class SoapBuilder
         var bank = ResolveBankCode(fiche.BankCode);
 
         var incmItems = string.Join("\n", rows.Select((r, i) => BuildIncmRow(
-            r, i + 1, fiche.FicheNo, docDateRay, rowDateRay, sourceSystemId, vchrTyp)));
+            r, i + 1, fiche.FicheNo, docDateRay, rowDateRay, sourceSystemId)));
 
         var refRecon = XmlOptionalElement("b", "RefreconstructionNo", fiche.RefReconstructionNo);
         var headerXml = BuildSoapHeader(action, serviceUrl);
@@ -132,20 +132,12 @@ public class SoapBuilder
       </s:Header>";
     }
 
-    /// <summary>کد بانک رایورز طبق PDF معمولاً ۱–۱۲ است؛ ConfirmBankCode شهرسازی ممکن است خارج از این بازه باشد.</summary>
-    private static int ResolveBankCode(string? bankCode)
-    {
-        if (!int.TryParse(bankCode, out var bank))
-            return 0;
-        return bank is >= 1 and <= 12 ? bank : 0;
-    }
+    /// <summary>کد بانک از PaymentBank / ConfirmBankCode دیتابیس شهرسازی (مثلاً ۱۸) بدون تغییر به رایورز می‌رود.</summary>
+    private static int ResolveBankCode(string? bankCode) =>
+        int.TryParse(bankCode, out var bank) ? bank : 0;
 
-    private static string FormatRayvarzMoney(decimal val, string vchrTyp)
-    {
-        var isPay = vchrTyp == "1";
-        var amount = isPay ? val : Math.Abs(val);
-        return amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
-    }
+    private static string FormatRayvarzMoney(decimal val) =>
+        val.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>مقادیر SOAP smallint — طبق PDF راهنما (مثلاً PhasTyp=7 برای ptDraftRegion).</summary>
     private static string ResolveSoapSmallInt(string? configured, string defaultValue, IReadOnlyDictionary<string, string> nameToCode)
@@ -162,14 +154,13 @@ public class SoapBuilder
         string refRowDocNo,
         string docDateRay,
         string rowDateRay,
-        string? sourceSystemId,
-        string vchrTyp)
+        string? sourceSystemId)
     {
         var reasonDsc = string.IsNullOrWhiteSpace(row.IncmRowDsc) ? "" : Escape(row.IncmRowDsc);
         var incmNoDsc = string.IsNullOrWhiteSpace(row.IncmRowDsc)
             ? row.IncmNo.ToString()
             : Escape(row.IncmRowDsc);
-        var money = FormatRayvarzMoney(row.Val, vchrTyp);
+        var money = FormatRayvarzMoney(row.Val);
 
         return $@"
               <b:DocumentItemIncm>
