@@ -212,7 +212,7 @@ public class SoapBuilder
             ?? "");
 
     public string ResolveEnvelopeStyle() =>
-        (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
+        RayvarzSoapHttp.ResolveEnvelopeStyle(_config);
 
     private string BuildSoapHeader(string action, string serviceUrl, string env)
     {
@@ -542,7 +542,7 @@ public class RayvarzClient
         var url = ResolveServiceUrl();
         var action = _config["Rayvarz:SoapAction"] ?? "";
         var allowInvalidSsl = _config.GetValue<bool>("Rayvarz:AllowInvalidSsl");
-        var envelopeStyle = (_config["Rayvarz:SoapEnvelopeStyle"] ?? "addressing").Trim().ToLowerInvariant();
+        var envelopeStyle = RayvarzSoapHttp.ResolveEnvelopeStyle(_config);
         var soapVersion = RayvarzSoapHttp.ResolveSoapVersion(_config);
         var sendDelayMs = _config.GetValue<int>("Rayvarz:SendDelayMs");
         if (sendDelayMs > 0)

@@ -13,12 +13,31 @@ internal enum RayvarzSoapVersion
 /// <summary>HTTP/SOAP transport — هم‌راستا با کلاینت‌های WCF قدیمی (SOAP 1.1 + SOAPAction، بدون Expect: 100-continue).</summary>
 internal static class RayvarzSoapHttp
 {
+  public static bool IsItcDirectWcf(IConfiguration config)
+    {
+        var url = config["Rayvarz:ServiceUrl"] ?? "";
+        return url.Contains("mdc-rayvarzsvc", StringComparison.OrdinalIgnoreCase)
+               || url.Contains("safa_shahrsazi", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static RayvarzSoapVersion ResolveSoapVersion(IConfiguration config)
     {
-        var raw = (config["Rayvarz:SoapVersion"] ?? "soap12").Trim().ToLowerInvariant();
+        var raw = config["Rayvarz:SoapVersion"];
+        if (string.IsNullOrWhiteSpace(raw))
+            return IsItcDirectWcf(config) ? RayvarzSoapVersion.Soap11 : RayvarzSoapVersion.Soap12;
+
+        raw = raw.Trim().ToLowerInvariant();
         return raw is "soap11" or "1.1" or "11" or "text/xml"
             ? RayvarzSoapVersion.Soap11
             : RayvarzSoapVersion.Soap12;
+    }
+
+    public static string ResolveEnvelopeStyle(IConfiguration config)
+    {
+        var raw = config["Rayvarz:SoapEnvelopeStyle"];
+        if (string.IsNullOrWhiteSpace(raw))
+            return IsItcDirectWcf(config) ? "empty-header" : "addressing";
+        return raw.Trim().ToLowerInvariant();
     }
 
     public static string SoapVersionLabel(RayvarzSoapVersion version) =>

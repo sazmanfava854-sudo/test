@@ -46,18 +46,28 @@ internal static class RayvarzDiagnosticsHelper
         {
             baseInfo.Category = "ConnectionReset";
             var largePayload = baseInfo.RequestBodyBytes > 1500;
-            baseInfo.LikelyCause = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
-                ? "MSB اتصال را در handshake یا WSDL قطع کرد — فایروال، IP مجاز، یا مسیر شبکه."
-                : largePayload
-                    ? "POST با بدنه بزرگ قطع شد — اگر POST Test کوچک OK بود: ساختار/فیلد SOAP، اندازه بدنه، یا رد محتوا توسط MSB/WAF (مبالغ منفی بستانکاری و کد بانک دیتابیس معتبرند)."
-                    : baseInfo.HasWsAddressingHeader
-                        ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
-                        : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
-            baseInfo.Hint = stage.Equals("PostSoap", StringComparison.OrdinalIgnoreCase) && largePayload
-                ? "ترتیب تست: POST خالی → «تست SaveDocument حداقلی» → ارسال فیش. appsettings: SoapVersion=soap11؛ SoapEnvelopeStyle=empty-header؛ RefRowDocNoInDetail=headerDocRow (مثل شهرسازی)."
-                : stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
-                    ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
-                    : "پس از POST Test موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";
+            if (baseInfo.HttpStatusCode == 502)
+            {
+                baseInfo.LikelyCause =
+                    "HTTP 502 از سرور — درخواست رسید ولی پاسخ ناقص/قطع شد. روی ITC (mdc-rayvarzsvc) WinTestService با SOAP 1.1/basicHttp کار می‌کند؛ RayvarzResend با soap12+addressing اغلب 502 می‌گیرد.";
+                baseInfo.Hint =
+                    "appsettings: SoapVersion=soap11 و SoapEnvelopeStyle=empty-header (پیش‌فرض جدید برای ITC). برنامه را restart کنید؛ در پیش‌نمایش Header خالی باشد و Content-Type=text/xml.";
+            }
+            else
+            {
+                baseInfo.LikelyCause = stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
+                    ? "MSB اتصال را در handshake یا WSDL قطع کرد — فایروال، IP مجاز، یا مسیر شبکه."
+                    : largePayload
+                        ? "POST با بدنه بزرگ قطع شد — اگر POST Test کوچک OK بود: ساختار/فیلد SOAP، اندازه بدنه، یا رد محتوا توسط MSB/WAF (مبالغ منفی بستانکاری و کد بانک دیتابیس معتبرند)."
+                        : baseInfo.HasWsAddressingHeader
+                            ? "اتصال در حین ارسال/دریافت قطع شد — شبکه، فایروال، یا رد درخواست توسط MSB."
+                            : "اتصال قطع شد — ابتدا Ping را از همان ماشین درست کنید.";
+                baseInfo.Hint = stage.Equals("PostSoap", StringComparison.OrdinalIgnoreCase) && largePayload
+                    ? "ترتیب تست: POST خالی → «تست SaveDocument حداقلی» → ارسال فیش. appsettings: SoapVersion=soap11؛ SoapEnvelopeStyle=empty-header؛ RefRowDocNoInDetail=headerDocRow (مثل شهرسازی)."
+                    : stage.Equals("GetWsdl", StringComparison.OrdinalIgnoreCase)
+                        ? "curl یا مرورگر از همان PC به ServiceUrl?wsdl؛ مقایسه با سرور اپلیکیشن شهرسازی."
+                        : "پس از POST Test موفق: WsAddressingTo و SoapEnvelopeStyle را بررسی کنید.";
+            }
         }
         else if (text.Contains("ssl") || text.Contains("certificate") || text.Contains("tls") || text.Contains("authentication"))
         {
