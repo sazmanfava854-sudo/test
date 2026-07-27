@@ -29,9 +29,13 @@ public class SoapBuilder
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
-        var transactionId = fiche.NidFiche.ToString();
+        var transactionId = fiche.NidFiche.ToString("D").ToLowerInvariant();
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
+        var useDocDateForDutyHeader = _config.GetValue("Rayvarz:DutyHeaderDatesFromDocDate", true);
+        var headerActDate = isDuty && useDocDateForDutyHeader ? docDateRay : rowDateRay;
+        var headerRowDate = isDuty && useDocDateForDutyHeader ? docDateRay : rowDateRay;
+        var docTypDsc = ResolveDocTypDsc(fiche);
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
@@ -68,10 +72,10 @@ public class SoapBuilder
             <b:DocDate>{docDateRay}</b:DocDate>
             <b:DocDsc>{Escape(fiche.DocDsc)}</b:DocDsc>
             <b:DocTyp>{fiche.DocTyp}</b:DocTyp>
-            <b:DocTypDsc/>
+            <b:DocTypDsc>{Escape(docTypDsc)}</b:DocTypDsc>
             <b:Items>
               <b:DocumentItem>
-                <b:ActDate>{docDateRay}</b:ActDate>
+                <b:ActDate>{headerActDate}</b:ActDate>
                 <b:ActTyp>3</b:ActTyp>
                 <b:Bank>{bank}</b:Bank>
                 <b:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</b:BnkAcntNo>
@@ -91,7 +95,7 @@ public class SoapBuilder
                 {XmlOptionalElement("b", "Ref3", fiche.PaymentId, nilIfEmpty: true)}
                 {XmlOptionalElement("b", "RefownrDsc", fiche.FicheNo, nilIfEmpty: true)}
                 {refRecon}
-                <b:RowDate>{rowDateRay}</b:RowDate>
+                <b:RowDate>{headerRowDate}</b:RowDate>
                 <b:RowDocNo>{Escape(fiche.FicheNo)}</b:RowDocNo>
                 <b:VchrTyp>{vchrTyp}</b:VchrTyp>
               </b:DocumentItem>
@@ -143,6 +147,7 @@ public class SoapBuilder
                 null,
                 ResolveDetailRefRowDocNo(probeFiche),
                 rowDateRay,
+                "probe",
                 false),
             sourceSystemId);
 
@@ -197,6 +202,16 @@ public class SoapBuilder
             return ficheNo;
         return "1";
     }
+
+    private static string ResolveDocTypDsc(FicheHeaderDto fiche) =>
+        fiche.Category switch
+        {
+            FicheCategory.DutyNosazi => "عوارض سرا",
+            FicheCategory.DutySenfi => "صنفی",
+            FicheCategory.Income when fiche.DocTyp == 3 => "بهای هوشمندسازی خدمات شهری",
+            FicheCategory.Income when fiche.DocTyp == 14 => "تهاتر مبلغ",
+            _ => fiche.DocTypDsc ?? ""
+        };
 
     private string ResolveIncmMkrTyp(FicheCategory category)
     {
@@ -281,6 +296,7 @@ public class SoapBuilder
         string? Num,
         string RefRowDocNo,
         string? RefRowDate,
+        string? IncmRowDscText,
         bool NilIncmNoDsc);
 
     private List<IncmContext> BuildIncmContexts(
@@ -309,6 +325,7 @@ public class SoapBuilder
                     "",
                     "0",
                     null,
+                    string.IsNullOrWhiteSpace(r.IncmRowDsc) ? null : r.IncmRowDsc,
                     true);
             }
 
@@ -323,6 +340,7 @@ public class SoapBuilder
                 null,
                 detailRefRow,
                 rowDateRay,
+                null,
                 false);
         }).ToList();
     }
@@ -354,6 +372,9 @@ public class SoapBuilder
             : (string.IsNullOrWhiteSpace(ctx.Row.IncmRowDsc)
                 ? $"<b:IncmNoDsc>{ctx.Row.IncmNo}</b:IncmNoDsc>"
                 : $"<b:IncmNoDsc>{Escape(ctx.Row.IncmRowDsc)}</b:IncmNoDsc>");
+        var incmRowDscXml = string.IsNullOrWhiteSpace(ctx.IncmRowDscText)
+            ? "<b:IncmRowDsc i:nil=\"true\"/>"
+            : $"<b:IncmRowDsc>{Escape(ctx.IncmRowDscText)}</b:IncmRowDsc>";
         var val = FormatRayvarzMoney(ctx.Row.Val);
         var refXml = string.IsNullOrWhiteSpace(ctx.Ref)
             ? "<b:Ref i:nil=\"true\"/>"
@@ -379,7 +400,7 @@ public class SoapBuilder
                 <b:IncmNo>{ctx.Row.IncmNo}</b:IncmNo>
                 {incmNoDsc}
                 <b:IncmRow>{ctx.IncmRow}</b:IncmRow>
-                <b:IncmRowDsc i:nil=""true""/>
+                {incmRowDscXml}
                 {numXml}
                 <b:Qty>{ctx.Qty}</b:Qty>
                 <b:Reason>{ctx.Reason}</b:Reason>
@@ -731,30 +752,25 @@ public class RayvarzClient
 
             try
             {
-                var doc = XDocument.Parse(body);
-                XNamespace wcf = "http://schemas.datacontract.org/2004/07/WCFServer";
-                XNamespace con = "http://www.bea.com/wli/sb/context";
-
-                var faultCode = doc.Descendants(con + "errorCode").FirstOrDefault()?.Value
-                    ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultcode")?.Value;
-                var faultReason = doc.Descendants(con + "reason").FirstOrDefault()?.Value
-                    ?? doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "faultstring")?.Value;
-
-                if (!string.IsNullOrWhiteSpace(faultCode) || !string.IsNullOrWhiteSpace(faultReason))
+                var (success, rayMessage, pursuit, fault) = RayvarzSoapResponseParser.Parse(body);
+                if (fault != null)
                 {
                     result.Success = false;
-                    result.Message = $"SOAP Fault: {faultCode} — {faultReason}".Trim(' ', '—');
+                    result.Message = fault;
                     result.Diagnostics = RayvarzDiagnosticsHelper.ForSoapFault(sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode);
-                    _logger.LogWarning("Rayvarz SOAP Fault — {FaultCode} {FaultReason}", faultCode, faultReason);
+                    _logger.LogWarning("Rayvarz SOAP Fault — {Fault}", fault);
                     return result;
                 }
 
-                result.Success = doc.Descendants(wcf + "Success").FirstOrDefault()?.Value == "true";
-                result.Message = doc.Descendants(wcf + "Message").FirstOrDefault()?.Value ?? "";
-                result.PursuitDocNo = doc.Descendants(wcf + "PursuitDocNo").FirstOrDefault()?.Value;
+                result.Success = success == true;
+                result.Message = rayMessage;
+                result.PursuitDocNo = pursuit;
 
                 if (!result.Success && string.IsNullOrWhiteSpace(result.Message))
-                    result.Message = "پاسخ رایورز Success=false — جزئیات در SoapResponse";
+                    result.Message = $"پاسخ رایورز Success=false (HTTP {(int)response.StatusCode}) — SoapResponse را ببینید";
+
+                if (!result.Success && !string.IsNullOrWhiteSpace(result.Message))
+                    result.Message = $"رایورز: {result.Message}";
 
                 result.Diagnostics = result.Success
                     ? RayvarzDiagnosticsHelper.ForSuccess(sw.ElapsedMilliseconds, diagnostics, (int)response.StatusCode, body.Length)

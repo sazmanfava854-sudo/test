@@ -41,6 +41,7 @@ public class FicheHeaderDto
     public string RowDate { get; set; } = "";
     public int DocTyp { get; set; }
     public string DocDsc { get; set; } = "";
+    public string? DocTypDsc { get; set; }
     public int? IncomeAccountGroup { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }

@@ -125,6 +125,12 @@ function showSendResult(data) {
   if (data.verifiedInRayvarz !== undefined) msg += `VerifiedInRayvarz: ${data.verifiedInRayvarz}\n`;
   if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
   if (data.warning) msg += `Warning: ${data.warning}\n`;
+  if (data.soapResponse) {
+    const preview = data.soapResponse.length > 3500
+      ? data.soapResponse.slice(0, 3500) + '\n...(truncated)'
+      : data.soapResponse;
+    msg += `\n--- SoapResponse ---\n${preview}\n`;
+  }
   msg += formatDiagnostics(data.diagnostics);
   $('resultBox').textContent = msg;
 }
