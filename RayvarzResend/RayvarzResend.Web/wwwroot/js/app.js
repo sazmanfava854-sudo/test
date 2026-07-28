@@ -263,8 +263,11 @@ async function init() {
   $('docDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   syncFundFromBranch();
 
-  const today = new Date();
-  $('docDate').value = `140${today.getFullYear() - 2020}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+  const defaultDoc =
+    (config.defaultDocDate && String(config.defaultDocDate).trim()) ||
+    (config.openFiscalYear ? `${config.openFiscalYear}/05/07` : '1405/05/07');
+  $('docDate').value = defaultDoc;
+  $('docDate').placeholder = `${config.openFiscalYear || '1405'}/MM/DD — سال مالی باز`;
 
   if (config.uiVersion !== '3' || !config.features?.rayvarzPostTest) {
     console.warn('Backend قدیمی — دکمه‌های تست POST ممکن است 404 بدهند. git pull و dotnet run مجدد');

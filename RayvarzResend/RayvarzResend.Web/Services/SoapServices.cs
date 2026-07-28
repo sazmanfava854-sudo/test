@@ -40,8 +40,9 @@ public class SoapBuilder
 
     public string Build(FicheHeaderDto fiche, int branch, int fund, string docDate)
     {
-        var docDateRay = DateHelper.ToRayvarzDate(docDate);
-        var rowDateRay = DateHelper.ToRayvarzDate(fiche.RowDate);
+        var docDateRay = AlignRayvarzDateToOpenFiscalYear(
+            DateHelper.ToRayvarzDate(string.IsNullOrWhiteSpace(docDate) ? _config["Rayvarz:DefaultDocDate"] : docDate));
+        var rowDateRay = AlignRayvarzDateToOpenFiscalYear(DateHelper.ToRayvarzDate(fiche.RowDate));
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
@@ -309,6 +310,20 @@ public class SoapBuilder
     private static string ResolveSoapActTyp(string? configured, string defaultCode) =>
         string.IsNullOrWhiteSpace(configured) ? defaultCode : configured.Trim();
 
+    private string AlignRayvarzDateToOpenFiscalYear(string rayvarzDate)
+    {
+        if (!_config.GetValue("Rayvarz:AlignDocDatesToOpenFiscalYear", true))
+            return rayvarzDate;
+        var fy = _config["Rayvarz:OpenFiscalYear"];
+        if (string.IsNullOrWhiteSpace(fy) || rayvarzDate.Length < 8)
+            return rayvarzDate;
+        var year = rayvarzDate[..4];
+        var open = new string(fy.Where(char.IsDigit).ToArray());
+        if (open.Length != 4 || year == open)
+            return rayvarzDate;
+        return DateHelper.ReplacePersianYear(rayvarzDate, open);
+    }
+
     private string ResolveIncomeDueDate(string docDateRay, string rowDateRay)
     {
         var configured = _config["Rayvarz:IncomeDueDate"];
@@ -320,7 +335,7 @@ public class SoapBuilder
             && rowDateRay.Length >= 8)
             return rowDateRay;
 
-        // نمونه رسمی: DocDate=14030829 و Due/RefRowDate=14031130 (پایان سال مالی همان سال شمسی)
+        // پایان سال مالی همان سال DocDate (مثلاً 14051130 برای سال مالی ۱۴۰۵)
         if (docDateRay.Length >= 4)
             return docDateRay[..4] + (_config["Rayvarz:IncomeDueMMDD"] ?? "1130");
 
@@ -844,7 +859,7 @@ public class RayvarzClient
                         result.Diagnostics.LikelyCause =
                             "رایورز: سال مالی برای تاریخ‌های سند (DocDate / Due / ActDate) در این شعبه باز نیست یا سال اشتباه است.";
                         result.Diagnostics.Hint =
-                            "تاریخ سند فرم را مثل نمونه XML (مثلاً 14030829) و همان سال مالی باز در رایورز بگذارید؛ برای درآمد Due پیش‌فرض YYYY1130 است (IncomeDueDate در appsettings).";
+                            "تاریخ سند فرم را در سال مالی باز رایورز بگذارید (الان ۱۴۰۵)؛ OpenFiscalYear و DefaultDocDate در appsettings.";
                     }
                     else
                     {

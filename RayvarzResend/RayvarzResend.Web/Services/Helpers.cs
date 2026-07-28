@@ -21,6 +21,15 @@ public static class DateHelper
         if (digits.Length >= 8) return digits[..8];
         return digits.PadLeft(8, '0');
     }
+
+    /// <summary>جایگزینی سال (۴ رقم اول) با سال مالی باز رایورز؛ ماه/روز حفظ می‌شود.</summary>
+    public static string ReplacePersianYear(string rayvarzYyyyMmDd, string openFiscalYear)
+    {
+        if (rayvarzYyyyMmDd.Length < 8) return rayvarzYyyyMmDd;
+        var fy = new string(openFiscalYear.Where(char.IsDigit).ToArray());
+        if (fy.Length != 4) return rayvarzYyyyMmDd;
+        return fy + rayvarzYyyyMmDd[4..];
+    }
 }
 
 public static class FundResolver

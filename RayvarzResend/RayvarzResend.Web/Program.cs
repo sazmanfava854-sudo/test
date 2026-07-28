@@ -40,6 +40,10 @@ app.MapGet("/api/config", (IConfiguration config) => new
     refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
+    openFiscalYear = config["Rayvarz:OpenFiscalYear"] ?? "1405",
+    defaultDocDate = config["Rayvarz:DefaultDocDate"] ?? "",
+    alignDocDatesToOpenFiscalYear = config.GetValue("Rayvarz:AlignDocDatesToOpenFiscalYear", true),
+    incomeDueMmdd = config["Rayvarz:IncomeDueMMDD"] ?? "1130",
     uiVersion = "3",
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
     branches = new[] {

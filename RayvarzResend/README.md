@@ -137,7 +137,9 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 `IncmMkrTyp` را روی `"auto"` بگذارید: برای نوسازی/صنفی مقدار `1` و برای درآمد مقدار `0` تنظیم می‌شود.
 `RefRowDocNoInDetail` فقط برای درآمد کاربرد دارد؛ برای نوسازی/صنفی خودکار `0` ارسال می‌شود (مطابق نمونه‌های موفق).
 
-برای **درآمد**، `DocDate` / `ActDate` / `RowDate` از تاریخ فرم سند هستند؛ `Due` و `RefRowDate` پیش‌فرض `YYYY1130` (همان سال DocDate) مثل نمونه رسمی — با `Rayvarz:IncomeDueDate` یا `IncomeDueUseRowDate` قابل تغییر است.
+برای **درآمد**، `DocDate` / `ActDate` / `RowDate` از تاریخ فرم سند هستند؛ `Due` و `RefRowDate` پیش‌فرض `YYYY1130` (همان سال DocDate) — با `Rayvarz:IncomeDueDate` یا `IncomeDueUseRowDate` قابل تغییر است.
+
+**سال مالی باز:** در `appsettings` مقدار `OpenFiscalYear` (مثلاً `1405`) و `DefaultDocDate` را تنظیم کنید. با `AlignDocDatesToOpenFiscalYear: true` اگر تاریخ فیش سال قدیمی داشت، سال به ۱۴۰۵ اصلاح می‌شود (ماه/روز همان می‌ماند). UI دیگر از فرمول میلادی اشتباه استفاده نمی‌کند.
 
 پاسخ رایورز گاهی کاراکتر کنترل (0x1E) در `Message` دارد؛ parser آن را پاک‌سازی و متن فارسی (مثلاً «سال مالی…») را استخراج می‌کند.
 
