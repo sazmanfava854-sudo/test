@@ -21,6 +21,28 @@ public static class DateHelper
         if (digits.Length >= 8) return digits[..8];
         return digits.PadLeft(8, '0');
     }
+
+    /// <summary>سال شمسی از رشته yyyyMMdd (برای ستون yr در incmdocsys).</summary>
+    public static int ExtractShamsiYear(string rayvarzYyyyMmDd)
+    {
+        var d = ToRayvarzDate(rayvarzYyyyMmDd);
+        return d.Length >= 4 && int.TryParse(d[..4], out var y) ? y : 0;
+    }
+
+    /// <summary>تاریخ دیتابیس: اگر سال ۱۳xx–۱۴xx باشد همان تقویم شمسی ذخیره‌شده؛ وگرنه تبدیل میلادی→شمسی.</summary>
+    public static string FromDatabaseDateValue(object value)
+    {
+        if (value is DateTime dt)
+        {
+            if (dt.Year is >= 1300 and <= 1500)
+                return dt.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+
+            var pc = new System.Globalization.PersianCalendar();
+            return $"{pc.GetYear(dt):0000}{pc.GetMonth(dt):00}{pc.GetDayOfMonth(dt):00}";
+        }
+
+        return ToRayvarzDate(value.ToString());
+    }
 }
 
 public static class FundResolver

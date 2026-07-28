@@ -112,7 +112,8 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
 
         try
         {
-            fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+            var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
+            fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, yr > 0 ? yr : null, ct);
         }
         catch (Exception rayEx)
         {
@@ -147,12 +148,14 @@ app.MapPost("/api/fiche/preview", (SendFicheRequest req, SoapBuilder soap) =>
 app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, SoapBuilder soap, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
 {
     var fiche = req.Fiche;
+    var incmdocsysYear = ResolveIncmdocsysYear(req);
 
     bool existsInRayvarz;
     string? sendWarning = null;
     try
     {
-        existsInRayvarz = fiche.ExistsInRayvarz || await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+        existsInRayvarz = fiche.ExistsInRayvarz
+            || await repo.ExistsInRayvarzAsync(fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
     }
     catch (SqlException ex)
     {
@@ -187,7 +190,8 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     {
         try
         {
-            result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, ct);
+            result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(
+                fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
         }
         catch (SqlException ex)
         {
@@ -218,6 +222,23 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
 
     return Results.Ok(result);
 });
+
+static int ResolveIncmdocsysYear(SendFicheRequest req)
+{
+    foreach (var d in new[] { req.DocDate, req.ActDate, req.DueDate })
+    {
+        var y = DateHelper.ExtractShamsiYear(d);
+        if (y > 0) return y;
+    }
+
+    foreach (var d in new[] { req.Fiche.RayvarzDocDate, req.Fiche.RayvarzActDate, req.Fiche.RayvarzDueDate })
+    {
+        var y = DateHelper.ExtractShamsiYear(d);
+        if (y > 0) return y;
+    }
+
+    return 0;
+}
 
 static string? ConnectionHint(string name, string cs, Exception ex)
 {

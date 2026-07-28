@@ -107,7 +107,6 @@ internal static class RayvarzSoapResponseParser
         return (success, message.Trim(), pursuit, null);
     }
 
-    /// <summary>رایورز گاهی RS/GS (0x1E/0x1F) در Message می‌گذارد — XML 1.0 نامعتبر و XDocument خطا می‌دهد.</summary>
     internal static string SanitizeXmlForParse(string body)
     {
         if (string.IsNullOrEmpty(body))
@@ -123,7 +122,6 @@ internal static class RayvarzSoapResponseParser
         return sb.ToString();
     }
 
-    /// <summary>استخراج متن فارسی از قالب pipe-separated رایورز.</summary>
     internal static string FormatRayvarzBusinessMessage(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -132,38 +130,26 @@ internal static class RayvarzSoapResponseParser
         var decoded = System.Net.WebUtility.HtmlDecode(raw);
         decoded = decoded.Replace('\u001E', '|').Replace('\u001F', ' ').Trim();
 
-        if (decoded.Contains("سال مالي", StringComparison.Ordinal)
-            || decoded.Contains("سال مالی", StringComparison.Ordinal))
-        {
-            var persian = ExtractPersianSegment(decoded);
-            if (!string.IsNullOrWhiteSpace(persian))
-                return persian;
-        }
-
-        var parts = decoded.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length > 0)
-        {
-            var lastMeaningful = parts.Reverse().FirstOrDefault(p =>
-                p.Any(c => c >= '\u0600' && c <= '\u06FF') || p.Contains('ی', StringComparison.Ordinal));
-            if (!string.IsNullOrWhiteSpace(lastMeaningful))
-                return lastMeaningful;
-        }
-
         var stackIdx = decoded.IndexOf(" at WCFServer.", StringComparison.Ordinal);
         if (stackIdx > 0)
             decoded = decoded[..stackIdx].Trim();
 
-        return decoded.Trim();
-    }
+        var lines = new List<string>();
 
-    private static string? ExtractPersianSegment(string decoded)
-    {
-        foreach (var part in decoded.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        if (decoded.Contains("تراکنش تکراری", StringComparison.Ordinal))
+            lines.Add("تراکنش تکراری");
+
+        foreach (var part in decoded.Split(new[] { '|', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
+            if (part.Contains("تراکنش تکراری", StringComparison.Ordinal))
+                continue;
             if (part.Any(c => c >= '\u0600' && c <= '\u06FF'))
-                return part;
+                lines.Add(part);
         }
 
-        return null;
+        if (lines.Count > 0)
+            return string.Join(" — ", lines.Distinct(StringComparer.Ordinal));
+
+        return decoded.Trim();
     }
 }

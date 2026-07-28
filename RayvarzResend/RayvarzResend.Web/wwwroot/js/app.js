@@ -166,7 +166,7 @@ function buildMappingRows(f) {
   const sourceId = config.sourceSystemId ?? null;
 
   return [
-    { field: 'TransactionId (سند)', source: 'Income_Fiche / Duty_Fiche → NidFiche (GUID)', value: f.nidFiche || '-' },
+    { field: 'TransactionId (سند)', source: 'newGuidPerSend (پیش‌فرض) یا NidFiche از config', value: f.nidFiche ? `${f.nidFiche} → GUID جدید در XML` : '-' },
     { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },

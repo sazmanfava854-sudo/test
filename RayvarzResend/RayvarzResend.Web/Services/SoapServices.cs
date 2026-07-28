@@ -55,7 +55,7 @@ public class SoapBuilder
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
-        var transactionId = fiche.NidFiche.ToString("D").ToLowerInvariant();
+        var transactionId = ResolveTransactionId(fiche);
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
         var headerActDate = actDateRay;
@@ -314,6 +314,18 @@ public class SoapBuilder
     private static string ResolveSoapActTyp(string? configured, string defaultCode) =>
         string.IsNullOrWhiteSpace(configured) ? defaultCode : configured.Trim();
 
+    /// <summary>
+    /// ارسال مجدد: GUID جدید در هر POST (پیش‌فرض) تا «تراکنش تکراری» نشود.
+    /// برای هم‌خوانی با سامانه اصلی: TransactionIdMode=nidFiche
+    /// </summary>
+    private string ResolveTransactionId(FicheHeaderDto fiche)
+    {
+        var mode = (_config["Rayvarz:TransactionIdMode"] ?? "newGuidPerSend").Trim();
+        if (mode.Equals("nidFiche", StringComparison.OrdinalIgnoreCase))
+            return fiche.NidFiche.ToString("D").ToLowerInvariant();
+        return Guid.NewGuid().ToString("D").ToLowerInvariant();
+    }
+
     /// <summary>ترتیب Refها مطابق نمونه SaveDocument موفق (WinTest / راهنما).</summary>
     private static string BuildDocumentItemRefFields(FicheHeaderDto fiche)
     {
@@ -366,7 +378,7 @@ public class SoapBuilder
                     0,
                     null,
                     fiche.FicheNo,
-                    "",
+                    null,
                     "0",
                     null,
                     string.IsNullOrWhiteSpace(r.IncmRowDsc) ? null : r.IncmRowDsc,
@@ -824,13 +836,21 @@ public class RayvarzClient
                 if (!result.Success)
                 {
                     var rayMsg = result.Message ?? "";
-                    if (rayMsg.Contains("سال مالي", StringComparison.Ordinal)
+                    if (rayMsg.Contains("تراکنش تکراری", StringComparison.Ordinal)
+                        || rayMsg.Contains("تکراری", StringComparison.Ordinal))
+                    {
+                        result.Diagnostics.LikelyCause =
+                            "رایورز: TransactionId قبلاً ثبت شده (همان NidFiche یا ارسال قبلی).";
+                        result.Diagnostics.Hint =
+                            "در appsettings مقدار TransactionIdMode را newGuidPerSend بگذارید (پیش‌فرض ابزار ارسال مجدد) و دوباره Send کنید.";
+                    }
+                    else if (rayMsg.Contains("سال مالي", StringComparison.Ordinal)
                         || rayMsg.Contains("سال مالی", StringComparison.Ordinal))
                     {
                         result.Diagnostics.LikelyCause =
                             "رایورز: سال مالی برای تاریخ‌های سند (DocDate / Due / ActDate) در این شعبه باز نیست یا سال اشتباه است.";
                         result.Diagnostics.Hint =
-                            "تاریخ DocDate / ActDate / Due را از فیش یا فیلدهای فرم پر کنید — هر فیش تاریخ عملیات خودش را دارد.";
+                            "سال شمسی DocDate باید با yr باز در رایورز یکی باشد (مثلاً 14050505 → yr=1405). پس از ثبت: SELECT * FROM ray.incmdocsys WHERE yr=1405 AND RowDocNo=@fiche";
                     }
                     else
                     {

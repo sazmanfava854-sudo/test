@@ -74,7 +74,7 @@ WHERE f.FicheNo = @FicheNo;
 
 | فیلد SOAP | منبع |
 |-----------|------|
-| TransactionId | `NidFiche` (GUID) |
+| TransactionId | پیش‌فرض **GUID جدید در هر ارسال** (`TransactionIdMode=newGuidPerSend`) تا خطای «تراکنش تکراری» نشود؛ برای رفتار سامانه اصلی: `nidFiche` |
 | SourceId | `appsettings → SourceSystemId` (`11111`) |
 | RowDocNo | `FicheNo` |
 | Ref2 / Ref3 | `BillID` / `PaymentID` |
@@ -139,7 +139,7 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 1. `DryRun: true` — فقط XML
 2. فیش **غیرتکراری**
 3. `DryRun: false` — ارسال واقعی (روی ITC سند ثبت می‌شود — سند تست را حذف کنید)
-4. بررسی در `ray.incmdocsys`
+4. بررسی در `ray.incmdocsys` با سال شمسی: `WHERE yr=1405 AND RowDocNo=@FicheNo`
 
 `PhasTyp` / `VchrTyp` در **XML SOAP** به‌صورت **نام عضو enum** ارسال می‌شوند (مثل WinTestService / DataContractSerializer)، نه عدد خام — پیش‌فرض: `ptDraftRegion` (حواله شهرستان، معادل PDF=7)، `pfRecieve` (دریافت، معادل PDF=0). در appsettings می‌توانید همان نام enum یا عدد PDF را بگذارید؛ برنامه عدد را به نام تبدیل می‌کند.
 

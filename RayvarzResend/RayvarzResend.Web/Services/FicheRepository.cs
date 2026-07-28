@@ -273,16 +273,24 @@ WHERE NidFiche = @nid";
         return rows;
     }
 
-    public async Task<bool> ExistsInRayvarzAsync(string ficheNo, CancellationToken ct = default)
+    public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)
     {
-        const string sql = @"
-SELECT TOP 1 1 FROM ray.incmdocsys
-WHERE Ref = @f OR RowDocNo = @f";
+        var sql = shamsiYear is > 0
+            ? """
+              SELECT TOP 1 1 FROM ray.incmdocsys
+              WHERE yr = @yr AND (Ref = @f OR RowDocNo = @f)
+              """
+            : """
+              SELECT TOP 1 1 FROM ray.incmdocsys
+              WHERE Ref = @f OR RowDocNo = @f
+              """;
 
         await using var conn = new SqlConnection(_rayCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@f", ficheNo);
+        if (shamsiYear is > 0)
+            cmd.Parameters.AddWithValue("@yr", shamsiYear.Value);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result != null;
     }
@@ -345,8 +353,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var value = reader.GetValue(ord);
         return value switch
         {
-            DateTime dt => dt.ToString("yyyyMMdd"),
-            _ => value.ToString() ?? ""
+            DateTime => DateHelper.FromDatabaseDateValue(value),
+            _ => DateHelper.ToRayvarzDate(value.ToString())
         };
     }
 }
