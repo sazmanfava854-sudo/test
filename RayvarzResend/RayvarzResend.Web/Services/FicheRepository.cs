@@ -354,7 +354,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         return value switch
         {
             DateTime => DateHelper.FromDatabaseDateValue(value),
-            _ => DateHelper.ToRayvarzDate(value.ToString())
+            _ => DateHelper.ToRayvarzDate(value.ToString() ?? "")
         };
     }
 }
