@@ -137,6 +137,10 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 `IncmMkrTyp` را روی `"auto"` بگذارید: برای نوسازی/صنفی مقدار `1` و برای درآمد مقدار `0` تنظیم می‌شود.
 `RefRowDocNoInDetail` فقط برای درآمد کاربرد دارد؛ برای نوسازی/صنفی خودکار `0` ارسال می‌شود (مطابق نمونه‌های موفق).
 
+برای **درآمد**، `DocDate` / `ActDate` / `RowDate` از تاریخ فرم سند هستند؛ `Due` و `RefRowDate` پیش‌فرض `YYYY1130` (همان سال DocDate) مثل نمونه رسمی — با `Rayvarz:IncomeDueDate` یا `IncomeDueUseRowDate` قابل تغییر است.
+
+پاسخ رایورز گاهی کاراکتر کنترل (0x1E) در `Message` دارد؛ parser آن را پاک‌سازی و متن فارسی (مثلاً «سال مالی…») را استخراج می‌کند.
+
 یک **GET ساده به آدرس WSDL** همان `ServiceUrl` (مثلاً `...?wsdl`) است — بدون ارسال `SaveDocument`. فقط می‌گوید از این ماشین به MSB/رایورز **راه شبکه و SSL** باز است یا نه.
 
 - API: `GET /api/rayvarz-ping`

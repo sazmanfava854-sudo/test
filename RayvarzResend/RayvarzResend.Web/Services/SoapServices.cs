@@ -51,8 +51,10 @@ public class SoapBuilder
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
         var useDocDateForDutyHeader = _config.GetValue("Rayvarz:DutyHeaderDatesFromDocDate", true);
-        var headerActDate = isDuty && useDocDateForDutyHeader ? docDateRay : rowDateRay;
-        var headerRowDate = isDuty && useDocDateForDutyHeader ? docDateRay : rowDateRay;
+        var headerActDate = isDuty
+            ? (useDocDateForDutyHeader ? docDateRay : rowDateRay)
+            : docDateRay;
+        var headerRowDate = headerActDate;
         var docTypDsc = ResolveDocTypDsc(fiche);
 
         const int docRow = 1;
@@ -71,6 +73,7 @@ public class SoapBuilder
             : "<b:CustomerNationalCode i:nil=\"true\"/>";
 
         var refRecon = XmlOptionalElement("b", "RefreconstructionNo", fiche.RefReconstructionNo);
+        var documentItemRefs = BuildDocumentItemRefFields(fiche);
         var bodyXml = $@"        <SaveDocument xmlns=""{TempUriNs}"">
           <branch>{branch}</branch>
           <doc xmlns:b=""{WcfNs}""
@@ -98,9 +101,7 @@ public class SoapBuilder
                 <b:Incms>{incmItems}
                 </b:Incms>
                 <b:PhasTyp>{phasTyp}</b:PhasTyp>
-                {XmlOptionalElement("b", "Ref2", fiche.BillId, nilIfEmpty: true)}
-                {XmlOptionalElement("b", "Ref3", fiche.PaymentId, nilIfEmpty: true)}
-                {XmlOptionalElement("b", "RefownrDsc", fiche.FicheNo, nilIfEmpty: true)}
+                {documentItemRefs}
                 {refRecon}
                 <b:RowDate>{headerRowDate}</b:RowDate>
                 <b:RowDocNo>{Escape(fiche.FicheNo)}</b:RowDocNo>
@@ -308,6 +309,40 @@ public class SoapBuilder
     private static string ResolveSoapActTyp(string? configured, string defaultCode) =>
         string.IsNullOrWhiteSpace(configured) ? defaultCode : configured.Trim();
 
+    private string ResolveIncomeDueDate(string docDateRay, string rowDateRay)
+    {
+        var configured = _config["Rayvarz:IncomeDueDate"];
+        if (!string.IsNullOrWhiteSpace(configured))
+            return DateHelper.ToRayvarzDate(configured);
+
+        if (_config.GetValue("Rayvarz:IncomeDueUseRowDate", false)
+            && !string.IsNullOrWhiteSpace(rowDateRay)
+            && rowDateRay.Length >= 8)
+            return rowDateRay;
+
+        // نمونه رسمی: DocDate=14030829 و Due/RefRowDate=14031130 (پایان سال مالی همان سال شمسی)
+        if (docDateRay.Length >= 4)
+            return docDateRay[..4] + (_config["Rayvarz:IncomeDueMMDD"] ?? "1130");
+
+        return docDateRay;
+    }
+
+    /// <summary>ترتیب Refها مطابق نمونه SaveDocument موفق (WinTest / راهنما).</summary>
+    private static string BuildDocumentItemRefFields(FicheHeaderDto fiche)
+    {
+        return $@"                <b:Ref1 i:nil=""true""/>
+                {XmlOptionalElement("b", "Ref2", fiche.BillId, nilIfEmpty: true)}
+                {XmlOptionalElement("b", "Ref3", fiche.PaymentId, nilIfEmpty: true)}
+                <b:Ref4 i:nil=""true""/>
+                <b:Ref5 i:nil=""true""/>
+                <b:Ref6 i:nil=""true""/>
+                <b:RefIncmMkrDsc i:nil=""true""/>
+                <b:RefIncmMkrNo i:nil=""true""/>
+                <b:RefRegPlaque i:nil=""true""/>
+                <b:RefUserName i:nil=""true""/>
+                {XmlOptionalElement("b", "RefownrDsc", fiche.FicheNo, nilIfEmpty: true)}";
+    }
+
     private sealed record IncmContext(
         IncmRowDto Row,
         int IncmRow,
@@ -356,13 +391,13 @@ public class SoapBuilder
                 r,
                 incmRow,
                 FormatRayvarzMoney(r.Val),
-                docDateRay,
+                ResolveIncomeDueDate(docDateRay, rowDateRay),
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
                 null,
                 null,
                 detailRefRow,
-                rowDateRay,
+                ResolveIncomeDueDate(docDateRay, rowDateRay),
                 null,
                 false);
         }).ToList();
@@ -802,8 +837,20 @@ public class RayvarzClient
                 result.Diagnostics.ElapsedMs = sw.ElapsedMilliseconds;
                 if (!result.Success)
                 {
-                    result.Diagnostics.LikelyCause = "رایورز Success=false — معمولاً فیلد Body (Fund، IncmNo، تاریخ، …).";
-                    result.Diagnostics.Hint = "Message و SoapResponse را ببینید.";
+                    var rayMsg = result.Message ?? "";
+                    if (rayMsg.Contains("سال مالي", StringComparison.Ordinal)
+                        || rayMsg.Contains("سال مالی", StringComparison.Ordinal))
+                    {
+                        result.Diagnostics.LikelyCause =
+                            "رایورز: سال مالی برای تاریخ‌های سند (DocDate / Due / ActDate) در این شعبه باز نیست یا سال اشتباه است.";
+                        result.Diagnostics.Hint =
+                            "تاریخ سند فرم را مثل نمونه XML (مثلاً 14030829) و همان سال مالی باز در رایورز بگذارید؛ برای درآمد Due پیش‌فرض YYYY1130 است (IncomeDueDate در appsettings).";
+                    }
+                    else
+                    {
+                        result.Diagnostics.LikelyCause = "رایورز Success=false — معمولاً فیلد Body (Fund، IncmNo، تاریخ، …).";
+                        result.Diagnostics.Hint = "Message و SoapResponse را ببینید.";
+                    }
                 }
 
                 _logger.LogInformation(

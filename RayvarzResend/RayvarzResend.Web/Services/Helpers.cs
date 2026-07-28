@@ -16,7 +16,7 @@ public static class DateHelper
 {
     public static string ToRayvarzDate(string input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return DateTime.Now.ToString("yyyyMMdd");
+        if (string.IsNullOrWhiteSpace(input)) return "";
         var digits = new string(input.Where(char.IsDigit).ToArray());
         if (digits.Length >= 8) return digits[..8];
         return digits.PadLeft(8, '0');
