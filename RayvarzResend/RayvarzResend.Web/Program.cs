@@ -1,5 +1,4 @@
 using Microsoft.Data.SqlClient;
-using RayvarzResend.Web;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.Services;
 
@@ -42,8 +41,6 @@ app.MapGet("/api/config", (IConfiguration config) => new
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
     uiVersion = "3",
-    releaseVersion = ReleaseInfo.Number,
-    releaseLabel = ReleaseInfo.Label,
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },

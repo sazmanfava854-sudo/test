@@ -4,10 +4,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>RayvarzResend.Web</RootNamespace>
-    <Version>1.15.0</Version>
-    <AssemblyVersion>1.15.0.0</AssemblyVersion>
-    <FileVersion>1.15.0.0</FileVersion>
-    <InformationalVersion>rayvarz-resend-v15</InformationalVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>

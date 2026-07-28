@@ -265,18 +265,12 @@ async function init() {
     return;
   }
   const badge = $('configBadge');
-  const releaseTag = config.releaseLabel ? `نسخه ${config.releaseLabel}` : (config.releaseVersion ? `نسخه ${config.releaseVersion}` : '');
   const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
-  const versionPrefix = releaseTag ? `${releaseTag} | ` : '';
   badge.textContent = config.dryRun
-    ? `${versionPrefix}${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
-    : `${versionPrefix}⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
+    ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
+    : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
   if (!config.dryRun) {
     badge.style.background = 'rgba(220, 53, 69, 0.35)';
-  }
-  const releaseHint = $('releaseVersionHint');
-  if (releaseHint && (config.releaseLabel || config.releaseVersion)) {
-    releaseHint.textContent = `(نسخه ${config.releaseLabel || config.releaseVersion})`;
   }
 
   const branchSel = $('branch');

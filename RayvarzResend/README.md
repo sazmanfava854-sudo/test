@@ -1,14 +1,5 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه تحویل: ۱۵** (`rayvarz-resend-v15`)
-
-| دریافت | آدرس |
-|--------|------|
-| Zip شاخه (همیشه آخرین commit) | `https://github.com/sazmanfava854-sudo/test/archive/refs/heads/rayvarz-resend.zip` |
-| Zip تگ نسخه ۱۵ (ثابت) | `https://github.com/sazmanfava854-sudo/test/archive/refs/tags/rayvarz-resend-v15.zip` |
-
-پس از unzip، در هدر فرم یا `GET /api/config` باید `releaseVersion: 15` ببینید.
-
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 
 ## پیش‌نیاز
