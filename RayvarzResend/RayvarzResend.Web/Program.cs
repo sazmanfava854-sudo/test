@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,9 +9,12 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 {
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
+builder.Services.AddSingleton<MemberRuleRepository>();
+builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 
 var app = builder.Build();
 
@@ -40,6 +44,8 @@ app.MapGet("/api/config", (IConfiguration config) => new
     refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
+    payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+    ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "3",
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
     branches = new[] {
@@ -139,13 +145,47 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
     }
 });
 
-app.MapPost("/api/fiche/preview", (SendFicheRequest req, SoapBuilder soap) =>
+app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, MemberRuleRepository repo, CancellationToken ct) =>
 {
-    var xml = soap.Build(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate);
-    return Results.Ok(new { xml });
+    try
+    {
+        var record = await repo.LoadActiveMemberAsync(nidMember, ct: ct);
+        if (record == null || string.IsNullOrWhiteSpace(record.XmlBody))
+            return Results.NotFound(new { error = "Member یا XmlBody یافت نشد — ConnectionStrings:RuleEngine یا RuleEngine:LocalXmlPath را تنظیم کنید." });
+
+        var parsed = ClsFunctionParser.Parse(record.XmlBody);
+        return Results.Ok(new
+        {
+            nidMember,
+            record.Source,
+            record.Version,
+            record.VersionDateTime,
+            parsed.NidClass,
+            parsed.NidFunction,
+            parsed.Name,
+            parsed.DisplayText,
+            parsed.IsActive,
+            parsed.FormulaVersion,
+            bodyLength = parsed.BodySource.Length,
+            functionCount = parsed.FunctionNames.Count,
+            functionsSample = parsed.FunctionNames.Take(25),
+            hasNosazi = parsed.ContainsFunction("نوسازی") || parsed.ContainsFunction("Nosazi"),
+            note = "XmlBody = ClsFunction با VB داخل Body؛ اجرا فقط در Sara یا SaraBridge."
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
 });
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, SoapBuilder soap, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
+{
+    var built = await payload.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
+    return Results.Ok(new { xml = built.Xml, payloadMode = built.Mode.ToString(), warning = built.Warning, ruleMeta = built.RuleMeta });
+});
+
+app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
 {
     var fiche = req.Fiche;
     var incmdocsysYear = ResolveIncmdocsysYear(req);
@@ -181,10 +221,11 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
         catch (Exception ex) { return Results.Problem($"خطا در ریست وضعیت: {ex.Message}"); }
     }
 
-    var xml = soap.Build(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate);
+    var built = await payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
+    var xml = built.Xml;
     var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
     var result = await client.SendAsync(xml, dryRun, ct);
-    result.Warning = sendWarning;
+    result.Warning = CombineWarnings(sendWarning, built.Warning);
 
     if (!dryRun && result.Success)
     {
@@ -238,6 +279,13 @@ static int ResolveIncmdocsysYear(SendFicheRequest req)
     }
 
     return 0;
+}
+
+static string? CombineWarnings(string? a, string? b)
+{
+    if (string.IsNullOrWhiteSpace(a)) return b;
+    if (string.IsNullOrWhiteSpace(b)) return a;
+    return a + " | " + b;
 }
 
 static string? ConnectionHint(string name, string cs, Exception ex)
