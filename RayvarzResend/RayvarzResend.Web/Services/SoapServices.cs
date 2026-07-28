@@ -40,8 +40,8 @@ public class SoapBuilder
 
     public string Build(FicheHeaderDto fiche, int branch, int fund, string docDate)
     {
-        var docDateRay = AlignRayvarzDateToOpenFiscalYear(
-            DateHelper.ToRayvarzDate(string.IsNullOrWhiteSpace(docDate) ? _config["Rayvarz:DefaultDocDate"] : docDate));
+        var effectiveDocDate = string.IsNullOrWhiteSpace(docDate) ? _config["Rayvarz:DefaultDocDate"] ?? "" : docDate;
+        var docDateRay = AlignRayvarzDateToOpenFiscalYear(DateHelper.ToRayvarzDate(effectiveDocDate));
         var rowDateRay = AlignRayvarzDateToOpenFiscalYear(DateHelper.ToRayvarzDate(fiche.RowDate));
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
         if (fund <= 0)
