@@ -22,6 +22,13 @@ public static class DateHelper
         return digits.PadLeft(8, '0');
     }
 
+    public static string CurrentShamsiRayvarzDate()
+    {
+        var pc = new System.Globalization.PersianCalendar();
+        var now = DateTime.Now;
+        return $"{pc.GetYear(now):0000}{pc.GetMonth(now):00}{pc.GetDayOfMonth(now):00}";
+    }
+
     /// <summary>سال شمسی از رشته yyyyMMdd (برای ستون yr در incmdocsys).</summary>
     public static int ExtractShamsiYear(string rayvarzYyyyMmDd)
     {

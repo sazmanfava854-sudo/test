@@ -93,7 +93,15 @@ WHERE f.FicheNo = @FicheNo;
 
 پس از «دریافت فیش» سه فیلد تاریخ پر می‌شوند؛ برای هر فیش می‌توان جداگانه اصلاح کرد.
 
-**نوسازی/صنفی:** در SOAP فیلد `Qty` در هر ردیف = **PayablePrice** (مثلاً ۶۵۵۸۳۰۰۰). `Val` هر ردیف سهم همان IncmNo است؛ **جمع Val = Payable**. ردیف نوسازی (۲۰۰۳) به‌صورت `Payable − آتش‌نشانی − پسماند − ارزش‌افزوده` محاسبه می‌شود.
+**نوسازی/صنفی:** منطق `Nosazi()` از سامانه شهرسازی (`DutyNosaziLogic.cs`):
+
+- **آتش‌نشانی:** `SUM(F5,F0) − SUM(F5,F≠0)`
+- **پسماند:** `SUM(F3,F0) − SUM(F3,F≠0)`
+- **ارزش‌افزوده:** `SUM(F3,F16)`
+- **ردیف اصلی (۲۰۰۳/…):** `Val = PayablePrice − آتش − پسماند − ارزش‌افزوده`
+- **Qty:** `PayablePrice` در هر ردیف
+- **تاریخ:** `DocDate`/`Due` = امروز شمسی؛ `ActDate`/`RowDate` = PaymentDate یا BankPaymentDate بر اساس وضعیت فیش
+- **شعبه/Fund:** `DutyDistrictBranchResolver` از BillID/PaymentID (nosazo.vb)
 | branch / Fund | منطقه فیش (`OtherFields → منطقه` برای نوسازی) |
 
 ## فیش‌های تست تأییدشده

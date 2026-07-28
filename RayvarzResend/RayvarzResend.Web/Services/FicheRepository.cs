@@ -170,19 +170,27 @@ WHERE {where}";
             ? 0 : ReadInt32(reader, "CI_DutyFicheExportType");
         var dutyType = ReadInt32(reader, "EumDutyType");
         var isSenfi = dutyType == 2;
+        var rawBill = reader.GetString(reader.GetOrdinal("BillID"));
+        var rawPayment = reader.GetString(reader.GetOrdinal("PaymentID"));
+        var bankCode = reader.IsDBNull(reader.GetOrdinal("BankCode"))
+            ? "18"
+            : DutyNosaziLogic.DefaultBankCode(reader.GetString(reader.GetOrdinal("BankCode")));
+        var dutyStatus = ReadInt32(reader, "EumDutyFicheStatus");
+        var paymentDateRay = ReadRowDate(reader, "PaymentDate");
+        var bankPaymentDateRay = ReadRowDate(reader, "BankPaymentDate");
 
         var dto = new FicheHeaderDto
         {
             Category = isSenfi ? FicheCategory.DutySenfi : FicheCategory.DutyNosazi,
             FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
-            BillId = reader.GetString(reader.GetOrdinal("BillID")),
-            PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
+            BillId = DutyNosaziLogic.NormalizeMergedId(rawBill),
+            PaymentId = DutyNosaziLogic.NormalizeMergedId(rawPayment),
             Payable = ReadDecimal(reader, "Payable"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
-            PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
-            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
+            PaymentBranch = bankCode,
+            BankCode = bankCode,
             RowDate = ReadRowDate(reader, "RowDate"),
-            CurrentStatus = ReadInt32(reader, "EumDutyFicheStatus"),
+            CurrentStatus = dutyStatus,
             DutyExportType = exportType,
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
             BnkAcntNoSource = "کد نوسازی — از Duty_Fiche.OtherFields (XML فیش)",
@@ -191,6 +199,13 @@ WHERE {where}";
             DocDsc = isSenfi ? "اسناد صنفی" : "اسناد نوسازی"
         };
 
+        var districtBranch = DutyDistrictBranchResolver.ResolveBranch(rawBill, rawPayment);
+        if (districtBranch > 0)
+        {
+            dto.ResolvedDistrictBranch = districtBranch;
+            dto.SuggestedFund = DutyDistrictBranchResolver.ResolveFund(districtBranch, bankCode);
+        }
+
         if (isSenfi)
         {
             dto.BnkAcntNo = "7-14-55-1-1-0-1";
@@ -198,12 +213,7 @@ WHERE {where}";
         }
 
         dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, exportType, ct);
-        FicheDateResolver.ApplyFromDutyColumns(
-            dto,
-            ReadRowDate(reader, "PaymentDate"),
-            ReadRowDate(reader, "BankPaymentDate"),
-            ReadRowDate(reader, "PrintDate"),
-            ReadRowDate(reader, "ExportDate"));
+        DutyNosaziLogic.ApplyRayvarzDates(dto, dutyStatus, paymentDateRay, bankPaymentDateRay);
         return dto;
     }
 
@@ -229,90 +239,8 @@ WHERE NidFiche = @nid";
             ));
         }
 
-        // تأیید: نوسازی 101104/9881711 | صنفی 051204/19920388
-        // 100003 ← SUM(F3,F0) | 206098003 ← SUM(F3,F16) | 100002 ← SUM(F5,F0)
-        // 2003/100062 ← PayablePrice − آتش‌نشانی − پسماند − ارزش‌افزوده
-        const int GarbageFormula = 3;
-        const int AtashFormula = 5;
-        const int AfzodehFiche = 16;
-
-        decimal Afzodeh = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == AfzodehFiche).Sum(s => s.Price);
-        decimal Atash = subs.Where(s => s.Formula == AtashFormula && s.Fiche == 0).Sum(s => s.Price);
-        decimal Garbage = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == 0).Sum(s => s.Price);
-        decimal NosaziFromFormula1 = subs.Where(s => s.Formula == 1 && s.Fiche == 0).Sum(s => s.Price);
-        decimal Nosazi = isSenfi
-            ? payable - Atash - Garbage - Afzodeh
-            : NosaziFromFormula1 != 0
-                ? NosaziFromFormula1
-                : payable - Atash - Garbage - Afzodeh;
-
-        // ExportType=14 (بانک‌ها): IncmNo=2005 — تأیید 021204/19379176
-        var mainIncm = isSenfi switch
-        {
-            true when exportType == 14 => 2005,
-            true => 100062,
-            false => 2003
-        };
-        var mainDsc = mainIncm switch
-        {
-            2005 => "عوارض ساليانه بانک ها و موسسات اعتباري",
-            100062 => "صنفي",
-            _ => "نوسازی"
-        };
-
-        var rows = new List<IncmRowDto>();
-        if (Nosazi != 0)
-            rows.Add(new IncmRowDto { IncmNo = mainIncm, Val = Nosazi, IncmRowDsc = mainDsc });
-        if (Atash != 0)
-            rows.Add(new IncmRowDto { IncmNo = 100002, Val = Atash, IncmRowDsc = "آتش نشانی" });
-        if (Garbage != 0)
-            rows.Add(new IncmRowDto { IncmNo = 100003, Val = Garbage, IncmRowDsc = "پسماند" });
-        if (Afzodeh != 0)
-            rows.Add(new IncmRowDto { IncmNo = 206098003, Val = Afzodeh, IncmRowDsc = "مالیات برارزش افزوده" });
-
-        AlignDutyRowValsToPayable(rows, payable);
-        return rows;
-    }
-
-    /// <summary>Qty در رایورز = Payable؛ جمع Val ردیف‌ها باید همان باشد (تخفیف/اختلاف فرمول در ردیف آخر جبران می‌شود).</summary>
-    private static void AlignDutyRowValsToPayable(List<IncmRowDto> rows, decimal payable)
-    {
-        if (rows.Count == 0) return;
-        var sum = rows.Sum(r => r.Val);
-        if (sum == payable) return;
-
-        if (sum == 0)
-        {
-            rows[0].Val = payable;
-            return;
-        }
-
-        // اول مانده را روی ردیف نوسازی (۲۰۰۳/۱۰۰۰۶۲/۲۰۰۵) اعمال کن
-        var main = rows.FirstOrDefault(r => r.IncmNo is 2003 or 100062 or 2005);
-        if (main != null)
-        {
-            var others = sum - main.Val;
-            var newMain = payable - others;
-            if (newMain >= 0)
-            {
-                main.Val = newMain;
-                return;
-            }
-        }
-
-        // اگر مانده منفی شد (جمع جزء &gt; Payable)، نسبت‌دهی خطی به Payable
-        var factor = payable / sum;
-        decimal allocated = 0;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (i == rows.Count - 1)
-                rows[i].Val = payable - allocated;
-            else
-            {
-                rows[i].Val = Math.Round(rows[i].Val * factor, 0, MidpointRounding.AwayFromZero);
-                allocated += rows[i].Val;
-            }
-        }
+        var amounts = DutyNosaziLogic.CalculateSubAmounts(subs, payable);
+        return DutyNosaziLogic.BuildIncmRows(amounts, isSenfi, exportType);
     }
 
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)

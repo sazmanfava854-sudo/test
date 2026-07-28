@@ -19,6 +19,16 @@ function branchFromRegion(regionStr) {
 }
 
 function applyBranchFromFiche(f) {
+  if (f.resolvedDistrictBranch) {
+    const branchId = f.resolvedDistrictBranch;
+    const match = config.branches.find(b => b.id === branchId);
+    if (match) {
+      $('branch').value = branchId;
+      if (f.suggestedFund) $('fund').value = f.suggestedFund;
+      else syncFundFromBranch();
+      return;
+    }
+  }
   const region = f.dutyRegion || f.incomeRegion;
   const branchId = region ? branchFromRegion(region) : null;
   if (!branchId) return;
@@ -177,10 +187,10 @@ function buildMappingRows(f) {
     { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.CI_City', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
-    { field: 'DocDate', source: 'Income/Duty_Fiche → PaymentDate / PrintDate / … (قابل ویرایش)', value: docDate || '-' },
-    { field: 'ActDate', source: 'BankPaymentDate → PaymentDate / … (قابل ویرایش)', value: actDate || '-' },
-    { field: 'Due', source: 'سررسید ردیف — از فیش (قابل ویرایش)', value: dueDate || '-' },
-    { field: 'RowDate (راهنما)', source: 'همان ActDate از فیش', value: f.rowDate || '-' },
+    { field: 'DocDate', source: 'nosazo.vb: امروز شمسی (CurrentShamsiDateString)', value: docDate || '-' },
+    { field: 'ActDate / RowDate', source: 'وضعیت=1 → PaymentDate وگرنه BankPaymentDate', value: actDate || '-' },
+    { field: 'Due', source: 'nosazo.vb: همان امروز شمسی (Ref DUE)', value: dueDate || '-' },
+    { field: 'شعبه (nosazo)', source: 'BillID/PaymentID → DistrickBranch', value: f.resolvedDistrictBranch ? `${f.resolvedDistrictBranch} (Fund پیشنهادی: ${f.suggestedFund || '-'})` : (f.dutyRegion || f.incomeRegion || '-') },
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
     { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },

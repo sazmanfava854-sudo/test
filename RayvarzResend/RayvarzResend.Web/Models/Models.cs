@@ -34,6 +34,8 @@ public class FicheHeaderDto
     public string BnkAcntNo { get; set; } = "";
     public string BnkAcntNoSource { get; set; } = "";
     public string? DutyRegion { get; set; }
+    public int? ResolvedDistrictBranch { get; set; }
+    public int? SuggestedFund { get; set; }
     public string? IncomeRegion { get; set; }
     public string? RefReconstructionNo { get; set; }
     public string PaymentBranch { get; set; } = "18";
