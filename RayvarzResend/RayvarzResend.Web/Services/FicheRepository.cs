@@ -32,6 +32,8 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS BankCode,
        COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
+       f.PaymentDate,
+       f.BankPaymentDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        ISNULL(
@@ -84,6 +86,10 @@ WHERE {where}";
         };
 
         dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+        FicheDateResolver.ApplyFromIncomeColumns(
+            dto,
+            ReadRowDate(reader, "PaymentDate"),
+            ReadRowDate(reader, "BankPaymentDate"));
         return dto;
     }
 
@@ -132,6 +138,10 @@ SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
        '18' AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(d.ConfirmBankCode AS nvarchar(20)))), '') AS BankCode,
        COALESCE(d.BankPaymentDate, d.PaymentDate, d.PrintDate, d.ExportDate) AS RowDate,
+       d.PaymentDate,
+       d.BankPaymentDate,
+       d.PrintDate,
+       d.ExportDate,
        d.EumDutyFicheStatus, d.CI_DutyFicheExportType,
        COALESCE(
            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
@@ -188,6 +198,12 @@ WHERE {where}";
         }
 
         dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, exportType, ct);
+        FicheDateResolver.ApplyFromDutyColumns(
+            dto,
+            ReadRowDate(reader, "PaymentDate"),
+            ReadRowDate(reader, "BankPaymentDate"),
+            ReadRowDate(reader, "PrintDate"),
+            ReadRowDate(reader, "ExportDate"));
         return dto;
     }
 

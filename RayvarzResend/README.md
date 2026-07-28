@@ -81,7 +81,17 @@ WHERE f.FicheNo = @FicheNo;
 | Qty | `Payable` (مبلغ کل) |
 | Val | مبلغ هر ردیف |
 | Bank | `ConfirmBankCode` |
-| RowDate | `BankPaymentDate` → `PaymentDate` → `PrintDate` → `ExportDate` |
+| تاریخ | **DocDate** / **ActDate** / **Due** هر کدام از ستون‌های فیش (و قابل ویرایش در فرم) — بدون مقدار ثابت در appsettings |
+
+### DocDate / ActDate / Due (از فیش Sara8M03)
+
+| SOAP | درآمد (`Income_Fiche`) | نوسازی/صنفی (`Duty_Fiche`) |
+|------|------------------------|----------------------------|
+| **DocDate** | `PaymentDate` → `BankPaymentDate` | `PrintDate` → `ExportDate` → `PaymentDate` → `BankPaymentDate` |
+| **ActDate** / **RowDate** | `BankPaymentDate` → `PaymentDate` | `BankPaymentDate` → `PaymentDate` → `PrintDate` → `ExportDate` |
+| **Due** / **RefRowDate** (ردیف) | `BankPaymentDate` → `PaymentDate` | همان **Due** از فیش |
+
+پس از «دریافت فیش» سه فیلد تاریخ پر می‌شوند؛ برای هر فیش می‌توان جداگانه اصلاح کرد.
 | branch / Fund | منطقه فیش (`OtherFields → منطقه` برای نوسازی) |
 
 ## فیش‌های تست تأییدشده
@@ -137,11 +147,6 @@ http://msb.mashhad.ir/FavaFinancialServices/Rayvarz/VasetDaraamad/Proxy/WCFServe
 `IncmMkrTyp` را روی `"auto"` بگذارید: برای نوسازی/صنفی مقدار `1` و برای درآمد مقدار `0` تنظیم می‌شود.
 `RefRowDocNoInDetail` فقط برای درآمد کاربرد دارد؛ برای نوسازی/صنفی خودکار `0` ارسال می‌شود (مطابق نمونه‌های موفق).
 
-برای **درآمد**، `Due` و `RefRowDate` از `Rayvarz:IncomeDueDate` (پیش‌فرض **`14051229`** برای سال مالی ۱۴۰۵) یا در صورت خالی بودن، `YYYY` + `IncomeDueMMDD` استفاده می‌شود.
-
-**سال مالی باز:** در `appsettings` مقدار `OpenFiscalYear` (مثلاً `1405`) و `DefaultDocDate` را تنظیم کنید. با `AlignDocDatesToOpenFiscalYear: true` اگر تاریخ فیش سال قدیمی داشت، سال به ۱۴۰۵ اصلاح می‌شود (ماه/روز همان می‌ماند). UI دیگر از فرمول میلادی اشتباه استفاده نمی‌کند.
-
-پاسخ رایورز گاهی کاراکتر کنترل (0x1E) در `Message` دارد؛ parser آن را پاک‌سازی و متن فارسی (مثلاً «سال مالی…») را استخراج می‌کند.
 
 یک **GET ساده به آدرس WSDL** همان `ServiceUrl` (مثلاً `...?wsdl`) است — بدون ارسال `SaveDocument`. فقط می‌گوید از این ماشین به MSB/رایورز **راه شبکه و SSL** باز است یا نه.
 

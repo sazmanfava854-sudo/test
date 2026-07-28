@@ -38,11 +38,18 @@ public class SoapBuilder
 
     public SoapBuilder(IConfiguration config) => _config = config;
 
-    public string Build(FicheHeaderDto fiche, int branch, int fund, string docDate)
+    public string Build(FicheHeaderDto fiche, int branch, int fund, string? docDate, string? actDate, string? dueDate)
     {
-        var effectiveDocDate = string.IsNullOrWhiteSpace(docDate) ? _config["Rayvarz:DefaultDocDate"] ?? "" : docDate;
-        var docDateRay = AlignRayvarzDateToOpenFiscalYear(DateHelper.ToRayvarzDate(effectiveDocDate));
-        var rowDateRay = AlignRayvarzDateToOpenFiscalYear(DateHelper.ToRayvarzDate(fiche.RowDate));
+        var docDateRay = FicheDateResolver.ResolveForSoap(docDate, fiche.RayvarzDocDate);
+        var actDateRay = FicheDateResolver.ResolveForSoap(actDate, fiche.RayvarzActDate);
+        var dueDateRay = FicheDateResolver.ResolveForSoap(dueDate, fiche.RayvarzDueDate);
+        if (string.IsNullOrEmpty(actDateRay) && !string.IsNullOrEmpty(docDateRay))
+            actDateRay = docDateRay;
+        if (string.IsNullOrEmpty(docDateRay) && !string.IsNullOrEmpty(actDateRay))
+            docDateRay = actDateRay;
+        if (string.IsNullOrEmpty(dueDateRay))
+            dueDateRay = FicheDateResolver.FirstRayvarzDate(actDateRay, docDateRay);
+
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
@@ -51,11 +58,8 @@ public class SoapBuilder
         var transactionId = fiche.NidFiche.ToString("D").ToLowerInvariant();
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
-        var useDocDateForDutyHeader = _config.GetValue("Rayvarz:DutyHeaderDatesFromDocDate", true);
-        var headerActDate = isDuty
-            ? (useDocDateForDutyHeader ? docDateRay : rowDateRay)
-            : docDateRay;
-        var headerRowDate = headerActDate;
+        var headerActDate = actDateRay;
+        var headerRowDate = actDateRay;
         var docTypDsc = ResolveDocTypDsc(fiche);
 
         const int docRow = 1;
@@ -66,7 +70,7 @@ public class SoapBuilder
         var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category);
         var bank = ResolveBankCode(fiche.BankCode);
 
-        var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, docDateRay, rowDateRay)
+        var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, dueDateRay)
             .Select(c => BuildIncmRow(c, sourceSystemId)));
         var customerXml = isDuty ? "<b:Customer></b:Customer>" : "<b:Customer i:nil=\"true\"/>";
         var customerNationalCodeXml = isDuty
@@ -310,38 +314,6 @@ public class SoapBuilder
     private static string ResolveSoapActTyp(string? configured, string defaultCode) =>
         string.IsNullOrWhiteSpace(configured) ? defaultCode : configured.Trim();
 
-    private string AlignRayvarzDateToOpenFiscalYear(string rayvarzDate)
-    {
-        if (!_config.GetValue("Rayvarz:AlignDocDatesToOpenFiscalYear", true))
-            return rayvarzDate;
-        var fy = _config["Rayvarz:OpenFiscalYear"];
-        if (string.IsNullOrWhiteSpace(fy) || rayvarzDate.Length < 8)
-            return rayvarzDate;
-        var year = rayvarzDate[..4];
-        var open = new string(fy.Where(char.IsDigit).ToArray());
-        if (open.Length != 4 || year == open)
-            return rayvarzDate;
-        return DateHelper.ReplacePersianYear(rayvarzDate, open);
-    }
-
-    private string ResolveIncomeDueDate(string docDateRay, string rowDateRay)
-    {
-        var configured = _config["Rayvarz:IncomeDueDate"];
-        if (!string.IsNullOrWhiteSpace(configured))
-            return DateHelper.ToRayvarzDate(configured);
-
-        if (_config.GetValue("Rayvarz:IncomeDueUseRowDate", false)
-            && !string.IsNullOrWhiteSpace(rowDateRay)
-            && rowDateRay.Length >= 8)
-            return rowDateRay;
-
-        // پایان سال مالی همان سال DocDate (مثلاً 14051130 برای سال مالی ۱۴۰۵)
-        if (docDateRay.Length >= 4)
-            return docDateRay[..4] + (_config["Rayvarz:IncomeDueMMDD"] ?? "1130");
-
-        return docDateRay;
-    }
-
     /// <summary>ترتیب Refها مطابق نمونه SaveDocument موفق (WinTest / راهنما).</summary>
     private static string BuildDocumentItemRefFields(FicheHeaderDto fiche)
     {
@@ -375,8 +347,7 @@ public class SoapBuilder
     private List<IncmContext> BuildIncmContexts(
         FicheHeaderDto fiche,
         IReadOnlyList<IncmRowDto> rows,
-        string docDateRay,
-        string rowDateRay)
+        string dueDateRay)
     {
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
         var detailRefRow = ResolveDetailRefRowDocNo(fiche.FicheNo);
@@ -391,7 +362,7 @@ public class SoapBuilder
                     r,
                     incmRow,
                     dutyQty,
-                    docDateRay,
+                    dueDateRay,
                     0,
                     null,
                     fiche.FicheNo,
@@ -406,13 +377,13 @@ public class SoapBuilder
                 r,
                 incmRow,
                 FormatRayvarzMoney(r.Val),
-                ResolveIncomeDueDate(docDateRay, rowDateRay),
+                dueDateRay,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
                 null,
                 null,
                 detailRefRow,
-                ResolveIncomeDueDate(docDateRay, rowDateRay),
+                dueDateRay,
                 null,
                 false);
         }).ToList();
@@ -859,7 +830,7 @@ public class RayvarzClient
                         result.Diagnostics.LikelyCause =
                             "رایورز: سال مالی برای تاریخ‌های سند (DocDate / Due / ActDate) در این شعبه باز نیست یا سال اشتباه است.";
                         result.Diagnostics.Hint =
-                            "تاریخ سند فرم را در سال مالی باز رایورز بگذارید (الان ۱۴۰۵)؛ OpenFiscalYear و DefaultDocDate در appsettings.";
+                            "تاریخ DocDate / ActDate / Due را از فیش یا فیلدهای فرم پر کنید — هر فیش تاریخ عملیات خودش را دارد.";
                     }
                     else
                     {

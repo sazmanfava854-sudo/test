@@ -40,10 +40,6 @@ app.MapGet("/api/config", (IConfiguration config) => new
     refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
-    openFiscalYear = config["Rayvarz:OpenFiscalYear"] ?? "1405",
-    defaultDocDate = config["Rayvarz:DefaultDocDate"] ?? "",
-    alignDocDatesToOpenFiscalYear = config.GetValue("Rayvarz:AlignDocDatesToOpenFiscalYear", true),
-    incomeDueMmdd = config["Rayvarz:IncomeDueMMDD"] ?? "1130",
     uiVersion = "3",
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
     branches = new[] {
@@ -144,7 +140,7 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
 
 app.MapPost("/api/fiche/preview", (SendFicheRequest req, SoapBuilder soap) =>
 {
-    var xml = soap.Build(req.Fiche, req.Branch, req.Fund, req.DocDate);
+    var xml = soap.Build(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate);
     return Results.Ok(new { xml });
 });
 
@@ -182,7 +178,7 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
         catch (Exception ex) { return Results.Problem($"خطا در ریست وضعیت: {ex.Message}"); }
     }
 
-    var xml = soap.Build(fiche, req.Branch, req.Fund, req.DocDate);
+    var xml = soap.Build(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate);
     var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
     var result = await client.SendAsync(xml, dryRun, ct);
     result.Warning = sendWarning;

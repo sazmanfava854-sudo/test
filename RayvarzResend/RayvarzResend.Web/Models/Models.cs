@@ -39,6 +39,12 @@ public class FicheHeaderDto
     public string PaymentBranch { get; set; } = "18";
     public string? BankCode { get; set; }
     public string RowDate { get; set; } = "";
+    /// <summary>تاریخ سند — از فیش (PaymentDate / PrintDate / …).</summary>
+    public string RayvarzDocDate { get; set; } = "";
+    /// <summary>تاریخ عملیات — معمولاً BankPaymentDate.</summary>
+    public string RayvarzActDate { get; set; } = "";
+    /// <summary>سررسید ردیف درآمد (Due / RefRowDate).</summary>
+    public string RayvarzDueDate { get; set; } = "";
     public int DocTyp { get; set; }
     public string DocDsc { get; set; } = "";
     public string? DocTypDsc { get; set; }
@@ -63,6 +69,8 @@ public class SendFicheRequest
     public int Branch { get; set; }
     public int Fund { get; set; }
     public string DocDate { get; set; } = "";
+    public string ActDate { get; set; } = "";
+    public string DueDate { get; set; } = "";
     public bool ResetStatus { get; set; } = true;
 }
 

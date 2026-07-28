@@ -41,12 +41,27 @@ function syncBranchFromFund() {
   if (item) $('branch').value = item.id;
 }
 
+function formatShamsiInput(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const d = String(yyyymmdd).replace(/\D/g, '');
+  if (d.length < 8) return String(yyyymmdd);
+  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+}
+
+function applyFicheDatesToForm(f) {
+  $('docDate').value = formatShamsiInput(f.rayvarzDocDate);
+  $('actDate').value = formatShamsiInput(f.rayvarzActDate);
+  $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
+}
+
 function getPayload(resetStatus) {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
     fund: parseInt($('fund').value),
     docDate: $('docDate').value,
+    actDate: $('actDate').value,
+    dueDate: $('dueDate').value,
     resetStatus: !!resetStatus
   };
 }
@@ -146,6 +161,8 @@ function buildMappingRows(f) {
   const branch = config.branches.find(b => b.id === parseInt($('branch').value));
   const fund = $('fund').value;
   const docDate = $('docDate').value;
+  const actDate = $('actDate').value;
+  const dueDate = $('dueDate').value;
   const sourceId = config.sourceSystemId ?? null;
 
   return [
@@ -160,8 +177,10 @@ function buildMappingRows(f) {
     { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.CI_City', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
-    { field: 'DocDate / ActDate / Due', source: 'ورودی تاریخ سند (فرم)', value: docDate },
-    { field: 'RowDate', source: 'BankPaymentDate → PaymentDate → PrintDate → ExportDate', value: f.rowDate || '-' },
+    { field: 'DocDate', source: 'Income/Duty_Fiche → PaymentDate / PrintDate / … (قابل ویرایش)', value: docDate || '-' },
+    { field: 'ActDate', source: 'BankPaymentDate → PaymentDate / … (قابل ویرایش)', value: actDate || '-' },
+    { field: 'Due', source: 'سررسید ردیف — از فیش (قابل ویرایش)', value: dueDate || '-' },
+    { field: 'RowDate (راهنما)', source: 'همان ActDate از فیش', value: f.rowDate || '-' },
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
     { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
@@ -261,13 +280,9 @@ async function init() {
   branchSel.onchange = () => { syncFundFromBranch(); if (currentFiche) renderMappingTable(currentFiche); };
   fundSel.onchange = () => { syncBranchFromFund(); if (currentFiche) renderMappingTable(currentFiche); };
   $('docDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
+  $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
+  $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   syncFundFromBranch();
-
-  const defaultDoc =
-    (config.defaultDocDate && String(config.defaultDocDate).trim()) ||
-    (config.openFiscalYear ? `${config.openFiscalYear}/05/07` : '1405/05/07');
-  $('docDate').value = defaultDoc;
-  $('docDate').placeholder = `${config.openFiscalYear || '1405'}/MM/DD — سال مالی باز`;
 
   if (config.uiVersion !== '3' || !config.features?.rayvarzPostTest) {
     console.warn('Backend قدیمی — دکمه‌های تست POST ممکن است 404 بدهند. git pull و dotnet run مجدد');
@@ -323,6 +338,7 @@ function setupEventHandlers() {
 
     currentFiche = data;
     applyBranchFromFiche(data);
+    applyFicheDatesToForm(data);
     renderFiche(data);
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
