@@ -1,6 +1,6 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**فایل تحویل:** `RayvarzResend-15.zip` (ریشه مخزن، شاخه `rayvarz-resend`)
+**فایل تحویل:** `RayvarzResend-16.zip` (ریشه مخزن، شاخه `rayvarz-resend`)
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 
@@ -103,7 +103,9 @@ WHERE f.FicheNo = @FicheNo;
 - **ردیف اصلی (۲۰۰۳/…):** `Val = PayablePrice − آتش − پسماند − ارزش‌افزوده`
 - **Qty:** `PayablePrice` در هر ردیف
 - **تاریخ:** `DocDate`/`Due` = امروز شمسی؛ `ActDate`/`RowDate` = PaymentDate یا BankPaymentDate بر اساس وضعیت فیش
-- **شعبه/Fund:** `DutyDistrictBranchResolver` از BillID/PaymentID (nosazo.vb)
+- **شعبه/Fund:** `DutyDistrictBranchResolver` از BillID/PaymentID با cutoff تاریخ شمسی (nosazo.vb)؛ Fund جدا برای `BankCode=1`
+- **BnkAcntNo نوسازی:** `GetNosaziNickName` — `Duty_FicheSub.NidFK` → `Base_NosaziCode` (صنفی: `7-14-55-1-1-0-1`)
+- **Ref2/Ref3:** همان `BillID`/`PaymentID` خام دیتابیس (nosazo RefP2/RefP3)
 | branch / Fund | منطقه فیش (`OtherFields → منطقه` برای نوسازی) |
 
 ## فیش‌های تست تأییدشده

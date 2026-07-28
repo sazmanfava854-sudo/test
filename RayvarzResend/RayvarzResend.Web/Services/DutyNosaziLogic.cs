@@ -2,12 +2,12 @@ using RayvarzResend.Web.Models;
 
 namespace RayvarzResend.Web.Services;
 
-/// <summary>منطق Biz.Communication — تابع Nosazi() (فایل nosazo.vb).</summary>
+/// <summary>منطق Biz.Communication — تابع Nosazi() (nosazo.vb).</summary>
 public static class DutyNosaziLogic
 {
     public sealed record DutySubAmounts(decimal Afzodeh, decimal Atash, decimal Garbage, decimal MainLine);
 
-    /// <summary>همان محاسبات خطوط ۲۱۹–۲۵۲ nosazo.vb</summary>
+    /// <summary>خطوط ۲۱۹–۲۵۲ nosazo.vb — همان فیلترهای VB روی لیست (تفریق F≠0 روی زیرلیست F=0 در عمل اثر ندارد).</summary>
     public static DutySubAmounts CalculateSubAmounts(
         IReadOnlyList<(int Formula, int Fiche, decimal Price)> subs,
         decimal payablePrice)
@@ -18,13 +18,13 @@ public static class DutyNosaziLogic
 
         var afzodeh = subs.Where(s => s.Formula == garbageFormula && s.Fiche == afzodehFiche).Sum(s => s.Price);
 
-        var atashF0 = subs.Where(s => s.Formula == atashFormula && s.Fiche == 0).Sum(s => s.Price);
-        var atashNonZero = subs.Where(s => s.Formula == atashFormula && s.Fiche != 0).Sum(s => s.Price);
-        var atash = atashF0 - atashNonZero;
+        var atashList = subs.Where(s => s.Formula == atashFormula && s.Fiche == 0).ToList();
+        var atash = atashList.Sum(s => s.Price);
+        atash -= atashList.Where(s => s.Fiche != 0).Sum(s => s.Price);
 
-        var garbageF0 = subs.Where(s => s.Formula == garbageFormula && s.Fiche == 0).Sum(s => s.Price);
-        var garbageNonZero = subs.Where(s => s.Formula == garbageFormula && s.Fiche != 0).Sum(s => s.Price);
-        var garbage = garbageF0 - garbageNonZero;
+        var garbageList = subs.Where(s => s.Formula == garbageFormula && s.Fiche == 0).ToList();
+        var garbage = garbageList.Sum(s => s.Price);
+        garbage -= garbageList.Where(s => s.Fiche != 0).Sum(s => s.Price);
 
         var mainLine = payablePrice - atash - garbage - afzodeh;
         return new DutySubAmounts(afzodeh, atash, garbage, mainLine);
@@ -61,13 +61,11 @@ public static class DutyNosaziLogic
         return rows;
     }
 
-    /// <summary>TmpDate — وضعیت ۱: PaymentDate وگرنه BankPaymentDate (خط ۳۰۰–۳۰۴).</summary>
     public static string ResolvePaymentDateRay(int eumDutyFicheStatus, string paymentDateRay, string bankPaymentDateRay) =>
         eumDutyFicheStatus == 1
             ? FicheDateResolver.FirstRayvarzDate(paymentDateRay, bankPaymentDateRay)
             : FicheDateResolver.FirstRayvarzDate(bankPaymentDateRay, paymentDateRay);
 
-    /// <summary>DocDate و Due = امروز شمسی؛ RowDate/ActDate = TmpDate (خط ۴۴۵–۴۵۰، ۵۳۵–۵۳۷).</summary>
     public static void ApplyRayvarzDates(FicheHeaderDto dto, int eumDutyFicheStatus, string paymentDateRay, string bankPaymentDateRay)
     {
         var tmpDate = ResolvePaymentDateRay(eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay);
@@ -78,7 +76,6 @@ public static class DutyNosaziLogic
         dto.RowDate = tmpDate;
     }
 
-    /// <summary>BillID/PaymentID با / — ادغام دو بخش اول (خط ۲۷۸–۲۸۱).</summary>
     public static string NormalizeMergedId(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "";
@@ -90,4 +87,7 @@ public static class DutyNosaziLogic
 
     public static string DefaultBankCode(string? confirmBankCode) =>
         string.IsNullOrWhiteSpace(confirmBankCode) ? "18" : confirmBankCode.Trim();
+
+    /// <summary>ObjOnPrice &lt;&gt; Nosazi — صنفی؛ ExportType=14 حساب ۲۰۰۵.</summary>
+    public static bool IsSenfiObjOnPrice(int eumDutyType) => eumDutyType == 2;
 }

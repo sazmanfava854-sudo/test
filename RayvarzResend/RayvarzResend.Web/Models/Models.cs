@@ -26,6 +26,9 @@ public class FicheHeaderDto
 {
     public FicheCategory Category { get; set; }
     public string FicheNo { get; set; } = "";
+    /// <summary>BillID همان DB (Ref2 در nosazo — بدون ادغام اجباری).</summary>
+    public string BillIdRaw { get; set; } = "";
+    public string PaymentIdRaw { get; set; } = "";
     public string BillId { get; set; } = "";
     public string PaymentId { get; set; } = "";
     public decimal Payable { get; set; }

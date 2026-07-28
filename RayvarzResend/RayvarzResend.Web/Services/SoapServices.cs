@@ -51,8 +51,16 @@ public class SoapBuilder
             dueDateRay = FicheDateResolver.FirstRayvarzDate(actDateRay, docDateRay);
 
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
+        if (isDuty)
+        {
+            if (branch <= 0 && fiche.ResolvedDistrictBranch is > 0)
+                branch = fiche.ResolvedDistrictBranch.Value;
+            if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
+                fund = DutyDistrictBranchResolver.ResolveFund(dist, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
+        }
+
         if (fund <= 0)
-            fund = FundResolver.Resolve(_config, branch, fiche.PaymentBranch);
+            fund = FundResolver.Resolve(_config, branch, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
         var transactionId = ResolveTransactionId(fiche);
@@ -329,9 +337,12 @@ public class SoapBuilder
     /// <summary>ترتیب Refها مطابق نمونه SaveDocument موفق (WinTest / راهنما).</summary>
     private static string BuildDocumentItemRefFields(FicheHeaderDto fiche)
     {
+        var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
+        var ref2 = isDuty ? FirstNonEmpty(fiche.BillIdRaw, fiche.BillId) : fiche.BillId;
+        var ref3 = isDuty ? FirstNonEmpty(fiche.PaymentIdRaw, fiche.PaymentId) : fiche.PaymentId;
         return $@"                <b:Ref1 i:nil=""true""/>
-                {XmlOptionalElement("b", "Ref2", fiche.BillId, nilIfEmpty: true)}
-                {XmlOptionalElement("b", "Ref3", fiche.PaymentId, nilIfEmpty: true)}
+                {XmlOptionalElement("b", "Ref2", ref2, nilIfEmpty: true)}
+                {XmlOptionalElement("b", "Ref3", ref3, nilIfEmpty: true)}
                 <b:Ref4 i:nil=""true""/>
                 <b:Ref5 i:nil=""true""/>
                 <b:Ref6 i:nil=""true""/>
@@ -499,6 +510,9 @@ public class SoapBuilder
     }
 
     private static string Escape(string? s) => WebUtility.HtmlEncode(s ?? "");
+
+    private static string FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "";
 }
 
 public class RayvarzClient
