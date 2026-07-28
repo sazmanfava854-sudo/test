@@ -239,12 +239,12 @@ WHERE NidFiche = @nid";
         decimal Afzodeh = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == AfzodehFiche).Sum(s => s.Price);
         decimal Atash = subs.Where(s => s.Formula == AtashFormula && s.Fiche == 0).Sum(s => s.Price);
         decimal Garbage = subs.Where(s => s.Formula == GarbageFormula && s.Fiche == 0).Sum(s => s.Price);
-
-        // Qty در SOAP = PayablePrice (کل فیش). جمع Val ردیف‌ها باید همان Payable باشد —
-        // ردیف نوسازی = مانده (نه فقط Formula=1 که ممکن است با PayablePrice یکی نباشد).
+        decimal NosaziFromFormula1 = subs.Where(s => s.Formula == 1 && s.Fiche == 0).Sum(s => s.Price);
         decimal Nosazi = isSenfi
             ? payable - Atash - Garbage - Afzodeh
-            : payable - Atash - Garbage - Afzodeh;
+            : NosaziFromFormula1 != 0
+                ? NosaziFromFormula1
+                : payable - Atash - Garbage - Afzodeh;
 
         // ExportType=14 (بانک‌ها): IncmNo=2005 — تأیید 021204/19379176
         var mainIncm = isSenfi switch
@@ -270,7 +270,49 @@ WHERE NidFiche = @nid";
         if (Afzodeh != 0)
             rows.Add(new IncmRowDto { IncmNo = 206098003, Val = Afzodeh, IncmRowDsc = "مالیات برارزش افزوده" });
 
+        AlignDutyRowValsToPayable(rows, payable);
         return rows;
+    }
+
+    /// <summary>Qty در رایورز = Payable؛ جمع Val ردیف‌ها باید همان باشد (تخفیف/اختلاف فرمول در ردیف آخر جبران می‌شود).</summary>
+    private static void AlignDutyRowValsToPayable(List<IncmRowDto> rows, decimal payable)
+    {
+        if (rows.Count == 0) return;
+        var sum = rows.Sum(r => r.Val);
+        if (sum == payable) return;
+
+        if (sum == 0)
+        {
+            rows[0].Val = payable;
+            return;
+        }
+
+        // اول مانده را روی ردیف نوسازی (۲۰۰۳/۱۰۰۰۶۲/۲۰۰۵) اعمال کن
+        var main = rows.FirstOrDefault(r => r.IncmNo is 2003 or 100062 or 2005);
+        if (main != null)
+        {
+            var others = sum - main.Val;
+            var newMain = payable - others;
+            if (newMain >= 0)
+            {
+                main.Val = newMain;
+                return;
+            }
+        }
+
+        // اگر مانده منفی شد (جمع جزء &gt; Payable)، نسبت‌دهی خطی به Payable
+        var factor = payable / sum;
+        decimal allocated = 0;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (i == rows.Count - 1)
+                rows[i].Val = payable - allocated;
+            else
+            {
+                rows[i].Val = Math.Round(rows[i].Val * factor, 0, MidpointRounding.AwayFromZero);
+                allocated += rows[i].Val;
+            }
+        }
     }
 
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)
