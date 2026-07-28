@@ -82,11 +82,12 @@ ORDER BY Version DESC, VersionDateTime DESC;
 - **جایگزینی کامل پورت C# با XmlBody خام، بدون موتور Sara:** در بیشتر موارد **عملی نیست** اگر XmlBody وابسته به VB و `Info8` باشد.
 - **یک نسخه قانون، بدون دو پیاده‌سازی:** **بله** اگر RayvarzResend به‌جای «بازنویسی»، **همان اجرای قانون شهرسازی** (۱ یا ۲ یا ۳) را صدا بزند؛ DB فقط انتخاب Member/Version است.
 
-## گام‌های پیشنهادی بعدی (کشف، بدون تغییر معماری v16)
+## گام‌های پیشنهادی بعدی (کشف)
 
-1. Export ناشناس یک `XmlBody` (+ ساختار `Body` اگر غیررمز) برای `NidMember=1388`.
-2. مشخص کردن: آیا موتور RuleEngein DLL جدا دارد؟ نام namespace / متد ورودی.
-3. آیا شهرسازی از همین Member برای **همان** مسیر `TmpDocument.Save` استفاده می‌کند؟
-4. POC: یک API روی سرور 232 که فقط `NidFiche` بگیرد و XML رایورز برگرداند؛ RayvarzResend branch جدید فقط آن را صدا بزند.
+1. Export یا کوئری `XmlBody` برای **`NidMember = 1388` فقط** (نسخه فعال).
+2. مشخص کردن: Sara هنگام ارسال رایورز همان Member را با `NidClass=360` / `1388` صدا می‌زند.
+3. POC: SaraBridge با `nidMember: 1388` ثابت.
+
+**توجه:** Memberهای دیگر DbRuleEngein خارج از scope ارسال رایورز هستند.
 
 Baseline قابل بازگشت: `BASELINE-v16.md` و tag `rayvarz-resend-baseline-v16`.
