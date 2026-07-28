@@ -41,7 +41,7 @@ public static class DateHelper
             return $"{pc.GetYear(dt):0000}{pc.GetMonth(dt):00}{pc.GetDayOfMonth(dt):00}";
         }
 
-        return ToRayvarzDate(value.ToString());
+        return ToRayvarzDate(value.ToString() ?? "");
     }
 }
 
