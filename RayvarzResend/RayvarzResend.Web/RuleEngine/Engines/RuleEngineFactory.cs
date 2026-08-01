@@ -1,3 +1,4 @@
+using RayvarzResend.Web.RuleEngine.Promotion;
 using RayvarzResend.Web.RuleEngine.Store;
 
 namespace RayvarzResend.Web.RuleEngine.Engines;
@@ -8,17 +9,20 @@ public sealed class RuleEngineFactory
     private readonly RuleEngineStore _store;
     private readonly LegacyRuleEngine _legacy;
     private readonly DynamicRuleEngine _dynamic;
+    private readonly RuleCircuitBreakerService _circuitBreaker;
 
     public RuleEngineFactory(
         IConfiguration config,
         RuleEngineStore store,
         LegacyRuleEngine legacy,
-        DynamicRuleEngine dynamic)
+        DynamicRuleEngine dynamic,
+        RuleCircuitBreakerService circuitBreaker)
     {
         _config = config;
         _store = store;
         _legacy = legacy;
         _dynamic = dynamic;
+        _circuitBreaker = circuitBreaker;
     }
 
     public int NidMember => _config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388);
@@ -28,7 +32,14 @@ public sealed class RuleEngineFactory
     {
         var forced = (_config["RuleEngine:ForceEngine"] ?? "").Trim();
         if (!string.IsNullOrEmpty(forced))
+        {
+            if (await _circuitBreaker.IsOpenAsync(ct))
+                return _legacy;
             return ResolveByName(forced);
+        }
+
+        if (await _circuitBreaker.IsOpenAsync(ct))
+            return _legacy;
 
         if (_store.IsConfigured && await _store.IsSchemaReadyAsync(ct))
         {
@@ -66,10 +77,19 @@ public sealed class RuleEngineFactory
         var engine = await ResolveAsync(ct);
         var result = await engine.EvaluateAsync(context, buildSoap, ct);
 
-        if (result.Success || engine is not DynamicRuleEngine)
+        if (result.Success)
+        {
+            if (engine is DynamicRuleEngine && string.Equals(result.EngineName, "Dynamic", StringComparison.OrdinalIgnoreCase))
+                await _circuitBreaker.RecordDynamicSuccessAsync(ct);
+            return result;
+        }
+
+        if (engine is not DynamicRuleEngine)
             return result;
 
-        if (!_config.GetValue("RuleEngine:DynamicFallbackToLegacy", true))
+        await _circuitBreaker.RecordDynamicFailureAsync(result.ErrorMessage ?? "Dynamic evaluation failed", ct);
+
+        if (!context.AllowLegacyFallback || !_config.GetValue("RuleEngine:DynamicFallbackToLegacy", true))
             return result;
 
         return await _legacy.EvaluateAsync(context, buildSoap, ct);

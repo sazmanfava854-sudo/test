@@ -13,6 +13,8 @@ public sealed class RuleSyncStateRow
     public string ActiveEngine { get; set; } = "Legacy";
     public long? ActiveSnapshotId { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
+    public int ConsecutiveDynamicFailures { get; set; }
+    public DateTime? CircuitBreakerOpenUntilUtc { get; set; }
 }
 
 public sealed class RuleGoldenFicheRow
@@ -62,8 +64,20 @@ public static class RuleCandidateStatus
     public const string Validated = "Validated";
     public const string DryRunPassed = "DryRunPassed";
     public const string Stable = "Stable";
+    public const string Promoted = "Promoted";
     public const string Rejected = "Rejected";
     public const string Superseded = "Superseded";
+}
+
+public sealed class RulePromotionLogRow
+{
+    public long LogId { get; init; }
+    public int NidMember { get; init; }
+    public long? CandidateId { get; init; }
+    public long? SnapshotId { get; init; }
+    public string Action { get; init; } = "";
+    public string? Reason { get; init; }
+    public DateTime CreatedAtUtc { get; init; }
 }
 
 public sealed class RuleDslSnapshotRow

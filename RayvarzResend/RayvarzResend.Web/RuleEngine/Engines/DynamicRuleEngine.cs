@@ -71,7 +71,8 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 ActDate = context.ActDate,
                 DueDate = context.DueDate,
                 DryRun = dryRun,
-                BuildSoap = buildSoap
+                BuildSoap = buildSoap,
+                AllowLegacyFallback = context.AllowLegacyFallback
             };
 
             var executed = _executor.Execute(program, execContext);
@@ -122,7 +123,8 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
     {
         if (_store.IsConfigured && await _store.IsSchemaReadyAsync(ct))
         {
-            var snapshot = await _store.GetLatestSnapshotAsync(NidMember, ct);
+            var snapshot = await _store.GetActiveSnapshotAsync(NidMember, ct)
+                ?? await _store.GetLatestSnapshotAsync(NidMember, ct);
             if (!string.IsNullOrWhiteSpace(snapshot?.DslJson))
                 return RuleDslParserService.DeserializeProgram(snapshot.DslJson);
         }
@@ -131,13 +133,16 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
         return parsed.Parse?.Program;
     }
 
+    private bool ShouldFallback(FicheRuleContext context) =>
+        context.AllowLegacyFallback && FallbackToLegacy;
+
     private async Task<FicheRuleEvaluationResult> FailOrFallbackAsync(
         FicheRuleContext context,
         bool buildSoap,
         string error,
         CancellationToken ct)
     {
-        if (!FallbackToLegacy)
+        if (!ShouldFallback(context))
         {
             return new FicheRuleEvaluationResult
             {

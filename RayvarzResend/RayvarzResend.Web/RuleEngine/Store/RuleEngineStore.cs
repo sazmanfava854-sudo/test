@@ -137,7 +137,8 @@ public sealed class RuleEngineStore
         const string sql = """
             SELECT NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
                    LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
-                   ActiveDslVersion, ActiveEngine, ActiveSnapshotId, UpdatedAtUtc
+                   ActiveDslVersion, ActiveEngine, ActiveSnapshotId, UpdatedAtUtc,
+                   ISNULL(ConsecutiveDynamicFailures, 0), CircuitBreakerOpenUntilUtc
             FROM dbo.RuleSyncState WHERE NidMember = @nid
             """;
 
@@ -162,13 +163,47 @@ public sealed class RuleEngineStore
                 ActiveDslVersion = r.GetInt32(7),
                 ActiveEngine = r.GetString(8),
                 ActiveSnapshotId = r.IsDBNull(9) ? null : r.GetInt64(9),
-                UpdatedAtUtc = r.GetDateTime(10)
+                UpdatedAtUtc = r.GetDateTime(10),
+                ConsecutiveDynamicFailures = r.FieldCount > 11 && !r.IsDBNull(11) ? r.GetInt32(11) : 0,
+                CircuitBreakerOpenUntilUtc = r.FieldCount > 12 && !r.IsDBNull(12) ? r.GetDateTime(12) : null
             };
         }
-        catch (SqlException ex) when (ex.Number == 208)
+        catch (SqlException ex) when (ex.Number is 208 or 207)
         {
-            return null;
+            return await GetSyncStateLegacyAsync(nidMember, ct);
         }
+    }
+
+    private async Task<RuleSyncStateRow?> GetSyncStateLegacyAsync(int nidMember, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
+                   LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
+                   ActiveDslVersion, ActiveEngine, ActiveSnapshotId, UpdatedAtUtc
+            FROM dbo.RuleSyncState WHERE NidMember = @nid
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+
+        return new RuleSyncStateRow
+        {
+            NidMember = r.GetInt32(0),
+            NidClass = r.GetInt32(1),
+            LastSeenNidHistory = r.IsDBNull(2) ? null : r.GetInt64(2),
+            LastSeenModifyAt = r.IsDBNull(3) ? null : r.GetDateTime(3),
+            LastStableNidHistory = r.IsDBNull(4) ? null : r.GetInt64(4),
+            LastStableModifyAt = r.IsDBNull(5) ? null : r.GetDateTime(5),
+            LastStableXmlHash = r.IsDBNull(6) ? null : r.GetString(6).Trim(),
+            ActiveDslVersion = r.GetInt32(7),
+            ActiveEngine = r.GetString(8),
+            ActiveSnapshotId = r.IsDBNull(9) ? null : r.GetInt64(9),
+            UpdatedAtUtc = r.GetDateTime(10)
+        };
     }
 
     public async Task UpsertSyncStateAsync(RuleSyncStateRow state, CancellationToken ct = default)
@@ -188,14 +223,50 @@ public sealed class RuleEngineStore
                 ActiveDslVersion = @dslVer,
                 ActiveEngine = @engine,
                 ActiveSnapshotId = @snapId,
+                ConsecutiveDynamicFailures = @dynFail,
+                CircuitBreakerOpenUntilUtc = @cbUntil,
                 UpdatedAtUtc = SYSUTCDATETIME()
             WHEN NOT MATCHED THEN INSERT (
                 NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
                 LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
-                ActiveDslVersion, ActiveEngine, ActiveSnapshotId)
-            VALUES (@nid, @class, @seenHist, @seenAt, @stableHist, @stableAt, @stableHash, @dslVer, @engine, @snapId);
+                ActiveDslVersion, ActiveEngine, ActiveSnapshotId,
+                ConsecutiveDynamicFailures, CircuitBreakerOpenUntilUtc)
+            VALUES (@nid, @class, @seenHist, @seenAt, @stableHist, @stableAt, @stableHash, @dslVer, @engine, @snapId, @dynFail, @cbUntil);
             """;
 
+        try
+        {
+            await ExecuteUpsertSyncStateAsync(state, sql, ct);
+        }
+        catch (SqlException ex) when (ex.Number == 207)
+        {
+            const string legacySql = """
+                MERGE dbo.RuleSyncState AS t
+                USING (SELECT @nid AS NidMember) AS s ON t.NidMember = s.NidMember
+                WHEN MATCHED THEN UPDATE SET
+                    NidClass = @class,
+                    LastSeenNidHistory = @seenHist,
+                    LastSeenModifyAt = @seenAt,
+                    LastStableNidHistory = @stableHist,
+                    LastStableModifyAt = @stableAt,
+                    LastStableXmlHash = @stableHash,
+                    ActiveDslVersion = @dslVer,
+                    ActiveEngine = @engine,
+                    ActiveSnapshotId = @snapId,
+                    UpdatedAtUtc = SYSUTCDATETIME()
+                WHEN NOT MATCHED THEN INSERT (
+                    NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
+                    LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
+                    ActiveDslVersion, ActiveEngine, ActiveSnapshotId)
+                VALUES (@nid, @class, @seenHist, @seenAt, @stableHist, @stableAt, @stableHash, @dslVer, @engine, @snapId);
+                """;
+            await ExecuteUpsertSyncStateAsync(state, legacySql, ct, includeCircuitBreaker: false);
+        }
+    }
+
+    private async Task ExecuteUpsertSyncStateAsync(
+        RuleSyncStateRow state, string sql, CancellationToken ct, bool includeCircuitBreaker = true)
+    {
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
@@ -209,6 +280,11 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@dslVer", state.ActiveDslVersion);
         cmd.Parameters.AddWithValue("@engine", state.ActiveEngine);
         cmd.Parameters.AddWithValue("@snapId", (object?)state.ActiveSnapshotId ?? DBNull.Value);
+        if (includeCircuitBreaker)
+        {
+            cmd.Parameters.AddWithValue("@dynFail", state.ConsecutiveDynamicFailures);
+            cmd.Parameters.AddWithValue("@cbUntil", (object?)state.CircuitBreakerOpenUntilUtc ?? DBNull.Value);
+        }
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -454,7 +530,7 @@ public sealed class RuleEngineStore
 
         const string sql = """
             UPDATE dbo.RuleCandidate
-            SET Status = @status, RejectReason = @reason
+            SET Status = @status, RejectReason = @reason, LastCheckedAtUtc = SYSUTCDATETIME()
             WHERE CandidateId = @id
             """;
 
@@ -464,6 +540,157 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@id", candidateId);
         cmd.Parameters.AddWithValue("@status", status);
         cmd.Parameters.AddWithValue("@reason", (object?)rejectReason ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<RuleCandidateRow>> GetCandidatesByStatusesAsync(
+        int nidMember, IReadOnlyList<string> statuses, CancellationToken ct = default)
+    {
+        if (!IsConfigured || statuses.Count == 0) return Array.Empty<RuleCandidateRow>();
+
+        var placeholders = string.Join(",", statuses.Select((_, i) => $"@s{i}"));
+        var sql = $"""
+            SELECT CandidateId, NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash,
+                   XmlBody, Modifyer, ModifyDesc, Status, RejectReason, StableEligibleAtUtc
+            FROM dbo.RuleCandidate
+            WHERE NidMember = @nid AND Status IN ({placeholders})
+            ORDER BY SourceModifyAt DESC
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        for (var i = 0; i < statuses.Count; i++)
+            cmd.Parameters.AddWithValue($"@s{i}", statuses[i]);
+
+        var list = new List<RuleCandidateRow>();
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+            list.Add(ReadCandidateRow(r));
+        return list;
+    }
+
+    public async Task<RuleDslSnapshotRow?> GetActiveSnapshotAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return null;
+
+        const string sql = """
+            SELECT TOP 1 SnapshotId, NidMember, DslVersion, XmlHash, DslJson, ParserVersion, EntryPoint, CreatedAtUtc, IsActive
+            FROM dbo.RuleDslSnapshot
+            WHERE NidMember = @nid AND IsActive = 1
+            ORDER BY DslVersion DESC, SnapshotId DESC
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+        return ReadDslSnapshotRow(r);
+    }
+
+    public async Task ActivateSnapshotAsync(int nidMember, long snapshotId, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            UPDATE dbo.RuleDslSnapshot SET IsActive = 0 WHERE NidMember = @nid;
+            UPDATE dbo.RuleDslSnapshot SET IsActive = 1 WHERE SnapshotId = @snap AND NidMember = @nid;
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@snap", snapshotId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task SupersedeCandidatesAsync(int nidMember, long exceptCandidateId, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            UPDATE dbo.RuleCandidate
+            SET Status = @superseded, RejectReason = 'Superseded by promotion'
+            WHERE NidMember = @nid AND CandidateId <> @keep
+              AND Status IN (@parsed, @validated, @dryRun, @stable, @detected)
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@keep", exceptCandidateId);
+        cmd.Parameters.AddWithValue("@superseded", RuleCandidateStatus.Superseded);
+        cmd.Parameters.AddWithValue("@parsed", RuleCandidateStatus.Parsed);
+        cmd.Parameters.AddWithValue("@validated", RuleCandidateStatus.Validated);
+        cmd.Parameters.AddWithValue("@dryRun", RuleCandidateStatus.DryRunPassed);
+        cmd.Parameters.AddWithValue("@stable", RuleCandidateStatus.Stable);
+        cmd.Parameters.AddWithValue("@detected", RuleCandidateStatus.Detected);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<RulePromotionLogRow>> GetRecentPromotionLogsAsync(int nidMember, int limit, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return Array.Empty<RulePromotionLogRow>();
+
+        const string sql = """
+            SELECT TOP (@lim) LogId, NidMember, CandidateId, SnapshotId, Action, Reason, CreatedAtUtc
+            FROM dbo.RulePromotionLog
+            WHERE NidMember = @nid
+            ORDER BY LogId DESC
+            """;
+
+        var list = new List<RulePromotionLogRow>();
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@lim", limit);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+        {
+            list.Add(new RulePromotionLogRow
+            {
+                LogId = r.GetInt64(0),
+                NidMember = r.GetInt32(1),
+                CandidateId = r.IsDBNull(2) ? null : r.GetInt64(2),
+                SnapshotId = r.IsDBNull(3) ? null : r.GetInt64(3),
+                Action = r.GetString(4),
+                Reason = r.IsDBNull(5) ? null : r.GetString(5),
+                CreatedAtUtc = r.GetDateTime(6)
+            });
+        }
+        return list;
+    }
+
+    private static RuleCandidateRow ReadCandidateRow(SqlDataReader r) =>
+        new()
+        {
+            CandidateId = r.GetInt64(0),
+            NidMember = r.GetInt32(1),
+            SourceNidHistory = r.GetInt64(2),
+            SourceModifyAt = r.GetDateTime(3),
+            CanonicalXmlHash = r.GetString(4).Trim(),
+            XmlBody = r.GetString(5),
+            Modifyer = r.IsDBNull(6) ? null : r.GetString(6),
+            ModifyDesc = r.IsDBNull(7) ? null : r.GetString(7),
+            Status = r.GetString(8),
+            RejectReason = r.IsDBNull(9) ? null : r.GetString(9),
+            StableEligibleAtUtc = r.GetDateTime(10)
+        };
+
+    public async Task DeactivateAllSnapshotsAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+        const string sql = "UPDATE dbo.RuleDslSnapshot SET IsActive = 0 WHERE NidMember = @nid";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
