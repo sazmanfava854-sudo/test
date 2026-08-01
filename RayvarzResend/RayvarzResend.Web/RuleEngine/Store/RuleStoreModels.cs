@@ -2,17 +2,17 @@ namespace RayvarzResend.Web.RuleEngine.Store;
 
 public sealed class RuleSyncStateRow
 {
-    public int NidMember { get; init; }
-    public int NidClass { get; init; } = 360;
-    public long? LastSeenNidHistory { get; init; }
-    public DateTime? LastSeenModifyAt { get; init; }
-    public long? LastStableNidHistory { get; init; }
-    public DateTime? LastStableModifyAt { get; init; }
-    public string? LastStableXmlHash { get; init; }
-    public int ActiveDslVersion { get; init; }
-    public string ActiveEngine { get; init; } = "Legacy";
-    public long? ActiveSnapshotId { get; init; }
-    public DateTime UpdatedAtUtc { get; init; }
+    public int NidMember { get; set; }
+    public int NidClass { get; set; } = 360;
+    public long? LastSeenNidHistory { get; set; }
+    public DateTime? LastSeenModifyAt { get; set; }
+    public long? LastStableNidHistory { get; set; }
+    public DateTime? LastStableModifyAt { get; set; }
+    public string? LastStableXmlHash { get; set; }
+    public int ActiveDslVersion { get; set; }
+    public string ActiveEngine { get; set; } = "Legacy";
+    public long? ActiveSnapshotId { get; set; }
+    public DateTime UpdatedAtUtc { get; set; }
 }
 
 public sealed class RuleGoldenFicheRow

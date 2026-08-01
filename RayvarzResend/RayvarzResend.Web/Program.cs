@@ -160,7 +160,9 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
 app.MapGet("/api/rule/sync/state", async (RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
 {
     var state = await store.GetSyncStateAsync(mgr.NidMember, ct);
-    return Results.Ok(state ?? new { nidMember = mgr.NidMember, activeEngine = "Legacy", note = "RuleSyncState not initialized" });
+    if (state == null)
+        return Results.Ok(new { nidMember = mgr.NidMember, activeEngine = "Legacy", note = "RuleSyncState not initialized" });
+    return Results.Ok(state);
 });
 
 app.MapPost("/api/rule/sync/run", async (RuleVersionManager mgr, CancellationToken ct) =>

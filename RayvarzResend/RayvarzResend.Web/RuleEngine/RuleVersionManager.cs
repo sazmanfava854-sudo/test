@@ -61,12 +61,13 @@ public sealed class RuleVersionManager
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(check.CanonicalXmlHash))
+        var hash = check.CanonicalXmlHash;
+        if (string.IsNullOrWhiteSpace(hash))
         {
             try
             {
                 var canonical = XmlCanonicalizer.Normalize(check.Latest.XmlBody);
-                check = check with { CanonicalXmlHash = RuleHashService.ComputeSha256Hex(canonical) };
+                hash = RuleHashService.ComputeSha256Hex(canonical);
             }
             catch (Exception ex)
             {
@@ -77,7 +78,6 @@ public sealed class RuleVersionManager
             }
         }
 
-        var hash = check.CanonicalXmlHash!;
         if (!await _store.CandidateExistsAsync(NidMember, hash, ct))
         {
             string canonicalXml;
