@@ -1,0 +1,246 @@
+using Microsoft.Data.SqlClient;
+
+namespace RayvarzResend.Web.RuleEngine.Store;
+
+public sealed class RuleEngineStore
+{
+    private readonly string? _cs;
+
+    public RuleEngineStore(IConfiguration config)
+    {
+        _cs = config.GetConnectionString("RayvarzRuleEngine");
+    }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_cs);
+
+    public async Task<RuleSyncStateRow?> GetSyncStateAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return null;
+
+        const string sql = """
+            SELECT NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
+                   LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
+                   ActiveDslVersion, ActiveEngine, ActiveSnapshotId, UpdatedAtUtc
+            FROM dbo.RuleSyncState WHERE NidMember = @nid
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+
+        return new RuleSyncStateRow
+        {
+            NidMember = r.GetInt32(0),
+            NidClass = r.GetInt32(1),
+            LastSeenNidHistory = r.IsDBNull(2) ? null : r.GetInt64(2),
+            LastSeenModifyAt = r.IsDBNull(3) ? null : r.GetDateTime(3),
+            LastStableNidHistory = r.IsDBNull(4) ? null : r.GetInt64(4),
+            LastStableModifyAt = r.IsDBNull(5) ? null : r.GetDateTime(5),
+            LastStableXmlHash = r.IsDBNull(6) ? null : r.GetString(6).Trim(),
+            ActiveDslVersion = r.GetInt32(7),
+            ActiveEngine = r.GetString(8),
+            ActiveSnapshotId = r.IsDBNull(9) ? null : r.GetInt64(9),
+            UpdatedAtUtc = r.GetDateTime(10)
+        };
+    }
+
+    public async Task UpsertSyncStateAsync(RuleSyncStateRow state, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            MERGE dbo.RuleSyncState AS t
+            USING (SELECT @nid AS NidMember) AS s ON t.NidMember = s.NidMember
+            WHEN MATCHED THEN UPDATE SET
+                NidClass = @class,
+                LastSeenNidHistory = @seenHist,
+                LastSeenModifyAt = @seenAt,
+                LastStableNidHistory = @stableHist,
+                LastStableModifyAt = @stableAt,
+                LastStableXmlHash = @stableHash,
+                ActiveDslVersion = @dslVer,
+                ActiveEngine = @engine,
+                ActiveSnapshotId = @snapId,
+                UpdatedAtUtc = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT (
+                NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
+                LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
+                ActiveDslVersion, ActiveEngine, ActiveSnapshotId)
+            VALUES (@nid, @class, @seenHist, @seenAt, @stableHist, @stableAt, @stableHash, @dslVer, @engine, @snapId);
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", state.NidMember);
+        cmd.Parameters.AddWithValue("@class", state.NidClass);
+        cmd.Parameters.AddWithValue("@seenHist", (object?)state.LastSeenNidHistory ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@seenAt", (object?)state.LastSeenModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableHist", (object?)state.LastStableNidHistory ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableAt", (object?)state.LastStableModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableHash", (object?)state.LastStableXmlHash ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@dslVer", state.ActiveDslVersion);
+        cmd.Parameters.AddWithValue("@engine", state.ActiveEngine);
+        cmd.Parameters.AddWithValue("@snapId", (object?)state.ActiveSnapshotId ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<RuleGoldenFicheRow>> GetActiveGoldenFichesAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return Array.Empty<RuleGoldenFicheRow>();
+
+        const string sql = """
+            SELECT GoldenFicheId, Name, FicheNo, NidFiche, NidMember, Scenario, ExpectedRowCount, IsActive, Notes
+            FROM dbo.RuleGoldenFiche
+            WHERE NidMember = @nid AND IsActive = 1
+            ORDER BY GoldenFicheId
+            """;
+
+        var list = new List<RuleGoldenFicheRow>();
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+        {
+            list.Add(new RuleGoldenFicheRow
+            {
+                GoldenFicheId = r.GetInt32(0),
+                Name = r.GetString(1),
+                FicheNo = r.GetString(2),
+                NidFiche = r.GetGuid(3),
+                NidMember = r.GetInt32(4),
+                Scenario = r.GetString(5),
+                ExpectedRowCount = r.GetInt32(6),
+                IsActive = r.GetBoolean(7),
+                Notes = r.IsDBNull(8) ? null : r.GetString(8)
+            });
+        }
+
+        return list;
+    }
+
+    public async Task<IReadOnlyList<RuleGoldenExpectedRow>> GetExpectedRowsAsync(int goldenFicheId, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return Array.Empty<RuleGoldenExpectedRow>();
+
+        const string sql = """
+            SELECT GoldenFicheId, IncmRow, IncmNo, ExpectedVal, IncmRowDsc, ExpectedBranch, ExpectedBank
+            FROM dbo.RuleGoldenExpectedRow
+            WHERE GoldenFicheId = @id
+            ORDER BY IncmRow
+            """;
+
+        var list = new List<RuleGoldenExpectedRow>();
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", goldenFicheId);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+        {
+            list.Add(new RuleGoldenExpectedRow
+            {
+                GoldenFicheId = r.GetInt32(0),
+                IncmRow = r.GetInt32(1),
+                IncmNo = r.GetInt32(2),
+                ExpectedVal = r.GetDecimal(3),
+                IncmRowDsc = r.IsDBNull(4) ? null : r.GetString(4),
+                ExpectedBranch = r.IsDBNull(5) ? null : r.GetInt32(5),
+                ExpectedBank = r.IsDBNull(6) ? null : r.GetInt32(6)
+            });
+        }
+
+        return list;
+    }
+
+    public async Task<long> InsertCandidateAsync(RuleCandidateRow row, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return 0;
+
+        const string sql = """
+            INSERT INTO dbo.RuleCandidate (
+                NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash, XmlBody,
+                Modifyer, ModifyDesc, Status, StableEligibleAtUtc)
+            OUTPUT INSERTED.CandidateId
+            VALUES (@member, @hist, @modAt, @hash, @xml, @modBy, @modDesc, @status, @stableAt)
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@member", row.NidMember);
+        cmd.Parameters.AddWithValue("@hist", row.SourceNidHistory);
+        cmd.Parameters.AddWithValue("@modAt", row.SourceModifyAt);
+        cmd.Parameters.AddWithValue("@hash", row.CanonicalXmlHash);
+        cmd.Parameters.AddWithValue("@xml", row.XmlBody);
+        cmd.Parameters.AddWithValue("@modBy", (object?)row.Modifyer ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@modDesc", (object?)row.ModifyDesc ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@status", row.Status);
+        cmd.Parameters.AddWithValue("@stableAt", row.StableEligibleAtUtc);
+        var id = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt64(id);
+    }
+
+    public async Task<bool> CandidateExistsAsync(int nidMember, string hash, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return false;
+
+        const string sql = "SELECT 1 FROM dbo.RuleCandidate WHERE NidMember = @nid AND CanonicalXmlHash = @hash";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@hash", hash);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result != null;
+    }
+
+    public async Task InsertDryRunResultAsync(
+        long? candidateId, long? snapshotId, int goldenFicheId, string engine,
+        bool success, string? error, string? outputJson, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            INSERT INTO dbo.RuleDryRunResult (CandidateId, SnapshotId, GoldenFicheId, EngineName, Success, ErrorMessage, OutputJson)
+            VALUES (@cand, @snap, @golden, @engine, @ok, @err, @json)
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@cand", (object?)candidateId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@snap", (object?)snapshotId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@golden", goldenFicheId);
+        cmd.Parameters.AddWithValue("@engine", engine);
+        cmd.Parameters.AddWithValue("@ok", success);
+        cmd.Parameters.AddWithValue("@err", (object?)error ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@json", (object?)outputJson ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task InsertPromotionLogAsync(int nidMember, long? candidateId, long? snapshotId, string action, string? reason, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            INSERT INTO dbo.RulePromotionLog (NidMember, CandidateId, SnapshotId, Action, Reason)
+            VALUES (@nid, @cand, @snap, @action, @reason)
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@cand", (object?)candidateId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@snap", (object?)snapshotId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@action", action);
+        cmd.Parameters.AddWithValue("@reason", (object?)reason ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+}

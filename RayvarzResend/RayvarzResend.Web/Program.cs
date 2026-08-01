@@ -1,6 +1,8 @@
 using Microsoft.Data.SqlClient;
+using RayvarzResend.Web.Hosting;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +17,11 @@ builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
+builder.Services.AddSingleton<RuleEngineStore>();
+builder.Services.AddSingleton<RuleHistoryChecker>();
+builder.Services.AddSingleton<RuleVersionManager>();
+builder.Services.AddSingleton<GoldenDryRunService>();
+builder.Services.AddHostedService<RuleSyncBackgroundService>();
 
 var app = builder.Build();
 
@@ -68,7 +75,7 @@ app.MapGet("/api/config", (IConfiguration config) => new
 app.MapGet("/api/db-test", async (IConfiguration config) =>
 {
     var results = new List<object>();
-    foreach (var name in new[] { "Sara", "Rayvarz" })
+    foreach (var name in new[] { "Sara", "Rayvarz", "RuleEngine", "RayvarzRuleEngine" })
     {
         var cs = config.GetConnectionString(name);
         if (string.IsNullOrWhiteSpace(cs))
@@ -80,9 +87,14 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
         {
             await using var conn = new SqlConnection(cs);
             await conn.OpenAsync();
-            var sql = name == "Sara"
-                ? "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche"
-                : "SELECT TOP 1 Ref FROM ray.incmdocsys";
+            var sql = name switch
+            {
+                "Sara" => "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche",
+                "Rayvarz" => "SELECT TOP 1 Ref FROM ray.incmdocsys",
+                "RuleEngine" => "SELECT TOP 1 NidMember FROM dbo.Member WHERE NidMember = 1388",
+                "RayvarzRuleEngine" => "SELECT TOP 1 NidMember FROM dbo.RuleSyncState",
+                _ => "SELECT 1"
+            };
             await using var cmd = new SqlCommand(sql, conn);
             var sample = (await cmd.ExecuteScalarAsync())?.ToString();
             results.Add(new { name, ok = true, server = conn.DataSource, database = conn.Database, sample });
@@ -143,6 +155,58 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
     {
         return Results.Json(new { error = $"خطا در بارگذاری: {ex.Message}" }, statusCode: 500);
     }
+});
+
+app.MapGet("/api/rule/sync/state", async (RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
+{
+    var state = await store.GetSyncStateAsync(mgr.NidMember, ct);
+    return Results.Ok(state ?? new { nidMember = mgr.NidMember, activeEngine = "Legacy", note = "RuleSyncState not initialized" });
+});
+
+app.MapPost("/api/rule/sync/run", async (RuleVersionManager mgr, CancellationToken ct) =>
+{
+    var state = await mgr.InitializeAsync(ct);
+    return Results.Ok(new { ok = true, state });
+});
+
+app.MapGet("/api/rule/history/latest", async (MemberRuleRepository repo, IConfiguration config, CancellationToken ct) =>
+{
+    var nid = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388);
+    var latest = await repo.LoadLatestHistoryAsync(nid, ct);
+    if (latest == null)
+        return Results.NotFound(new { error = "MemberHistory یافت نشد — ConnectionStrings:RuleEngine را چک کنید." });
+    return Results.Ok(new
+    {
+        latest.NidHistory,
+        latest.NidMember,
+        latest.NidClass,
+        latest.ModifyDateTime,
+        latest.Modifyer,
+        latest.ModifyDesc,
+        xmlBodyLength = latest.XmlBody.Length
+    });
+});
+
+app.MapGet("/api/rule/golden", async (RuleEngineStore store, IConfiguration config, CancellationToken ct) =>
+{
+    var nid = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388);
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+
+    var fiches = await store.GetActiveGoldenFichesAsync(nid, ct);
+    var withRows = new List<object>();
+    foreach (var g in fiches)
+    {
+        var rows = await store.GetExpectedRowsAsync(g.GoldenFicheId, ct);
+        withRows.Add(new { g.GoldenFicheId, g.Name, g.FicheNo, g.NidFiche, g.Scenario, g.ExpectedRowCount, expectedRows = rows });
+    }
+    return Results.Ok(new { count = withRows.Count, fiches = withRows });
+});
+
+app.MapPost("/api/rule/golden/dry-run", async (GoldenDryRunService dryRun, CancellationToken ct) =>
+{
+    var summary = await dryRun.RunAllAsync(compareExpectedRows: true, ct);
+    return Results.Ok(summary);
 });
 
 app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, MemberRuleRepository repo, CancellationToken ct) =>

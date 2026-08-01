@@ -1,7 +1,15 @@
 {
   "ConnectionStrings": {
-    "Sara": "Server=tcp:YOUR_SARA_SERVER,1433;Database=Sara8M03;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
-    "Rayvarz": "Server=tcp:YOUR_RAY_SERVER,1433;Database=Ray_CityHall;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
+    "Sara": "Server=tcp:232;Database=Sara8M03;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
+    "Rayvarz": "Server=tcp:232;Database=Ray_CityHall;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
+    "RuleEngine": "Server=tcp:232;Database=DbRuleEngein;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;",
+    "RayvarzRuleEngine": "Server=tcp:232;Database=RayvarzRuleEngine;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;"
+  },
+  "RuleEngine": {
+    "NidMemberRayvarzRun": 1388,
+    "StabilityHours": 72,
+    "PollIntervalMinutes": 15,
+    "EnableBackgroundSync": true
   },
   "Rayvarz": {
     "ServiceUrl": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
