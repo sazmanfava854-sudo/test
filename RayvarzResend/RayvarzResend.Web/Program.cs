@@ -221,6 +221,8 @@ app.MapGet("/api/rule/history/latest", async (MemberRuleRepository repo, IConfig
         latest.NidMember,
         latest.NidClass,
         latest.ModifyDateTime,
+        latest.ModifyDateRaw,
+        latest.ModifyTimeRaw,
         latest.Modifyer,
         latest.ModifyDesc,
         xmlBodyLength = latest.XmlBody.Length

@@ -83,11 +83,10 @@ public sealed class MemberRuleRepository
                 h.Modifyer,
                 h.ModifyDesc,
                 h.ModifyDate,
-                h.ModifyTime,
-                CAST(h.ModifyDate AS datetime) + CAST(h.ModifyTime AS datetime) AS ModifyDateTime
+                h.ModifyTime
             FROM dbo.MemberHistory h
             WHERE h.NidMember = @nid
-            ORDER BY h.ModifyDate DESC, h.ModifyTime DESC, h.NidHistory DESC
+            ORDER BY h.NidHistory DESC
             """;
 
         await using var conn = new SqlConnection(cs);
@@ -103,6 +102,13 @@ public sealed class MemberRuleRepository
             ? ""
             : reader.GetString(reader.GetOrdinal("XmlBody"));
 
+        var modifyDate = reader.IsDBNull(reader.GetOrdinal("ModifyDate"))
+            ? null
+            : reader.GetValue(reader.GetOrdinal("ModifyDate"));
+        var modifyTime = reader.IsDBNull(reader.GetOrdinal("ModifyTime"))
+            ? null
+            : reader.GetValue(reader.GetOrdinal("ModifyTime"));
+
         return new MemberHistoryRecord
         {
             NidHistory = Convert.ToInt64(reader.GetValue(reader.GetOrdinal("NidHistory"))),
@@ -111,7 +117,9 @@ public sealed class MemberRuleRepository
             XmlBody = xmlBody,
             Modifyer = reader.IsDBNull(reader.GetOrdinal("Modifyer")) ? null : reader.GetString(reader.GetOrdinal("Modifyer")),
             ModifyDesc = reader.IsDBNull(reader.GetOrdinal("ModifyDesc")) ? null : reader.GetString(reader.GetOrdinal("ModifyDesc")),
-            ModifyDateTime = reader.GetDateTime(reader.GetOrdinal("ModifyDateTime"))
+            ModifyDateRaw = modifyDate?.ToString(),
+            ModifyTimeRaw = modifyTime?.ToString(),
+            ModifyDateTime = MemberHistoryDateParser.CombineModifyDateTime(modifyDate, modifyTime)
         };
     }
 }
@@ -133,5 +141,7 @@ public sealed class MemberHistoryRecord
     public string XmlBody { get; init; } = "";
     public string? Modifyer { get; init; }
     public string? ModifyDesc { get; init; }
+    public string? ModifyDateRaw { get; init; }
+    public string? ModifyTimeRaw { get; init; }
     public DateTime ModifyDateTime { get; init; }
 }
