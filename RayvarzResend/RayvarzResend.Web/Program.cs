@@ -182,6 +182,9 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
     }
 });
 
+app.MapGet("/api/rule/schema-diagnostics", async (RuleEngineStore store, CancellationToken ct) =>
+    Results.Ok(await store.GetDiagnosticsAsync(ct)));
+
 app.MapGet("/api/rule/sync/state", async (RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
 {
     if (!store.IsConfigured)

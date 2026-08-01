@@ -114,15 +114,16 @@ public sealed class RuleVersionManager
 
     private async Task<bool> EnsureSchemaReadyAsync(CancellationToken ct)
     {
-        if (await _store.IsSchemaReadyAsync(ct))
+        var diag = await _store.GetDiagnosticsAsync(ct);
+        if (diag.SchemaReady)
             return true;
 
-        var db = _store.ConfiguredDatabaseName ?? "?";
         _logger.LogWarning(
-            "RayvarzRuleEngine schema not found on database '{Database}'. " +
-            "Run database/01_RayvarzRuleEngine_Schema.sql then 02_RuleGolden_Seed.sql on server 232. " +
-            "ConnectionStrings:RayvarzRuleEngine must point to database RayvarzRuleEngine (not DbRuleEngein).",
-            db);
+            "RayvarzRuleEngine schema not ready. Configured DB={ConfiguredDb}, Actual DB={ActualDb}, Tables=[{Tables}]. {Message}",
+            diag.ConfiguredDatabase,
+            diag.ActualDatabase,
+            string.Join(", ", diag.ExistingTables),
+            diag.Message);
         return false;
     }
 }

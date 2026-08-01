@@ -47,9 +47,92 @@ public sealed class RuleEngineStore
         }
     }
 
+    public string? ConfiguredServerName
+    {
+        get
+        {
+            if (!IsConfigured) return null;
+            try { return new SqlConnectionStringBuilder(_cs).DataSource; }
+            catch { return null; }
+        }
+    }
+
+    public async Task<RuleEngineDiagnostics> GetDiagnosticsAsync(CancellationToken ct = default)
+    {
+        var diag = new RuleEngineDiagnostics
+        {
+            ConnectionConfigured = IsConfigured,
+            ConfiguredServer = ConfiguredServerName,
+            ConfiguredDatabase = ConfiguredDatabaseName
+        };
+
+        if (!IsConfigured)
+        {
+            diag.ConnectionOk = false;
+            diag.Message = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده";
+            return diag;
+        }
+
+        try
+        {
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            diag.ConnectionOk = true;
+            diag.ActualServer = conn.DataSource;
+            diag.ActualDatabase = conn.Database;
+
+            const string tablesSql = """
+                SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME IN (
+                    'RuleSyncState','RuleGoldenFiche','RuleGoldenExpectedRow','RuleCandidate')
+                ORDER BY TABLE_NAME
+                """;
+            await using var tablesCmd = new SqlCommand(tablesSql, conn);
+            await using var reader = await tablesCmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                diag.ExistingTables.Add(reader.GetString(0));
+            await reader.CloseAsync();
+
+            diag.SchemaReady = diag.ExistingTables.Contains("RuleSyncState", StringComparer.OrdinalIgnoreCase);
+
+            if (diag.SchemaReady)
+            {
+                await using var countCmd = new SqlCommand(
+                    "SELECT (SELECT COUNT(*) FROM dbo.RuleGoldenFiche),(SELECT COUNT(*) FROM dbo.RuleSyncState)", conn);
+                await using var countReader = await countCmd.ExecuteReaderAsync(ct);
+                if (await countReader.ReadAsync(ct))
+                {
+                    diag.GoldenFicheCount = countReader.GetInt32(0);
+                    diag.SyncStateCount = countReader.GetInt32(1);
+                }
+                diag.Message = "Schema OK";
+            }
+            else
+            {
+                diag.Message =
+                    $"اتصال به database '{diag.ActualDatabase}' برقرار است ولی RuleSyncState وجود ندارد. " +
+                    "اسکریپت database/01_RayvarzRuleEngine_Schema.sql را روی RayvarzRuleEngine اجرا کنید. " +
+                    "Database در connection string باید RayvarzRuleEngine باشد نه DbRuleEngein.";
+            }
+        }
+        catch (Exception ex)
+        {
+            diag.ConnectionOk = false;
+            diag.Message = ex.Message;
+        }
+
+        return diag;
+    }
+
+    private async Task<bool> GuardSchemaAsync(CancellationToken ct)
+    {
+        if (!IsConfigured) return false;
+        return await IsSchemaReadyAsync(ct);
+    }
+
     public async Task<RuleSyncStateRow?> GetSyncStateAsync(int nidMember, CancellationToken ct = default)
     {
-        if (!IsConfigured) return null;
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return null;
 
         const string sql = """
             SELECT NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
@@ -58,32 +141,39 @@ public sealed class RuleEngineStore
             FROM dbo.RuleSyncState WHERE NidMember = @nid
             """;
 
-        await using var conn = new SqlConnection(_cs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@nid", nidMember);
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        if (!await r.ReadAsync(ct)) return null;
-
-        return new RuleSyncStateRow
+        try
         {
-            NidMember = r.GetInt32(0),
-            NidClass = r.GetInt32(1),
-            LastSeenNidHistory = r.IsDBNull(2) ? null : r.GetInt64(2),
-            LastSeenModifyAt = r.IsDBNull(3) ? null : r.GetDateTime(3),
-            LastStableNidHistory = r.IsDBNull(4) ? null : r.GetInt64(4),
-            LastStableModifyAt = r.IsDBNull(5) ? null : r.GetDateTime(5),
-            LastStableXmlHash = r.IsDBNull(6) ? null : r.GetString(6).Trim(),
-            ActiveDslVersion = r.GetInt32(7),
-            ActiveEngine = r.GetString(8),
-            ActiveSnapshotId = r.IsDBNull(9) ? null : r.GetInt64(9),
-            UpdatedAtUtc = r.GetDateTime(10)
-        };
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@nid", nidMember);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct)) return null;
+
+            return new RuleSyncStateRow
+            {
+                NidMember = r.GetInt32(0),
+                NidClass = r.GetInt32(1),
+                LastSeenNidHistory = r.IsDBNull(2) ? null : r.GetInt64(2),
+                LastSeenModifyAt = r.IsDBNull(3) ? null : r.GetDateTime(3),
+                LastStableNidHistory = r.IsDBNull(4) ? null : r.GetInt64(4),
+                LastStableModifyAt = r.IsDBNull(5) ? null : r.GetDateTime(5),
+                LastStableXmlHash = r.IsDBNull(6) ? null : r.GetString(6).Trim(),
+                ActiveDslVersion = r.GetInt32(7),
+                ActiveEngine = r.GetString(8),
+                ActiveSnapshotId = r.IsDBNull(9) ? null : r.GetInt64(9),
+                UpdatedAtUtc = r.GetDateTime(10)
+            };
+        }
+        catch (SqlException ex) when (ex.Number == 208)
+        {
+            return null;
+        }
     }
 
     public async Task UpsertSyncStateAsync(RuleSyncStateRow state, CancellationToken ct = default)
     {
-        if (!IsConfigured) return;
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return;
 
         const string sql = """
             MERGE dbo.RuleSyncState AS t
@@ -124,7 +214,7 @@ public sealed class RuleEngineStore
 
     public async Task<IReadOnlyList<RuleGoldenFicheRow>> GetActiveGoldenFichesAsync(int nidMember, CancellationToken ct = default)
     {
-        if (!IsConfigured) return Array.Empty<RuleGoldenFicheRow>();
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return Array.Empty<RuleGoldenFicheRow>();
 
         const string sql = """
             SELECT GoldenFicheId, Name, FicheNo, NidFiche, NidMember, Scenario, ExpectedRowCount, IsActive, Notes
@@ -277,4 +367,19 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@reason", (object?)reason ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+}
+
+public sealed class RuleEngineDiagnostics
+{
+    public bool ConnectionConfigured { get; init; }
+    public bool ConnectionOk { get; set; }
+    public bool SchemaReady { get; set; }
+    public string? ConfiguredServer { get; init; }
+    public string? ConfiguredDatabase { get; init; }
+    public string? ActualServer { get; set; }
+    public string? ActualDatabase { get; set; }
+    public List<string> ExistingTables { get; } = new();
+    public int GoldenFicheCount { get; set; }
+    public int SyncStateCount { get; set; }
+    public string? Message { get; set; }
 }
