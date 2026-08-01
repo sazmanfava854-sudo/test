@@ -145,4 +145,11 @@ public sealed class RuleDslParserService
 
     public static string SerializeProgram(DslProgram program) =>
         JsonSerializer.Serialize(program, JsonOptions);
+
+    public static DslProgram? DeserializeProgram(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        return JsonSerializer.Deserialize<DslProgram>(json, JsonOptions);
+    }
 }
