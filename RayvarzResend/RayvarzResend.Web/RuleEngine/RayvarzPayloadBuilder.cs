@@ -1,4 +1,5 @@
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.RuleEngine.Engines;
 using RayvarzResend.Web.Services;
 
 namespace RayvarzResend.Web.RuleEngine;
@@ -15,6 +16,7 @@ public sealed class RayvarzPayloadBuildResult
     public RayvarzPayloadSourceMode Mode { get; init; }
     public string? Warning { get; init; }
     public RuleEngineMeta? RuleMeta { get; init; }
+    public string? EngineName { get; init; }
 }
 
 public sealed class RuleEngineMeta
@@ -30,25 +32,24 @@ public sealed class RuleEngineMeta
 }
 
 /// <summary>
-/// ساخت XML SaveDocument: پیش‌فرض C# (baseline v16) یا پل Sara که همان Member 1388 را با Info8 اجرا می‌کند.
-/// XmlBody شامل VB داخل &lt;Body&gt; است — در .NET بدون موتور شهرسازی اجرا نمی‌شود.
+/// ساخت XML SaveDocument: پیش‌فرض IFicheRuleEngine/Legacy (baseline v16) یا پل Sara.
 /// </summary>
 public sealed class RayvarzPayloadBuilder
 {
     private readonly IConfiguration _config;
-    private readonly SoapBuilder _soap;
     private readonly MemberRuleRepository _rules;
+    private readonly RuleEngineFactory _engineFactory;
     private readonly IHttpClientFactory _httpClientFactory;
 
     public RayvarzPayloadBuilder(
         IConfiguration config,
-        SoapBuilder soap,
         MemberRuleRepository rules,
+        RuleEngineFactory engineFactory,
         IHttpClientFactory httpClientFactory)
     {
         _config = config;
-        _soap = soap;
         _rules = rules;
+        _engineFactory = engineFactory;
         _httpClientFactory = httpClientFactory;
     }
 
@@ -99,43 +100,101 @@ public sealed class RayvarzPayloadBuilder
                     {
                         Xml = xml,
                         Mode = RayvarzPayloadSourceMode.RuleEngineBridge,
-                        RuleMeta = meta
+                        RuleMeta = meta,
+                        EngineName = "SaraBridge"
                     };
                 }
                 catch (Exception ex)
                 {
-                    return LegacyWithWarning(fiche, branch, fund, docDate, actDate, dueDate, meta,
-                        $"SaraBridge خطا داد — fallback به C#: {ex.Message}");
+                    return await LegacyWithWarningAsync(fiche, branch, fund, docDate, actDate, dueDate, meta,
+                        $"SaraBridge خطا داد — fallback به C#: {ex.Message}", ct);
                 }
             }
 
-            return LegacyWithWarning(fiche, branch, fund, docDate, actDate, dueDate, meta,
+            return await LegacyWithWarningAsync(fiche, branch, fund, docDate, actDate, dueDate, meta,
                 "RuleEngineBridge فعال است ولی RuleEngine:SaraBridgeUrl تنظیم نشده. " +
                 "XmlBody همان VB داخل ClsFunction است و در این پروژه اجرا نمی‌شود؛ " +
                 "روی سرور شهرسازی API بسازید که Run() را صدا بزند و XML برگرداند. " +
-                (loadError != null ? $"بارگذاری Member: {loadError}" : $"Member بارگذاری شد (منبع: {record?.Source ?? "—"})."));
+                (loadError != null ? $"بارگذاری Member: {loadError}" : $"Member بارگذاری شد (منبع: {record?.Source ?? "—"})."),
+                ct);
+        }
+
+        return await BuildViaEngineAsync(fiche, branch, fund, docDate, actDate, dueDate, meta,
+            loadError != null ? $"Member (اختیاری): {loadError}" : null, ct);
+    }
+
+    private async Task<RayvarzPayloadBuildResult> BuildViaEngineAsync(
+        FicheHeaderDto fiche, int branch, int fund,
+        string? docDate, string? actDate, string? dueDate,
+        RuleEngineMeta? meta, string? warning, CancellationToken ct)
+    {
+        var engine = await _engineFactory.ResolveAsync(ct);
+        var evaluated = await engine.EvaluateAsync(new FicheRuleContext
+        {
+            Fiche = fiche,
+            Branch = branch,
+            Fund = fund,
+            DocDate = docDate,
+            ActDate = actDate,
+            DueDate = dueDate
+        }, buildSoap: true, ct);
+
+        if (!evaluated.Success || string.IsNullOrWhiteSpace(evaluated.SoapXml))
+        {
+            if (!string.Equals(engine.EngineName, _engineFactory.Legacy.EngineName, StringComparison.OrdinalIgnoreCase))
+            {
+                var fallback = await _engineFactory.Legacy.EvaluateAsync(new FicheRuleContext
+                {
+                    Fiche = fiche,
+                    Branch = branch,
+                    Fund = fund,
+                    DocDate = docDate,
+                    ActDate = actDate,
+                    DueDate = dueDate
+                }, buildSoap: true, ct);
+
+                if (fallback.Success && !string.IsNullOrWhiteSpace(fallback.SoapXml))
+                {
+                    return new RayvarzPayloadBuildResult
+                    {
+                        Xml = fallback.SoapXml,
+                        Mode = RayvarzPayloadSourceMode.LegacyCSharp,
+                        RuleMeta = meta,
+                        EngineName = fallback.EngineName,
+                        Warning = CombineWarnings(warning,
+                            $"{engine.EngineName} ناموفق — fallback به Legacy: {evaluated.ErrorMessage}")
+                    };
+                }
+            }
+
+            throw new InvalidOperationException(evaluated.ErrorMessage ?? "ساخت SOAP ناموفق بود");
         }
 
         return new RayvarzPayloadBuildResult
         {
-            Xml = _soap.Build(fiche, branch, fund, docDate, actDate, dueDate),
+            Xml = evaluated.SoapXml,
             Mode = RayvarzPayloadSourceMode.LegacyCSharp,
             RuleMeta = meta,
-            Warning = loadError != null ? $"Member (اختیاری): {loadError}" : null
+            EngineName = evaluated.EngineName,
+            Warning = warning
         };
     }
 
-    private RayvarzPayloadBuildResult LegacyWithWarning(
+    private async Task<RayvarzPayloadBuildResult> LegacyWithWarningAsync(
         FicheHeaderDto fiche, int branch, int fund,
         string? docDate, string? actDate, string? dueDate,
-        RuleEngineMeta? meta, string warning) =>
-        new()
+        RuleEngineMeta? meta, string warning, CancellationToken ct)
+    {
+        var built = await BuildViaEngineAsync(fiche, branch, fund, docDate, actDate, dueDate, meta, warning, ct);
+        return new RayvarzPayloadBuildResult
         {
-            Xml = _soap.Build(fiche, branch, fund, docDate, actDate, dueDate),
-            Mode = RayvarzPayloadSourceMode.LegacyCSharp,
-            RuleMeta = meta,
+            Xml = built.Xml,
+            Mode = built.Mode,
+            RuleMeta = built.RuleMeta,
+            EngineName = built.EngineName,
             Warning = warning
         };
+    }
 
     private static RuleEngineMeta? BuildMeta(int nidMember, MemberRuleRecord? record, ClsFunctionDocument? parsed)
     {
@@ -173,6 +232,13 @@ public sealed class RayvarzPayloadBuilder
         if (string.IsNullOrWhiteSpace(doc.SoapXml))
             throw new InvalidOperationException(doc.Error ?? "SoapXml در پاسخ نیست.");
         return doc.SoapXml;
+    }
+
+    private static string? CombineWarnings(string? a, string? b)
+    {
+        if (string.IsNullOrWhiteSpace(a)) return b;
+        if (string.IsNullOrWhiteSpace(b)) return a;
+        return a + " | " + b;
     }
 
     private sealed class BridgeSoapResponse
