@@ -3,6 +3,7 @@ using RayvarzResend.Web.Hosting;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.RuleEngine.Engines;
+using RayvarzResend.Web.RuleEngine.Executor;
 using RayvarzResend.Web.RuleEngine.Parser;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
@@ -24,6 +25,9 @@ builder.Services.AddSingleton<RuleEngineFactory>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<RuleEngineStore>();
 builder.Services.AddSingleton<RuleHistoryChecker>();
+builder.Services.AddSingleton<IOperationRegistry>(_ => SaraOperationBootstrap.CreateDefault());
+builder.Services.AddSingleton<DslValidator>();
+builder.Services.AddSingleton<DslExecutor>();
 builder.Services.AddSingleton<RuleDslParserService>();
 builder.Services.AddSingleton<RuleVersionManager>();
 builder.Services.AddSingleton<GoldenDryRunService>();
@@ -251,10 +255,21 @@ app.MapGet("/api/rule/golden", async (RuleEngineStore store, IConfiguration conf
     return Results.Ok(new { count = withRows.Count, fiches = withRows });
 });
 
-app.MapPost("/api/rule/golden/dry-run", async (GoldenDryRunService dryRun, CancellationToken ct) =>
+app.MapPost("/api/rule/golden/dry-run", async (
+    GoldenDryRunService dryRun,
+    IConfiguration config,
+    CancellationToken ct) =>
 {
     var summary = await dryRun.RunAllAsync(compareExpectedRows: true, ct);
-    return Results.Ok(summary);
+    return Results.Ok(new
+    {
+        summary.EngineName,
+        summary.Total,
+        summary.Passed,
+        summary.AllPassed,
+        forceEngine = config["RuleEngine:ForceEngine"],
+        cases = summary.Cases
+    });
 });
 
 app.MapGet("/api/rule/engine", async (RuleEngineFactory factory, RuleEngineStore store, IConfiguration config, CancellationToken ct) =>
@@ -354,6 +369,25 @@ app.MapPost("/api/rule/dsl/preview", (RuleDslParsePreviewRequest? req, RuleDslPa
         parsed.Program.UnsupportedFunctions,
         parsed.Program.Warnings,
         dsl = parsed.Program
+    });
+});
+
+app.MapPost("/api/rule/dsl/validate", (RuleDslParsePreviewRequest? req, RuleDslParserService parser, DslValidator validator) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.XmlBody))
+        return Results.BadRequest(new { error = "XmlBody لازم است." });
+
+    var parsed = parser.Parse(req.XmlBody, "validate");
+    if (!parsed.Success || parsed.Program == null)
+        return Results.Json(new { error = parsed.ErrorMessage }, statusCode: 400);
+
+    var validation = validator.Validate(parsed.Program);
+    return Results.Ok(new
+    {
+        validation.Success,
+        validation.Errors,
+        validation.Warnings,
+        validation.UnknownOperations
     });
 });
 

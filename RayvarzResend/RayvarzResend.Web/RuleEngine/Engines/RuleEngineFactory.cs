@@ -55,4 +55,23 @@ public sealed class RuleEngineFactory
         };
 
     public LegacyRuleEngine Legacy => _legacy;
+    public DynamicRuleEngine Dynamic => _dynamic;
+
+    /// <summary>ارزیابی با موتور resolve‌شده؛ در صورت Dynamic و خطا، fallback به Legacy.</summary>
+    public async Task<FicheRuleEvaluationResult> EvaluateWithFallbackAsync(
+        FicheRuleContext context,
+        bool buildSoap = false,
+        CancellationToken ct = default)
+    {
+        var engine = await ResolveAsync(ct);
+        var result = await engine.EvaluateAsync(context, buildSoap, ct);
+
+        if (result.Success || engine is not DynamicRuleEngine)
+            return result;
+
+        if (!_config.GetValue("RuleEngine:DynamicFallbackToLegacy", true))
+            return result;
+
+        return await _legacy.EvaluateAsync(context, buildSoap, ct);
+    }
 }

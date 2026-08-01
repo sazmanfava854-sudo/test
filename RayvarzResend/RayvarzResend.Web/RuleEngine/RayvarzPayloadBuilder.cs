@@ -128,8 +128,7 @@ public sealed class RayvarzPayloadBuilder
         string? docDate, string? actDate, string? dueDate,
         RuleEngineMeta? meta, string? warning, CancellationToken ct)
     {
-        var engine = await _engineFactory.ResolveAsync(ct);
-        var evaluated = await engine.EvaluateAsync(new FicheRuleContext
+        var evaluated = await _engineFactory.EvaluateWithFallbackAsync(new FicheRuleContext
         {
             Fiche = fiche,
             Branch = branch,
@@ -140,43 +139,15 @@ public sealed class RayvarzPayloadBuilder
         }, buildSoap: true, ct);
 
         if (!evaluated.Success || string.IsNullOrWhiteSpace(evaluated.SoapXml))
-        {
-            if (!string.Equals(engine.EngineName, _engineFactory.Legacy.EngineName, StringComparison.OrdinalIgnoreCase))
-            {
-                var fallback = await _engineFactory.Legacy.EvaluateAsync(new FicheRuleContext
-                {
-                    Fiche = fiche,
-                    Branch = branch,
-                    Fund = fund,
-                    DocDate = docDate,
-                    ActDate = actDate,
-                    DueDate = dueDate
-                }, buildSoap: true, ct);
-
-                if (fallback.Success && !string.IsNullOrWhiteSpace(fallback.SoapXml))
-                {
-                    return new RayvarzPayloadBuildResult
-                    {
-                        Xml = fallback.SoapXml,
-                        Mode = RayvarzPayloadSourceMode.LegacyCSharp,
-                        RuleMeta = meta,
-                        EngineName = fallback.EngineName,
-                        Warning = CombineWarnings(warning,
-                            $"{engine.EngineName} ناموفق — fallback به Legacy: {evaluated.ErrorMessage}")
-                    };
-                }
-            }
-
             throw new InvalidOperationException(evaluated.ErrorMessage ?? "ساخت SOAP ناموفق بود");
-        }
 
         return new RayvarzPayloadBuildResult
         {
-            Xml = evaluated.SoapXml,
+            Xml = evaluated.SoapXml!,
             Mode = RayvarzPayloadSourceMode.LegacyCSharp,
             RuleMeta = meta,
             EngineName = evaluated.EngineName,
-            Warning = warning
+            Warning = CombineWarnings(warning, evaluated.Warning)
         };
     }
 
