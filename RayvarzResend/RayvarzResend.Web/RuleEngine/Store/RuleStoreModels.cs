@@ -65,3 +65,16 @@ public static class RuleCandidateStatus
     public const string Rejected = "Rejected";
     public const string Superseded = "Superseded";
 }
+
+public sealed class RuleDslSnapshotRow
+{
+    public long SnapshotId { get; init; }
+    public int NidMember { get; init; }
+    public int DslVersion { get; init; }
+    public string XmlHash { get; init; } = "";
+    public string? DslJson { get; init; }
+    public string ParserVersion { get; init; } = "2.0.0";
+    public string EntryPoint { get; init; } = "Run";
+    public DateTime CreatedAtUtc { get; init; }
+    public bool IsActive { get; init; }
+}

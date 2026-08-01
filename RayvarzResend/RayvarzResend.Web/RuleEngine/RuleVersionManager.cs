@@ -1,24 +1,28 @@
+using RayvarzResend.Web.RuleEngine.Parser;
 using RayvarzResend.Web.RuleEngine.Store;
 
 namespace RayvarzResend.Web.RuleEngine;
 
-/// <summary>فاز ۰: sync تغییرات MemberHistory → RuleCandidate. Parse/Promote در فاز ۲+.</summary>
+/// <summary>فاز ۰–۲: sync MemberHistory → RuleCandidate؛ parse XmlBody → RuleDslSnapshot (بدون Active).</summary>
 public sealed class RuleVersionManager
 {
     private readonly IConfiguration _config;
     private readonly RuleEngineStore _store;
     private readonly RuleHistoryChecker _historyChecker;
+    private readonly RuleDslParserService _dslParser;
     private readonly ILogger<RuleVersionManager> _logger;
 
     public RuleVersionManager(
         IConfiguration config,
         RuleEngineStore store,
         RuleHistoryChecker historyChecker,
+        RuleDslParserService dslParser,
         ILogger<RuleVersionManager> logger)
     {
         _config = config;
         _store = store;
         _historyChecker = historyChecker;
+        _dslParser = dslParser;
         _logger = logger;
     }
 
@@ -91,7 +95,7 @@ public sealed class RuleVersionManager
             catch { canonicalXml = check.Latest.XmlBody; }
 
             var stableAt = check.Latest.ModifyDateTime.ToUniversalTime().AddHours(StabilityHours);
-            await _store.InsertCandidateAsync(new RuleCandidateRow
+            var candidateId = await _store.InsertCandidateAsync(new RuleCandidateRow
             {
                 NidMember = NidMember,
                 SourceNidHistory = check.Latest.NidHistory,
@@ -107,9 +111,44 @@ public sealed class RuleVersionManager
             _logger.LogInformation(
                 "New rule candidate NidHistory={NidHistory} hash={HashPrefix}… stable after {StableAt:u}",
                 check.Latest.NidHistory, hash[..12], stableAt);
+
+            await TryParseCandidateAsync(candidateId, canonicalXml, ct);
         }
 
         await _store.UpsertSyncStateAsync(state, ct);
+    }
+
+    public async Task<DslPersistResult> ParseActiveMemberSnapshotAsync(CancellationToken ct = default) =>
+        await _dslParser.ParseActiveMemberAsync(ct);
+
+    private async Task TryParseCandidateAsync(long candidateId, string xmlBody, CancellationToken ct)
+    {
+        try
+        {
+            await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Parsing, ct: ct);
+            var result = await _dslParser.ParseAndStoreAsync(xmlBody, "MemberHistory", ct);
+            if (result.Parse?.Success == true)
+            {
+                await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Parsed, ct: ct);
+                await _store.InsertPromotionLogAsync(
+                    NidMember, candidateId, result.SnapshotId, "Parsed",
+                    result.SkippedExisting ? "DSL snapshot already existed" : "DSL snapshot stored", ct);
+            }
+            else
+            {
+                await _store.UpdateCandidateStatusAsync(
+                    candidateId, RuleCandidateStatus.Rejected,
+                    result.Parse?.ErrorMessage ?? result.Message, ct);
+                await _store.InsertPromotionLogAsync(
+                    NidMember, candidateId, null, "Rejected",
+                    result.Parse?.ErrorMessage ?? result.Message, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DSL parse failed for candidate {CandidateId}", candidateId);
+            await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Rejected, ex.Message, ct);
+        }
     }
 
     private async Task<bool> EnsureSchemaReadyAsync(CancellationToken ct)

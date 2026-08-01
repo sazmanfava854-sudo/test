@@ -61,6 +61,11 @@ public class FicheHeaderDto
     public List<IncmRowDto> Rows { get; set; } = new();
 }
 
+public class RuleDslParsePreviewRequest
+{
+    public string? XmlBody { get; set; }
+}
+
 public class IncmRowDto
 {
     public int IncmNo { get; set; }
