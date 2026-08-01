@@ -1,5 +1,6 @@
 using System.Text.Json;
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.RuleEngine.Engines;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
@@ -28,35 +29,36 @@ public sealed class GoldenDryRunSummary
 }
 
 /// <summary>
-/// فاز ۰: بارگذاری live از Sara + مقایسه ردیف‌های Legacy با RuleGoldenExpectedRow.
+/// فاز ۱: بارگذاری live از Sara + ارزیابی از IFicheRuleEngine + مقایسه با RuleGoldenExpectedRow.
 /// </summary>
 public sealed class GoldenDryRunService
 {
     private readonly RuleEngineStore _store;
     private readonly FicheRepository _fiches;
-    private readonly IConfiguration _config;
+    private readonly RuleEngineFactory _engineFactory;
 
-    public GoldenDryRunService(RuleEngineStore store, FicheRepository fiches, IConfiguration config)
+    public GoldenDryRunService(RuleEngineStore store, FicheRepository fiches, RuleEngineFactory engineFactory)
     {
         _store = store;
         _fiches = fiches;
-        _config = config;
+        _engineFactory = engineFactory;
     }
 
     public async Task<GoldenDryRunSummary> RunAllAsync(bool compareExpectedRows = true, CancellationToken ct = default)
     {
-        var nidMember = _config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388);
+        var engine = await _engineFactory.ResolveAsync(ct);
+        var nidMember = _engineFactory.NidMember;
         var goldens = await _store.GetActiveGoldenFichesAsync(nidMember, ct);
         var results = new List<GoldenDryRunCaseResult>();
 
         foreach (var g in goldens)
         {
-            results.Add(await RunOneAsync(g, compareExpectedRows, ct));
+            results.Add(await RunOneAsync(engine, g, compareExpectedRows, ct));
         }
 
         return new GoldenDryRunSummary
         {
-            EngineName = "LegacyCSharp",
+            EngineName = engine.EngineName,
             Total = results.Count,
             Passed = results.Count(r => r.Success),
             Cases = results
@@ -65,6 +67,16 @@ public sealed class GoldenDryRunService
 
     public async Task<GoldenDryRunCaseResult> RunOneAsync(
         RuleGoldenFicheRow golden, bool compareExpectedRows = true, CancellationToken ct = default)
+    {
+        var engine = await _engineFactory.ResolveAsync(ct);
+        return await RunOneAsync(engine, golden, compareExpectedRows, ct);
+    }
+
+    private async Task<GoldenDryRunCaseResult> RunOneAsync(
+        IFicheRuleEngine engine,
+        RuleGoldenFicheRow golden,
+        bool compareExpectedRows,
+        CancellationToken ct)
     {
         try
         {
@@ -75,14 +87,25 @@ public sealed class GoldenDryRunService
             if (fiche.Category != FicheCategory.DutyNosazi && fiche.Category != FicheCategory.DutySenfi)
                 return Fail(golden, $"فیش {golden.FicheNo} از نوع Duty نیست: {fiche.Category}");
 
+            var branch = fiche.ResolvedDistrictBranch ?? 0;
+            var fund = fiche.SuggestedFund ?? 0;
+            var evaluated = await engine.EvaluateAsync(new FicheRuleContext
+            {
+                Fiche = fiche,
+                Branch = branch,
+                Fund = fund
+            }, buildSoap: false, ct);
+
+            if (!evaluated.Success)
+                return Fail(golden, evaluated.ErrorMessage ?? "ارزیابی موتور ناموفق بود");
+
             var mismatches = new List<string>();
 
             if (fiche.Rows.Count != golden.ExpectedRowCount)
                 mismatches.Add($"تعداد ردیف: expected={golden.ExpectedRowCount} actual={fiche.Rows.Count}");
 
-            var rowSum = fiche.Rows.Sum(r => r.Val);
-            if (rowSum != fiche.Payable)
-                mismatches.Add($"جمع ردیف‌ها ({rowSum}) ≠ PayablePrice ({fiche.Payable})");
+            if (evaluated.RowSum != fiche.Payable)
+                mismatches.Add($"جمع ردیف‌ها ({evaluated.RowSum}) ≠ PayablePrice ({fiche.Payable})");
 
             if (compareExpectedRows && _store.IsConfigured)
             {
@@ -105,11 +128,12 @@ public sealed class GoldenDryRunService
             var outputJson = JsonSerializer.Serialize(new
             {
                 golden.FicheNo,
+                engine = engine.EngineName,
                 fiche.Payable,
                 rows = fiche.Rows.Select(r => new { r.IncmNo, r.Val, r.IncmRowDsc })
             });
 
-            await _store.InsertDryRunResultAsync(null, null, golden.GoldenFicheId, "LegacyCSharp", success,
+            await _store.InsertDryRunResultAsync(null, null, golden.GoldenFicheId, engine.EngineName, success,
                 success ? null : string.Join("; ", mismatches), outputJson, ct);
 
             return new GoldenDryRunCaseResult
@@ -121,13 +145,14 @@ public sealed class GoldenDryRunService
                 ErrorMessage = success ? null : string.Join("; ", mismatches),
                 RowCount = fiche.Rows.Count,
                 Payable = fiche.Payable,
-                RowSum = rowSum,
+                RowSum = evaluated.RowSum,
                 Mismatches = mismatches
             };
         }
         catch (Exception ex)
         {
-            await _store.InsertDryRunResultAsync(null, null, golden.GoldenFicheId, "LegacyCSharp", false, ex.Message, null, ct);
+            var engineName = engine.EngineName;
+            await _store.InsertDryRunResultAsync(null, null, golden.GoldenFicheId, engineName, false, ex.Message, null, ct);
             return Fail(golden, ex.Message);
         }
     }

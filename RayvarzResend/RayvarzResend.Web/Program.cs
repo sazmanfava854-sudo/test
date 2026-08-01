@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using RayvarzResend.Web.Hosting;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Engines;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
@@ -16,6 +17,9 @@ builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
+builder.Services.AddSingleton<LegacyRuleEngine>();
+builder.Services.AddSingleton<DynamicRuleEngine>();
+builder.Services.AddSingleton<RuleEngineFactory>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<RuleEngineStore>();
 builder.Services.AddSingleton<RuleHistoryChecker>();
@@ -251,6 +255,26 @@ app.MapPost("/api/rule/golden/dry-run", async (GoldenDryRunService dryRun, Cance
     return Results.Ok(summary);
 });
 
+app.MapGet("/api/rule/engine", async (RuleEngineFactory factory, RuleEngineStore store, IConfiguration config, CancellationToken ct) =>
+{
+    var resolved = await factory.ResolveEngineNameAsync(ct);
+    string? activeEngine = null;
+    if (store.IsConfigured && await store.IsSchemaReadyAsync(ct))
+    {
+        var state = await store.GetSyncStateAsync(factory.NidMember, ct);
+        activeEngine = state?.ActiveEngine;
+    }
+
+    return Results.Ok(new
+    {
+        nidMember = factory.NidMember,
+        activeEngine = activeEngine ?? "Legacy",
+        resolvedEngine = resolved,
+        payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+        forceEngine = config["RuleEngine:ForceEngine"]
+    });
+});
+
 app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, MemberRuleRepository repo, CancellationToken ct) =>
 {
     try
@@ -288,7 +312,14 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
 app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
 {
     var built = await payload.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
-    return Results.Ok(new { xml = built.Xml, payloadMode = built.Mode.ToString(), warning = built.Warning, ruleMeta = built.RuleMeta });
+    return Results.Ok(new
+    {
+        xml = built.Xml,
+        payloadMode = built.Mode.ToString(),
+        engineName = built.EngineName,
+        warning = built.Warning,
+        ruleMeta = built.RuleMeta
+    });
 });
 
 app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
