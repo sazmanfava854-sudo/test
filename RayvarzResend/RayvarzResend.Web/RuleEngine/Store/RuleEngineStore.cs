@@ -13,6 +13,40 @@ public sealed class RuleEngineStore
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_cs);
 
+    /// <summary>آیا جداول فاز ۰ (مثلاً RuleSyncState) روی RayvarzRuleEngine ساخته شده‌اند؟</summary>
+    public async Task<bool> IsSchemaReadyAsync(CancellationToken ct = default)
+    {
+        if (!IsConfigured) return false;
+
+        const string sql = """
+            SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'RuleSyncState'
+            """;
+
+        try
+        {
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            var result = await cmd.ExecuteScalarAsync(ct);
+            return result != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public string? ConfiguredDatabaseName
+    {
+        get
+        {
+            if (!IsConfigured) return null;
+            try { return new SqlConnectionStringBuilder(_cs).InitialCatalog; }
+            catch { return null; }
+        }
+    }
+
     public async Task<RuleSyncStateRow?> GetSyncStateAsync(int nidMember, CancellationToken ct = default)
     {
         if (!IsConfigured) return null;

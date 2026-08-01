@@ -33,4 +33,36 @@
 
 `Rayvarz:PayloadSource` = `LegacyCSharp` (بدون تغییر نسبت به v16).
 
-Background sync هر ۱۵ دقیقه (قابل غیرفعال با `RuleEngine:EnableBackgroundSync=false`).
+## عیب‌یابی
+
+### `Invalid object name 'dbo.RuleSyncState'`
+
+**علت:** اتصال SQL برقرار است ولی دیتابیس `RayvarzRuleEngine` و جداول آن ساخته نشده.
+
+**راه‌حل:**
+
+1. در SSMS به **سرور 232** وصل شوید
+2. فایل `database/01_RayvarzRuleEngine_Schema.sql` را اجرا کنید (کل فایل)
+3. سپس `database/02_RuleGolden_Seed.sql`
+4. در `appsettings.Development.json` مطمئن شوید:
+
+```json
+"RuleEngine": "Server=232;Database=DbRuleEngein;...",
+"RayvarzRuleEngine": "Server=232;Database=RayvarzRuleEngine;..."
+```
+
+| Connection | Database |
+|------------|----------|
+| `RuleEngine` | **DbRuleEngein** (خواندن Member/History) |
+| `RayvarzRuleEngine` | **RayvarzRuleEngine** (state + golden) |
+
+**اشتباه رایج:** هر دو را روی `DbRuleEngein` گذاشتن — جدول `RuleSyncState` آنجا وجود ندارد.
+
+**تأیید:**
+```sql
+USE RayvarzRuleEngine;
+SELECT * FROM dbo.RuleSyncState;
+SELECT COUNT(*) FROM dbo.RuleGoldenFiche;  -- باید 4 باشد
+```
+
+تا زمان اجرای اسکریپت‌ها، برنامه بالا می‌آید ولی rule sync فقط warning می‌دهد (crash نمی‌کند).

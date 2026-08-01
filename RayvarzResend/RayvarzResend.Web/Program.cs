@@ -87,6 +87,31 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
         {
             await using var conn = new SqlConnection(cs);
             await conn.OpenAsync();
+            if (name == "RayvarzRuleEngine")
+            {
+                var schemaSql = """
+                    SELECT CASE WHEN EXISTS (
+                        SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+                        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'RuleSyncState')
+                    THEN 1 ELSE 0 END
+                    """;
+                await using var schemaCmd = new SqlCommand(schemaSql, conn);
+                var schemaReady = Convert.ToInt32(await schemaCmd.ExecuteScalarAsync()) == 1;
+                if (!schemaReady)
+                {
+                    results.Add(new
+                    {
+                        name,
+                        ok = false,
+                        server = conn.DataSource,
+                        database = conn.Database,
+                        error = "Invalid object name 'dbo.RuleSyncState'",
+                        hint = "اتصال SQL برقرار است ولی جداول ساخته نشده‌اند. در SSMS روی سرور 232 اجرا کنید: database/01_RayvarzRuleEngine_Schema.sql سپس 02_RuleGolden_Seed.sql — Database باید RayvarzRuleEngine باشد نه DbRuleEngein."
+                    });
+                    continue;
+                }
+            }
+
             var sql = name switch
             {
                 "Sara" => "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche",
@@ -159,9 +184,19 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
 
 app.MapGet("/api/rule/sync/state", async (RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
 {
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+    if (!await store.IsSchemaReadyAsync(ct))
+        return Results.Json(new
+        {
+            error = "جداول RayvarzRuleEngine ساخته نشده‌اند",
+            hint = "روی سرور 232 اجرا کنید: database/01_RayvarzRuleEngine_Schema.sql و 02_RuleGolden_Seed.sql",
+            database = store.ConfiguredDatabaseName
+        }, statusCode: 503);
+
     var state = await store.GetSyncStateAsync(mgr.NidMember, ct);
     if (state == null)
-        return Results.Ok(new { nidMember = mgr.NidMember, activeEngine = "Legacy", note = "RuleSyncState not initialized" });
+        return Results.Ok(new { nidMember = mgr.NidMember, activeEngine = "Legacy", note = "RuleSyncState row missing — run POST /api/rule/sync/run after seed" });
     return Results.Ok(state);
 });
 
@@ -369,6 +404,8 @@ static string? ConnectionHint(string name, string cs, Exception ex)
         return $"سرور SQL ({name}) از این ماشین در دسترس نیست — VPN/فایروال/پورت 1433 را چک کنید.";
     if (msg.Contains("json") || msg.Contains("configuration"))
         return "خطای خواندن appsettings.json — ویرگول/کاما/گیومه در Password یا ساختار JSON را چک کنید.";
+    if (name == "RayvarzRuleEngine" && msg.Contains("invalid object name") && msg.Contains("rulesyncstate"))
+        return "جداول RayvarzRuleEngine ساخته نشده — فایل database/01_RayvarzRuleEngine_Schema.sql را روی سرور 232 اجرا کنید. ConnectionStrings:RayvarzRuleEngine باید Database=RayvarzRuleEngine باشد (نه DbRuleEngein).";
     if (name == "Rayvarz" && msg.Contains("login failed"))
         return "User Id یا Password رایورز اشتباه است. اگر Password کاراکتر ; یا \" دارد، در JSON باید escape شود.";
     return null;

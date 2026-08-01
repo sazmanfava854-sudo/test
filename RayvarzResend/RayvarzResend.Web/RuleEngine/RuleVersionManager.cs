@@ -27,6 +27,9 @@ public sealed class RuleVersionManager
 
     public async Task<RuleSyncStateRow> InitializeAsync(CancellationToken ct = default)
     {
+        if (!await EnsureSchemaReadyAsync(ct))
+            return new RuleSyncStateRow { NidMember = NidMember, NidClass = 360, ActiveEngine = "Legacy", ActiveDslVersion = 0 };
+
         var state = await _store.GetSyncStateAsync(NidMember, ct)
             ?? new RuleSyncStateRow { NidMember = NidMember, NidClass = 360, ActiveEngine = "Legacy", ActiveDslVersion = 0 };
 
@@ -41,6 +44,9 @@ public sealed class RuleVersionManager
             _logger.LogWarning("RayvarzRuleEngine connection not configured — skip rule sync");
             return;
         }
+
+        if (!await EnsureSchemaReadyAsync(ct))
+            return;
 
         state ??= await _store.GetSyncStateAsync(NidMember, ct)
             ?? new RuleSyncStateRow { NidMember = NidMember, NidClass = 360, ActiveEngine = "Legacy", ActiveDslVersion = 0 };
@@ -104,5 +110,19 @@ public sealed class RuleVersionManager
         }
 
         await _store.UpsertSyncStateAsync(state, ct);
+    }
+
+    private async Task<bool> EnsureSchemaReadyAsync(CancellationToken ct)
+    {
+        if (await _store.IsSchemaReadyAsync(ct))
+            return true;
+
+        var db = _store.ConfiguredDatabaseName ?? "?";
+        _logger.LogWarning(
+            "RayvarzRuleEngine schema not found on database '{Database}'. " +
+            "Run database/01_RayvarzRuleEngine_Schema.sql then 02_RuleGolden_Seed.sql on server 232. " +
+            "ConnectionStrings:RayvarzRuleEngine must point to database RayvarzRuleEngine (not DbRuleEngein).",
+            db);
+        return false;
     }
 }
