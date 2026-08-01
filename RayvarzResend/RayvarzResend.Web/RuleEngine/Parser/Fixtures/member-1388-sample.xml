@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ClsFunction>
+  <NidClass>360</NidClass>
+  <NidFunction>1388</NidFunction>
+  <Name>Run</Name>
+  <Text>ارسال رایورز</Text>
+  <IsActive>true</IsActive>
+  <Ver>12</Ver>
+  <FormulaVersion>1</FormulaVersion>
+  <Body>&lt;DisplayName("نوسازی")&gt; Public Function Nosazi() As ClsRayvarzMessageContract
+    Dim param = Info8.GetAccountingDocCreateParameter()
+    Dim result = ClsAccounting.Save(param)
+    Return result
+End Function
+
+Public Function iNcOME() As ClsRayvarzMessageContract
+    Return Nothing
+End Function
+
+Public Function Run() As ClsRayvarzMessageContract
+    If Biz.Communication.DutyFicheResultList.Count &gt; 0 Then
+        Return Nosazi()
+    ElseIf Biz.Communication.IncomeFicheResultList.Count &gt; 0 Then
+        Return iNcOME()
+    End If
+End Function</Body>
+</ClsFunction>

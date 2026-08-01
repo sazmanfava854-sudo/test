@@ -3,6 +3,7 @@ using RayvarzResend.Web.Hosting;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.RuleEngine.Engines;
+using RayvarzResend.Web.RuleEngine.Parser;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
@@ -23,6 +24,7 @@ builder.Services.AddSingleton<RuleEngineFactory>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<RuleEngineStore>();
 builder.Services.AddSingleton<RuleHistoryChecker>();
+builder.Services.AddSingleton<RuleDslParserService>();
 builder.Services.AddSingleton<RuleVersionManager>();
 builder.Services.AddSingleton<GoldenDryRunService>();
 builder.Services.AddHostedService<RuleSyncBackgroundService>();
@@ -272,6 +274,86 @@ app.MapGet("/api/rule/engine", async (RuleEngineFactory factory, RuleEngineStore
         resolvedEngine = resolved,
         payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
         forceEngine = config["RuleEngine:ForceEngine"]
+    });
+});
+
+app.MapGet("/api/rule/dsl/latest", async (RuleEngineStore store, RuleDslParserService parser, CancellationToken ct) =>
+{
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+
+    var snapshot = await store.GetLatestSnapshotAsync(parser.NidMember, ct);
+    if (snapshot == null)
+        return Results.NotFound(new { error = "RuleDslSnapshot یافت نشد — POST /api/rule/dsl/parse را اجرا کنید." });
+
+    return Results.Ok(new
+    {
+        snapshot.SnapshotId,
+        snapshot.NidMember,
+        snapshot.DslVersion,
+        snapshot.XmlHash,
+        snapshot.ParserVersion,
+        snapshot.EntryPoint,
+        snapshot.IsActive,
+        snapshot.CreatedAtUtc,
+        dslJsonLength = snapshot.DslJson?.Length ?? 0
+    });
+});
+
+app.MapPost("/api/rule/dsl/parse", async (RuleDslParserService parser, RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
+{
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+
+    var result = await mgr.ParseActiveMemberSnapshotAsync(ct);
+    return Results.Ok(new
+    {
+        result.Stored,
+        result.SkippedExisting,
+        result.SnapshotId,
+        result.DslVersion,
+        result.XmlHash,
+        result.Message,
+        parseSuccess = result.Parse?.Success,
+        parseError = result.Parse?.ErrorMessage,
+        entryPoint = result.Parse?.Program?.EntryPoint,
+        functionCount = result.Parse?.Program?.Functions.Count,
+        unsupportedFunctions = result.Parse?.Program?.UnsupportedFunctions,
+        warnings = result.Parse?.Program?.Warnings
+    });
+});
+
+app.MapPost("/api/rule/dsl/preview", (RuleDslParsePreviewRequest? req, RuleDslParserService parser) =>
+{
+    string xml;
+    if (!string.IsNullOrWhiteSpace(req?.XmlBody))
+    {
+        xml = req.XmlBody;
+    }
+    else
+    {
+        return Results.BadRequest(new { error = "XmlBody در body لازم است (preview بدون ذخیره DB)." });
+    }
+
+    var parsed = parser.Parse(xml, "preview");
+    if (!parsed.Success || parsed.Program == null)
+        return Results.Json(new { error = parsed.ErrorMessage ?? "Parse failed" }, statusCode: 400);
+
+    return Results.Ok(new
+    {
+        parsed.Envelope?.XmlHash,
+        parsed.Program.EntryPoint,
+        parsed.Program.ParserVersion,
+        functions = parsed.Program.Functions.Select(f => new
+        {
+            f.Name,
+            f.DisplayName,
+            f.IsSupported,
+            statementCount = f.Body.Count
+        }),
+        parsed.Program.UnsupportedFunctions,
+        parsed.Program.Warnings,
+        dsl = parsed.Program
     });
 });
 

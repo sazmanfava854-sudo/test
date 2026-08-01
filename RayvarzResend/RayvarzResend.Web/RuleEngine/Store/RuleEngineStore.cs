@@ -84,7 +84,7 @@ public sealed class RuleEngineStore
             const string tablesSql = """
                 SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME IN (
-                    'RuleSyncState','RuleGoldenFiche','RuleGoldenExpectedRow','RuleCandidate')
+                    'RuleSyncState','RuleGoldenFiche','RuleGoldenExpectedRow','RuleCandidate','RuleDslSnapshot')
                 ORDER BY TABLE_NAME
                 """;
             await using var tablesCmd = new SqlCommand(tablesSql, conn);
@@ -367,6 +367,119 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@reason", (object?)reason ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    public async Task<RuleDslSnapshotRow?> GetSnapshotByHashAsync(int nidMember, string xmlHash, CancellationToken ct = default)
+    {
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return null;
+
+        const string sql = """
+            SELECT TOP 1 SnapshotId, NidMember, DslVersion, XmlHash, DslJson, ParserVersion, EntryPoint, CreatedAtUtc, IsActive
+            FROM dbo.RuleDslSnapshot
+            WHERE NidMember = @nid AND XmlHash = @hash
+            ORDER BY DslVersion DESC
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@hash", xmlHash);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+
+        return ReadDslSnapshotRow(r);
+    }
+
+    public async Task<RuleDslSnapshotRow?> GetLatestSnapshotAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return null;
+
+        const string sql = """
+            SELECT TOP 1 SnapshotId, NidMember, DslVersion, XmlHash, DslJson, ParserVersion, EntryPoint, CreatedAtUtc, IsActive
+            FROM dbo.RuleDslSnapshot
+            WHERE NidMember = @nid
+            ORDER BY DslVersion DESC, SnapshotId DESC
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+
+        return ReadDslSnapshotRow(r);
+    }
+
+    public async Task<int> GetNextDslVersionAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured || !await GuardSchemaAsync(ct)) return 1;
+
+        const string sql = "SELECT ISNULL(MAX(DslVersion), 0) + 1 FROM dbo.RuleDslSnapshot WHERE NidMember = @nid";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt32(result);
+    }
+
+    public async Task<long> InsertDslSnapshotAsync(RuleDslSnapshotRow row, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return 0;
+
+        const string sql = """
+            INSERT INTO dbo.RuleDslSnapshot (NidMember, DslVersion, XmlHash, DslJson, ParserVersion, EntryPoint, IsActive)
+            OUTPUT INSERTED.SnapshotId
+            VALUES (@member, @ver, @hash, @json, @parser, @entry, @active)
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@member", row.NidMember);
+        cmd.Parameters.AddWithValue("@ver", row.DslVersion);
+        cmd.Parameters.AddWithValue("@hash", row.XmlHash);
+        cmd.Parameters.AddWithValue("@json", (object?)row.DslJson ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@parser", row.ParserVersion);
+        cmd.Parameters.AddWithValue("@entry", row.EntryPoint);
+        cmd.Parameters.AddWithValue("@active", row.IsActive);
+        var id = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt64(id);
+    }
+
+    public async Task UpdateCandidateStatusAsync(long candidateId, string status, string? rejectReason = null, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            UPDATE dbo.RuleCandidate
+            SET Status = @status, RejectReason = @reason
+            WHERE CandidateId = @id
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", candidateId);
+        cmd.Parameters.AddWithValue("@status", status);
+        cmd.Parameters.AddWithValue("@reason", (object?)rejectReason ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static RuleDslSnapshotRow ReadDslSnapshotRow(SqlDataReader r) =>
+        new()
+        {
+            SnapshotId = r.GetInt64(0),
+            NidMember = r.GetInt32(1),
+            DslVersion = r.GetInt32(2),
+            XmlHash = r.GetString(3),
+            DslJson = r.IsDBNull(4) ? null : r.GetString(4),
+            ParserVersion = r.GetString(5),
+            EntryPoint = r.GetString(6),
+            CreatedAtUtc = r.GetDateTime(7),
+            IsActive = r.GetBoolean(8)
+        };
 }
 
 public sealed class RuleEngineDiagnostics
