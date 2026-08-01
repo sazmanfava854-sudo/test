@@ -87,13 +87,28 @@ Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/promote/roll
 
 ## جریان تست dev
 
-1. `POST /api/rule/sync/run` — sync MemberHistory
-2. `POST /api/rule/dsl/parse` — snapshot DSL
-3. `GET /api/rule/promote/status` — بررسی candidate
+1. `POST /api/rule/sync/run` — sync MemberHistory (+ retry parse برای candidateهای گیرکرده در Detected)
+2. `POST /api/rule/dsl/parse` — snapshot DSL + لینک candidate به Parsed
+3. `GET /api/rule/promote/status` — بررسی candidate (باید `Parsed` یا بالاتر باشد)
 4. `StabilityHours: 0` در Development یا `POST .../promote/run?force=true`
 5. `GET /api/rule/engine` — `activeEngine=Dynamic` بعد از promote
 6. `POST /api/rule/golden/dry-run` — تأیید ۴/۴
 7. در صورت مشکل: `POST /api/rule/promote/rollback`
+
+### عیب‌یابی: candidate در `Detected` مانده
+
+اگر `promote/run` می‌گوید «No candidates» و status هنوز `Detected` است:
+
+```powershell
+# دوباره sync (parse گیرکرده را retry می‌کند)
+Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/sync/run"
+
+# یا dsl/parse (candidate را به Parsed لینک می‌کند)
+Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/dsl/parse"
+
+# سپس promote
+Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/promote/run?force=true"
+```
 
 ## Circuit breaker
 

@@ -15,6 +15,7 @@ public sealed class RulePromotionService
     private readonly GoldenDryRunService _goldenDryRun;
     private readonly DynamicRuleEngine _dynamic;
     private readonly RuleCircuitBreakerService _circuitBreaker;
+    private readonly RuleDslParserService _dslParser;
     private readonly ILogger<RulePromotionService> _logger;
 
     public RulePromotionService(
@@ -25,6 +26,7 @@ public sealed class RulePromotionService
         GoldenDryRunService goldenDryRun,
         DynamicRuleEngine dynamic,
         RuleCircuitBreakerService circuitBreaker,
+        RuleDslParserService dslParser,
         ILogger<RulePromotionService> logger)
     {
         _config = config;
@@ -34,6 +36,7 @@ public sealed class RulePromotionService
         _goldenDryRun = goldenDryRun;
         _dynamic = dynamic;
         _circuitBreaker = circuitBreaker;
+        _dslParser = dslParser;
         _logger = logger;
     }
 
@@ -86,10 +89,14 @@ public sealed class RulePromotionService
 
         var steps = new List<string>();
         var candidates = await _store.GetCandidatesByStatusesAsync(NidMember,
-            new[] { RuleCandidateStatus.Parsed, RuleCandidateStatus.Validated, RuleCandidateStatus.DryRunPassed }, ct);
+            new[]
+            {
+                RuleCandidateStatus.Detected, RuleCandidateStatus.Parsing,
+                RuleCandidateStatus.Parsed, RuleCandidateStatus.Validated, RuleCandidateStatus.DryRunPassed
+            }, ct);
 
         if (candidates.Count == 0)
-            return new RulePromotionRunResult { Message = "No candidates in Parsed/Validated/DryRunPassed" };
+            return new RulePromotionRunResult { Message = "No candidates in Detected/Parsed/Validated/DryRunPassed" };
 
         foreach (var candidate in candidates.OrderByDescending(c => c.SourceModifyAt))
         {
@@ -137,10 +144,32 @@ public sealed class RulePromotionService
         var snapshot = await _store.GetSnapshotByHashAsync(NidMember, candidate.CanonicalXmlHash, ct);
         if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.DslJson))
         {
-            await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Rejected,
-                "DSL snapshot missing", ct);
-            steps.Add($"Candidate {candidate.CandidateId}: rejected — no snapshot");
-            return new RulePromotionRunResult { AnyAction = true };
+            if (status is RuleCandidateStatus.Detected or RuleCandidateStatus.Parsing)
+            {
+                var parsed = await TryParseCandidateXmlAsync(candidate, steps, ct);
+                if (parsed != null)
+                {
+                    snapshot = parsed;
+                    status = RuleCandidateStatus.Parsed;
+                }
+            }
+
+            if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.DslJson))
+            {
+                await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Rejected,
+                    "DSL snapshot missing", ct);
+                steps.Add($"Candidate {candidate.CandidateId}: rejected — no snapshot");
+                return new RulePromotionRunResult { AnyAction = true };
+            }
+        }
+
+        if (status is RuleCandidateStatus.Detected or RuleCandidateStatus.Parsing)
+        {
+            await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Parsed, ct: ct);
+            await _store.InsertPromotionLogAsync(NidMember, candidate.CandidateId, snapshot.SnapshotId, "Parsed",
+                "Snapshot linked during promote", ct);
+            status = RuleCandidateStatus.Parsed;
+            steps.Add($"Candidate {candidate.CandidateId}: Parsed (snapshot exists)");
         }
 
         var program = RuleDslParserService.DeserializeProgram(snapshot.DslJson);
@@ -198,6 +227,27 @@ public sealed class RulePromotionService
         }
 
         return await PromoteAsync(candidate, snapshot, steps, ct);
+    }
+
+    private async Task<RuleDslSnapshotRow?> TryParseCandidateXmlAsync(
+        RuleCandidateRow candidate, List<string> steps, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(candidate.XmlBody))
+            return null;
+
+        await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Parsing, ct: ct);
+        var result = await _dslParser.ParseAndStoreAsync(candidate.XmlBody, "MemberHistory", ct);
+        if (result.Parse?.Success != true)
+        {
+            await RejectCandidate(candidate.CandidateId, result.Parse?.ErrorMessage ?? result.Message, ct);
+            steps.Add($"Candidate {candidate.CandidateId}: parse failed");
+            return null;
+        }
+
+        await _store.InsertPromotionLogAsync(NidMember, candidate.CandidateId, result.SnapshotId, "Parsed",
+            result.SkippedExisting ? "DSL snapshot already existed" : "DSL snapshot stored", ct);
+        steps.Add($"Candidate {candidate.CandidateId}: parsed on demand");
+        return await _store.GetSnapshotByHashAsync(NidMember, candidate.CanonicalXmlHash, ct);
     }
 
     private bool IsStable(RuleCandidateRow candidate)
