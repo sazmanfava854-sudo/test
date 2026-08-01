@@ -8,7 +8,7 @@ public sealed class DslValidator
 
     public DslValidator(IOperationRegistry registry) => _registry = registry;
 
-    public DslValidationResult Validate(DslProgram program)
+    public DslValidationResult Validate(DslProgram program, bool strictUnsupportedStatements = true)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -28,7 +28,7 @@ public sealed class DslValidator
             if (!fn.IsSupported)
                 continue;
 
-            WalkStatements(fn.Body, unknownOps, errors);
+            WalkStatements(fn.Body, unknownOps, errors, warnings, strictUnsupportedStatements);
         }
 
         foreach (var op in unknownOps)
@@ -49,29 +49,34 @@ public sealed class DslValidator
     private void WalkStatements(
         IReadOnlyList<DslStatement> statements,
         HashSet<string> unknownOps,
-        List<string> errors)
+        List<string> errors,
+        List<string> warnings,
+        bool strictUnsupportedStatements)
     {
         foreach (var stmt in statements)
         {
             switch (stmt)
             {
                 case DslUnsupportedStatement u:
-                    errors.Add($"Unsupported: {u.Reason} — {u.SourceSnippet}");
+                    if (strictUnsupportedStatements)
+                        errors.Add($"Unsupported: {u.Reason} — {u.SourceSnippet}");
+                    else
+                        warnings.Add($"Unsupported (skipped): {u.SourceSnippet}");
                     break;
                 case DslCallOperationStatement op:
                     unknownOps.Add(IOperationRegistry.BuildKey(op.Receiver, op.Operation));
                     break;
                 case DslIfStatement iff:
-                    WalkStatements(iff.ThenBranch, unknownOps, errors);
+                    WalkStatements(iff.ThenBranch, unknownOps, errors, warnings, strictUnsupportedStatements);
                     foreach (var branch in iff.ElseIfBranches)
-                        WalkStatements(branch.Body, unknownOps, errors);
+                        WalkStatements(branch.Body, unknownOps, errors, warnings, strictUnsupportedStatements);
                     if (iff.ElseBranch != null)
-                        WalkStatements(iff.ElseBranch, unknownOps, errors);
+                        WalkStatements(iff.ElseBranch, unknownOps, errors, warnings, strictUnsupportedStatements);
                     break;
                 case DslTryCatchStatement t:
-                    WalkStatements(t.TryBranch, unknownOps, errors);
+                    WalkStatements(t.TryBranch, unknownOps, errors, warnings, strictUnsupportedStatements);
                     if (t.CatchBranch != null)
-                        WalkStatements(t.CatchBranch, unknownOps, errors);
+                        WalkStatements(t.CatchBranch, unknownOps, errors, warnings, strictUnsupportedStatements);
                     break;
             }
         }

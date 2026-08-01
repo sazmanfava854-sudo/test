@@ -100,16 +100,30 @@ public sealed class RulePromotionService
 
         foreach (var candidate in candidates.OrderByDescending(c => c.SourceModifyAt))
         {
-            var result = await ProcessCandidateAsync(candidate, forcePromote, steps, ct);
-            if (result.Promoted || result.AnyAction)
+            try
             {
+                var result = await ProcessCandidateAsync(candidate, forcePromote, steps, ct);
+                if (result.Promoted || result.AnyAction)
+                {
+                    return new RulePromotionRunResult
+                    {
+                        AnyAction = result.AnyAction,
+                        Promoted = result.Promoted,
+                        CandidateId = result.CandidateId,
+                        SnapshotId = result.SnapshotId,
+                        Message = result.Message,
+                        Steps = steps
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Promotion failed for candidate {CandidateId}", candidate.CandidateId);
+                steps.Add($"Candidate {candidate.CandidateId}: ERROR {ex.Message}");
                 return new RulePromotionRunResult
                 {
-                    AnyAction = result.AnyAction,
-                    Promoted = result.Promoted,
-                    CandidateId = result.CandidateId,
-                    SnapshotId = result.SnapshotId,
-                    Message = result.Message,
+                    AnyAction = true,
+                    Message = $"Promotion error: {ex.Message}",
                     Steps = steps
                 };
             }
@@ -182,11 +196,12 @@ public sealed class RulePromotionService
 
         if (status is RuleCandidateStatus.Parsed or RuleCandidateStatus.Detected)
         {
-            var validation = _validator.Validate(program);
+            var validation = _validator.Validate(program, strictUnsupportedStatements: false);
             if (!validation.Success)
             {
-                await RejectCandidate(candidate.CandidateId, string.Join("; ", validation.Errors), ct);
-                steps.Add($"Candidate {candidate.CandidateId}: validation failed");
+                var reason = SummarizeErrors(validation.Errors);
+                await RejectCandidate(candidate.CandidateId, reason, ct);
+                steps.Add($"Candidate {candidate.CandidateId}: validation failed — {reason}");
                 return new RulePromotionRunResult { AnyAction = true };
             }
             await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Validated, ct: ct);
@@ -202,9 +217,13 @@ public sealed class RulePromotionService
                 allowLegacyFallback: false, ct);
             if (!dryRun.AllPassed)
             {
-                await RejectCandidate(candidate.CandidateId,
-                    $"Golden dry-run failed: {dryRun.Passed}/{dryRun.Total}", ct);
+                var failed = dryRun.Cases.Where(c => !c.Success).Take(3)
+                    .Select(c => $"{c.FicheNo}: {c.ErrorMessage}");
+                var reason = $"Golden dry-run failed: {dryRun.Passed}/{dryRun.Total} — {string.Join(" | ", failed)}";
+                await RejectCandidate(candidate.CandidateId, reason, ct);
                 steps.Add($"Candidate {candidate.CandidateId}: golden failed {dryRun.Passed}/{dryRun.Total}");
+                foreach (var c in dryRun.Cases.Where(x => !x.Success))
+                    steps.Add($"  {c.FicheNo}: {c.ErrorMessage}");
                 return new RulePromotionRunResult { AnyAction = true };
             }
             await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.DryRunPassed, ct: ct);
@@ -239,7 +258,7 @@ public sealed class RulePromotionService
         var result = await _dslParser.ParseAndStoreAsync(candidate.XmlBody, "MemberHistory", ct);
         if (result.Parse?.Success != true)
         {
-            await RejectCandidate(candidate.CandidateId, result.Parse?.ErrorMessage ?? result.Message, ct);
+            await RejectCandidate(candidate.CandidateId, result.Parse?.ErrorMessage ?? result.Message ?? "Parse failed", ct);
             steps.Add($"Candidate {candidate.CandidateId}: parse failed");
             return null;
         }
@@ -259,24 +278,34 @@ public sealed class RulePromotionService
 
     private async Task<bool> VerifyMemberHashAsync(RuleCandidateRow candidate, CancellationToken ct)
     {
-        var member = await _members.LoadActiveMemberAsync(NidMember, ct: ct);
-        if (member == null || string.IsNullOrWhiteSpace(member.XmlBody))
-            return false;
         try
         {
+            var member = await _members.LoadActiveMemberAsync(NidMember, ct: ct);
+            if (member == null || string.IsNullOrWhiteSpace(member.XmlBody))
+                return false;
+
             var envelope = XmlEnvelopeReader.Read(member.XmlBody, member.Source);
             return envelope.XmlHash.Equals(candidate.CanonicalXmlHash, StringComparison.OrdinalIgnoreCase);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "VerifyMemberHash failed for candidate {CandidateId}", candidate.CandidateId);
             return false;
         }
     }
 
     private async Task<bool> VerifyNoNewerHistoryAsync(RuleCandidateRow candidate, CancellationToken ct)
     {
-        var latest = await _members.LoadLatestHistoryAsync(NidMember, ct);
-        return latest != null && latest.NidHistory == candidate.SourceNidHistory;
+        try
+        {
+            var latest = await _members.LoadLatestHistoryAsync(NidMember, ct);
+            return latest != null && latest.NidHistory == candidate.SourceNidHistory;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "VerifyNoNewerHistory failed for candidate {CandidateId}", candidate.CandidateId);
+            return false;
+        }
     }
 
     private async Task<RulePromotionRunResult> PromoteAsync(
@@ -325,7 +354,18 @@ public sealed class RulePromotionService
 
     private async Task RejectCandidate(long candidateId, string reason, CancellationToken ct)
     {
-        await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Rejected, reason, ct);
-        await _store.InsertPromotionLogAsync(NidMember, candidateId, null, "Rejected", reason, ct);
+        var trimmed = TruncateReason(reason);
+        await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Rejected, trimmed, ct);
+        await _store.InsertPromotionLogAsync(NidMember, candidateId, null, "Rejected", trimmed, ct);
     }
+
+    private static string SummarizeErrors(IReadOnlyList<string> errors)
+    {
+        if (errors.Count == 0) return "Validation failed";
+        if (errors.Count == 1) return errors[0];
+        return $"Validation failed ({errors.Count} errors): {string.Join("; ", errors.Take(3))}";
+    }
+
+    private static string TruncateReason(string? reason, int maxLen = 480) =>
+        string.IsNullOrEmpty(reason) ? "" : reason.Length <= maxLen ? reason : reason[..maxLen];
 }

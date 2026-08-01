@@ -167,7 +167,14 @@ public sealed class GoldenDryRunService
         catch (Exception ex)
         {
             var engineName = engine.EngineName;
-            await _store.InsertDryRunResultAsync(candidateId, snapshotId, golden.GoldenFicheId, engineName, false, ex.Message, null, ct);
+            try
+            {
+                await _store.InsertDryRunResultAsync(candidateId, snapshotId, golden.GoldenFicheId, engineName, false, ex.Message, null, ct);
+            }
+            catch
+            {
+                // ignore secondary DB errors during dry-run logging
+            }
             return Fail(golden, ex.Message);
         }
     }
