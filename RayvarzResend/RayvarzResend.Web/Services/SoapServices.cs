@@ -104,7 +104,7 @@ public class SoapBuilder
                 <b:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</b:BnkAcntNo>
                 <b:BnkAcntOwnr i:nil=""true""/>
                 <b:BnkBrnch i:nil=""true""/>
-                <b:Center>0</b:Center>
+                <b:Center>{fiche.Center ?? 0}</b:Center>
                 {customerXml}
                 {customerNationalCodeXml}
                 <b:DocRow>{docRow}</b:DocRow>
@@ -399,15 +399,15 @@ public class SoapBuilder
             return new IncmContext(
                 r,
                 incmRow,
-                FormatRayvarzMoney(r.Val),
+                FormatRayvarzMoney(Math.Abs(r.Val)),
                 dueDateRay,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
-                null,
-                null,
+                r.Ref,
+                r.Num,
                 detailRefRow,
                 dueDateRay,
-                null,
+                TahatorRowBuilder.IsTahatorFiche(fiche) ? r.IncmRowDsc : null,
                 false);
         }).ToList();
     }
@@ -453,11 +453,15 @@ public class SoapBuilder
             ? "<b:RefRowDate i:nil=\"true\"/>"
             : $"<b:RefRowDate>{ctx.RefRowDate}</b:RefRowDate>";
 
+        var center1 = ctx.Row.Center1 ?? 0;
+        var center2 = ctx.Row.Center2 ?? 0;
+        var center3 = ctx.Row.Center3 ?? 0;
+
         return $@"
               <b:DocumentItemIncm>
-                <b:Center1>0</b:Center1>
-                <b:Center2>0</b:Center2>
-                <b:Center3>0</b:Center3>
+                <b:Center1>{center1}</b:Center1>
+                <b:Center2>{center2}</b:Center2>
+                <b:Center3>{center3}</b:Center3>
                 <b:Crncy i:nil=""true""/>
                 <b:CrncyDate i:nil=""true""/>
                 <b:CrncyPrice>0</b:CrncyPrice>
@@ -495,6 +499,10 @@ public class SoapBuilder
             rows.Add(new IncmRowDto { IncmNo = 0, Val = fiche.Payable, IncmRowDsc = "کل" });
 
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
+            return rows;
+
+        // تهاتر: ردیف منفی با Centers — اسکیل نکن
+        if (TahatorRowBuilder.IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15)
             return rows;
 
         // اگر FicheRepository قبلاً اسکیل کرده باشد، sum≈Payable و این no-op است

@@ -88,7 +88,7 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 return await FailOrFallbackAsync(context, buildSoap, "ردیف IncmNo یافت نشد", ct);
 
             var rowSum = executed.RowSum;
-            if (rowSum != fiche.Payable)
+            if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, rowSum))
                 return await FailOrFallbackAsync(context, buildSoap,
                     $"جمع ردیف‌ها ({rowSum}) ≠ PayablePrice ({fiche.Payable})", ct);
 

@@ -45,7 +45,7 @@ public sealed class LegacyRuleEngine : IFicheRuleEngine
         }
 
         var rowSum = fiche.Rows.Sum(r => r.Val);
-        if (rowSum != fiche.Payable)
+        if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, rowSum))
         {
             return Task.FromResult(new FicheRuleEvaluationResult
             {

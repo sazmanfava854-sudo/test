@@ -139,8 +139,17 @@ public sealed class TahatorResendService
                 return Fail(ficheNo, dryRun, steps, "فیش درآمدی برای تهاتر در Sara یافت نشد.");
             }
 
-            ApplyTahatorDocTyp(fiche);
-            steps.Add($"2) فیش بارگذاری شد — DocTyp={fiche.DocTyp} ({fiche.DocTypDsc}), ردیف={fiche.Rows.Count}, Payable={fiche.Payable}");
+            // گروه 157 از Load قبلاً ردیف تهاتر + Centers دارد؛ در غیر این صورت اینجا بساز
+            if (!TahatorRowBuilder.IsTahatorFiche(fiche)
+                || fiche.Rows.Count != 1
+                || fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther))
+                TahatorRowBuilder.ApplyTahatorRows(fiche);
+            else
+                ApplyTahatorDocTyp(fiche);
+
+            steps.Add(
+                $"2) فیش تهاتر — DocTyp={fiche.DocTyp} ({fiche.DocTypDsc}), IncmNo={fiche.Rows[0].IncmNo}, " +
+                $"Val={fiche.Rows[0].Val}, Center={fiche.Center}, Center1={fiche.Rows[0].Center1}, Center3={fiche.Rows[0].Center3}");
 
             if (fiche.Rows.Count == 0 || fiche.Payable <= 0)
                 return Fail(ficheNo, dryRun, steps, "فیش تهاتر ردیف/مبلغ معتبر ندارد.");

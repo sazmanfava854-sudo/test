@@ -79,6 +79,12 @@ database/04_RuleGolden_Seed_Phase6_Samples.sql
 | 9 | `071105/0385826` | Duty نوسازی | 4 | 38,688,000 |
 | 10 | `071205/20381801` | Duty صنفی | 3 | 8,089,000 |
 
+تهاتر (اسکریپت جدا: `database/06_RuleGolden_Seed_Tahator.sql`) — چک `Center` / `Center1` / `Center2` / `Center3`:
+
+| Id | FicheNo | نوع | ردیف | Val (تهاتر) |
+|----|---------|-----|------|-------------|
+| 11–14 | `050933483716` … `051233468141` | Tahator DocTyp14 | 1 | −Payable ؛ Center1=Deposit ؛ Center3=700100001 |
+
 منبع expected: `Ray_CityHall.ray.incmdocsys` — فیش‌ها در Sara (`Income_Fiche` / `Duty_Fiche`) موجودند.
 
 ```powershell

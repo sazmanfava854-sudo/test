@@ -39,6 +39,11 @@ public sealed class RuleGoldenExpectedRow
     public string? IncmRowDsc { get; init; }
     public int? ExpectedBranch { get; init; }
     public int? ExpectedBank { get; init; }
+    /// <summary>DocumentItem.Center</summary>
+    public long? ExpectedCenter { get; init; }
+    public long? ExpectedCenter1 { get; init; }
+    public long? ExpectedCenter2 { get; init; }
+    public long? ExpectedCenter3 { get; init; }
 }
 
 public sealed class RuleCandidateRow

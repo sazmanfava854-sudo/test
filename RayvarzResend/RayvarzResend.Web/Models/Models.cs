@@ -58,6 +58,16 @@ public class FicheHeaderDto
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
     public string StatusMessage { get; set; } = "";
+    /// <summary>DocumentItem.Center — از Tahator1: Bank=2→CreditorPapers وگرنه 0.</summary>
+    public long? Center { get; set; }
+    /// <summary>Income_Fiche.Deposit → Center1 ردیف تهاتر.</summary>
+    public long? Deposit { get; set; }
+    /// <summary>Income_Fiche.DepositID → Ref ردیف تهاتر.</summary>
+    public long? DepositId { get; set; }
+    /// <summary>Income_Fiche.CreditorPapers — برای Center وقتی Bank=2.</summary>
+    public long? CreditorPapers { get; set; }
+    /// <summary>Income_Fiche.CheckNo — Center3: 5→700100002 وگرنه 700100001.</summary>
+    public string? CheckNo { get; set; }
     public List<IncmRowDto> Rows { get; set; } = new();
 }
 
@@ -76,6 +86,14 @@ public class IncmRowDto
     public int IncmNo { get; set; }
     public string IncmRowDsc { get; set; } = "";
     public decimal Val { get; set; }
+    /// <summary>DocumentItemIncm.Center1 (تهاتر: Deposit).</summary>
+    public long? Center1 { get; set; }
+    /// <summary>DocumentItemIncm.Center2.</summary>
+    public long? Center2 { get; set; }
+    /// <summary>DocumentItemIncm.Center3 (تهاتر: 700100001 / 700100002).</summary>
+    public long? Center3 { get; set; }
+    public string? Ref { get; set; }
+    public string? Num { get; set; }
 }
 
 public class SendFicheRequest

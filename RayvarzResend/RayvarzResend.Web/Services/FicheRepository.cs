@@ -30,11 +30,18 @@ public class FicheRepository
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
-       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS BankCode,
+       COALESCE(
+         NULLIF(LTRIM(RTRIM(CAST(f.CI_Bank AS nvarchar(20)))), ''),
+         NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '')
+       ) AS BankCode,
        COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
        f.PaymentDate,
        f.BankPaymentDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
+       CAST(f.CheckNo AS nvarchar(20)) AS CheckNo,
+       CAST(f.Deposit AS bigint) AS Deposit,
+       CAST(f.DepositID AS bigint) AS DepositID,
+       CAST(f.CreditorPapers AS bigint) AS CreditorPapers,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        ISNULL(
          NULLIF(LTRIM(RTRIM(
@@ -61,7 +68,7 @@ WHERE {where}";
         if (!await reader.ReadAsync(ct)) return null;
 
         var group = ReadInt32(reader, "CI_IncomeAccountGroup");
-        var docTyp = group == 150 ? 11 : 3;
+        var docTyp = group == 150 ? 11 : group == TahatorRowBuilder.IncomeAccountGroupTahator ? 14 : 3;
 
         var dto = new FicheHeaderDto
         {
@@ -77,17 +84,30 @@ WHERE {where}";
             RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
+            CheckNo = reader.IsDBNull(reader.GetOrdinal("CheckNo")) ? null : reader.GetString(reader.GetOrdinal("CheckNo")),
+            Deposit = reader.IsDBNull(reader.GetOrdinal("Deposit")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("Deposit"))),
+            DepositId = reader.IsDBNull(reader.GetOrdinal("DepositID")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("DepositID"))),
+            CreditorPapers = reader.IsDBNull(reader.GetOrdinal("CreditorPapers")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("CreditorPapers"))),
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
             BnkAcntNoSource = "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
             IncomeRegion = reader.IsDBNull(reader.GetOrdinal("IncomeRegion")) ? null : reader.GetString(reader.GetOrdinal("IncomeRegion")),
             DocTyp = docTyp,
-            DocDsc = "اسناد شهرسازی"
+            DocDsc = group == TahatorRowBuilder.IncomeAccountGroupTahator ? "اسناد تهاتر مبلغ" : "اسناد شهرسازی"
         };
 
-        dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
-        // Income_Calculation = مبلغ ناخالص؛ PayablePrice پس از تخفیف است — مثل SOAP اسکیل کن
-        IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
+        if (group == TahatorRowBuilder.IncomeAccountGroupTahator)
+        {
+            // ردیف SOAP تهاتر (نه Income_Calculation) — مطابق Tahator1 + نمونه‌های golden
+            TahatorRowBuilder.ApplyTahatorRows(dto);
+        }
+        else
+        {
+            dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+            // Income_Calculation = مبلغ ناخالص؛ PayablePrice پس از تخفیف است — مثل SOAP اسکیل کن
+            IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
+        }
+
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
             ReadRowDate(reader, "PaymentDate"),
