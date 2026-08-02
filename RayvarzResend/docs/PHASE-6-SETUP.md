@@ -53,13 +53,34 @@ Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/golden/dry-r
   Select-Object engineName, passed, allPassed
 ```
 
-## Golden درآمد (اختیاری)
+## Golden درآمد (نمونه‌های کاربر — فاز ۶)
 
-فعلاً seed فقط ۴ فیش Duty دارد. برای golden درآمدی:
+فایل SQL:
 
-1. چند `FicheNo` درآمدی پایدار از Sara انتخاب کنید
-2. expected را از `ray.incmdocsys` بگیرید
-3. به `02_RuleGolden_Seed.sql` اضافه کنید (`Scenario` مثلاً `Income`)
+```text
+database/04_RuleGolden_Seed_Phase6_Samples.sql
+```
+
+روی `RayvarzRuleEngine` (سرور ۲۳۲) بعد از `02_RuleGolden_Seed.sql` اجرا کنید.
+
+| Id | FicheNo | نوع | ردیف | Payable |
+|----|---------|-----|------|---------|
+| 5 | `050733453546` | Income شهرسازی | 5 | 5,379,066,000 |
+| 6 | `050733451977` | Income شهرسازی | 3 | 2,024,365,000 |
+| 7 | `050733447710` | Income شهرسازی | 5 | 1,780,716,000 |
+| 8 | `050733454216` | Income شهرسازی | 4 | 147,291,000 |
+| 9 | `071105/0385826` | Duty نوسازی | 4 | 38,688,000 |
+| 10 | `071205/20381801` | Duty صنفی | 3 | 8,089,000 |
+
+منبع expected: `Ray_CityHall.ray.incmdocsys` — فیش‌ها در Sara (`Income_Fiche` / `Duty_Fiche`) موجودند.
+
+```powershell
+# بعد از اجرای SQL:
+Invoke-RestMethod -Uri "http://localhost:5000/api/rule/golden"
+Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/golden/dry-run" |
+  Select-Object engineName, total, passed, allPassed
+# انتظار با Dynamic: total>=10 ، و income+duty سبز اگر ردیف‌های Sara با Rayvarz هم‌خوان باشند
+```
 
 `GoldenDryRunService` حالا `FicheCategory.Income` را می‌پذیرد.
 
