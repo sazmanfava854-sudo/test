@@ -34,4 +34,16 @@ public class TahatorHelpersTests
         Assert.Equal("تهاتر مبلغ", fiche.DocTypDsc);
         Assert.Equal("اسناد تهاتر مبلغ", fiche.DocDsc);
     }
+
+    [Fact]
+    public void Schema_script_defines_TahatorRestoreSnapshot()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "database", "05_TahatorRestoreSnapshot.sql"));
+        Assert.True(File.Exists(path), path);
+        var sql = File.ReadAllText(path);
+        Assert.Contains("TahatorRestoreSnapshot", sql);
+        Assert.Contains("ExportPermanentDate", sql);
+        Assert.Contains("Pending", sql);
+    }
 }

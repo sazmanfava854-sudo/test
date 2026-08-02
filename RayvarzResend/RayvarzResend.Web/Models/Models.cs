@@ -149,9 +149,10 @@ public class AppConfig
     public int SendDelayMs { get; set; } = 2000;
 }
 
-/// <summary>نگه‌داشت فیلدهای Income_Fiche قبل از تریگر تهاتر (وضعیت ۲).</summary>
+/// <summary>نگه‌داشت فیلدهای Income_Fiche قبل از تریگر تهاتر (وضعیت ۲) — پایدار در RayvarzRuleEngine.</summary>
 public class IncomeFicheTahatorSnapshot
 {
+    public long SnapshotId { get; set; }
     public string FicheNo { get; set; } = "";
     public int EumFicheStatus { get; set; }
     public string? ExportPermanentDate { get; set; }
@@ -160,6 +161,9 @@ public class IncomeFicheTahatorSnapshot
     public string? UserConfirmDate { get; set; }
     public string? UsernameUserConfirm { get; set; }
     public Guid? NidUserUserConfirm { get; set; }
+    public string? TriggerDate { get; set; }
+    public string? PersistStatus { get; set; }
+    public DateTime? CreatedAtUtc { get; set; }
 }
 
 public class TahatorFicheRequest
@@ -182,6 +186,8 @@ public class TahatorCheckResult
     public string Message { get; set; } = "";
     public string? DocNotSentError { get; set; }
     public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+    /// <summary>اگر فرایند قبلی قطع شده باشد، snapshot Pending از RayvarzRuleEngine.</summary>
+    public IncomeFicheTahatorSnapshot? PendingStoredSnapshot { get; set; }
     public FicheHeaderDto? Fiche { get; set; }
 }
 
@@ -196,6 +202,7 @@ public class TahatorSendResult
     public bool ExistsInAccountingDocHeaderAfter { get; set; }
     public bool ExistsInRayvarz { get; set; }
     public string? TriggerDate { get; set; }
+    public long? SnapshotId { get; set; }
     public string? DocNotSentError { get; set; }
     public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
     public string? EngineName { get; set; }

@@ -17,19 +17,22 @@ public sealed class TahatorResendService
     private readonly FicheRepository _fiches;
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
+    private readonly TahatorSnapshotStore _snapshots;
 
     public TahatorResendService(
         IConfiguration config,
         ILogger<TahatorResendService> logger,
         FicheRepository fiches,
         RayvarzPayloadBuilder payload,
-        RayvarzClient client)
+        RayvarzClient client,
+        TahatorSnapshotStore snapshots)
     {
         _config = config;
         _logger = logger;
         _fiches = fiches;
         _payload = payload;
         _client = client;
+        _snapshots = snapshots;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara تنظیم نشده");
     }
@@ -62,6 +65,29 @@ public sealed class TahatorResendService
             // optional
         }
 
+        IncomeFicheTahatorSnapshot? pendingStored = null;
+        try
+        {
+            if (_snapshots.IsConfigured)
+                pendingStored = await _snapshots.GetPendingAsync(ficheNo, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "خواندن snapshot Pending تهاتر ناموفق");
+        }
+
+        var msg = inHeader
+            ? "فیش در جدول واسط Accounting_DocHeader هست — نیاز به ارسال نیست."
+            : inRayvarz
+                ? "فیش در رایورز (incmdocsys) هست — ارسال لازم نیست."
+                : snapshot == null || fiche == null
+                    ? "فیش درآمدی در Income_Fiche یافت نشد."
+                    : string.IsNullOrWhiteSpace(notSent)
+                        ? $"آماده ارسال SOAP تهاتر (DocTyp={fiche.DocTyp})."
+                        : $"آماده ارسال SOAP. آخرین DocNotSent: {notSent}";
+        if (pendingStored != null)
+            msg += $" | Snapshot Pending ذخیره‌شده: Id={pendingStored.SnapshotId} — در صورت نیاز POST /api/tahator/restore";
+
         return new TahatorCheckResult
         {
             FicheNo = ficheNo,
@@ -69,18 +95,11 @@ public sealed class TahatorResendService
             ExistsInIncomeFiche = snapshot != null,
             ExistsInRayvarz = inRayvarz,
             Snapshot = snapshot,
+            PendingStoredSnapshot = pendingStored,
             Fiche = fiche,
             DocNotSentError = notSent,
             NeedsSend = !inHeader && !inRayvarz && snapshot != null && fiche != null,
-            Message = inHeader
-                ? "فیش در جدول واسط Accounting_DocHeader هست — نیاز به ارسال نیست."
-                : inRayvarz
-                    ? "فیش در رایورز (incmdocsys) هست — ارسال لازم نیست."
-                    : snapshot == null || fiche == null
-                        ? "فیش درآمدی در Income_Fiche یافت نشد."
-                        : string.IsNullOrWhiteSpace(notSent)
-                            ? $"آماده ارسال SOAP تهاتر (DocTyp={fiche.DocTyp})."
-                            : $"آماده ارسال SOAP. آخرین DocNotSent: {notSent}"
+            Message = msg
         };
     }
 
@@ -169,15 +188,26 @@ public sealed class TahatorResendService
             var actDate = FirstDate(req.ActDate, fiche.RayvarzActDate);
             var dueDate = FirstDate(req.DueDate, fiche.RayvarzDueDate);
 
+            long? snapshotId = null;
             if (!dryRun)
             {
+                if (!_snapshots.IsConfigured)
+                    return Fail(ficheNo, dryRun, steps,
+                        "ConnectionStrings:RayvarzRuleEngine برای ذخیره snapshot تهاتر تنظیم نشده.");
+
+                snapshotId = await _snapshots.InsertPendingAsync(
+                    snapshot, today, "قبل از UPDATE وضعیت ۲ — ارسال تهاتر", ct);
+                snapshot.SnapshotId = snapshotId.Value;
+                snapshot.PersistStatus = TahatorSnapshotStore.StatusPending;
+                steps.Add($"3b) Snapshot در RayvarzRuleEngine ذخیره شد — SnapshotId={snapshotId}");
+
                 await ApplyTriggerStatus2Async(ficheNo, today, ct);
                 statusChanged = true;
                 steps.Add($"4) UPDATE وضعیت ۲ (Export/Break={today}, PaymentDate='')");
             }
             else
             {
-                steps.Add($"4) DryRun — UPDATE وضعیت ۲ شبیه‌سازی شد (تاریخ={today})");
+                steps.Add($"4) DryRun — ذخیره snapshot و UPDATE وضعیت ۲ شبیه‌سازی شد (تاریخ={today})");
             }
 
             steps.Add($"5) ساخت SOAP تهاتر via DSL/PayloadBuilder (Branch={branch}, Fund={fund}, Engine=Active)");
@@ -193,11 +223,10 @@ public sealed class TahatorResendService
                     ? $"6) SOAP ارسال شد — {soapResult.Message}"
                     : $"6) SOAP ناموفق — {soapResult.Message}");
 
-            if (statusChanged)
+            if (statusChanged && snapshotId is > 0)
             {
-                await RestoreSnapshotStatus3Async(snapshot, ct);
+                await RestoreFromStoredSnapshotAsync(snapshotId.Value, steps, ct);
                 statusChanged = false;
-                steps.Add("7) UPDATE بازگردانی وضعیت ۳ با اطلاعات SELECT اولیه");
             }
             else
             {
@@ -255,6 +284,7 @@ public sealed class TahatorResendService
                 ExistsInAccountingDocHeaderAfter = inHeaderAfter,
                 ExistsInRayvarz = verifiedRay,
                 Snapshot = snapshot,
+                SnapshotId = snapshot?.SnapshotId > 0 ? snapshot.SnapshotId : null,
                 TriggerDate = today,
                 DocNotSentError = notSent,
                 EngineName = built.EngineName,
@@ -278,12 +308,23 @@ public sealed class TahatorResendService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Tahator send failed for {FicheNo}", ficheNo);
-            if (statusChanged && snapshot != null)
+            if (statusChanged)
             {
                 try
                 {
-                    await RestoreSnapshotStatus3Async(snapshot, ct);
-                    steps.Add("⚠ پس از خطا وضعیت ۳ بازگردانی شد");
+                    var pending = snapshot?.SnapshotId > 0
+                        ? await _snapshots.GetByIdAsync(snapshot.SnapshotId, ct)
+                        : await _snapshots.GetPendingAsync(ficheNo, ct);
+                    if (pending != null)
+                    {
+                        await RestoreFromStoredSnapshotAsync(pending.SnapshotId, steps, ct);
+                        steps.Add("⚠ پس از خطا وضعیت از snapshot ذخیره‌شده بازگردانی شد");
+                    }
+                    else if (snapshot != null)
+                    {
+                        await RestoreSnapshotStatus3Async(snapshot, ct);
+                        steps.Add("⚠ پس از خطا وضعیت ۳ از حافظه بازگردانی شد (snapshot DB نبود)");
+                    }
                 }
                 catch (Exception restoreEx)
                 {
@@ -293,6 +334,44 @@ public sealed class TahatorResendService
 
             return Fail(ficheNo, dryRun, steps, ex.Message);
         }
+    }
+
+    /// <summary>بازگردانی دستی از snapshot Pending ذخیره‌شده (بعد از قطع فرایند).</summary>
+    public async Task<TahatorSendResult> RestorePendingAsync(string ficheNo, CancellationToken ct = default)
+    {
+        ficheNo = NormalizeFicheNo(ficheNo);
+        var steps = new List<string>();
+        if (!_snapshots.IsConfigured)
+            return Fail(ficheNo, false, steps, "RayvarzRuleEngine تنظیم نشده.");
+
+        var pending = await _snapshots.GetPendingAsync(ficheNo, ct);
+        if (pending == null)
+            return Fail(ficheNo, false, steps, "Snapshot Pending برای این فیش یافت نشد.");
+
+        steps.Add($"SnapshotId={pending.SnapshotId} از RayvarzRuleEngine خوانده شد");
+        await RestoreFromStoredSnapshotAsync(pending.SnapshotId, steps, ct);
+        return new TahatorSendResult
+        {
+            Success = true,
+            FicheNo = ficheNo,
+            SnapshotId = pending.SnapshotId,
+            Snapshot = pending,
+            Steps = steps,
+            Message = $"وضعیت فیش از SnapshotId={pending.SnapshotId} به ۳ بازگردانی شد."
+        };
+    }
+
+    public Task<IReadOnlyList<IncomeFicheTahatorSnapshot>> ListPendingAsync(CancellationToken ct = default) =>
+        _snapshots.ListPendingAsync(50, ct);
+
+    private async Task RestoreFromStoredSnapshotAsync(long snapshotId, List<string> steps, CancellationToken ct)
+    {
+        var stored = await _snapshots.GetByIdAsync(snapshotId, ct)
+            ?? throw new InvalidOperationException($"SnapshotId={snapshotId} یافت نشد.");
+
+        await RestoreSnapshotStatus3Async(stored, ct);
+        await _snapshots.MarkRestoredAsync(snapshotId, "بازگردانی وضعیت ۳ روی Income_Fiche", ct);
+        steps.Add($"7) UPDATE بازگردانی وضعیت ۳ از SnapshotId={snapshotId} (RayvarzRuleEngine) انجام شد");
     }
 
     /// <summary>مطابق Tahator1 در XmlBody: CI_Bank=4 → DocTyp 14 وگرنه 15.</summary>

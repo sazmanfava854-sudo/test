@@ -17,6 +17,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<TahatorSnapshotStore>();
 builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
@@ -502,6 +503,26 @@ app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendS
     catch (Exception ex)
     {
         return Results.Json(new { error = ex.Message, steps = Array.Empty<string>() }, statusCode: 500);
+    }
+});
+
+app.MapGet("/api/tahator/pending", async (TahatorResendService tahator, CancellationToken ct) =>
+{
+    var items = await tahator.ListPendingAsync(ct);
+    return Results.Ok(new { count = items.Count, items });
+});
+
+app.MapPost("/api/tahator/restore", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.FicheNo))
+        return Results.BadRequest(new { error = "FicheNo برای بازگردانی الزامی است." });
+    try
+    {
+        return Results.Ok(await tahator.RestorePendingAsync(req.FicheNo, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
 });
 

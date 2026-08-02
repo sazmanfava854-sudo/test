@@ -626,6 +626,9 @@ function formatTahatorCheck(d) {
     `NeedsSend: ${d.needsSend}`,
     f ? `DocTyp تهاتر: ${f.docTyp} — ${f.docTypDsc || f.docDsc || ''}` : '',
     f ? `Payable: ${Number(f.payable || 0).toLocaleString()} | ردیف: ${(f.rows || []).length}` : '',
+    d.pendingStoredSnapshot
+      ? `Snapshot Pending ذخیره‌شده: Id=${d.pendingStoredSnapshot.snapshotId} (در صورت قطعی → restore)`
+      : 'Snapshot Pending: —',
     d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : 'DocNotSent: —',
     `پیام: ${d.message || ''}`,
     snap ? [
@@ -651,6 +654,7 @@ function formatTahatorSend(d) {
     `DryRun: ${d.dryRun}`,
     `Engine: ${d.engineName || '-'}`,
     `DocTyp: ${d.docTyp || '-'}`,
+    d.snapshotId ? `SnapshotId (DB): ${d.snapshotId}` : '',
     `Branch/Fund: ${d.branch || '-'} / ${d.fund || '-'}`,
     `DocHeader قبل: ${d.existsInAccountingDocHeaderBefore}`,
     `DocHeader بعد: ${d.existsInAccountingDocHeaderAfter}`,

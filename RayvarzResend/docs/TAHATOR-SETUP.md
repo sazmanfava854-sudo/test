@@ -14,11 +14,22 @@
 ## جریان
 
 1. اگر در `Accounting_DocHeader` یا `incmdocsys` بود → ارسال لازم نیست  
-2. `SELECT` و نگه‌داشت از `Income_Fiche`  
-3. `UPDATE` وضعیت **۲** (معادل تایید فیش دستی Sara)  
-4. ساخت SOAP از **DSL / ActiveEngine** با `DocTyp` تهاتر و `POST SaveDocument`  
-5. `UPDATE` بازگردانی وضعیت **۳** با مقادیر اولیه  
-6. اگر در واسط / رایورز نبود → علت از `Accounting_DocNotSent`
+2. `SELECT` از `Income_Fiche`  
+3. **ذخیره پایدار** همان مقادیر در `RayvarzRuleEngine.dbo.TahatorRestoreSnapshot` (Status=`Pending`)  
+4. `UPDATE` وضعیت **۲** روی Sara  
+5. ساخت SOAP از **DSL / ActiveEngine** با `DocTyp` تهاتر و `POST SaveDocument`  
+6. `UPDATE` بازگردانی وضعیت **۳** از همان snapshot ذخیره‌شده → Status=`Restored`  
+7. اگر در واسط / رایورز نبود → علت از `Accounting_DocNotSent`
+
+اگر فرایند وسط کار قطع شود، snapshot با Status=`Pending` می‌ماند:
+
+```http
+GET  /api/tahator/pending
+POST /api/tahator/restore
+{ "ficheNo": "040933318150" }
+```
+
+اسکریپت جدول: `database/05_TahatorRestoreSnapshot.sql` (روی سرور ۲۳۲ / `RayvarzRuleEngine`). در صورت نبود جدول، سرویس در اولین استفاده آن را می‌سازد.
 
 ## API
 
