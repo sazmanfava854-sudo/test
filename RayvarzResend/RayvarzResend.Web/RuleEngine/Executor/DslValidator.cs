@@ -27,6 +27,9 @@ public sealed class DslValidator
         if (!program.HasNosazi)
             warnings.Add("تابع Nosazi در DSL یافت نشد.");
 
+        if (!program.HasIncome)
+            warnings.Add("تابع iNcOME (درآمد) در DSL یافت نشد.");
+
         foreach (var fn in program.UnsupportedFunctions)
             warnings.Add($"تابع پشتیبانی‌نشده در Parser: {fn}");
 

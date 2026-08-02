@@ -1,13 +1,8 @@
 namespace RayvarzResend.Web.RuleEngine.Parser;
 
-/// <summary>فاز ۲: XmlBody Body → DslProgram — Run dispatch + Nosazi subset.</summary>
+/// <summary>XmlBody Body → DslProgram — Run + Nosazi + خانواده iNcOME (فاز ۶).</summary>
 public static class VbTranspiler
 {
-    private static readonly HashSet<string> Phase2Functions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Run", "Nosazi"
-    };
-
     public static DslProgram Transpile(ClsFunctionDocument document)
     {
         var warnings = new List<string>();
@@ -21,8 +16,7 @@ public static class VbTranspiler
 
         foreach (var fn in extracted)
         {
-            var isSupported = Phase2Functions.Contains(fn.Name)
-                || string.Equals(fn.DisplayName, "نوسازی", StringComparison.Ordinal);
+            var isSupported = SupportedDslFunctions.IsSupported(fn.Name, fn.DisplayName);
 
             if (!isSupported)
             {
@@ -35,13 +29,14 @@ public static class VbTranspiler
                     Body = new[]
                     {
                         new DslUnsupportedStatement(
-                            "Function outside Phase 2 scope (Run + Nosazi only)",
+                            "Function outside supported DSL scope (Run + Nosazi + iNcOME*)",
                             fn.Name)
                     }
                 });
                 continue;
             }
 
+            // بدنه درآمد در DryRun skip می‌شود؛ parse برای dispatch کافی است (allow unsupported در body)
             var body = VbStatementParser.ParseBlock(fn.Body, localNames, warnings, allowUnsupportedFallback: true);
             dslFunctions.Add(new DslFunction
             {
@@ -55,9 +50,11 @@ public static class VbTranspiler
         if (!dslFunctions.Any(f => f.Name.Equals("Run", StringComparison.OrdinalIgnoreCase)))
             warnings.Add("تابع Run در Body یافت نشد.");
 
-        if (!dslFunctions.Any(f => f.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
-                                    || string.Equals(f.DisplayName, "نوسازی", StringComparison.Ordinal)))
+        if (!dslFunctions.Any(f => SupportedDslFunctions.IsNosazi(f.Name, f.DisplayName)))
             warnings.Add("تابع Nosazi (نوسازی) در Body یافت نشد.");
+
+        if (!dslFunctions.Any(f => SupportedDslFunctions.IsIncome(f.Name)))
+            warnings.Add("تابع iNcOME (درآمد) در Body یافت نشد.");
 
         return new DslProgram
         {

@@ -54,9 +54,8 @@ public sealed class DslProgram
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> UnsupportedFunctions { get; init; } = Array.Empty<string>();
     public bool HasEntryPoint => Functions.Any(f => f.Name.Equals(EntryPoint, StringComparison.OrdinalIgnoreCase));
-    public bool HasNosazi => Functions.Any(f =>
-        f.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(f.DisplayName, "نوسازی", StringComparison.Ordinal));
+    public bool HasNosazi => Functions.Any(f => SupportedDslFunctions.IsNosazi(f.Name, f.DisplayName));
+    public bool HasIncome => Functions.Any(f => SupportedDslFunctions.IsIncome(f.Name));
 }
 
 public sealed class DslParseResult

@@ -6,7 +6,8 @@ internal static class VbStatementParser
 {
     private static readonly HashSet<string> Phase2SupportedFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Run", "Nosazi", "نوسازی"
+        "Run", "Nosazi", "نوسازی",
+        "iNcOME", "iNcOMEOragh", "iNcOMESeprdeh", "iNcOMEEshghal", "iNcOMESepordeh", "Income"
     };
 
     private static readonly Regex DimAssignRegex = new(
@@ -409,7 +410,9 @@ internal static class VbStatementParser
         }
 
         if (TryExtractBareFunctionName(callee, out var bareName)
-            && (localFunctionNames.Contains(bareName) || Phase2SupportedFunctions.Contains(bareName)))
+            && (localFunctionNames.Contains(bareName)
+                || Phase2SupportedFunctions.Contains(bareName)
+                || SupportedDslFunctions.IsSupported(bareName)))
         {
             statement = new DslCallFunctionStatement(bareName, args);
             return true;

@@ -18,6 +18,7 @@ public static class SaraOperationBootstrap
         RegisterFiche(registry);
         RegisterRef(registry);
         RegisterNosazi(registry);
+        RegisterIncome(registry);
         RegisterValidation(registry);
         RegisterCollectionNoOps(registry);
         return registry;
@@ -217,6 +218,25 @@ public static class SaraOperationBootstrap
             ctx.Variables["rowsBuilt"] = ctx.Rows.Count;
             return ctx.Rows;
         });
+    }
+
+    private static void RegisterIncome(OperationRegistry r)
+    {
+        OperationHandler buildIncome = (ctx, _) =>
+        {
+            if (ctx.Fiche.Category != FicheCategory.Income)
+                throw new InvalidOperationException($"Income.BuildIncomeRows برای {ctx.Fiche.Category} مجاز نیست.");
+
+            ctx.Rows.Clear();
+            ctx.Rows.AddRange(ctx.Fiche.Rows);
+            ctx.Variables["rowsBuilt"] = ctx.Rows.Count;
+            ctx.Variables["incomeBuilt"] = true;
+            return ctx.Rows;
+        };
+
+        r.Register("Income.BuildIncomeRows", buildIncome);
+        r.Register("iNcOME.BuildIncomeRows", buildIncome);
+        r.Register("iNcOME.BuildRows", buildIncome);
     }
 
     private static void RegisterValidation(OperationRegistry r)

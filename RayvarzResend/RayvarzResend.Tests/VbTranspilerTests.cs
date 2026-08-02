@@ -18,7 +18,11 @@ public class VbTranspilerTests
 
         Assert.True(program.HasEntryPoint);
         Assert.True(program.HasNosazi);
-        Assert.Contains(program.UnsupportedFunctions, f => f.Equals("iNcOME", StringComparison.OrdinalIgnoreCase));
+        Assert.True(program.HasIncome);
+        Assert.DoesNotContain(program.UnsupportedFunctions, f => f.Equals("iNcOME", StringComparison.OrdinalIgnoreCase));
+
+        var income = program.Functions.First(f => f.Name.Equals("iNcOME", StringComparison.OrdinalIgnoreCase));
+        Assert.True(income.IsSupported);
 
         var run = program.Functions.First(f => f.Name.Equals("Run", StringComparison.OrdinalIgnoreCase));
         Assert.True(run.IsSupported);

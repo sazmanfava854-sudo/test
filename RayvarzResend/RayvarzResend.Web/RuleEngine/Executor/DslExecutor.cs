@@ -33,6 +33,12 @@ public sealed class DslExecutor
                 _registry.Invoke("Nosazi.BuildDutyRows", context, Array.Empty<string>());
                 _registry.Invoke("Validate.RowSumEqualsPayable", context, Array.Empty<string>());
             }
+            else if (context.Fiche.Category == FicheCategory.Income
+                     && SupportedDslFunctions.IsIncome(context.DispatchedFunction))
+            {
+                _registry.Invoke("Income.BuildIncomeRows", context, Array.Empty<string>());
+                _registry.Invoke("Validate.RowSumEqualsPayable", context, Array.Empty<string>());
+            }
 
             var rows = context.Rows.Count > 0 ? context.Rows : context.Fiche.Rows;
             var sum = rows.Sum(r => r.Val);
@@ -62,19 +68,20 @@ public sealed class DslExecutor
         trace.Add($"→ {function.Name}()");
         context.DispatchedFunction = function.Name;
 
-        if (!function.IsSupported && !function.Name.Equals("Run", StringComparison.OrdinalIgnoreCase)
-            && !function.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase))
+        if (!function.IsSupported
+            && !function.Name.Equals("Run", StringComparison.OrdinalIgnoreCase)
+            && !SupportedDslFunctions.IsDryRunBodySkip(function.Name, function.DisplayName))
         {
-            throw new InvalidOperationException($"تابع {function.Name} در فاز ۳ پشتیبانی نمی‌شود.");
+            throw new InvalidOperationException($"تابع {function.Name} در DSL پشتیبانی نمی‌شود.");
         }
 
-        // DryRun: بدنه Nosazi را اجرا نکن — ردیف‌ها از Fiche live
-        if (context.DryRun
-            && (function.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(function.DisplayName, "نوسازی", StringComparison.Ordinal)))
+        // DryRun: بدنه Nosazi / iNcOME* را اجرا نکن — ردیف‌ها از Fiche live
+        if (context.DryRun && SupportedDslFunctions.IsDryRunBodySkip(function.Name, function.DisplayName))
         {
-            context.DispatchedFunction = "Nosazi";
-            trace.Add("→ Nosazi() [DryRun: body skipped — use live Fiche.Rows]");
+            context.DispatchedFunction = SupportedDslFunctions.IsNosazi(function.Name, function.DisplayName)
+                ? "Nosazi"
+                : function.Name;
+            trace.Add($"→ {context.DispatchedFunction}() [DryRun: body skipped — use live Fiche.Rows]");
             return;
         }
 
@@ -112,14 +119,13 @@ public sealed class DslExecutor
                     if (target == null)
                         throw new InvalidOperationException($"تابع {fn.FunctionName} یافت نشد.");
 
-                    // فاز ۳/۴: بدنه کامل Nosazi در XmlBody پر از Select Case است؛
-                    // ردیف‌ها از فیش live ساخته می‌شوند (Nosazi.BuildDutyRows بعد از Execute).
-                    if (context.DryRun
-                        && (target.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(target.DisplayName, "نوسازی", StringComparison.Ordinal)))
+                    // DryRun: بدنه Nosazi / iNcOME* skip — ردیف از فیش live
+                    if (context.DryRun && SupportedDslFunctions.IsDryRunBodySkip(target.Name, target.DisplayName))
                     {
-                        context.DispatchedFunction = "Nosazi";
-                        trace.Add("  → Nosazi() [DryRun: body skipped — use live Fiche.Rows]");
+                        context.DispatchedFunction = SupportedDslFunctions.IsNosazi(target.Name, target.DisplayName)
+                            ? "Nosazi"
+                            : target.Name;
+                        trace.Add($"  → {context.DispatchedFunction}() [DryRun: body skipped — use live Fiche.Rows]");
                         break;
                     }
 

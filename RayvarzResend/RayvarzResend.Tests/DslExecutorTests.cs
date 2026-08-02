@@ -23,6 +23,37 @@ public class DslExecutorTests
     }
 
     [Fact]
+    public void Execute_fixture_dispatches_Income_for_income_fiche()
+    {
+        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "member-1388-sample.xml");
+        var xml = File.ReadAllText(fixturePath);
+        var program = VbTranspiler.Transpile(XmlEnvelopeReader.Read(xml, "fixture").Document);
+
+        var registry = SaraOperationBootstrap.CreateDefault();
+        var executor = new DslExecutor(registry);
+
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            FicheNo = "1403/12345",
+            Payable = 500m,
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1001, Val = 300m, IncmRowDsc = "عوارض" },
+                new IncmRowDto { IncmNo = 1002, Val = 200m, IncmRowDsc = "سایر" }
+            }
+        };
+
+        var context = new DslExecutionContext { Fiche = fiche, DryRun = true };
+        var result = executor.Execute(program, context);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Equal("iNcOME", result.DispatchedFunction, ignoreCase: true);
+        Assert.Equal(500m, result.RowSum);
+        Assert.Equal(2, result.Rows.Count);
+    }
+
+    [Fact]
     public void Execute_fixture_dispatches_Nosazi_for_duty_fiche()
     {
         var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "member-1388-sample.xml");
