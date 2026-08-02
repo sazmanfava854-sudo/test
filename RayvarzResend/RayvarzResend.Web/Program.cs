@@ -323,22 +323,32 @@ app.MapPost("/api/rule/dsl/parse", async (bool? force, RuleVersionManager mgr, R
     if (!store.IsConfigured)
         return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
 
-    var result = await mgr.ParseActiveMemberSnapshotAsync(forceRebuild: force == true, ct);
-    return Results.Ok(new
+    try
     {
-        result.Stored,
-        result.SkippedExisting,
-        result.SnapshotId,
-        result.DslVersion,
-        result.XmlHash,
-        result.Message,
-        parseSuccess = result.Parse?.Success,
-        parseError = result.Parse?.ErrorMessage,
-        entryPoint = result.Parse?.Program?.EntryPoint,
-        functionCount = result.Parse?.Program?.Functions.Count,
-        unsupportedFunctions = result.Parse?.Program?.UnsupportedFunctions,
-        warnings = result.Parse?.Program?.Warnings
-    });
+        var result = await mgr.ParseActiveMemberSnapshotAsync(forceRebuild: force == true, ct);
+        return Results.Ok(new
+        {
+            result.Stored,
+            result.SkippedExisting,
+            result.SnapshotId,
+            result.DslVersion,
+            result.XmlHash,
+            result.Message,
+            parseSuccess = result.Parse?.Success,
+            parseError = result.Parse?.ErrorMessage,
+            entryPoint = result.Parse?.Program?.EntryPoint,
+            functionCount = result.Parse?.Program?.Functions.Count,
+            unsupportedFunctions = result.Parse?.Program?.UnsupportedFunctions,
+            warnings = result.Parse?.Program?.Warnings,
+            dslJsonLength = result.Parse?.Program != null
+                ? RuleDslParserService.SerializeProgram(result.Parse.Program).Length
+                : (int?)null
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message, inner = ex.InnerException?.Message }, statusCode: 500);
+    }
 });
 
 app.MapPost("/api/rule/dsl/preview", (RuleDslParsePreviewRequest? req, RuleDslParserService parser) =>

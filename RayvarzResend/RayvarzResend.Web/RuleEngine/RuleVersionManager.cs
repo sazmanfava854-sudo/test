@@ -142,16 +142,16 @@ public sealed class RuleVersionManager
     private async Task LinkCandidatesToSnapshotAsync(DslPersistResult result, CancellationToken ct)
     {
         var stuck = await _store.GetCandidatesByStatusesAsync(NidMember,
-            new[] { RuleCandidateStatus.Detected, RuleCandidateStatus.Parsing }, ct);
+            new[] { RuleCandidateStatus.Detected, RuleCandidateStatus.Parsing, RuleCandidateStatus.Rejected }, ct);
         foreach (var candidate in stuck)
         {
             if (!candidate.CanonicalXmlHash.Equals(result.XmlHash, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Parsed, ct: ct);
+            await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Parsed, rejectReason: null, ct: ct);
             await _store.InsertPromotionLogAsync(
                 NidMember, candidate.CandidateId, result.SnapshotId, "Parsed",
-                result.SkippedExisting ? "Linked to existing snapshot after dsl/parse" : "Parsed via dsl/parse", ct);
+                result.Message ?? "Linked to snapshot after dsl/parse", ct);
         }
     }
 

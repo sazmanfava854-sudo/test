@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace RayvarzResend.Web.RuleEngine.Store;
 
@@ -377,7 +378,7 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@hist", row.SourceNidHistory);
         cmd.Parameters.AddWithValue("@modAt", row.SourceModifyAt);
         cmd.Parameters.AddWithValue("@hash", row.CanonicalXmlHash);
-        cmd.Parameters.AddWithValue("@xml", row.XmlBody);
+        AddNVarCharMax(cmd, "@xml", row.XmlBody);
         cmd.Parameters.AddWithValue("@modBy", (object?)row.Modifyer ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@modDesc", (object?)row.ModifyDesc ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@status", row.Status);
@@ -420,7 +421,7 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@engine", engine);
         cmd.Parameters.AddWithValue("@ok", success);
         cmd.Parameters.AddWithValue("@err", (object?)error ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@json", (object?)outputJson ?? DBNull.Value);
+        AddNVarCharMax(cmd, "@json", outputJson);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -516,7 +517,7 @@ public sealed class RuleEngineStore
         cmd.Parameters.AddWithValue("@member", row.NidMember);
         cmd.Parameters.AddWithValue("@ver", row.DslVersion);
         cmd.Parameters.AddWithValue("@hash", row.XmlHash);
-        cmd.Parameters.AddWithValue("@json", (object?)row.DslJson ?? DBNull.Value);
+        AddNVarCharMax(cmd, "@json", row.DslJson);
         cmd.Parameters.AddWithValue("@parser", row.ParserVersion);
         cmd.Parameters.AddWithValue("@entry", row.EntryPoint);
         cmd.Parameters.AddWithValue("@active", row.IsActive);
@@ -539,9 +540,9 @@ public sealed class RuleEngineStore
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@id", snapshotId);
-        cmd.Parameters.AddWithValue("@json", dslJson);
+        AddNVarCharMax(cmd, "@json", dslJson);
         cmd.Parameters.AddWithValue("@parser", parserVersion);
-        cmd.Parameters.AddWithValue("@entry", entryPoint);
+        cmd.Parameters.AddWithValue("@entry", entryPoint ?? "Run");
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -713,6 +714,12 @@ public sealed class RuleEngineStore
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@nid", nidMember);
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static void AddNVarCharMax(SqlCommand cmd, string name, string? value)
+    {
+        var p = cmd.Parameters.Add(name, SqlDbType.NVarChar, -1);
+        p.Value = string.IsNullOrEmpty(value) ? DBNull.Value : value;
     }
 
     private static RuleDslSnapshotRow ReadDslSnapshotRow(SqlDataReader r) =>
