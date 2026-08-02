@@ -129,7 +129,7 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 return RuleDslParserService.DeserializeProgram(snapshot.DslJson);
         }
 
-        var parsed = await _parser.ParseActiveMemberAsync(ct);
+        var parsed = await _parser.ParseActiveMemberAsync(ct: ct);
         return parsed.Parse?.Program;
     }
 

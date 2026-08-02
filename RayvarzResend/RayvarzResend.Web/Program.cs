@@ -318,12 +318,12 @@ app.MapGet("/api/rule/dsl/latest", async (RuleEngineStore store, RuleDslParserSe
     });
 });
 
-app.MapPost("/api/rule/dsl/parse", async (RuleDslParserService parser, RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
+app.MapPost("/api/rule/dsl/parse", async (bool? force, RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
 {
     if (!store.IsConfigured)
         return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
 
-    var result = await mgr.ParseActiveMemberSnapshotAsync(ct);
+    var result = await mgr.ParseActiveMemberSnapshotAsync(forceRebuild: force == true, ct);
     return Results.Ok(new
     {
         result.Stored,

@@ -187,6 +187,15 @@ public sealed class RulePromotionService
         }
 
         var program = RuleDslParserService.DeserializeProgram(snapshot.DslJson);
+        var liveParse = _dslParser.Parse(candidate.XmlBody, "MemberHistory");
+        if (liveParse.Success && liveParse.Program != null)
+        {
+            program = liveParse.Program;
+            var freshJson = RuleDslParserService.SerializeProgram(program);
+            if (!string.Equals(freshJson, snapshot.DslJson, StringComparison.Ordinal))
+                await _store.UpdateDslSnapshotAsync(snapshot.SnapshotId, freshJson, RuleDslParserService.ParserVersion, program.EntryPoint, ct);
+        }
+
         if (program == null)
         {
             await RejectCandidate(candidate.CandidateId, "Invalid DslJson", ct);
@@ -255,7 +264,7 @@ public sealed class RulePromotionService
             return null;
 
         await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Parsing, ct: ct);
-        var result = await _dslParser.ParseAndStoreAsync(candidate.XmlBody, "MemberHistory", ct);
+        var result = await _dslParser.ParseAndStoreAsync(candidate.XmlBody, "MemberHistory", ct: ct);
         if (result.Parse?.Success != true)
         {
             await RejectCandidate(candidate.CandidateId, result.Parse?.ErrorMessage ?? result.Message ?? "Parse failed", ct);

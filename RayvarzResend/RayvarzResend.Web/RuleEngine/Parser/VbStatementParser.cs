@@ -13,6 +13,14 @@ internal static class VbStatementParser
         @"^Dim\s+(\w+)\s*(?:As\s+[\w.]+)?\s*=\s*(.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    private static readonly Regex DimAsNewRegex = new(
+        @"^Dim\s+(\w+)\s+As\s+New\s+(.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex DimAsTypeRegex = new(
+        @"^Dim\s+(\w+)\s+As\s+(.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     private static readonly Regex SimpleAssignRegex = new(
         @"^(\w+)\s*=\s*(.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -56,10 +64,9 @@ internal static class VbStatementParser
                 continue;
             }
 
-            if (DimAssignRegex.Match(line).Success)
+            if (TryParseDim(line, out var dimStatement))
             {
-                var m = DimAssignRegex.Match(line);
-                statements.Add(new DslAssignStatement(m.Groups[1].Value, m.Groups[2].Value.Trim()));
+                statements.Add(dimStatement);
                 index++;
                 continue;
             }
@@ -244,10 +251,9 @@ internal static class VbStatementParser
                 continue;
             }
 
-            if (DimAssignRegex.Match(line).Success)
+            if (TryParseDim(line, out var dimStatement))
             {
-                var m = DimAssignRegex.Match(line);
-                collected.Add(new DslAssignStatement(m.Groups[1].Value, m.Groups[2].Value.Trim()));
+                collected.Add(dimStatement);
                 index++;
                 continue;
             }
@@ -313,10 +319,43 @@ internal static class VbStatementParser
         return statements;
     }
 
+    private static bool TryParseDim(string line, out DslStatement statement)
+    {
+        statement = null!;
+        if (!StartsWithKeyword(line, "Dim "))
+            return false;
+
+        var assign = DimAssignRegex.Match(line);
+        if (assign.Success)
+        {
+            statement = new DslAssignStatement(assign.Groups[1].Value, assign.Groups[2].Value.Trim());
+            return true;
+        }
+
+        var asNew = DimAsNewRegex.Match(line);
+        if (asNew.Success)
+        {
+            statement = new DslAssignStatement(asNew.Groups[1].Value, $"New {asNew.Groups[2].Value.Trim()}");
+            return true;
+        }
+
+        var asType = DimAsTypeRegex.Match(line);
+        if (asType.Success)
+        {
+            statement = new DslAssignStatement(asType.Groups[1].Value, asType.Groups[2].Value.Trim());
+            return true;
+        }
+
+        statement = new DslUnsupportedStatement("Dim declaration", line);
+        return true;
+    }
+
     private static bool TryParseCall(string line, IReadOnlySet<string> localFunctionNames, out DslStatement statement)
     {
         statement = null!;
         var trimmed = line.Trim();
+        if (trimmed.StartsWith("Dim ", StringComparison.OrdinalIgnoreCase))
+            return false;
         if (!trimmed.Contains('('))
             return false;
 

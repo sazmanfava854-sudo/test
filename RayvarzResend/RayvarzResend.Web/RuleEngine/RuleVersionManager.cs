@@ -120,9 +120,9 @@ public sealed class RuleVersionManager
         await RetryStuckCandidatesAsync(ct);
     }
 
-    public async Task<DslPersistResult> ParseActiveMemberSnapshotAsync(CancellationToken ct = default)
+    public async Task<DslPersistResult> ParseActiveMemberSnapshotAsync(bool forceRebuild = false, CancellationToken ct = default)
     {
-        var result = await _dslParser.ParseActiveMemberAsync(ct);
+        var result = await _dslParser.ParseActiveMemberAsync(forceRebuild, ct);
         if (result.Parse?.Success == true && !string.IsNullOrWhiteSpace(result.XmlHash))
             await LinkCandidatesToSnapshotAsync(result, ct);
         return result;
@@ -160,7 +160,7 @@ public sealed class RuleVersionManager
         try
         {
             await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Parsing, ct: ct);
-            var result = await _dslParser.ParseAndStoreAsync(xmlBody, "MemberHistory", ct);
+            var result = await _dslParser.ParseAndStoreAsync(xmlBody, "MemberHistory", ct: ct);
             if (result.Parse?.Success == true)
             {
                 await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Parsed, ct: ct);

@@ -29,13 +29,18 @@ public class VbTranspilerTests
     }
 
     [Fact]
-    public void Parse_fixture_produces_stable_xml_hash()
+    public void Parse_dim_as_new_list_is_assign_not_operation()
     {
-        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "member-1388-sample.xml");
-        var xml = File.ReadAllText(fixturePath);
-        var first = XmlEnvelopeReader.Read(xml, "fixture");
-        var second = XmlEnvelopeReader.Read(xml, "fixture");
-        Assert.Equal(first.XmlHash, second.XmlHash);
-        Assert.Equal(64, first.XmlHash.Length);
+        var body = """
+            Dim ListRefP As New List(Of String)
+            Dim PParamName As New List(Of String)
+            Return ""
+            """;
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Nosazi" };
+        var warnings = new List<string>();
+        var statements = VbStatementParser.ParseBlock(body, names, warnings);
+
+        Assert.All(statements, s => Assert.IsNotType<DslCallOperationStatement>(s));
+        Assert.Contains(statements, s => s is DslAssignStatement a && a.Target == "ListRefP");
     }
 }

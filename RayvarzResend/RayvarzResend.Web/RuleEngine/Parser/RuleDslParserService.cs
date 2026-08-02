@@ -61,7 +61,7 @@ public sealed class RuleDslParserService
     }
 
     public async Task<DslPersistResult> ParseAndStoreAsync(
-        string xmlBody, string source = "xml", CancellationToken ct = default)
+        string xmlBody, string source = "xml", bool forceRebuild = false, CancellationToken ct = default)
     {
         var parsed = Parse(xmlBody, source);
         if (!parsed.Success || parsed.Envelope == null || parsed.Program == null)
@@ -85,8 +85,9 @@ public sealed class RuleDslParserService
             };
         }
 
+        var dslJson = JsonSerializer.Serialize(parsed.Program, JsonOptions);
         var existing = await _store.GetSnapshotByHashAsync(NidMember, parsed.Envelope.XmlHash, ct);
-        if (existing != null)
+        if (existing != null && !forceRebuild)
         {
             return new DslPersistResult
             {
@@ -96,12 +97,28 @@ public sealed class RuleDslParserService
                 DslVersion = existing.DslVersion,
                 XmlHash = existing.XmlHash,
                 Parse = parsed,
-                Message = "Snapshot already exists for this XmlHash — skipped rebuild"
+                Message = "Snapshot already exists for this XmlHash — skipped rebuild (use force=true)"
+            };
+        }
+
+        if (existing != null && forceRebuild)
+        {
+            await _store.UpdateDslSnapshotAsync(existing.SnapshotId, dslJson, ParserVersion, parsed.Program.EntryPoint, ct);
+            _logger.LogInformation("DSL snapshot rebuilt SnapshotId={SnapshotId} ParserVersion={Version}",
+                existing.SnapshotId, ParserVersion);
+            return new DslPersistResult
+            {
+                Stored = true,
+                SkippedExisting = false,
+                SnapshotId = existing.SnapshotId,
+                DslVersion = existing.DslVersion,
+                XmlHash = existing.XmlHash,
+                Parse = parsed,
+                Message = "DSL snapshot rebuilt (force=true)"
             };
         }
 
         var dslVersion = await _store.GetNextDslVersionAsync(NidMember, ct);
-        var dslJson = JsonSerializer.Serialize(parsed.Program, JsonOptions);
         var snapshotId = await _store.InsertDslSnapshotAsync(new RuleDslSnapshotRow
         {
             NidMember = NidMember,
@@ -128,7 +145,7 @@ public sealed class RuleDslParserService
         };
     }
 
-    public async Task<DslPersistResult> ParseActiveMemberAsync(CancellationToken ct = default)
+    public async Task<DslPersistResult> ParseActiveMemberAsync(bool forceRebuild = false, CancellationToken ct = default)
     {
         var record = await _members.LoadActiveMemberAsync(NidMember, ct: ct);
         if (record == null || string.IsNullOrWhiteSpace(record.XmlBody))
@@ -140,7 +157,7 @@ public sealed class RuleDslParserService
             };
         }
 
-        return await ParseAndStoreAsync(record.XmlBody, record.Source, ct);
+        return await ParseAndStoreAsync(record.XmlBody, record.Source, forceRebuild, ct);
     }
 
     public static string SerializeProgram(DslProgram program) =>

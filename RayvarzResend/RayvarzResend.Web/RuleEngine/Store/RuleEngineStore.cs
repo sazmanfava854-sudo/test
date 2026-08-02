@@ -524,6 +524,27 @@ public sealed class RuleEngineStore
         return Convert.ToInt64(id);
     }
 
+    public async Task UpdateDslSnapshotAsync(
+        long snapshotId, string dslJson, string parserVersion, string entryPoint, CancellationToken ct = default)
+    {
+        if (!IsConfigured) return;
+
+        const string sql = """
+            UPDATE dbo.RuleDslSnapshot
+            SET DslJson = @json, ParserVersion = @parser, EntryPoint = @entry
+            WHERE SnapshotId = @id
+            """;
+
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", snapshotId);
+        cmd.Parameters.AddWithValue("@json", dslJson);
+        cmd.Parameters.AddWithValue("@parser", parserVersion);
+        cmd.Parameters.AddWithValue("@entry", entryPoint);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     public async Task UpdateCandidateStatusAsync(long candidateId, string status, string? rejectReason = null, CancellationToken ct = default)
     {
         if (!IsConfigured) return;
