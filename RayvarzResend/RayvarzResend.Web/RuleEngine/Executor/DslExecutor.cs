@@ -68,6 +68,16 @@ public sealed class DslExecutor
             throw new InvalidOperationException($"تابع {function.Name} در فاز ۳ پشتیبانی نمی‌شود.");
         }
 
+        // DryRun: بدنه Nosazi را اجرا نکن — ردیف‌ها از Fiche live
+        if (context.DryRun
+            && (function.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(function.DisplayName, "نوسازی", StringComparison.Ordinal)))
+        {
+            context.DispatchedFunction = "Nosazi";
+            trace.Add("→ Nosazi() [DryRun: body skipped — use live Fiche.Rows]");
+            return;
+        }
+
         ExecuteStatements(function.Body, program, context, trace);
     }
 
@@ -101,6 +111,18 @@ public sealed class DslExecutor
                         || string.Equals(f.DisplayName, fn.FunctionName, StringComparison.Ordinal));
                     if (target == null)
                         throw new InvalidOperationException($"تابع {fn.FunctionName} یافت نشد.");
+
+                    // فاز ۳/۴: بدنه کامل Nosazi در XmlBody پر از Select Case است؛
+                    // ردیف‌ها از فیش live ساخته می‌شوند (Nosazi.BuildDutyRows بعد از Execute).
+                    if (context.DryRun
+                        && (target.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(target.DisplayName, "نوسازی", StringComparison.Ordinal)))
+                    {
+                        context.DispatchedFunction = "Nosazi";
+                        trace.Add("  → Nosazi() [DryRun: body skipped — use live Fiche.Rows]");
+                        break;
+                    }
+
                     ExecuteFunction(target, program, context, trace);
                     break;
                 }
@@ -157,10 +179,19 @@ public sealed class DslExecutor
                     return;
 
                 case DslUnsupportedStatement u:
+                    // فاز ۳/۴: خطوط VB خارج از subset — در DryRun رد می‌شوند؛ ردیف از Fiche live.
+                    if (context.DryRun)
+                    {
+                        trace.Add($"  skip unsupported: {Truncate(u.SourceSnippet, 80)}");
+                        break;
+                    }
                     throw new InvalidOperationException($"{u.Reason}: {u.SourceSnippet}");
             }
         }
     }
+
+    private static string Truncate(string? s, int max) =>
+        string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..max] + "…";
 
     private static bool TryParseInlineCall(string expression, out string functionName)
     {

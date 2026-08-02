@@ -87,7 +87,10 @@ internal static class VbStatementParser
                 continue;
             }
 
-            if (StartsWithKeyword(line, "Select Case"))
+            if (StartsWithKeyword(line, "Select Case")
+                || StartsWithKeyword(line, "Case ")
+                || line.Equals("Case Else", StringComparison.OrdinalIgnoreCase)
+                || line.Equals("End Select", StringComparison.OrdinalIgnoreCase))
             {
                 statements.Add(new DslUnsupportedStatement("Select Case not in Phase 2 subset", line));
                 index++;
@@ -281,7 +284,10 @@ internal static class VbStatementParser
                 continue;
             }
 
-            if (StartsWithKeyword(line, "Select Case"))
+            if (StartsWithKeyword(line, "Select Case")
+                || StartsWithKeyword(line, "Case ")
+                || line.Equals("Case Else", StringComparison.OrdinalIgnoreCase)
+                || line.Equals("End Select", StringComparison.OrdinalIgnoreCase))
             {
                 collected.Add(new DslUnsupportedStatement("Select Case not in Phase 2 subset", line));
                 index++;
@@ -318,6 +324,13 @@ internal static class VbStatementParser
             {
                 var m = ReturnRegex.Match(trimmed);
                 statements.Add(new DslReturnStatement(m.Groups[1].Value.Trim()));
+                continue;
+            }
+
+            if (SimpleAssignRegex.Match(trimmed).Success)
+            {
+                var m = SimpleAssignRegex.Match(trimmed);
+                statements.Add(new DslAssignStatement(m.Groups[1].Value, m.Groups[2].Value.Trim()));
                 continue;
             }
 
