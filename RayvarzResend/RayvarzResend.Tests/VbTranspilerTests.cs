@@ -1,4 +1,5 @@
 using Xunit;
+using RayvarzResend.Web.RuleEngine.Executor;
 using RayvarzResend.Web.RuleEngine.Parser;
 
 namespace RayvarzResend.Tests;
@@ -26,6 +27,49 @@ public class VbTranspilerTests
         var nosazi = program.Functions.First(f => f.Name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(nosazi.Body, s => s is DslAssignStatement a
             && a.Expression.Contains("GetAccountingDocCreateParameter", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ValidateForPromotion_ignores_misparsed_assignment_artifacts()
+    {
+        var program = new DslProgram
+        {
+            EntryPoint = "Run",
+            Functions = new List<DslFunction>
+            {
+                new()
+                {
+                    Name = "Run",
+                    IsSupported = true,
+                    Body = new List<DslStatement>
+                    {
+                        new DslCallOperationStatement("DutyFicheResultList", "DistrickBranch = Info8.GetAccountingDocCreateParameter", Array.Empty<string>()),
+                        new DslCallOperationStatement("DutyFicheResultList", "Select Case Info8.GetAccountingDocCreateParameter", Array.Empty<string>()),
+                        new DslCallOperationStatement("Save", "ClsAccounting", Array.Empty<string>())
+                    }
+                },
+                new() { Name = "Nosazi", IsSupported = true }
+            }
+        };
+
+        var validator = new DslValidator(SaraOperationBootstrap.CreateDefault());
+        var result = validator.ValidateForPromotion(program);
+
+        Assert.True(result.Success, string.Join("; ", result.Errors));
+    }
+
+    [Fact]
+    public void Parse_dotted_property_assign_is_assign_not_operation()
+    {
+        var body = """
+            DtoAccounting_DocHeader.EumAccountingObjInDocument = CByte(Enums.AccountingObjectInDocument.DutyFiche)
+            DistrickBranch = Info8.GetAccountingDocCreateParameter(param).DutyFicheResultList
+            """;
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Nosazi" };
+        var warnings = new List<string>();
+        var statements = VbStatementParser.ParseBlock(body, names, warnings);
+
+        Assert.All(statements, s => Assert.IsType<DslAssignStatement>(s));
     }
 
     [Fact]

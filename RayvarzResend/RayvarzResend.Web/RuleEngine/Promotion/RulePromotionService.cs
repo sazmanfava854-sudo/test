@@ -205,7 +205,7 @@ public sealed class RulePromotionService
 
         if (status is RuleCandidateStatus.Parsed or RuleCandidateStatus.Detected)
         {
-            var validation = _validator.Validate(program, strictUnsupportedStatements: false);
+            var validation = _validator.ValidateForPromotion(program);
             if (!validation.Success)
             {
                 var reason = SummarizeErrors(validation.Errors);

@@ -22,7 +22,7 @@ internal static class VbStatementParser
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex SimpleAssignRegex = new(
-        @"^(\w+)\s*=\s*(.+)$",
+        @"^([\w.]+)\s*=\s*(.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex ReturnRegex = new(
@@ -83,6 +83,13 @@ internal static class VbStatementParser
             {
                 var m = ReturnRegex.Match(line);
                 statements.Add(new DslReturnStatement(m.Groups[1].Value.Trim()));
+                index++;
+                continue;
+            }
+
+            if (StartsWithKeyword(line, "Select Case"))
+            {
+                statements.Add(new DslUnsupportedStatement("Select Case not in Phase 2 subset", line));
                 index++;
                 continue;
             }
@@ -274,6 +281,13 @@ internal static class VbStatementParser
                 continue;
             }
 
+            if (StartsWithKeyword(line, "Select Case"))
+            {
+                collected.Add(new DslUnsupportedStatement("Select Case not in Phase 2 subset", line));
+                index++;
+                continue;
+            }
+
             if (TryParseCall(line, localFunctionNames, out var callStatement))
             {
                 collected.Add(callStatement);
@@ -355,6 +369,10 @@ internal static class VbStatementParser
         statement = null!;
         var trimmed = line.Trim();
         if (trimmed.StartsWith("Dim ", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (trimmed.Contains('='))
+            return false;
+        if (StartsWithKeyword(trimmed, "Select Case"))
             return false;
         if (!trimmed.Contains('('))
             return false;
