@@ -130,7 +130,7 @@
       <p class="hint">
         تهاتر با نوسازی/صنفی فرق دارد: فقط <strong>تک‌کد فیش</strong> (بدون اکسل).
         اگر فیش در <code>Accounting_DocHeader</code> / رایورز باشد ارسال لازم نیست.
-        در غیر این صورت: نگه‌داشت → وضعیت ۲ → <strong>ارسال SOAP</strong> (DocTyp ۱۴/۱۵ از DSL) → بازگردانی وضعیت ۳ → بررسی واسط / <code>Accounting_DocNotSent</code>.
+        در غیر این صورت: نگه‌داشت در جدول <code>TahatorRestoreSnapshot</code> → وضعیت ۲ → <strong>ارسال SOAP</strong> → بازگردانی وضعیت ۳ از همان snapshot → بررسی واسط / <code>Accounting_DocNotSent</code>.
       </p>
       <div class="form-grid">
         <label class="field field-wide">
