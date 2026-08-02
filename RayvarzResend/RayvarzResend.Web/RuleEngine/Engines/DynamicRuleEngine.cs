@@ -57,11 +57,13 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
             if (program == null)
                 return await FailOrFallbackAsync(context, buildSoap, "DSL snapshot یافت نشد — POST /api/rule/dsl/parse را اجرا کنید.", ct);
 
-            var validation = _validator.Validate(program);
-            if (!validation.Success)
-                return await FailOrFallbackAsync(context, buildSoap, string.Join("; ", validation.Errors), ct);
-
             var dryRun = !buildSoap || _config.GetValue<bool>("Rayvarz:DryRun");
+            // DryRun/promote: Select Case و خطوط VB خارج از subset مانع اجرا نشوند
+            var validation = dryRun
+                ? _validator.ValidateForPromotion(program)
+                : _validator.Validate(program);
+            if (!validation.Success)
+                return await FailOrFallbackAsync(context, buildSoap, string.Join("; ", validation.Errors.Take(5)), ct);
             var execContext = new DslExecutionContext
             {
                 Fiche = context.Fiche,
@@ -71,7 +73,8 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 ActDate = context.ActDate,
                 DueDate = context.DueDate,
                 DryRun = dryRun,
-                BuildSoap = buildSoap
+                BuildSoap = buildSoap,
+                AllowLegacyFallback = context.AllowLegacyFallback
             };
 
             var executed = _executor.Execute(program, execContext);
@@ -122,14 +125,18 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
     {
         if (_store.IsConfigured && await _store.IsSchemaReadyAsync(ct))
         {
-            var snapshot = await _store.GetLatestSnapshotAsync(NidMember, ct);
+            var snapshot = await _store.GetActiveSnapshotAsync(NidMember, ct)
+                ?? await _store.GetLatestSnapshotAsync(NidMember, ct);
             if (!string.IsNullOrWhiteSpace(snapshot?.DslJson))
                 return RuleDslParserService.DeserializeProgram(snapshot.DslJson);
         }
 
-        var parsed = await _parser.ParseActiveMemberAsync(ct);
+        var parsed = await _parser.ParseActiveMemberAsync(ct: ct);
         return parsed.Parse?.Program;
     }
+
+    private bool ShouldFallback(FicheRuleContext context) =>
+        context.AllowLegacyFallback && FallbackToLegacy;
 
     private async Task<FicheRuleEvaluationResult> FailOrFallbackAsync(
         FicheRuleContext context,
@@ -137,7 +144,7 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
         string error,
         CancellationToken ct)
     {
-        if (!FallbackToLegacy)
+        if (!ShouldFallback(context))
         {
             return new FicheRuleEvaluationResult
             {

@@ -68,6 +68,7 @@ public sealed class RuleVersionManager
         if (!check.HasNewChange)
         {
             await _store.UpsertSyncStateAsync(state, ct);
+            await RetryStuckCandidatesAsync(ct);
             return;
         }
 
@@ -116,17 +117,50 @@ public sealed class RuleVersionManager
         }
 
         await _store.UpsertSyncStateAsync(state, ct);
+        await RetryStuckCandidatesAsync(ct);
     }
 
-    public async Task<DslPersistResult> ParseActiveMemberSnapshotAsync(CancellationToken ct = default) =>
-        await _dslParser.ParseActiveMemberAsync(ct);
+    public async Task<DslPersistResult> ParseActiveMemberSnapshotAsync(bool forceRebuild = false, CancellationToken ct = default)
+    {
+        var result = await _dslParser.ParseActiveMemberAsync(forceRebuild, ct);
+        if (result.Parse?.Success == true && !string.IsNullOrWhiteSpace(result.XmlHash))
+            await LinkCandidatesToSnapshotAsync(result, ct);
+        return result;
+    }
+
+    public async Task RetryStuckCandidatesAsync(CancellationToken ct = default)
+    {
+        if (!_store.IsConfigured || !await EnsureSchemaReadyAsync(ct))
+            return;
+
+        var stuck = await _store.GetCandidatesByStatusesAsync(NidMember,
+            new[] { RuleCandidateStatus.Detected, RuleCandidateStatus.Parsing }, ct);
+        foreach (var candidate in stuck)
+            await TryParseCandidateAsync(candidate.CandidateId, candidate.XmlBody, ct);
+    }
+
+    private async Task LinkCandidatesToSnapshotAsync(DslPersistResult result, CancellationToken ct)
+    {
+        var stuck = await _store.GetCandidatesByStatusesAsync(NidMember,
+            new[] { RuleCandidateStatus.Detected, RuleCandidateStatus.Parsing, RuleCandidateStatus.Rejected }, ct);
+        foreach (var candidate in stuck)
+        {
+            if (!candidate.CanonicalXmlHash.Equals(result.XmlHash, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            await _store.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatus.Parsed, rejectReason: null, ct: ct);
+            await _store.InsertPromotionLogAsync(
+                NidMember, candidate.CandidateId, result.SnapshotId, "Parsed",
+                result.Message ?? "Linked to snapshot after dsl/parse", ct);
+        }
+    }
 
     private async Task TryParseCandidateAsync(long candidateId, string xmlBody, CancellationToken ct)
     {
         try
         {
             await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Parsing, ct: ct);
-            var result = await _dslParser.ParseAndStoreAsync(xmlBody, "MemberHistory", ct);
+            var result = await _dslParser.ParseAndStoreAsync(xmlBody, "MemberHistory", ct: ct);
             if (result.Parse?.Success == true)
             {
                 await _store.UpdateCandidateStatusAsync(candidateId, RuleCandidateStatus.Parsed, ct: ct);

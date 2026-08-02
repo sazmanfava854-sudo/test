@@ -12,6 +12,7 @@ public sealed class DslExecutionContext
     public string? DueDate { get; init; }
     public bool DryRun { get; init; } = true;
     public bool BuildSoap { get; init; }
+    public bool AllowLegacyFallback { get; init; } = true;
     public Dictionary<string, object?> Variables { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<IncmRowDto> Rows { get; } = new();
     public string? LastReturnValue { get; set; }

@@ -55,6 +55,18 @@ public class DslExecutorTests
     }
 
     [Fact]
+    public void Registry_treats_list_add_as_known_noop()
+    {
+        var registry = SaraOperationBootstrap.CreateDefault();
+        Assert.True(registry.IsKnown("TmpAccounting_DocDetailsList.Add"));
+        Assert.True(registry.IsKnown("ListRefP.add"));
+        Assert.True(registry.IsKnown("ListAcc.Add"));
+
+        var ctx = new DslExecutionContext { DryRun = true };
+        Assert.Null(registry.Invoke("ListRefP.Add", ctx, Array.Empty<string>()));
+    }
+
+    [Fact]
     public void Registry_has_at_least_26_operations()
     {
         var registry = SaraOperationBootstrap.CreateDefault();

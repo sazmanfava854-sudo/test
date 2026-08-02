@@ -47,13 +47,24 @@ public sealed class GoldenDryRunService
     public async Task<GoldenDryRunSummary> RunAllAsync(bool compareExpectedRows = true, CancellationToken ct = default)
     {
         var engine = await _engineFactory.ResolveAsync(ct);
+        return await RunAllWithEngineAsync(engine, null, null, compareExpectedRows, allowLegacyFallback: true, ct);
+    }
+
+    public async Task<GoldenDryRunSummary> RunAllWithEngineAsync(
+        IFicheRuleEngine engine,
+        long? candidateId,
+        long? snapshotId,
+        bool compareExpectedRows = true,
+        bool allowLegacyFallback = true,
+        CancellationToken ct = default)
+    {
         var nidMember = _engineFactory.NidMember;
         var goldens = await _store.GetActiveGoldenFichesAsync(nidMember, ct);
         var results = new List<GoldenDryRunCaseResult>();
 
         foreach (var g in goldens)
         {
-            results.Add(await RunOneAsync(engine, g, compareExpectedRows, ct));
+            results.Add(await RunOneAsync(engine, g, candidateId, snapshotId, compareExpectedRows, allowLegacyFallback, ct));
         }
 
         return new GoldenDryRunSummary
@@ -69,13 +80,16 @@ public sealed class GoldenDryRunService
         RuleGoldenFicheRow golden, bool compareExpectedRows = true, CancellationToken ct = default)
     {
         var engine = await _engineFactory.ResolveAsync(ct);
-        return await RunOneAsync(engine, golden, compareExpectedRows, ct);
+        return await RunOneAsync(engine, golden, null, null, compareExpectedRows, true, ct);
     }
 
     private async Task<GoldenDryRunCaseResult> RunOneAsync(
         IFicheRuleEngine engine,
         RuleGoldenFicheRow golden,
+        long? candidateId,
+        long? snapshotId,
         bool compareExpectedRows,
+        bool allowLegacyFallback,
         CancellationToken ct)
     {
         try
@@ -93,7 +107,8 @@ public sealed class GoldenDryRunService
             {
                 Fiche = fiche,
                 Branch = branch,
-                Fund = fund
+                Fund = fund,
+                AllowLegacyFallback = allowLegacyFallback
             }, buildSoap: false, ct);
 
             if (!evaluated.Success)
@@ -133,7 +148,7 @@ public sealed class GoldenDryRunService
                 rows = fiche.Rows.Select(r => new { r.IncmNo, r.Val, r.IncmRowDsc })
             });
 
-            await _store.InsertDryRunResultAsync(null, null, golden.GoldenFicheId, engine.EngineName, success,
+            await _store.InsertDryRunResultAsync(candidateId, snapshotId, golden.GoldenFicheId, engine.EngineName, success,
                 success ? null : string.Join("; ", mismatches), outputJson, ct);
 
             return new GoldenDryRunCaseResult
@@ -152,7 +167,14 @@ public sealed class GoldenDryRunService
         catch (Exception ex)
         {
             var engineName = engine.EngineName;
-            await _store.InsertDryRunResultAsync(null, null, golden.GoldenFicheId, engineName, false, ex.Message, null, ct);
+            try
+            {
+                await _store.InsertDryRunResultAsync(candidateId, snapshotId, golden.GoldenFicheId, engineName, false, ex.Message, null, ct);
+            }
+            catch
+            {
+                // ignore secondary DB errors during dry-run logging
+            }
             return Fail(golden, ex.Message);
         }
     }

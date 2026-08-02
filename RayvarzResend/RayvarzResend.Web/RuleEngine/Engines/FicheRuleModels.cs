@@ -10,6 +10,7 @@ public sealed class FicheRuleContext
     public string? DocDate { get; init; }
     public string? ActDate { get; init; }
     public string? DueDate { get; init; }
+    public bool AllowLegacyFallback { get; init; } = true;
 }
 
 public sealed class FicheRuleEvaluationResult

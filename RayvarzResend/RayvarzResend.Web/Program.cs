@@ -5,6 +5,7 @@ using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.RuleEngine.Engines;
 using RayvarzResend.Web.RuleEngine.Executor;
 using RayvarzResend.Web.RuleEngine.Parser;
+using RayvarzResend.Web.RuleEngine.Promotion;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
@@ -31,6 +32,8 @@ builder.Services.AddSingleton<DslExecutor>();
 builder.Services.AddSingleton<RuleDslParserService>();
 builder.Services.AddSingleton<RuleVersionManager>();
 builder.Services.AddSingleton<GoldenDryRunService>();
+builder.Services.AddSingleton<RuleCircuitBreakerService>();
+builder.Services.AddSingleton<RulePromotionService>();
 builder.Services.AddHostedService<RuleSyncBackgroundService>();
 
 var app = builder.Build();
@@ -315,27 +318,37 @@ app.MapGet("/api/rule/dsl/latest", async (RuleEngineStore store, RuleDslParserSe
     });
 });
 
-app.MapPost("/api/rule/dsl/parse", async (RuleDslParserService parser, RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
+app.MapPost("/api/rule/dsl/parse", async (bool? force, RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
 {
     if (!store.IsConfigured)
         return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
 
-    var result = await mgr.ParseActiveMemberSnapshotAsync(ct);
-    return Results.Ok(new
+    try
     {
-        result.Stored,
-        result.SkippedExisting,
-        result.SnapshotId,
-        result.DslVersion,
-        result.XmlHash,
-        result.Message,
-        parseSuccess = result.Parse?.Success,
-        parseError = result.Parse?.ErrorMessage,
-        entryPoint = result.Parse?.Program?.EntryPoint,
-        functionCount = result.Parse?.Program?.Functions.Count,
-        unsupportedFunctions = result.Parse?.Program?.UnsupportedFunctions,
-        warnings = result.Parse?.Program?.Warnings
-    });
+        var result = await mgr.ParseActiveMemberSnapshotAsync(forceRebuild: force == true, ct);
+        return Results.Ok(new
+        {
+            result.Stored,
+            result.SkippedExisting,
+            result.SnapshotId,
+            result.DslVersion,
+            result.XmlHash,
+            result.Message,
+            parseSuccess = result.Parse?.Success,
+            parseError = result.Parse?.ErrorMessage,
+            entryPoint = result.Parse?.Program?.EntryPoint,
+            functionCount = result.Parse?.Program?.Functions.Count,
+            unsupportedFunctions = result.Parse?.Program?.UnsupportedFunctions,
+            warnings = result.Parse?.Program?.Warnings,
+            dslJsonLength = result.Parse?.Program != null
+                ? RuleDslParserService.SerializeProgram(result.Parse.Program).Length
+                : (int?)null
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message, inner = ex.InnerException?.Message }, statusCode: 500);
+    }
 });
 
 app.MapPost("/api/rule/dsl/preview", (RuleDslParsePreviewRequest? req, RuleDslParserService parser) =>
@@ -390,6 +403,15 @@ app.MapPost("/api/rule/dsl/validate", (RuleDslParsePreviewRequest? req, RuleDslP
         validation.UnknownOperations
     });
 });
+
+app.MapGet("/api/rule/promote/status", async (RulePromotionService promotion, CancellationToken ct) =>
+    Results.Ok(await promotion.GetStatusAsync(ct)));
+
+app.MapPost("/api/rule/promote/run", async (bool? force, RulePromotionService promotion, CancellationToken ct) =>
+    Results.Ok(await promotion.EvaluatePromotionsAsync(forcePromote: force == true, ct)));
+
+app.MapPost("/api/rule/promote/rollback", async (RulePromotionRollbackRequest? req, RulePromotionService promotion, CancellationToken ct) =>
+    Results.Ok(await promotion.RollbackToLegacyAsync(req?.Reason, ct)));
 
 app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, MemberRuleRepository repo, CancellationToken ct) =>
 {
