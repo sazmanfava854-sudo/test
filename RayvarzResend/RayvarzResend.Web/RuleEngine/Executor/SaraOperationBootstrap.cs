@@ -19,7 +19,26 @@ public static class SaraOperationBootstrap
         RegisterRef(registry);
         RegisterNosazi(registry);
         RegisterValidation(registry);
+        RegisterCollectionNoOps(registry);
         return registry;
+    }
+
+    private static void RegisterCollectionNoOps(OperationRegistry r)
+    {
+        OperationHandler addNoOp = (ctx, _) =>
+        {
+            ctx.Variables["collectionAddSkipped"] = true;
+            return null;
+        };
+
+        // صریح — از XmlBody واقعی Member 1388
+        r.Register("TmpAccounting_DocDetailsList.Add", addNoOp);
+        r.Register("ListRefP.Add", addNoOp);
+        r.Register("ListRefP.add", addNoOp);
+        r.Register("ListAcc.Add", addNoOp);
+        r.Register("ListAcc.add", addNoOp);
+        r.Register("PParamName.Add", addNoOp);
+        r.Register("PParamValue.Add", addNoOp);
     }
 
     private static void RegisterCommunication(OperationRegistry r)
