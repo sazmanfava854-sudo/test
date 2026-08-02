@@ -86,8 +86,24 @@ Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/golden/dry-r
 
 `GoldenDryRunService` حالا `FicheCategory.Income` را می‌پذیرد.
 
+## PayloadSource در برابر ActiveEngine
+
+| تنظیم | معنی |
+|--------|------|
+| `Rayvarz:PayloadSource=LegacyCSharp` | SOAP داخل همین اپ ساخته می‌شود (نه SaraBridge) |
+| `RuleSyncState.ActiveEngine=Dynamic` | همان ساخت از **DSL snapshot** (Run→Nosazi/iNcOME + Build*Rows) |
+| `Rayvarz:PayloadSource=RuleEngineBridge` | فراخوانی Sara خارجی — DSL این پروژه نیست |
+
+با `ActiveEngine=Dynamic`، preview/send از DSL می‌خواند. `payloadMode` در پاسخ ممکن است هنوز `LegacyCSharp` باشد (= مسیر in-process)؛ فیلد مهم `engineName` است.
+
+```powershell
+# تأیید: engineName باید Dynamic باشد
+Invoke-RestMethod -Uri "http://localhost:5000/api/rule/engine" |
+  Select-Object activeEngine, resolvedEngine, activeSnapshotId, payloadSource, dryRun
+```
+
 ## ایمنی
 
-- `PayloadSource=LegacyCSharp` و `DryRun` را طبق سیاست خود نگه دارید
-- بعد از `dsl/parse?force=true` در صورت نیاز دوباره `promote/run?force=true`
+- `DryRun=true` یعنی SOAP به Rayvarz پست نشود؛ موتور همچنان Dynamic/DSL است
+- بعد از `dsl/parse?force=true` اگر candidate قبلاً Promoted است، promote دوباره لازم نیست (snapshot همان Id به‌روز می‌شود)
 - Rollback: `POST /api/rule/promote/rollback`
