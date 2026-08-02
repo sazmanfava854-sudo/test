@@ -98,8 +98,10 @@ public sealed class GoldenDryRunService
             if (fiche == null)
                 return Fail(golden, $"فیش {golden.FicheNo} در Sara یافت نشد (live)");
 
-            if (fiche.Category != FicheCategory.DutyNosazi && fiche.Category != FicheCategory.DutySenfi)
-                return Fail(golden, $"فیش {golden.FicheNo} از نوع Duty نیست: {fiche.Category}");
+            if (fiche.Category != FicheCategory.DutyNosazi
+                && fiche.Category != FicheCategory.DutySenfi
+                && fiche.Category != FicheCategory.Income)
+                return Fail(golden, $"فیش {golden.FicheNo} از نوع Duty/Income نیست: {fiche.Category}");
 
             var branch = fiche.ResolvedDistrictBranch ?? 0;
             var fund = fiche.SuggestedFund ?? 0;

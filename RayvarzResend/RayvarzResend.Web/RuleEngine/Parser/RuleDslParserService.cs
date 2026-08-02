@@ -6,7 +6,7 @@ namespace RayvarzResend.Web.RuleEngine.Parser;
 
 public sealed class RuleDslParserService
 {
-    public const string ParserVersion = "2.0.0";
+    public const string ParserVersion = "2.2.0";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

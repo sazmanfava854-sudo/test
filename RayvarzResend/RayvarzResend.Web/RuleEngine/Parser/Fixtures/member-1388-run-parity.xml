@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ClsFunction xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <NidClass>360</NidClass>
+  <NidFunction>1388</NidFunction>
+  <Name>Run</Name>
+  <Text>اجراي فرمول</Text>
+  <Body>&lt;DisplayName("اجراي فرمول")&gt; Public Function Run() As clsOut
+    Try
+        If Info8.GetAccountingDocCreateParameter.AccountingDocumentingCause = CByte(BIZ.SA.ClsEnum.EumAccountingDocumentingCause.Confirm) Then
+            If Info8.GetAccountingDocCreateParameter.ObjOnPrice = BIZ.SA.ClsEnum.EumObjOnPrice.Income Then
+                Call iNcOME()
+                Call IncomeHoushmand()
+                Call IncomeSrvElectronic()
+                Call iNcOMESeprdeh()
+                Call iNcOMEEshghal()
+                Call iNcOMEGhatar_Shahri()
+                Call iNcOMEBackSeprdeh()
+                Call iNcOMEOragh()
+                Call iNcOMEHavaleT()
+                Call BazAfarine()
+                Call Tahator1()
+                Call Tahator()
+            Else
+                Call Nosazi()
+            End If
+        ElseIf Info8.GetAccountingDocCreateParameter.AccountingDocumentingCause = 7 Then
+            Call iNcOMECheck()
+        End If
+    Catch ex As Exception
+    End Try
+End Function
+
+&lt;DisplayName("نوسازی")&gt; Public Function Nosazi()
+    Dim x As Integer = 1
+End Function
+
+&lt;DisplayName("درآمد")&gt; Public Function iNcOME()
+    Dim x As Integer = 1
+End Function
+
+&lt;DisplayName("درآمد اوراق بهادار خزانه ")&gt; Public Function iNcOMEOragh()
+End Function
+
+&lt;DisplayName("سپرده درآمد")&gt; Public Function iNcOMESeprdeh()
+End Function
+
+&lt;DisplayName("اشغال معابر درآمد")&gt; Public Function iNcOMEEshghal()
+End Function
+
+&lt;DisplayName(" قطار شهری درآمد")&gt; Public Function iNcOMEGhatar_Shahri()
+End Function
+
+&lt;DisplayName("برگشت از سپرده درآمد")&gt; Public Function iNcOMEBackSeprdeh()
+End Function
+
+&lt;DisplayName("درآمد حواله تقسیط ")&gt; Public Function iNcOMEHavaleT()
+End Function
+
+&lt;DisplayName("بدهی قبلی")&gt; Public Function BedeHi()
+End Function
+
+&lt;DisplayName(" چک درآمد")&gt; Public Function iNcOMECheck()
+End Function
+
+Function ChangeDate (ByVal D1 As String) as Integer
+    Return 0
+End Function
+
+Private Function GetSara8Workflow ()
+End Function
+
+Private Function GetDiffDate(ByVal Date1 As String, ByVal Date2 As String, ByVal Mood As Integer) As Integer
+    Return 0
+End Function
+
+&lt;DisplayName(" درآمدی تهاتر")&gt; Public Function Tahator()
+End Function
+
+&lt;DisplayName("باز افرینی")&gt; Public Function BazAfarine()
+End Function
+
+&lt;DisplayName("قدیم باز افرینی")&gt; Public Function BazAfarineOld()
+End Function
+
+&lt;DisplayName("تهاتر تک مبلغی")&gt; Public Function Tahator1()
+End Function
+
+Public Function FnSMS()
+End Function
+
+Public Function AddDateForHolidays()
+End Function
+
+&lt;DisplayName("بهای هوشمندسازی خدمات شهری")&gt; Public Function IncomeHoushmand()
+End Function
+
+&lt;DisplayName("خدمات سرويس هاي الكترونيك شهرداري")&gt; Public Function IncomeSrvElectronic()
+End Function
+</Body>
+</ClsFunction>

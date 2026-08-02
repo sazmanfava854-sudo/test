@@ -86,6 +86,8 @@ WHERE {where}";
         };
 
         dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+        // Income_Calculation = مبلغ ناخالص؛ PayablePrice پس از تخفیف است — مثل SOAP اسکیل کن
+        IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
             ReadRowDate(reader, "PaymentDate"),

@@ -14,7 +14,21 @@
 End Function
 
 Public Function iNcOME() As ClsRayvarzMessageContract
-    Return Nothing
+    Dim param = Info8.GetAccountingDocCreateParameter()
+    Dim result = ClsAccounting.Save(param)
+    Return result
+End Function
+
+Public Function iNcOMEOragh() As ClsRayvarzMessageContract
+    Return iNcOME()
+End Function
+
+Public Function iNcOMESeprdeh() As ClsRayvarzMessageContract
+    Return iNcOME()
+End Function
+
+Public Function iNcOMEEshghal() As ClsRayvarzMessageContract
+    Return iNcOME()
 End Function
 
 Public Function Run() As ClsRayvarzMessageContract

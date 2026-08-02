@@ -279,19 +279,28 @@ app.MapGet("/api/rule/engine", async (RuleEngineFactory factory, RuleEngineStore
 {
     var resolved = await factory.ResolveEngineNameAsync(ct);
     string? activeEngine = null;
+    long? activeSnapshotId = null;
+    int? activeDslVersion = null;
     if (store.IsConfigured && await store.IsSchemaReadyAsync(ct))
     {
         var state = await store.GetSyncStateAsync(factory.NidMember, ct);
         activeEngine = state?.ActiveEngine;
+        activeSnapshotId = state?.ActiveSnapshotId;
+        activeDslVersion = state?.ActiveDslVersion;
     }
 
+    // PayloadSource = منبع ساخت SOAP (این اپ vs SaraBridge)؛ موتور واقعی = resolvedEngine/ActiveEngine
     return Results.Ok(new
     {
         nidMember = factory.NidMember,
         activeEngine = activeEngine ?? "Legacy",
         resolvedEngine = resolved,
+        activeSnapshotId,
+        activeDslVersion,
         payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
-        forceEngine = config["RuleEngine:ForceEngine"]
+        payloadSourceNote = "LegacyCSharp = ساخت SOAP داخل همین اپ از روی ActiveEngine/DSL؛ RuleEngineBridge = Sara خارجی",
+        forceEngine = config["RuleEngine:ForceEngine"],
+        dryRun = config.GetValue<bool>("Rayvarz:DryRun")
     });
 });
 

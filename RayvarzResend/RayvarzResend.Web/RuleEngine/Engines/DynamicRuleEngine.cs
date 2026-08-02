@@ -57,11 +57,10 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
             if (program == null)
                 return await FailOrFallbackAsync(context, buildSoap, "DSL snapshot یافت نشد — POST /api/rule/dsl/parse را اجرا کنید.", ct);
 
-            var dryRun = !buildSoap || _config.GetValue<bool>("Rayvarz:DryRun");
-            // DryRun/promote: Select Case و خطوط VB خارج از subset مانع اجرا نشوند
-            var validation = dryRun
-                ? _validator.ValidateForPromotion(program)
-                : _validator.Validate(program);
+            // بدنه کامل VB (Nosazi/iNcOME) در این فاز اجرا نمی‌شود — فقط dispatch DSL + Build*Rows.
+            // Rayvarz:DryRun فقط ارسال SOAP را کنترل می‌کند (در RayvarzClient)، نه مسیر موتور.
+            var skipUnsupportedBodies = true;
+            var validation = _validator.ValidateForPromotion(program);
             if (!validation.Success)
                 return await FailOrFallbackAsync(context, buildSoap, string.Join("; ", validation.Errors.Take(5)), ct);
             var execContext = new DslExecutionContext
@@ -72,7 +71,7 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 DocDate = context.DocDate,
                 ActDate = context.ActDate,
                 DueDate = context.DueDate,
-                DryRun = dryRun,
+                DryRun = skipUnsupportedBodies,
                 BuildSoap = buildSoap,
                 AllowLegacyFallback = context.AllowLegacyFallback
             };
