@@ -1,41 +1,30 @@
 namespace RayvarzResend.Web.RuleEngine.Parser;
 
 /// <summary>
-/// توابع پشتیبانی‌شده در Parser/Executor.
-/// فاز ۲–۴: Run + Nosazi؛ فاز ۶: خانواده iNcOME (درآمد).
+/// توابع Member 1388 — همه در DSL Supported هستند.
+/// اجرا: Run کامل (همان Call chain فایل اصلی)؛ بدنه بقیه در DryRun skip → Build*Rows از فیش live.
 /// </summary>
 public static class SupportedDslFunctions
 {
-    public static readonly HashSet<string> Core = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Run", "Nosazi", "نوسازی"
-    };
-
-    /// <summary>توابع درآمدی که در Run از Member 1388 dispatch می‌شوند.</summary>
-    public static readonly HashSet<string> Income = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "iNcOME",
-        "iNcOMEOragh",
-        "iNcOMESeprdeh",
-        "iNcOMEEshghal",
-        "iNcOMESepordeh",
-        "Income"
-    };
+    public static bool IsEntryPoint(string name) =>
+        name.Equals("Run", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsNosazi(string name, string? displayName = null) =>
         name.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)
         || string.Equals(displayName, "نوسازی", StringComparison.Ordinal);
 
     public static bool IsIncome(string name) =>
-        Income.Contains(name)
+        name.Equals("iNcOME", StringComparison.OrdinalIgnoreCase)
         || name.StartsWith("iNcOME", StringComparison.OrdinalIgnoreCase)
         || name.StartsWith("Income", StringComparison.OrdinalIgnoreCase);
 
-    public static bool IsSupported(string name, string? displayName = null) =>
-        Core.Contains(name)
-        || string.Equals(displayName, "نوسازی", StringComparison.Ordinal)
-        || IsIncome(name);
+    /// <summary>همه توابع استخراج‌شده از XmlBody پشتیبانی می‌شوند.</summary>
+    public static bool IsSupported(string name, string? displayName = null) => true;
 
+    /// <summary>
+    /// بدنه همه توابع به‌جز Run در DryRun اجرا نمی‌شود (وابستگی Info8/Biz).
+    /// Run باید همان Call chain فایل اصلی را طی کند.
+    /// </summary>
     public static bool IsDryRunBodySkip(string name, string? displayName = null) =>
-        IsNosazi(name, displayName) || IsIncome(name);
+        !IsEntryPoint(name);
 }

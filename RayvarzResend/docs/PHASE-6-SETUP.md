@@ -39,7 +39,10 @@ Run()
 | `iNcOMEEshghal` | اشغال |
 | هر `iNcOME*` | با پیشوند `iNcOME` هم پشتیبانی می‌شود |
 
-`ParserVersion` → **2.1.0**
+`ParserVersion` → **2.2.0**
+
+از 2.2.0 همه توابع Member (Public/Private) با `IsSupported=true` در DSL هستند.
+اجرا: `Run` همان Call chain فایل اصلی را طی می‌کند؛ بدنه بقیه در DryRun skip می‌شود و ردیف با `Build*Rows` از فیش live ساخته می‌شود.
 
 ## تست بعد از deploy
 

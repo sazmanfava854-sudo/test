@@ -17,6 +17,8 @@ public sealed class DslExecutionContext
     public List<IncmRowDto> Rows { get; } = new();
     public string? LastReturnValue { get; set; }
     public string DispatchedFunction { get; set; } = "";
+    /// <summary>ترتیب توابع فراخوانی‌شده از Run (همان Call chain فایل اصلی).</summary>
+    public List<string> InvokedFunctions { get; } = new();
 }
 
 public sealed class DslExecutionResult

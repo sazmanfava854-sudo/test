@@ -7,12 +7,14 @@ public sealed class VbFunctionInfo
     public string Name { get; init; } = "";
     public string? DisplayName { get; init; }
     public string Body { get; init; } = "";
+    public bool IsPrivate { get; init; }
 }
 
 internal static class VbFunctionExtractor
 {
+    /// <summary>Public / Private / Function بدون modifier — همه توابع Member.</summary>
     private static readonly Regex FunctionStartRegex = new(
-        @"(?:<DisplayName\(""([^""]*)""\)>?\s*)?Public\s+Function\s+(\w+)\s*\(",
+        @"(?:<DisplayName\(""([^""]*)""\)>?\s*)?(?:(Public|Private)\s+)?Function\s+(\w+)\s*\(",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static IReadOnlyList<VbFunctionInfo> Extract(string bodySource)
@@ -21,10 +23,25 @@ internal static class VbFunctionExtractor
             return Array.Empty<VbFunctionInfo>();
 
         var functions = new List<VbFunctionInfo>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (Match match in FunctionStartRegex.Matches(bodySource))
         {
-            var displayName = match.Groups[1].Success ? match.Groups[1].Value : null;
-            var name = match.Groups[2].Value;
+            // رد کردن "End Function" اگر به‌اشتباه match شود
+            var prefixStart = Math.Max(0, match.Index - 4);
+            var prefix = bodySource[prefixStart..match.Index];
+            if (prefix.EndsWith("End ", StringComparison.OrdinalIgnoreCase)
+                || prefix.EndsWith("Exit ", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var displayName = match.Groups[1].Success && match.Groups[1].Length > 0
+                ? match.Groups[1].Value
+                : null;
+            var modifier = match.Groups[2].Success ? match.Groups[2].Value : "";
+            var name = match.Groups[3].Value;
+            if (!seen.Add(name))
+                continue;
+
             var bodyStart = match.Index + match.Length;
             var endFunctionIndex = FindEndFunction(bodySource, bodyStart);
             if (endFunctionIndex < 0)
@@ -36,7 +53,8 @@ internal static class VbFunctionExtractor
             {
                 Name = name,
                 DisplayName = displayName,
-                Body = innerBody
+                Body = innerBody,
+                IsPrivate = modifier.Equals("Private", StringComparison.OrdinalIgnoreCase)
             });
         }
 
