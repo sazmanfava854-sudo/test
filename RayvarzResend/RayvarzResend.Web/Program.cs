@@ -395,6 +395,7 @@ app.MapPost("/api/rule/dsl/preview", (RuleDslParsePreviewRequest? req, RuleDslPa
             f.Name,
             f.DisplayName,
             f.IsSupported,
+            role = SupportedDslFunctions.GetRole(f.Name, f.DisplayName).ToString(),
             statementCount = f.Body.Count
         }),
         parsed.Program.UnsupportedFunctions,

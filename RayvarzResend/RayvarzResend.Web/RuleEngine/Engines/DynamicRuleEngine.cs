@@ -9,7 +9,8 @@ using RayvarzResend.Web.Services;
 namespace RayvarzResend.Web.RuleEngine.Engines;
 
 /// <summary>
-/// فاز ۳: اجرای AST از RuleDslSnapshot — بدون TmpDocument.Save در DryRun.
+/// اجرای AST از RuleDslSnapshot: قوانین (کلی + وابسته به نوع فیش) قبل از SOAP.
+/// DryRun فقط ClsAccounting.Save را skip می‌کند؛ بدنه توابع به‌خاطر Unsupported یکجا skip نمی‌شود.
 /// </summary>
 public sealed class DynamicRuleEngine : IFicheRuleEngine
 {
@@ -57,9 +58,8 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
             if (program == null)
                 return await FailOrFallbackAsync(context, buildSoap, "DSL snapshot یافت نشد — POST /api/rule/dsl/parse را اجرا کنید.", ct);
 
-            // بدنه کامل VB (Nosazi/iNcOME) در این فاز اجرا نمی‌شود — فقط dispatch DSL + Build*Rows.
-            // Rayvarz:DryRun فقط ارسال SOAP را کنترل می‌کند (در RayvarzClient)، نه مسیر موتور.
-            var skipUnsupportedBodies = true;
+            // قوانین قبل از SOAP: Run + Call chain بر اساس نوع فیش؛ خطوط VB خارج از subset defer می‌شوند.
+            // DryRun=true فقط Save حسابداری را skip می‌کند (نه کل بدنه تابع).
             var validation = _validator.ValidateForPromotion(program);
             if (!validation.Success)
                 return await FailOrFallbackAsync(context, buildSoap, string.Join("; ", validation.Errors.Take(5)), ct);
@@ -71,7 +71,7 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 DocDate = context.DocDate,
                 ActDate = context.ActDate,
                 DueDate = context.DueDate,
-                DryRun = skipUnsupportedBodies,
+                DryRun = true,
                 BuildSoap = buildSoap,
                 AllowLegacyFallback = context.AllowLegacyFallback
             };
@@ -92,6 +92,7 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 return await FailOrFallbackAsync(context, buildSoap,
                     $"جمع ردیف‌ها ({rowSum}) ≠ PayablePrice ({fiche.Payable})", ct);
 
+            // فقط پس از موفقیت PreSOAP / نقش‌های اجباری
             string? soapXml = null;
             if (buildSoap)
             {
