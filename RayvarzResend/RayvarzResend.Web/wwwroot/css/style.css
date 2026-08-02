@@ -121,6 +121,30 @@ h3 {
   box-shadow: var(--shadow);
 }
 
+.tahator-card {
+  border-color: #99f6e4;
+  background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 48%);
+}
+
+.tahator-card .card-icon {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.tahator-card .hint {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  font-size: 0.92rem;
+}
+
+.tahator-card .hint code {
+  font-size: 0.85em;
+  background: #ecfeff;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .card-head {
   display: flex;
   align-items: center;

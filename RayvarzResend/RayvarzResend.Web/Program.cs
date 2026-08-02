@@ -17,6 +17,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
@@ -67,7 +68,14 @@ app.MapGet("/api/config", (IConfiguration config) => new
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "3",
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true },
+    tahator = new
+    {
+        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
+        pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
+        note = "تهاتر: تک‌کد — بدون اکسل؛ مسیر جدول واسط Accounting_DocHeader"
+    },
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
@@ -467,6 +475,34 @@ app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBui
         warning = built.Warning,
         ruleMeta = built.RuleMeta
     });
+});
+
+app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.FicheNo))
+        return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
+    try
+    {
+        return Results.Ok(await tahator.CheckAsync(req.FicheNo, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.FicheNo))
+        return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
+    try
+    {
+        return Results.Ok(await tahator.SendAsync(req.FicheNo, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message, steps = Array.Empty<string>() }, statusCode: 500);
+    }
 });
 
 app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>

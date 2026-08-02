@@ -524,6 +524,125 @@ function setupEventHandlers() {
     $('btnPostMinimalSave').disabled = false;
   }
   });
+
+  bindClick('btnTahatorCheck', async () => {
+    const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
+    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
+    const btn = $('btnTahatorCheck');
+    btn.disabled = true;
+    showTahatorWaiting('بررسی Accounting_DocHeader / DocNotSent…');
+    try {
+      const res = await fetch('/api/tahator/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ficheNo })
+      });
+      if (res.status === 404) {
+        throw new Error('API /api/tahator/check یافت نشد — pull و restart کنید.');
+      }
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      showTahatorResult(formatTahatorCheck(data));
+      alert(data.message || 'بررسی انجام شد');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  bindClick('btnTahatorSend', async () => {
+    const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
+    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
+    const dry = config?.tahator?.dryRun ?? config?.dryRun;
+    const warn = dry
+      ? `DryRun فعال است — فقط شبیه‌سازی برای ${ficheNo}. ادامه؟`
+      : `اجرای واقعی تهاتر برای ${ficheNo}?\n(SELECT → وضعیت ۲ → انتظار واسط → بازگردانی ۳)`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnTahatorSend');
+    btn.disabled = true;
+    showTahatorWaiting('اجرای فرایند تهاتر… ممکن است تا یک دقیقه طول بکشد');
+    try {
+      const res = await fetch('/api/tahator/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ficheNo })
+      });
+      if (res.status === 404) {
+        throw new Error('API /api/tahator/send یافت نشد — pull و restart کنید.');
+      }
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      showTahatorResult(formatTahatorSend(data));
+      if (data.dryRun) alert('DryRun: UPDATE واقعی انجام نشد.');
+      else if (data.skipped) alert(data.message);
+      else if (data.success) alert(data.message || 'تهاتر موفق — فیش در واسط است.');
+      else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function showTahatorWaiting(title) {
+  const box = $('tahatorResultBox');
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = `${title}\n\nصبر کنید…`;
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showTahatorResult(text) {
+  const box = $('tahatorResultBox');
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = text;
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function formatTahatorCheck(d) {
+  const snap = d.snapshot;
+  return [
+    '=== بررسی تهاتر ===',
+    `FicheNo: ${d.ficheNo}`,
+    `در Accounting_DocHeader: ${d.existsInAccountingDocHeader ? 'بله — ارسال لازم نیست' : 'خیر'}`,
+    `در Income_Fiche: ${d.existsInIncomeFiche ? 'بله' : 'خیر'}`,
+    `NeedsSend: ${d.needsSend}`,
+    d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : 'DocNotSent: —',
+    `پیام: ${d.message || ''}`,
+    snap ? [
+      '',
+      '--- Snapshot فعلی ---',
+      `EumFicheStatus: ${snap.eumFicheStatus}`,
+      `ExportPermanentDate: ${snap.exportPermanentDate || ''}`,
+      `PaymentBreakDate: ${snap.paymentBreakDate || ''}`,
+      `PaymentDate: ${snap.paymentDate || ''}`,
+      `UserConfirmDate: ${snap.userConfirmDate || ''}`,
+      `UsernameUserConfirm: ${snap.usernameUserConfirm || ''}`,
+      `NidUserUserConfirm: ${snap.nidUserUserConfirm || ''}`
+    ].join('\n') : ''
+  ].filter(Boolean).join('\n');
+}
+
+function formatTahatorSend(d) {
+  return [
+    '=== نتیجه فرایند تهاتر ===',
+    `FicheNo: ${d.ficheNo}`,
+    `Success: ${d.success}`,
+    `Skipped: ${d.skipped}`,
+    `DryRun: ${d.dryRun}`,
+    `DocHeader قبل: ${d.existsInAccountingDocHeaderBefore}`,
+    `DocHeader بعد: ${d.existsInAccountingDocHeaderAfter}`,
+    d.triggerDate ? `تاریخ تریگر: ${d.triggerDate}` : '',
+    d.docNotSentError ? `علت عدم ارسال (DocNotSent): ${d.docNotSentError}` : '',
+    `پیام: ${d.message || ''}`,
+    '',
+    '--- مراحل ---',
+    ...(d.steps || [])
+  ].filter(Boolean).join('\n');
 }
 
 setupEventHandlers();

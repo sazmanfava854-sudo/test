@@ -148,3 +148,47 @@ public class AppConfig
     public bool DryRun { get; set; }
     public int SendDelayMs { get; set; } = 2000;
 }
+
+/// <summary>نگه‌داشت فیلدهای Income_Fiche قبل از تریگر تهاتر (وضعیت ۲).</summary>
+public class IncomeFicheTahatorSnapshot
+{
+    public string FicheNo { get; set; } = "";
+    public int EumFicheStatus { get; set; }
+    public string? ExportPermanentDate { get; set; }
+    public string? PaymentBreakDate { get; set; }
+    public string? PaymentDate { get; set; }
+    public string? UserConfirmDate { get; set; }
+    public string? UsernameUserConfirm { get; set; }
+    public Guid? NidUserUserConfirm { get; set; }
+}
+
+public class TahatorFicheRequest
+{
+    public string FicheNo { get; set; } = "";
+}
+
+public class TahatorCheckResult
+{
+    public string FicheNo { get; set; } = "";
+    public bool ExistsInAccountingDocHeader { get; set; }
+    public bool ExistsInIncomeFiche { get; set; }
+    public bool NeedsSend { get; set; }
+    public string Message { get; set; } = "";
+    public string? DocNotSentError { get; set; }
+    public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+}
+
+public class TahatorSendResult
+{
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public bool DryRun { get; set; }
+    public string FicheNo { get; set; } = "";
+    public string Message { get; set; } = "";
+    public bool ExistsInAccountingDocHeaderBefore { get; set; }
+    public bool ExistsInAccountingDocHeaderAfter { get; set; }
+    public string? TriggerDate { get; set; }
+    public string? DocNotSentError { get; set; }
+    public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+    public List<string> Steps { get; set; } = new();
+}

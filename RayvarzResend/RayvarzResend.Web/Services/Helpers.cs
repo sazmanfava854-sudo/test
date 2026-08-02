@@ -29,6 +29,21 @@ public static class DateHelper
         return $"{pc.GetYear(now):0000}{pc.GetMonth(now):00}{pc.GetDayOfMonth(now):00}";
     }
 
+    /// <summary>تاریخ شمسی با اسلش — مطابق ستون‌های Income_Fiche (مثلاً 1405/03/23).</summary>
+    public static string CurrentShamsiSlashDate()
+    {
+        var d = CurrentShamsiRayvarzDate();
+        return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : d;
+    }
+
+    public static string ToShamsiSlashDate(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+        if (input.Contains('/')) return input.Trim();
+        var d = ToRayvarzDate(input);
+        return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();
+    }
+
     /// <summary>سال شمسی از رشته yyyyMMdd (برای ستون yr در incmdocsys).</summary>
     public static int ExtractShamsiYear(string rayvarzYyyyMmDd)
     {
