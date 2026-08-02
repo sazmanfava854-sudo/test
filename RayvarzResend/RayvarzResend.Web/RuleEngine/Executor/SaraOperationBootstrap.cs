@@ -61,6 +61,21 @@ public static class SaraOperationBootstrap
             ctx.Variables["param"] = new { ctx.Fiche.FicheNo, ctx.Fiche.Payable };
             return ctx.Variables["param"];
         });
+
+        // VB error channel — در DryRun فقط لاگ/متغیر
+        OperationHandler addError = (ctx, args) =>
+        {
+            var msg = args.Count > 0 ? args[0] : "";
+            ctx.Variables["lastInfo8Error"] = msg;
+            return null;
+        };
+        r.Register("Info8.AddError", addError);
+        r.Register("Info8.addError", addError);
+        r.Register("Info8.ClearError", (ctx, _) =>
+        {
+            ctx.Variables.Remove("lastInfo8Error");
+            return null;
+        });
     }
 
     private static void RegisterAccounting(OperationRegistry r)

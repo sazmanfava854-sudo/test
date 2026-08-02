@@ -9,7 +9,13 @@ public sealed class RulePromotionRunResult
     public long? CandidateId { get; init; }
     public long? SnapshotId { get; init; }
     public string? Message { get; init; }
+    /// <summary>مرحله‌ای که متوقف شد: Parse / Validate / GoldenDryRun / Stability / Hash / Promote</summary>
+    public string? FailedStage { get; init; }
     public IReadOnlyList<string> Steps { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> UnknownOperations { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<object> GoldenFailures { get; init; } = Array.Empty<object>();
+    public IReadOnlyList<object> CandidateStatuses { get; init; } = Array.Empty<object>();
 }
 
 public sealed class RulePromotionStatus
@@ -24,5 +30,6 @@ public sealed class RulePromotionStatus
     public bool EnableAutoPromote { get; init; }
     public int StabilityHours { get; init; }
     public IReadOnlyList<object> Candidates { get; init; } = Array.Empty<object>();
+    public IReadOnlyList<object> RejectedCandidates { get; init; } = Array.Empty<object>();
     public IReadOnlyList<RulePromotionLogRow> RecentLogs { get; init; } = Array.Empty<RulePromotionLogRow>();
 }
