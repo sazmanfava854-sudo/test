@@ -1,3 +1,4 @@
+using RayvarzResend.Web.Models;
 using RayvarzResend.Web.Services;
 using Xunit;
 
@@ -19,5 +20,18 @@ public class TahatorHelpersTests
     public void ToShamsiSlashDate_normalizes(string input, string expected)
     {
         Assert.Equal(expected, DateHelper.ToShamsiSlashDate(input));
+    }
+
+    [Theory]
+    [InlineData("4", 14)]
+    [InlineData("18", 15)]
+    [InlineData("", 15)]
+    public void ApplyTahatorDocTyp_matches_member_Tahator1(string bank, int expectedDocTyp)
+    {
+        var fiche = new FicheHeaderDto { BankCode = bank, DocTyp = 3 };
+        TahatorResendService.ApplyTahatorDocTyp(fiche);
+        Assert.Equal(expectedDocTyp, fiche.DocTyp);
+        Assert.Equal("تهاتر مبلغ", fiche.DocTypDsc);
+        Assert.Equal("اسناد تهاتر مبلغ", fiche.DocDsc);
     }
 }

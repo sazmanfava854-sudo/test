@@ -225,8 +225,8 @@ public class SoapBuilder
             FicheCategory.DutyNosazi => "عوارض سرا",
             FicheCategory.DutySenfi => "صنفی",
             FicheCategory.Income when fiche.DocTyp == 3 => "بهای هوشمندسازی خدمات شهری",
-            FicheCategory.Income when fiche.DocTyp == 14 => "تهاتر مبلغ",
-            _ => fiche.DocTypDsc ?? ""
+            FicheCategory.Income when fiche.DocTyp is 14 or 15 => "تهاتر مبلغ",
+            _ => fiche.DocTypDsc ?? fiche.DocDsc ?? ""
         };
 
     private string ResolveIncmMkrTyp(FicheCategory category)

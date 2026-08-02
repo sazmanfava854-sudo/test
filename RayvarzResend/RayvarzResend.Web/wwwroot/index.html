@@ -129,8 +129,8 @@
       </div>
       <p class="hint">
         تهاتر با نوسازی/صنفی فرق دارد: فقط <strong>تک‌کد فیش</strong> (بدون اکسل).
-        اگر فیش در <code>Accounting_DocHeader</code> باشد ارسال لازم نیست.
-        در غیر این صورت: نگه‌داشت اطلاعات → وضعیت ۲ (تایید فیش دستی Sara) → بازگردانی وضعیت ۳ → در صورت نبود واسط، علت از <code>Accounting_DocNotSent</code>.
+        اگر فیش در <code>Accounting_DocHeader</code> / رایورز باشد ارسال لازم نیست.
+        در غیر این صورت: نگه‌داشت → وضعیت ۲ → <strong>ارسال SOAP</strong> (DocTyp ۱۴/۱۵ از DSL) → بازگردانی وضعیت ۳ → بررسی واسط / <code>Accounting_DocNotSent</code>.
       </p>
       <div class="form-grid">
         <label class="field field-wide">
@@ -149,6 +149,6 @@
       <pre id="tahatorResultBox" class="code-block" hidden></pre>
     </section>
   </div>
-  <script src="js/app.js?v=5" defer></script>
+  <script src="js/app.js?v=6" defer></script>
 </body>
 </html>

@@ -556,18 +556,25 @@ function setupEventHandlers() {
     if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
     const dry = config?.tahator?.dryRun ?? config?.dryRun;
     const warn = dry
-      ? `DryRun فعال است — فقط شبیه‌سازی برای ${ficheNo}. ادامه؟`
-      : `اجرای واقعی تهاتر برای ${ficheNo}?\n(SELECT → وضعیت ۲ → انتظار واسط → بازگردانی ۳)`;
+      ? `DryRun فعال است — SOAP ساخته می‌شود ولی POST واقعی برای ${ficheNo} زده نمی‌شود. ادامه؟`
+      : `اجرای واقعی تهاتر برای ${ficheNo}?\n(SELECT → وضعیت ۲ → SOAP → بازگردانی ۳)`;
     if (!confirm(warn)) return;
 
     const btn = $('btnTahatorSend');
     btn.disabled = true;
-    showTahatorWaiting('اجرای فرایند تهاتر… ممکن است تا یک دقیقه طول بکشد');
+    showTahatorWaiting('اجرای تهاتر + SOAP… ممکن است طول بکشد');
     try {
       const res = await fetch('/api/tahator/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ficheNo })
+        body: JSON.stringify({
+          ficheNo,
+          branch: parseInt($('branch')?.value || '0', 10) || 0,
+          fund: parseInt($('fund')?.value || '0', 10) || 0,
+          docDate: $('docDate')?.value || '',
+          actDate: $('actDate')?.value || '',
+          dueDate: $('dueDate')?.value || ''
+        })
       });
       if (res.status === 404) {
         throw new Error('API /api/tahator/send یافت نشد — pull و restart کنید.');
@@ -575,9 +582,13 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       showTahatorResult(formatTahatorSend(data));
-      if (data.dryRun) alert('DryRun: UPDATE واقعی انجام نشد.');
+      if (data.previewXml || data.soapResponse) {
+        $('xmlSection').hidden = false;
+        $('xmlBox').textContent = data.soapResponse || data.previewXml;
+      }
+      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
       else if (data.skipped) alert(data.message);
-      else if (data.success) alert(data.message || 'تهاتر موفق — فیش در واسط است.');
+      else if (data.success) alert(data.message || 'تهاتر + SOAP موفق');
       else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
     } catch (e) {
       alert(e.message);
@@ -605,12 +616,16 @@ function showTahatorResult(text) {
 
 function formatTahatorCheck(d) {
   const snap = d.snapshot;
+  const f = d.fiche;
   return [
     '=== بررسی تهاتر ===',
     `FicheNo: ${d.ficheNo}`,
     `در Accounting_DocHeader: ${d.existsInAccountingDocHeader ? 'بله — ارسال لازم نیست' : 'خیر'}`,
     `در Income_Fiche: ${d.existsInIncomeFiche ? 'بله' : 'خیر'}`,
+    `در رایورز (incmdocsys): ${d.existsInRayvarz ? 'بله' : 'خیر'}`,
     `NeedsSend: ${d.needsSend}`,
+    f ? `DocTyp تهاتر: ${f.docTyp} — ${f.docTypDsc || f.docDsc || ''}` : '',
+    f ? `Payable: ${Number(f.payable || 0).toLocaleString()} | ردیف: ${(f.rows || []).length}` : '',
     d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : 'DocNotSent: —',
     `پیام: ${d.message || ''}`,
     snap ? [
@@ -629,14 +644,20 @@ function formatTahatorCheck(d) {
 
 function formatTahatorSend(d) {
   return [
-    '=== نتیجه فرایند تهاتر ===',
+    '=== نتیجه تهاتر + SOAP ===',
     `FicheNo: ${d.ficheNo}`,
     `Success: ${d.success}`,
     `Skipped: ${d.skipped}`,
     `DryRun: ${d.dryRun}`,
+    `Engine: ${d.engineName || '-'}`,
+    `DocTyp: ${d.docTyp || '-'}`,
+    `Branch/Fund: ${d.branch || '-'} / ${d.fund || '-'}`,
     `DocHeader قبل: ${d.existsInAccountingDocHeaderBefore}`,
     `DocHeader بعد: ${d.existsInAccountingDocHeaderAfter}`,
-    d.triggerDate ? `تاریخ تریگر: ${d.triggerDate}` : '',
+    `VerifiedInRayvarz: ${d.existsInRayvarz}`,
+    d.pursuitDocNo ? `PursuitDocNo: ${d.pursuitDocNo}` : '',
+    d.triggerDate ? `تاریخ تریگر وضعیت ۲: ${d.triggerDate}` : '',
+    d.soapMessage ? `SOAP Message: ${d.soapMessage}` : '',
     d.docNotSentError ? `علت عدم ارسال (DocNotSent): ${d.docNotSentError}` : '',
     `پیام: ${d.message || ''}`,
     '',

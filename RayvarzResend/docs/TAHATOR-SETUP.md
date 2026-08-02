@@ -1,26 +1,24 @@
-# تهاتر — ارسال از مسیر جدول واسط Sara
+# تهاتر — SOAP + جدول واسط
 
-تهاتر با مسیر SOAP عادی (نوسازی/صنفی/درآمد شهرسازی) فرق دارد.
+تهاتر با مسیر عادی نوسازی/صنفی فرق دارد، ولی **ارسال به رایورز با SOAP** (`SaveDocument`) انجام می‌شود.
 
 ## تفاوت با نوسازی / صنفی
 
-| | نوسازی / صنفی / درآمد عادی | تهاتر |
-|--|---------------------------|--------|
-| ورود | تک فیش یا (در فرایند Sara) اکسل | **فقط تک‌کد FicheNo** — بدون اکسل |
-| ارسال | SOAP `SaveDocument` از RayvarzResend | تریگر وضعیت در `Income_Fiche`؛ رایورز از **جدول واسط** برمی‌دارد |
-| چک تکراری | `ray.incmdocsys` | `dbo.Accounting_DocHeader` |
+| | نوسازی / صنفی | تهاتر |
+|--|---------------|--------|
+| ورود | تک فیش | **فقط تک‌کد FicheNo** — بدون اکسل |
+| DocTyp | ۱ / ۲ | **۱۴ یا ۱۵** (مثل `Tahator1` در Member 1388: Bank=4→۱۴ وگرنه ۱۵) |
+| قبل از SOAP | ریست وضعیت Duty/Income | نگه‌داشت فیلدها + وضعیت **۲** |
+| بعد از SOAP | تأیید `incmdocsys` | بازگردانی وضعیت **۳** + چک `Accounting_DocHeader` / `incmdocsys` / `DocNotSent` |
 
 ## جریان
 
-1. `SELECT FicheNo FROM Accounting_DocHeader WHERE FicheNo = …`  
-   اگر بود → **ارسال لازم نیست**.
-2. `SELECT` از `Income_Fiche` و **نگه‌داشت**:  
-   `ExportPermanentDate, PaymentBreakDate, PaymentDate, UserConfirmDate, UsernameUserConfirm, NidUserUserConfirm`
-3. `UPDATE` وضعیت **۲** (معادل «تایید فیش دستی» در Sara):  
-   `EumFicheStatus=2`, `ExportPermanentDate/PaymentBreakDate=امروز`, `PaymentDate=''`
-4. انتظار پر شدن `Accounting_DocHeader` (poll)
-5. `UPDATE` بازگردانی وضعیت **۳** با همان مقادیر SELECT اولیه
-6. اگر هنوز در واسط نبود → `Accounting_DocNotSent.Comment` (مثلاً مرکز هزینه)
+1. اگر در `Accounting_DocHeader` یا `incmdocsys` بود → ارسال لازم نیست  
+2. `SELECT` و نگه‌داشت از `Income_Fiche`  
+3. `UPDATE` وضعیت **۲** (معادل تایید فیش دستی Sara)  
+4. ساخت SOAP از **DSL / ActiveEngine** با `DocTyp` تهاتر و `POST SaveDocument`  
+5. `UPDATE` بازگردانی وضعیت **۳** با مقادیر اولیه  
+6. اگر در واسط / رایورز نبود → علت از `Accounting_DocNotSent`
 
 ## API
 
@@ -29,8 +27,17 @@ POST /api/tahator/check
 { "ficheNo": "040933318150" }
 
 POST /api/tahator/send
-{ "ficheNo": "040933318150" }
+{
+  "ficheNo": "040933318150",
+  "branch": 207,
+  "fund": 200207009,
+  "docDate": "14050323",
+  "actDate": "14050323",
+  "dueDate": "14050323"
+}
 ```
+
+`branch` / تاریخ‌ها اختیاری‌اند؛ در صورت خالی از فیش / FundMap پر می‌شوند.
 
 ## تنظیمات
 
@@ -41,8 +48,4 @@ POST /api/tahator/send
 }
 ```
 
-`DryRun`: اگر `Tahator:DryRun` نباشد از `Rayvarz:DryRun` ارث می‌برد. در DryRun هیچ UPDATE واقعی زده نمی‌شود.
-
-## UI
-
-بخش «تهاتر» در پایین صفحه اصلی — ورود تک فیش + بررسی + اجرای فرایند.
+DryRun از `Rayvarz:DryRun` ارث می‌برد (مگر `Tahator:DryRun` ست شود). در DryRun: SOAP ساخته می‌شود ولی POST واقعی و UPDATE وضعیت زده نمی‌شود.

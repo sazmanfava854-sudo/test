@@ -165,6 +165,11 @@ public class IncomeFicheTahatorSnapshot
 public class TahatorFicheRequest
 {
     public string FicheNo { get; set; } = "";
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public string DocDate { get; set; } = "";
+    public string ActDate { get; set; } = "";
+    public string DueDate { get; set; } = "";
 }
 
 public class TahatorCheckResult
@@ -172,10 +177,12 @@ public class TahatorCheckResult
     public string FicheNo { get; set; } = "";
     public bool ExistsInAccountingDocHeader { get; set; }
     public bool ExistsInIncomeFiche { get; set; }
+    public bool ExistsInRayvarz { get; set; }
     public bool NeedsSend { get; set; }
     public string Message { get; set; } = "";
     public string? DocNotSentError { get; set; }
     public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+    public FicheHeaderDto? Fiche { get; set; }
 }
 
 public class TahatorSendResult
@@ -187,8 +194,17 @@ public class TahatorSendResult
     public string Message { get; set; } = "";
     public bool ExistsInAccountingDocHeaderBefore { get; set; }
     public bool ExistsInAccountingDocHeaderAfter { get; set; }
+    public bool ExistsInRayvarz { get; set; }
     public string? TriggerDate { get; set; }
     public string? DocNotSentError { get; set; }
     public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+    public string? EngineName { get; set; }
+    public int DocTyp { get; set; }
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public string? PreviewXml { get; set; }
+    public string? SoapResponse { get; set; }
+    public string? PursuitDocNo { get; set; }
+    public string? SoapMessage { get; set; }
     public List<string> Steps { get; set; } = new();
 }

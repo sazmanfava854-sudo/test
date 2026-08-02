@@ -497,7 +497,7 @@ app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendS
         return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
     try
     {
-        return Results.Ok(await tahator.SendAsync(req.FicheNo, ct));
+        return Results.Ok(await tahator.SendAsync(req, ct));
     }
     catch (Exception ex)
     {
