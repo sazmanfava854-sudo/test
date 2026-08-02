@@ -57,11 +57,13 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
             if (program == null)
                 return await FailOrFallbackAsync(context, buildSoap, "DSL snapshot یافت نشد — POST /api/rule/dsl/parse را اجرا کنید.", ct);
 
-            var validation = _validator.Validate(program);
-            if (!validation.Success)
-                return await FailOrFallbackAsync(context, buildSoap, string.Join("; ", validation.Errors), ct);
-
             var dryRun = !buildSoap || _config.GetValue<bool>("Rayvarz:DryRun");
+            // DryRun/promote: Select Case و خطوط VB خارج از subset مانع اجرا نشوند
+            var validation = dryRun
+                ? _validator.ValidateForPromotion(program)
+                : _validator.Validate(program);
+            if (!validation.Success)
+                return await FailOrFallbackAsync(context, buildSoap, string.Join("; ", validation.Errors.Take(5)), ct);
             var execContext = new DslExecutionContext
             {
                 Fiche = context.Fiche,
