@@ -227,6 +227,8 @@ public static class SaraOperationBootstrap
             if (ctx.Fiche.Category != FicheCategory.Income)
                 throw new InvalidOperationException($"Income.BuildIncomeRows برای {ctx.Fiche.Category} مجاز نیست.");
 
+            // دفاعی: اگر ردیف‌ها هنوز ناخالص باشند، به Payable اسکیل کن (parity با SOAP)
+            IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
             ctx.Rows.Clear();
             ctx.Rows.AddRange(ctx.Fiche.Rows);
             ctx.Variables["rowsBuilt"] = ctx.Rows.Count;

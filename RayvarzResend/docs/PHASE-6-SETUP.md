@@ -19,11 +19,13 @@ Run()
   ElseIf IncomeFicheResultList.Count > 0 → iNcOME()
         │
         ▼ DryRun
-  Income.BuildIncomeRows  ← کپی Fiche.Rows از Income_Calculation (Sara live)
+  Income.BuildIncomeRows  ← ردیف‌ها از Income_Calculation + اسکیل به PayablePrice
   Validate.RowSumEqualsPayable
 ```
 
 بدنه کامل VB داخل `iNcOME*` (مثل Nosazi) در DryRun اجرا نمی‌شود؛ ردیف‌ها از `FicheRepository` (جدول `Income_Calculation`) می‌آیند.
+
+**تخفیف درآمد:** جمع خام `IncomeValue` اغلب ≠ `PayablePrice`. همان منطق `SoapBuilder.NormalizeRows` در `IncomeRowScaler.ScaleToPayable` هنگام Load و در `Income.BuildIncomeRows` اعمال می‌شود تا موتور/golden با مبلغ ارسالی به Rayvarz یکی باشد.
 
 ## توابع پشتیبانی‌شده
 

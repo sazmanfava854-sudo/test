@@ -497,15 +497,8 @@ public class SoapBuilder
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
             return rows;
 
-        var sum = rows.Sum(r => r.Val);
-        if (sum != fiche.Payable && sum != 0)
-        {
-            var factor = fiche.Payable / sum;
-            foreach (var r in rows) r.Val = Math.Round(r.Val * factor, 0);
-            var diff = fiche.Payable - rows.Sum(r => r.Val);
-            rows[0].Val += diff;
-        }
-
+        // اگر FicheRepository قبلاً اسکیل کرده باشد، sum≈Payable و این no-op است
+        IncomeRowScaler.ScaleToPayable(rows, fiche.Payable);
         return rows;
     }
 
