@@ -57,8 +57,8 @@ public class TahatorHelpersTests
         };
         TahatorResendService.ApplyTahatorDocTyp(fiche);
         Assert.Equal(expectedDocTyp, fiche.DocTyp);
-        Assert.Equal("تهاتر درآمد", fiche.DocTypDsc);
-        Assert.Equal("اسناد تهاتر درآمد", fiche.DocDsc);
+        Assert.Equal("عوارض تهاتر درامد", fiche.DocTypDsc);
+        Assert.Equal("اسناد تهاتر درامد", fiche.DocDsc);
     }
 
     [Fact]
@@ -272,14 +272,52 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void Golden_seed_script_includes_tahator_samples_and_centers()
+    public void ResolvePhasTyp_VchrTyp_match_VB_Tahator_vs_Tahator1()
+    {
+        var amount = new FicheHeaderDto { Category = FicheCategory.Income, IncomeAccountGroup = 157 };
+        var income = new FicheHeaderDto { Category = FicheCategory.Income, IncomeAccountGroup = 158 };
+        Assert.Equal("2", TahatorRowBuilder.ResolvePhasTypCode(amount));
+        Assert.Equal("1", TahatorRowBuilder.ResolveVchrTypCode(amount));
+        Assert.Equal("7", TahatorRowBuilder.ResolvePhasTypCode(income));
+        Assert.Equal("0", TahatorRowBuilder.ResolveVchrTypCode(income));
+    }
+
+    [Fact]
+    public void ApplyTahatorIncomeRows_Ref_and_Num_match_VB()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            BankCode = "4",
+            DepositId = 19684,
+            Payable = 100m,
+            BnkAcntNo = "9-3-1-0-0-0-0"
+        };
+        TahatorRowBuilder.ApplyTahatorRows(fiche);
+        Assert.Equal("4", fiche.Rows[0].Ref); // VB: iif(CI_Bank=4,4,2)
+        Assert.Equal("19684", fiche.Rows[0].Num); // VB: FileNo=DepositID
+    }
+
+    [Fact]
+    public void Full_member_1388_fixture_contains_Tahator_bodies()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "database", "06_RuleGolden_Seed_Tahator.sql"));
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "RuleEngine", "Parser", "Fixtures", "member-1388-full-body.vb"));
         Assert.True(File.Exists(path), path);
-        var sql = File.ReadAllText(path);
-        Assert.Contains("050933483716", sql);
-        Assert.Contains("ExpectedCenter1", sql);
-        Assert.Contains("200098", sql);
+        var vb = File.ReadAllText(path);
+        Assert.Contains("Public Function Tahator()", vb);
+        Assert.Contains("Public Function Tahator1()", vb);
+        Assert.Contains("CI_IncomeAccountGroup=158", vb);
+        Assert.Contains("CI_IncomeAccountGroup=157", vb);
+        Assert.Contains("CI_Bank=4,17,18", vb);
+        Assert.Contains("CI_Bank=4,14,15", vb);
+        Assert.Contains("Mess.District = 102", vb);
+        Assert.Contains("RefFund.Value = 31", vb);
+        Assert.Contains("RefFund.Value = 51", vb);
+        Assert.Contains("335000181", vb);
+        Assert.Contains("PhasType = 7", vb);
+        Assert.Contains("PhasType = 2", vb);
     }
 }

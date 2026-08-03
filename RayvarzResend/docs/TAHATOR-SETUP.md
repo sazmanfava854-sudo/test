@@ -139,21 +139,36 @@ End If
 
 ## مسیر دوم — تابع `Tahator` / گروه ۱۵۸ («درآمدی تهاتر») → منطقه
 
+منبع: XmlBody کامل Member 1388 (`Fixtures/member-1388-full-body.vb`).
+
 شرط ورود: `CI_IncomeAccountGroup = 158`.
 
-| فیلد SOAP | مقدار |
-|-----------|--------|
-| `branch` (SaveDocument) | **DistrickBranch** منطقه (۲۰۱–۲۱۲) — نه ۱۰۲ |
-| `Fund` | ۲۰۱→۳۱ … ۲۱۲→۴۲ (۲۱۸→۴۳) |
+| فیلد SOAP | مقدار از VB `Tahator` |
+|-----------|------------------------|
+| `Mess.District` / branch | **DistrickBranch** منطقه (۲۰۱–۲۱۲) |
+| `Fund` | ۲۰۱→۳۱ … ۲۱۲→۴۲ ؛ ۲۱۸→۴۳ |
 | `DocTyp` | `CI_Bank=4` → **۱۷** وگرنه **۱۸** |
-| `DocumentItem.Center` | مثل Tahator1: Bank=2 → CreditorPapers وگرنه ۰ |
-| `DocumentItemIncm.Center1` | ثابت **`335000181`** |
-| `DocumentItemIncm.Center2/3` | خالی |
-| `Val` | مثبت (ردیف‌های `Income_Calculation` اسکیل‌شده به Payable) |
+| `PhasType` | **۷** (`ptDraftRegion`) |
+| `vchrtyp` | **۰** (`pfRecieve`) |
+| `ActTyp` | **۱** |
+| `docdsc` | `اسناد تهاتر درامد` |
+| `DocTypDsc` | `عوارض تهاتر درامد` |
+| `Center` | Bank=2 → CreditorPapers وگرنه ۰ |
+| `Center1` | ثابت **`335000181`** |
+| `Ref` | Bank=4 → ۴ وگرنه ۲ |
+| `FileNo` | `DepositID` |
+| `Val` | مثبت؛ ردیف‌های `Income_Calculation` اسکیل به Payable |
 
-DocTyp با `CI_Bank` عوض می‌شود؛ مقصد (مرکز/منطقه) با **گروه حساب** تعیین می‌شود — نه با DocTyp به‌تنهایی.
+مقصد (مرکز/منطقه) از **گروه حساب**؛ DocTyp از **CI_Bank**.
 
 ۴ فیش گلدن فعلی فقط مسیر **۱۵۷ / مبلغ** را پوشش می‌دهند.
+
+### Fixture DSL
+
+- `RuleEngine/Parser/Fixtures/member-1388-full.xml` — ClsFunction با Body کامل (شامل `Tahator` / `Tahator1`)
+- `member-1388-full-body.vb` — همان VB خام
+- برای LocalXmlPath: مسیر `member-1388-full.xml` را در `RuleEngine:LocalXmlPath` بگذارید تا DSL از همین XmlBody ساخته شود
+- SOAP فیلدهای تهاتر از پورت C# همان VB (`TahatorRowBuilder`) پر می‌شود
 
 ## Golden تهاتر
 

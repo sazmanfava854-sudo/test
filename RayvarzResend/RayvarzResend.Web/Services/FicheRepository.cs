@@ -131,7 +131,7 @@ WHERE {where}";
             DocDsc = isTahatorAmount
                 ? "اسناد تهاتر مبلغ"
                 : isTahatorIncome
-                    ? "اسناد تهاتر درآمد"
+                    ? "اسناد تهاتر درامد"
                     : "اسناد شهرسازی"
         };
 

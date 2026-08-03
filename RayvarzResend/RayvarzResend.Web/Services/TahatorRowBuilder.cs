@@ -31,14 +31,26 @@ public static class TahatorRowBuilder
     /// <summary>Branch ثابت تهاتر مبلغ (مرکز) در نمونه‌های رایورز</summary>
     public const int DefaultRayvarzBranch = 102;
 
-    /// <summary>PhasType = 2 → ptDraft</summary>
-    public const string PhasTypCode = "2";
+    /// <summary>PhasType — مبلغ=2 (ptDraft) ؛ درآمدی=7 (مثل VB Tahator)</summary>
+    public const string PhasTypCodeAmount = "2";
+    public const string PhasTypCodeIncome = "7";
 
-    /// <summary>vchrtyp = 1 → pfPay (تهاتر مبلغ Val منفی)</summary>
-    public const string VchrTypCode = "1";
+    /// <summary>سازگاری: پیش‌فرض مسیر مبلغ</summary>
+    public const string PhasTypCode = PhasTypCodeAmount;
 
-    /// <summary>نمونه اصلی: ActTyp = 1</summary>
+    /// <summary>vchrtyp — مبلغ=1 (pfPay) ؛ درآمدی=0 (مثل VB Tahator)</summary>
+    public const string VchrTypCodeAmount = "1";
+    public const string VchrTypCodeIncome = "0";
+    public const string VchrTypCode = VchrTypCodeAmount;
+
+    /// <summary>نمونه اصلی: ActTyp = 1 (هر دو مسیر)</summary>
     public const string ActTypCode = "1";
+
+    public static string ResolvePhasTypCode(FicheHeaderDto fiche) =>
+        IsTahatorIncomeFiche(fiche) ? PhasTypCodeIncome : PhasTypCodeAmount;
+
+    public static string ResolveVchrTypCode(FicheHeaderDto fiche) =>
+        IsTahatorIncomeFiche(fiche) ? VchrTypCodeIncome : VchrTypCodeAmount;
 
     /// <summary>گروه ۱۵۷ اولویت دارد؛ در غیر این صورت DocTyp ۱۴/۱۵.</summary>
     public static bool IsTahatorAmountFiche(FicheHeaderDto fiche)
@@ -148,12 +160,14 @@ public static class TahatorRowBuilder
 
         if (incomePath)
         {
+            // VB Tahator: Mess.docdsc / DocTypDsc
             fiche.DocTyp = bank == "4" ? 17 : 18;
-            fiche.DocDsc = "اسناد تهاتر درآمد";
-            fiche.DocTypDsc = "تهاتر درآمد";
+            fiche.DocDsc = "اسناد تهاتر درامد";
+            fiche.DocTypDsc = "عوارض تهاتر درامد";
         }
         else
         {
+            // VB Tahator1
             fiche.DocTyp = bank == "4" ? 14 : 15;
             fiche.DocDsc = "اسناد تهاتر مبلغ";
             fiche.DocTypDsc = "تهاتر مبلغ";
@@ -223,9 +237,10 @@ public static class TahatorRowBuilder
     }
 
     /// <summary>
-    /// Tahator — درآمدی تهاتر — ارسال به منطقه (Branch=۲۰۱–۲۱۲):
-    /// ردیف‌ها از Income_Calculation (Val مثبت)؛ Center1=335000181؛ DocTyp ۱۷/۱۸.
-    /// اگر هنوز ردیفی نباشد، یک ردیف با Payable می‌سازد (تا Load بعدی Calculation را جایگزین کند).
+    /// Tahator — درآمدی تهاتر — ارسال به منطقه (Mess.District = DistrickBranch):
+    /// ردیف‌ها از Income_Calculation (Val مثبت، اسکیل به Payable)؛
+    /// Center1 ثابت 335000181؛ Ref=iif(Bank=4,4,2)؛ FileNo/Num=DepositID؛
+    /// PhasType=7 ؛ vchrtyp=0 ؛ DocTyp ۱۷/۱۸.
     /// </summary>
     public static void ApplyTahatorIncomeRows(FicheHeaderDto fiche)
     {
@@ -233,12 +248,16 @@ public static class TahatorRowBuilder
         ApplyTahatorDocTyp(fiche);
 
         var bank = (fiche.BankCode ?? "").Trim();
-        // مثل Tahator1: Bank=2 → Center=CreditorPapers (نمونه‌های DocTyp=18 اغلب Center دارند)
+        // VB: CI_Bank="2" → CreditorPapers وگرنه "0"
         fiche.Center = bank == "2"
             ? (fiche.CreditorPapers ?? 0)
             : 0;
 
         ApplyDistrictAndFund(fiche, amountPath: false);
+
+        // VB: Ref = iif(CI_Bank=4,4,2) ؛ FileNo = DepositID
+        var refVal = bank == "4" ? "4" : "2";
+        var depositId = fiche.DepositId?.ToString();
 
         if (fiche.Rows.Count == 0)
         {
@@ -251,7 +270,9 @@ public static class TahatorRowBuilder
                     IncmRowDsc = "تهاتر درآمد",
                     Center1 = TahatorIncomeCenter1,
                     Center2 = null,
-                    Center3 = null
+                    Center3 = null,
+                    Ref = refVal,
+                    Num = depositId
                 }
             ];
             return;
@@ -262,6 +283,8 @@ public static class TahatorRowBuilder
             row.Center1 = TahatorIncomeCenter1;
             row.Center2 = null;
             row.Center3 = null;
+            row.Ref = refVal;
+            row.Num = depositId;
             // Val مثبت می‌ماند — نفی نمی‌شود
             if (row.Val < 0)
                 row.Val = Math.Abs(row.Val);

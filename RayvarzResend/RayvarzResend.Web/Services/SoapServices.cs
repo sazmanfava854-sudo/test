@@ -95,20 +95,22 @@ public class SoapBuilder
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
-        // Tahator1: PhasType=2, vchrtyp=1 ؛ ActTyp نمونه اصلی=1 — نه پیش‌فرض نوسازی (7/0/3)
+        // Tahator1: PhasType=2, vchrtyp=1 ؛ Tahator: PhasType=7, vchrtyp=0 (از VB Member 1388)
+        var tahatorPhas = isTahator ? TahatorRowBuilder.ResolvePhasTypCode(fiche) : null;
+        var tahatorVchr = isTahator ? TahatorRowBuilder.ResolveVchrTypCode(fiche) : null;
         var phasTyp = ResolveSoapDataContractEnum(
-            isTahator ? TahatorRowBuilder.PhasTypCode : _config["Rayvarz:PhasTyp"],
-            isTahator ? TahatorRowBuilder.PhasTypCode : "7",
+            tahatorPhas ?? _config["Rayvarz:PhasTyp"],
+            tahatorPhas ?? "7",
             PhasTypCodeToWireName);
         var vchrTyp = ResolveSoapDataContractEnum(
-            isTahator ? TahatorRowBuilder.VchrTypCode : _config["Rayvarz:VchrTyp"],
-            isTahator ? TahatorRowBuilder.VchrTypCode : "0",
+            tahatorVchr ?? _config["Rayvarz:VchrTyp"],
+            tahatorVchr ?? "0",
             VchrTypCodeToWireName);
         var actTyp = ResolveSoapActTyp(
             isTahator ? TahatorRowBuilder.ActTypCode : _config["Rayvarz:ActTyp"],
             isTahator ? TahatorRowBuilder.ActTypCode : "3");
         var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category, isTahator);
-        // Tahator1: Bank از PaymentBranch (خالی→0)؛ CI_Bank فقط برای IncmNo/DocTyp
+        // هر دو مسیر تهاتر: Bank از PaymentBranch (خالی→0)؛ CI_Bank فقط برای IncmNo/DocTyp
         var bank = isTahator
             ? ResolveBankCode(fiche.PaymentBranch)
             : ResolveBankCode(fiche.BankCode);
@@ -261,7 +263,7 @@ public class SoapBuilder
             FicheCategory.DutySenfi => "صنفی",
             FicheCategory.Income when fiche.DocTyp == 3 => "بهای هوشمندسازی خدمات شهری",
             FicheCategory.Income when fiche.DocTyp is 14 or 15 => "تهاتر مبلغ",
-            FicheCategory.Income when fiche.DocTyp is 17 or 18 => "تهاتر درآمد",
+            FicheCategory.Income when fiche.DocTyp is 17 or 18 => "عوارض تهاتر درامد",
             _ => fiche.DocTypDsc ?? fiche.DocDsc ?? ""
         };
 
