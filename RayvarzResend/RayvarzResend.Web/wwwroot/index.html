@@ -4,25 +4,30 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ارسال مجدد به رایورز</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=11" />
 </head>
 <body>
-  <div class="page-bg"></div>
+  <div class="page-bg" aria-hidden="true"></div>
   <div class="container">
     <header class="hero">
-      <div class="hero-content">
-        <div class="hero-icon" aria-hidden="true">↻</div>
-        <div>
-          <h1>ارسال مجدد فیش به رایورز</h1>
-          <p class="subtitle">ابزار تست — بارگذاری از Sara8M03 و ارسال SaveDocument</p>
+      <div class="hero-top">
+        <div class="hero-brand">
+          <div class="hero-mark" aria-hidden="true">↻</div>
+          <div>
+            <p class="brand-name">Rayvarz Resend</p>
+            <h1>ارسال مجدد فیش به رایورز</h1>
+          </div>
         </div>
+        <div id="configBadge" class="badge">...</div>
       </div>
-      <div id="configBadge" class="badge">...</div>
     </header>
 
-    <section class="card">
+    <section class="card card-enter">
       <div class="card-head">
-        <span class="card-icon">📋</span>
+        <span class="card-icon" aria-hidden="true">📋</span>
         <h2>ورود فیش</h2>
       </div>
       <div class="form-grid">
@@ -35,7 +40,7 @@
         </label>
         <label class="field field-wide">
           <span class="field-label">مقدار شناسه</span>
-          <input id="identifierValue" type="text" placeholder="مثلاً 971030914186 یا 90004712516690002765712571" />
+          <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
         </label>
         <label class="field">
           <span class="field-label">شعبه / منطقه</span>
@@ -46,46 +51,39 @@
           <select id="fund"></select>
         </label>
         <label class="field">
-          <span class="field-label">DocDate — تاریخ سند</span>
+          <span class="field-label">DocDate</span>
           <input id="docDate" type="text" placeholder="1404/05/05" />
         </label>
         <label class="field">
-          <span class="field-label">ActDate — تاریخ عملیات</span>
+          <span class="field-label">ActDate</span>
           <input id="actDate" type="text" placeholder="1404/05/05" />
         </label>
         <label class="field">
-          <span class="field-label">Due — سررسید (ردیف درآمد)</span>
+          <span class="field-label">Due</span>
           <input id="dueDate" type="text" placeholder="1404/05/05" />
         </label>
       </div>
       <div class="actions">
-        <button id="btnLoad" class="btn primary">
-          <span class="btn-icon">⬇</span> دریافت فیش
-        </button>
-        <button id="btnPreview" class="btn secondary" disabled>
-          <span class="btn-icon">👁</span> پیش‌نمایش XML
-        </button>
-        <button id="btnSend" class="btn danger" disabled>
-          <span class="btn-icon">➤</span> ارسال به رایورز
-        </button>
+        <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
+        <button id="btnPreview" class="btn secondary" type="button" disabled>پیش‌نمایش XML</button>
+        <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
       </div>
     </section>
 
-    <section class="card" id="ficheSection" hidden>
+    <section class="card card-enter" id="ficheSection" hidden>
       <div class="card-head">
-        <span class="card-icon">📄</span>
+        <span class="card-icon" aria-hidden="true">📄</span>
         <h2>اطلاعات فیش</h2>
       </div>
       <div id="ficheSummary" class="summary-grid"></div>
 
       <div class="subsection">
-        <h3>مپینگ فیلدهای SOAP</h3>
-        <p class="hint">فیلدهایی مثل BnkAcntOwnr، Center، Customer، Ref4–Ref6 در جریان شهرسازی معمولاً NULL می‌مانند و ارسال نمی‌شوند.</p>
+        <h3>مپینگ SOAP</h3>
         <div id="mappingTable" class="mapping-table"></div>
       </div>
 
       <div class="subsection">
-        <h3>ردیف‌های IncmNo (WrapperAccountNo)</h3>
+        <h3>ردیف‌های IncmNo</h3>
         <div class="table-wrap">
           <table id="rowsTable">
             <thead>
@@ -97,48 +95,40 @@
       </div>
     </section>
 
-    <section class="card" id="resultSection" hidden>
+    <section class="card card-enter" id="resultSection" hidden>
       <div class="card-head">
-        <span class="card-icon">✓</span>
+        <span class="card-icon" aria-hidden="true">✓</span>
         <h2>نتیجه ارسال</h2>
       </div>
       <pre id="resultBox" class="code-block"></pre>
     </section>
 
-    <section class="card" id="xmlSection" hidden>
+    <section class="card card-enter" id="xmlSection" hidden>
       <div class="card-head">
-        <span class="card-icon">&lt;/&gt;</span>
+        <span class="card-icon" aria-hidden="true">&lt;/&gt;</span>
         <h2>XML پیش‌نمایش</h2>
       </div>
       <pre id="xmlBox" class="code-block"></pre>
     </section>
 
-    <section class="card tahator-card">
+    <section class="card tahator-card card-enter">
       <div class="card-head">
-        <span class="card-icon">⇄</span>
-        <h2>تهاتر — ارسال از مسیر جدول واسط</h2>
+        <span class="card-icon" aria-hidden="true">⇄</span>
+        <h2>تهاتر</h2>
       </div>
-      <p class="hint">
-        فقط <strong>تک‌کد فیش</strong> (بدون اکسل).
-        <code>040933/318150</code> با <code>040933318150</code> فرق دارد — اسلش را حذف نکنید.
-      </p>
-      <div class="form-grid">
-        <label class="field field-wide">
-          <span class="field-label">شماره فیش تهاتر (FicheNo)</span>
-          <input id="tahatorFicheNo" type="text" placeholder="مثلاً 040933/318150" autocomplete="off" />
+      <div class="tahator-row">
+        <label class="field field-grow">
+          <span class="field-label">شماره فیش</span>
+          <input id="tahatorFicheNo" type="text" placeholder="040933/318150" autocomplete="off" />
         </label>
-      </div>
-      <div class="actions">
-        <button id="btnTahatorCheck" class="btn secondary" type="button">
-          <span class="btn-icon">🔍</span> بررسی واسط / DocNotSent
-        </button>
-        <button id="btnTahatorSend" class="btn danger" type="button">
-          <span class="btn-icon">➤</span> ارسال به رایورز
-        </button>
+        <div class="actions actions-inline">
+          <button id="btnTahatorCheck" class="btn secondary" type="button">بررسی</button>
+          <button id="btnTahatorSend" class="btn danger" type="button">ارسال به رایورز</button>
+        </div>
       </div>
       <pre id="tahatorResultBox" class="code-block" hidden></pre>
     </section>
   </div>
-  <script src="js/app.js?v=10" defer></script>
+  <script src="js/app.js?v=11" defer></script>
 </body>
 </html>
