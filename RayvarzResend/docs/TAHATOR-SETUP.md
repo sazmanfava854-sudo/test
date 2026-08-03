@@ -61,16 +61,44 @@ POST /api/tahator/send
 
 DryRun از `Rayvarz:DryRun` ارث می‌برد (مگر `Tahator:DryRun` ست شود). در DryRun: SOAP ساخته می‌شود ولی POST واقعی و UPDATE وضعیت زده نمی‌شود.
 
-## Centers (مطابق Tahator1)
+## Centers — منبع: تابع `Tahator1` در XmlBody (Member 1388)
 
-| فیلد SOAP | منبع |
-|-----------|------|
-| `DocumentItem.Center` | Bank=2 → `CreditorPapers` وگرنه `0` |
-| `DocumentItemIncm.Center1` | `Income_Fiche.Deposit` |
-| `DocumentItemIncm.Center2` | معمولاً خالی / `0` |
-| `DocumentItemIncm.Center3` | `CheckNo=5` → `700100002` وگرنه `700100001` |
-| `IncmNo` | Bank=4 → `200098` وگرنه `200099` |
-| `Val` | `−Payable` |
+این منطق از **۴ فیش نمونه استنتاج نشده**؛ از بدنهٔ VB تابع `Tahator1` («تهاتر تک مبلغی») خوانده شده است.
+شرط ورود همان تابع: `CI_IncomeAccountGroup = 157`.
+
+نقل قول مستقیم از XmlBody:
+
+```vb
+' Center
+If CI_Bank = "2" Then
+    Refcenter.Value = CreditorPapers.ToString()
+Else
+    Refcenter.Value = "0"
+End If
+
+' Center1
+Refcenter1.Value = deposit
+
+' Center3  — در Tahator1 هیچ Center2 ست نمی‌شود
+If CheckNo = "5" Then
+    Refcenter3.Value = "700100002"
+Else
+    Refcenter3.Value = "700100001"
+End If
+```
+
+| فیلد SOAP | منبع در `Tahator1` |
+|-----------|---------------------|
+| `DocumentItem.Center` | `CI_Bank="2"` → `CreditorPapers` وگرنه `"0"` |
+| `DocumentItemIncm.Center1` | `IncomeFiche.deposit` |
+| `DocumentItemIncm.Center2` | در `Tahator1` ست نمی‌شود |
+| `DocumentItemIncm.Center3` | `CheckNo="5"` → `700100002` وگرنه `700100001` |
+| `IncmNo` / `WrapperAccountNo` | `CI_Bank=4` → `200098` وگرنه `200099` |
+| `Val` / `Price` | `(-1) * Payable` |
+
+**تفاوت با تابع `Tahator` («درآمدی تهاتر»):** آنجا `Center1` ثابت `335000181` است (یا در شاخهٔ دیگر Centers منطقه‌ای مثل `910700001` / `335000046` / `800800007`). مسیر فعلی resend/گلدن فقط **`Tahator1` + گروه ۱۵۷** را پیاده می‌کند؛ نمونه‌های گلدن هم همه `CI_IncomeAccountGroup=157` هستند.
+
+۴ فیش گلدن فقط برای **مقادیر expected** (Val/Center1/…) استفاده شدند تا dry-run با `incmdocsys` چک شود، نه برای کشف قانون.
 
 ## Golden تهاتر
 

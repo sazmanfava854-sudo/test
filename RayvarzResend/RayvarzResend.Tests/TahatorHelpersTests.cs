@@ -50,7 +50,7 @@ public class TahatorHelpersTests
     [Fact]
     public void ApplyTahatorRows_matches_sample_incmdocsys_centers()
     {
-        // الگوی نمونه‌های golden 11–14: CI_Bank=4, CheckNo=6, Deposit=320008535
+        // الگوی نمونه‌های golden 11–14 (مقادیر expected)؛ منطق از Tahator1 XmlBody است
         var fiche = new FicheHeaderDto
         {
             Category = FicheCategory.Income,
@@ -67,18 +67,36 @@ public class TahatorHelpersTests
         TahatorRowBuilder.ApplyTahatorRows(fiche);
 
         Assert.Equal(14, fiche.DocTyp);
-        Assert.Equal(0, fiche.Center);
+        Assert.Equal(0, fiche.Center); // CI_Bank≠2 → "0" در Tahator1
         Assert.Single(fiche.Rows);
         var row = fiche.Rows[0];
         Assert.Equal(200098, row.IncmNo);
         Assert.Equal(-22_106_681_457m, row.Val);
         Assert.Equal("مبلغ تهاتر", row.IncmRowDsc);
-        Assert.Equal(320008535, row.Center1);
-        Assert.Null(row.Center2);
-        Assert.Equal(700100001, row.Center3);
+        Assert.Equal(320008535, row.Center1); // Tahator1: deposit
+        Assert.Null(row.Center2); // Tahator1 Center2 را ست نمی‌کند
+        Assert.Equal(700100001, row.Center3); // CheckNo≠5
         Assert.Equal("19684", row.Ref);
         Assert.Equal("4", row.Num);
         Assert.True(TahatorRowBuilder.RowSumMatchesPayable(fiche, row.Val));
+    }
+
+    [Fact]
+    public void ApplyTahatorRows_Bank2_Center_uses_CreditorPapers_per_Tahator1()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            BankCode = "2",
+            CreditorPapers = 5510918,
+            Deposit = 10,
+            CheckNo = "6",
+            Payable = 100m
+        };
+        TahatorRowBuilder.ApplyTahatorRows(fiche);
+        Assert.Equal(5510918, fiche.Center);
+        Assert.Equal(200099, fiche.Rows[0].IncmNo); // CI_Bank≠4
     }
 
     [Fact]

@@ -3,7 +3,11 @@ using RayvarzResend.Web.Models;
 namespace RayvarzResend.Web.Services;
 
 /// <summary>
-/// ساخت ردیف SOAP تهاتر مطابق تابع Tahator1 در Member 1388 (گروه حساب 157).
+/// ساخت ردیف SOAP تهاتر — منبع: تابع <c>Tahator1</c> در XmlBody Member NidMember=1388
+/// (DisplayName: «تهاتر تک مبلغی»)، نه استنتاج از نمونه فیش.
+/// شرط ورود مسیر: <c>CI_IncomeAccountGroup=157</c>.
+/// توجه: تابع <c>Tahator</c> («درآمدی تهاتر») منطق Center متفاوتی دارد (مثلاً Center1 ثابت 335000181
+/// یا مسیر منطقه‌ای با Center/Center1/Center2/Center3 ثابت) و اینجا پیاده نشده.
 /// </summary>
 public static class TahatorRowBuilder
 {
@@ -19,7 +23,9 @@ public static class TahatorRowBuilder
             || fiche.DocTyp is 14 or 15);
 
     /// <summary>
-    /// یک ردیف مبلغ تهاتر: Val = -Payable، Centers از Deposit / CheckNo / CI_Bank.
+    /// یک ردیف مبلغ تهاتر مطابق Tahator1:
+    /// Price=(-1)*Payable ؛ WrapperAccountNo=iif(CI_Bank=4,200098,200099) ؛
+    /// Center / Center1 / Center3 از RefParameetrs همان تابع.
     /// </summary>
     public static void ApplyTahatorRows(FicheHeaderDto fiche)
     {
@@ -29,15 +35,18 @@ public static class TahatorRowBuilder
         TahatorResendService.ApplyTahatorDocTyp(fiche);
 
         var bank = (fiche.BankCode ?? "").Trim();
+        // Tahator1: TmpInComeCode = iif(CI_Bank=4, 200098, 200099) ; fileN = iif(CI_Bank=4, 4, 2)
         var incmNo = bank == "4" ? IncmNoBank4 : IncmNoOther;
         var fileNo = bank == "4" ? 4 : 2;
 
-        // DocumentItem.Center: Bank=2 → CreditorPapers وگرنه 0 (در نمونه‌ها NULL≈0)
-        fiche.Center = bank == "2" && fiche.CreditorPapers is > 0
-            ? fiche.CreditorPapers
+        // Tahator1 RefParameetrs "Center":
+        //   if CI_Bank="2" Then CreditorPapers.ToString() Else "0"
+        fiche.Center = bank == "2"
+            ? (fiche.CreditorPapers ?? 0)
             : 0;
 
-        // Center3: CheckNo=5 → 700100002 وگرنه 700100001
+        // Tahator1: Center1 = deposit — Center2 در Tahator1 اصلاً ست نمی‌شود
+        // Tahator1: if CheckNo="5" Then Center3=700100002 Else Center3=700100001
         var center3 = string.Equals(fiche.CheckNo?.Trim(), "5", StringComparison.Ordinal)
             ? Center3CheckNo5
             : Center3Default;
@@ -52,13 +61,14 @@ public static class TahatorRowBuilder
                 Center1 = fiche.Deposit,
                 Center2 = null,
                 Center3 = center3,
+                // Tahator1: Ref = DepositID
                 Ref = fiche.DepositId?.ToString(),
                 Num = fileNo.ToString()
             }
         };
     }
 
-    /// <summary>برای تهاتر جمع ردیف‌ها = −Payable است.</summary>
+    /// <summary>Tahator1: جمع ردیف = (−1)×Payable.</summary>
     public static bool RowSumMatchesPayable(FicheHeaderDto fiche, decimal rowSum)
     {
         if (IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15)
