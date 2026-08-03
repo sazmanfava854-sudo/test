@@ -78,13 +78,35 @@ public static class TahatorRowBuilder
         return 0;
     }
 
-    /// <summary>FicheNo تهاتر در رایورز بدون اسلش است (040933318150 نه 040933/318150).</summary>
+    /// <summary>
+    /// فقط Trim — اسلش FicheNo را حذف نکن؛ در Sara ممکن است <c>040933/318150</c> باشد.
+    /// </summary>
     public static string NormalizeFicheNo(string? ficheNo)
     {
         var f = (ficheNo ?? "").Trim();
         if (string.IsNullOrWhiteSpace(f))
             throw new ArgumentException("شماره فیش تهاتر الزامی است.");
-        return f.Replace("/", "", StringComparison.Ordinal);
+        return f;
+    }
+
+    /// <summary>واریانت‌های جستجو: همان ورودی، بدون اسلش، و با اسلش اگر الگوی ۱۲ رقمی باشد.</summary>
+    public static IReadOnlyList<string> FicheNoLookupVariants(string? ficheNo)
+    {
+        var raw = NormalizeFicheNo(ficheNo);
+        var list = new List<string> { raw };
+        var noSlash = raw.Replace("/", "", StringComparison.Ordinal);
+        if (!string.Equals(noSlash, raw, StringComparison.Ordinal))
+            list.Add(noSlash);
+
+        // 040933318150 → 040933/318150 (۶ رقم + / + بقیه) اگر اسلش نداشت
+        if (noSlash.Length >= 7 && !raw.Contains('/'))
+        {
+            var withSlash = noSlash[..6] + "/" + noSlash[6..];
+            if (!list.Contains(withSlash, StringComparer.Ordinal))
+                list.Add(withSlash);
+        }
+
+        return list;
     }
 
     /// <summary>
@@ -98,7 +120,7 @@ public static class TahatorRowBuilder
             return;
 
         if (!string.IsNullOrWhiteSpace(fiche.FicheNo))
-            fiche.FicheNo = NormalizeFicheNo(fiche.FicheNo);
+            fiche.FicheNo = fiche.FicheNo.Trim();
         TahatorResendService.ApplyTahatorDocTyp(fiche);
 
         var bank = (fiche.BankCode ?? "").Trim();

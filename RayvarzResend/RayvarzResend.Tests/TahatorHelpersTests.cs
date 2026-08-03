@@ -126,14 +126,26 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void NormalizeFicheNo_strips_slash_like_rayvarz_RowDocNo()
+    public void NormalizeFicheNo_keeps_slash_as_stored_in_Sara()
     {
-        Assert.Equal("040933318150", TahatorRowBuilder.NormalizeFicheNo("040933/318150"));
+        Assert.Equal("040933/318150", TahatorRowBuilder.NormalizeFicheNo("040933/318150"));
         Assert.Equal("040933318150", TahatorRowBuilder.NormalizeFicheNo("040933318150"));
     }
 
     [Fact]
-    public void ApplyTahatorRows_sets_SuggestedFund_from_Tahator1_map()
+    public void FicheNoLookupVariants_tries_with_and_without_slash()
+    {
+        var fromSlash = TahatorRowBuilder.FicheNoLookupVariants("040933/318150");
+        Assert.Contains("040933/318150", fromSlash);
+        Assert.Contains("040933318150", fromSlash);
+
+        var fromPlain = TahatorRowBuilder.FicheNoLookupVariants("040933318150");
+        Assert.Contains("040933318150", fromPlain);
+        Assert.Contains("040933/318150", fromPlain);
+    }
+
+    [Fact]
+    public void ApplyTahatorRows_preserves_slash_in_FicheNo()
     {
         var fiche = new FicheHeaderDto
         {
@@ -148,7 +160,7 @@ public class TahatorHelpersTests
             FicheNo = "040933/318150"
         };
         TahatorRowBuilder.ApplyTahatorRows(fiche);
-        Assert.Equal("040933318150", fiche.FicheNo);
+        Assert.Equal("040933/318150", fiche.FicheNo);
         Assert.Equal(209, fiche.ResolvedDistrictBranch);
         Assert.Equal(59, fiche.SuggestedFund);
         Assert.Equal(14, fiche.DocTyp);
