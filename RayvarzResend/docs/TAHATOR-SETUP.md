@@ -36,8 +36,10 @@ POST /api/tahator/restore
 | مرحله | کار | نتیجه روی `Income_Fiche` |
 |-------|-----|---------------------------|
 | ۲ | `SELECT` فیلدهای اصلی + ذخیره در `TahatorRestoreSnapshot` | تغییری روی Sara نیست |
-| ۳ | `UPDATE` وضعیت **۲** | `ExportPermanentDate`/`PaymentBreakDate` = **تاریخ روز**، `PaymentDate=''`؛ UserConfirm* دست نخورده |
-| بعد از SOAP | بازگردانی از snapshot | دوباره مقادیر اصلی (مثل قبل از تریگر) |
+| ۳ | `UPDATE` وضعیت **۲** | `ExportPermanentDate`/`PaymentBreakDate` = **تاریخ روز**، **`PaymentDate=''` (عمدی خالی)**؛ UserConfirm* دست نخورده |
+| بعد از SOAP | بازگردانی از snapshot | دوباره مقادیر اصلی — از جمله `PaymentDate` مثلاً `1404/12/11` |
+
+`PaymentDate` قبل از تریگر ممکن است مقدار داشته باشد (مثل `1404/12/11`). در وضعیت ۲ **عمداً خالی** می‌شود تا واسط دوباره پردازش کند؛ مقدار اصلی در `TahatorRestoreSnapshot` است و با restore برمی‌گردد.
 
 اگر بعد از ارسال کامل دوباره SELECT بزنید، تاریخ‌ها **اصلی** هستند (بازگردانی شده) — این درست است.
 
@@ -69,7 +71,8 @@ POST /api/tahator/send
 SELECT ExportPermanentDate, PaymentBreakDate, PaymentDate,
        UserConfirmDate, UsernameUserConfirm, NidUserUserConfirm, EumFicheStatus
 FROM dbo.Income_Fiche WHERE FicheNo = '040933/318150';
--- انتظار: Status=2 ، Export/Break = امروز ، PaymentDate خالی ، UserConfirm* همان اصلی
+-- انتظار: Status=2 ، Export/Break = امروز ، PaymentDate خالی (عمدی) ، UserConfirm* همان اصلی
+-- PaymentDate اصلی (مثلاً 1404/12/11) فقط در snapshot است تا restore
 -- توجه: '040933/318150' ≠ '040933318150'
 ```
 

@@ -253,10 +253,15 @@ public sealed class TahatorResendService
 
                 await ApplyTriggerStatus2Async(ficheNo, today, ct);
                 statusChanged = true;
+                var after = await TryLoadSnapshotAsync(ficheNo, ct);
                 steps.Add(
                     $"4) UPDATE وضعیت ۲ روی Sara: EumFicheStatus=2, " +
-                    $"ExportPermanentDate={today}, PaymentBreakDate={today}, PaymentDate='' " +
-                    "(UserConfirm* دست نخورده). الان SELECT بزنید تا تاریخ روز را ببینید.");
+                    $"ExportPermanentDate={today}, PaymentBreakDate={today}, PaymentDate='' (عمدی خالی). " +
+                    $"PaymentDate اصلی در snapshot نگه داشته شد: '{snapshot.PaymentDate ?? ""}' — با restore برمی‌گردد.");
+                steps.Add(
+                    $"4b) SELECT بعد از تریگر: Status={after?.EumFicheStatus}, " +
+                    $"Export={after?.ExportPermanentDate}, Break={after?.PaymentBreakDate}, " +
+                    $"Pay='{after?.PaymentDate ?? ""}' (باید خالی باشد)");
             }
             else
             {
@@ -282,9 +287,9 @@ public sealed class TahatorResendService
                     Fund = fund,
                     Steps = steps,
                     Message =
-                        $"وضعیت ۲ اعمال شد (تاریخ={today}). " +
-                        "در Sara همان SELECT را بزنید؛ Export/Break باید تاریخ روز باشد. " +
-                        "سپس POST /api/tahator/restore برای بازگردانی مقادیر اصلی."
+                        $"وضعیت ۲ اعمال شد (Export/Break={today}). " +
+                        $"PaymentDate الان خالی است (عمدی)؛ مقدار اصلی '{snapshot.PaymentDate ?? ""}' در snapshot است. " +
+                        "با دکمه بازگردانی وضعیت ۳ همان مقدار برمی‌گردد."
                 };
             }
 
@@ -437,7 +442,9 @@ public sealed class TahatorResendService
             SnapshotId = pending.SnapshotId,
             Snapshot = pending,
             Steps = steps,
-            Message = $"وضعیت فیش از SnapshotId={pending.SnapshotId} به ۳ بازگردانی شد."
+            Message =
+                $"وضعیت فیش از SnapshotId={pending.SnapshotId} به ۳ بازگردانی شد. " +
+                $"PaymentDate باید دوباره '{pending.PaymentDate ?? ""}' باشد."
         };
     }
 
@@ -451,7 +458,10 @@ public sealed class TahatorResendService
 
         await RestoreSnapshotStatus3Async(stored, ct);
         await _snapshots.MarkRestoredAsync(snapshotId, "بازگردانی وضعیت ۳ روی Income_Fiche", ct);
-        steps.Add($"7) UPDATE بازگردانی وضعیت ۳ از SnapshotId={snapshotId} (RayvarzRuleEngine) انجام شد");
+        steps.Add(
+            $"7) بازگردانی وضعیت ۳ از SnapshotId={snapshotId}: " +
+            $"Export={stored.ExportPermanentDate}, Break={stored.PaymentBreakDate}, " +
+            $"PaymentDate='{stored.PaymentDate ?? ""}'");
     }
 
     /// <summary>مطابق Tahator1 در XmlBody: CI_Bank=4 → DocTyp 14 وگرنه 15.</summary>
@@ -512,12 +522,13 @@ WHERE FicheNo = @f";
 
     private async Task ApplyTriggerStatus2Async(string ficheNo, string todaySlash, CancellationToken ct)
     {
+        // PaymentDate عمداً خالی می‌شود (تریگر واسط) — مقدار اصلی قبل از این در snapshot است
         const string sql = @"
 UPDATE dbo.Income_Fiche
 SET EumFicheStatus = 2,
     ExportPermanentDate = @today,
     PaymentBreakDate = @today,
-    PaymentDate = ''
+    PaymentDate = @emptyPay
 WHERE FicheNo = @f";
 
         await using var conn = new SqlConnection(_saraCs);
@@ -525,6 +536,7 @@ WHERE FicheNo = @f";
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@f", ficheNo);
         cmd.Parameters.AddWithValue("@today", todaySlash);
+        cmd.Parameters.Add("@emptyPay", System.Data.SqlDbType.NVarChar, 30).Value = "";
         var n = await cmd.ExecuteNonQueryAsync(ct);
         if (n == 0)
             throw new InvalidOperationException($"UPDATE وضعیت ۲ برای فیش {ficheNo} هیچ ردیفی را تغییر نداد.");
@@ -548,16 +560,26 @@ WHERE FicheNo = @f";
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@f", snap.FicheNo);
-        cmd.Parameters.AddWithValue("@export", (object?)NullIfEmpty(snap.ExportPermanentDate) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@brk", (object?)NullIfEmpty(snap.PaymentBreakDate) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@pay", (object?)NullIfEmpty(snap.PaymentDate) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@ucDate", (object?)NullIfEmpty(snap.UserConfirmDate) ?? DBNull.Value);
+        AddSlashDateParam(cmd, "@export", snap.ExportPermanentDate);
+        AddSlashDateParam(cmd, "@brk", snap.PaymentBreakDate);
+        // PaymentDate اصلی (مثلاً 1404/12/11) باید عین همان برگردد — نه NULL
+        AddSlashDateParam(cmd, "@pay", snap.PaymentDate);
+        AddSlashDateParam(cmd, "@ucDate", snap.UserConfirmDate);
         cmd.Parameters.AddWithValue("@ucName", (object?)NullIfEmpty(snap.UsernameUserConfirm) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@ucNid", (object?)snap.NidUserUserConfirm ?? DBNull.Value);
         var n = await cmd.ExecuteNonQueryAsync(ct);
         if (n == 0)
             throw new InvalidOperationException($"بازگردانی وضعیت ۳ برای فیش {snap.FicheNo} انجام نشد.");
-        _logger.LogInformation("Tahator restore status=3 FicheNo={FicheNo}", snap.FicheNo);
+        _logger.LogInformation(
+            "Tahator restore status=3 FicheNo={FicheNo} PaymentDate={Pay}",
+            snap.FicheNo, snap.PaymentDate ?? "");
+    }
+
+    /// <summary>ستون‌های تاریخ شمسی Income_Fiche معمولاً NVARCHAR هستند — مقدار اسلش‌دار را عین خودش بنویس.</summary>
+    private static void AddSlashDateParam(SqlCommand cmd, string name, string? value)
+    {
+        var p = cmd.Parameters.Add(name, System.Data.SqlDbType.NVarChar, 30);
+        p.Value = string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
     }
 
     private static int ResolveBranch(FicheHeaderDto fiche, int requestBranch)
@@ -620,6 +642,7 @@ WHERE FicheNo = @f";
         var value = reader.GetValue(ord);
         if (value is DateTime dt)
         {
+            // بعضی ستون‌های Sara تاریخ شمسی را به‌صورت DateTime با سال ۱۳xx–۱۴xx نگه می‌دارند
             if (dt.Year is >= 1300 and <= 1500)
                 return dt.ToString("yyyy/MM/dd", System.Globalization.CultureInfo.InvariantCulture);
             return DateHelper.ToShamsiSlashDate(DateHelper.FromDatabaseDateValue(dt));
@@ -627,6 +650,8 @@ WHERE FicheNo = @f";
 
         var s = value.ToString()?.Trim();
         if (string.IsNullOrWhiteSpace(s)) return null;
+        // "" بعد از تریگر وضعیت ۲ — خالی معتبر است
+        if (s.Length == 0) return "";
         return s.Contains('/') ? s : DateHelper.ToShamsiSlashDate(s);
     }
 }

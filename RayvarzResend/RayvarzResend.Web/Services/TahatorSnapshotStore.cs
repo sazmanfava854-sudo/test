@@ -82,10 +82,14 @@ VALUES
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@f", snap.FicheNo);
         cmd.Parameters.AddWithValue("@st", snap.EumFicheStatus);
-        cmd.Parameters.AddWithValue("@export", (object?)NullIfEmpty(snap.ExportPermanentDate) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@brk", (object?)NullIfEmpty(snap.PaymentBreakDate) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@pay", (object?)NullIfEmpty(snap.PaymentDate) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@ucDate", (object?)NullIfEmpty(snap.UserConfirmDate) ?? DBNull.Value);
+        cmd.Parameters.Add("@export", System.Data.SqlDbType.NVarChar, 30).Value =
+            (object?)NullIfEmpty(snap.ExportPermanentDate) ?? DBNull.Value;
+        cmd.Parameters.Add("@brk", System.Data.SqlDbType.NVarChar, 30).Value =
+            (object?)NullIfEmpty(snap.PaymentBreakDate) ?? DBNull.Value;
+        cmd.Parameters.Add("@pay", System.Data.SqlDbType.NVarChar, 30).Value =
+            (object?)NullIfEmpty(snap.PaymentDate) ?? DBNull.Value;
+        cmd.Parameters.Add("@ucDate", System.Data.SqlDbType.NVarChar, 30).Value =
+            (object?)NullIfEmpty(snap.UserConfirmDate) ?? DBNull.Value;
         cmd.Parameters.AddWithValue("@ucName", (object?)NullIfEmpty(snap.UsernameUserConfirm) ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@ucNid", (object?)snap.NidUserUserConfirm ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@trigger", (object?)NullIfEmpty(triggerDate) ?? DBNull.Value);
