@@ -53,25 +53,29 @@ POST /api/tahator/restore
 // appsettings: "Rayvarz": { "DryRun": false }
 POST /api/tahator/send
 {
-  "ficheNo": "040933318150",
+  "ficheNo": "040933/318150",
   "force": true,
   "holdAfterStatus2": true
 }
 ```
 
+از UI: چک‌باکس‌های «force» و «توقف روی وضعیت ۲» را بزنید (DryRun باید false باشد).
+
 سپس در Sara:
 ```sql
 SELECT ExportPermanentDate, PaymentBreakDate, PaymentDate,
        UserConfirmDate, UsernameUserConfirm, NidUserUserConfirm, EumFicheStatus
-FROM dbo.Income_Fiche WHERE FicheNo = '040933318150';
+FROM dbo.Income_Fiche WHERE FicheNo = '040933/318150';
 -- انتظار: Status=2 ، Export/Break = امروز ، PaymentDate خالی ، UserConfirm* همان اصلی
+-- توجه: '040933/318150' ≠ '040933318150'
 ```
 
 بازگردانی:
 ```http
 POST /api/tahator/restore
-{ "ficheNo": "040933318150" }
+{ "ficheNo": "040933/318150" }
 ```
+یا دکمه «بازگردانی وضعیت ۳» در UI.
 
 
 ## تنظیمات

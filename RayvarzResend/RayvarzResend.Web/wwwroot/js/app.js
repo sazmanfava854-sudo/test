@@ -554,21 +554,53 @@ function setupEventHandlers() {
   bindClick('btnTahatorSend', async () => {
     const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
     if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
+    const force = !!$('tahatorForce')?.checked;
+    const holdAfterStatus2 = !!$('tahatorHoldStatus2')?.checked;
     const dry = config?.tahator?.dryRun ?? config?.dryRun;
-    const warn = dry
-      ? `DryRun فعال است — SOAP ساخته می‌شود ولی POST واقعی برای ${ficheNo} زده نمی‌شود. ادامه؟`
-      : `اجرای واقعی تهاتر برای ${ficheNo}?\n(SELECT → وضعیت ۲ → SOAP → بازگردانی ۳)`;
+
+    if (holdAfterStatus2 && dry) {
+      return alert(
+        'توقف روی وضعیت ۲ با DryRun ممکن نیست.\n' +
+        'در appsettings مقدار Rayvarz:DryRun=false بگذارید، سپس دوباره امتحان کنید.'
+      );
+    }
+
+    let warn;
+    if (holdAfterStatus2) {
+      warn =
+        `فقط وضعیت ۲ برای ${ficheNo}؟\n` +
+        `Export/Break = تاریخ روز روی Sara — بدون SOAP و بدون بازگردانی.\n` +
+        (force ? 'force=true\n' : '') +
+        'بعد از SELECT، دکمه «بازگردانی وضعیت ۳» را بزنید.';
+    } else if (dry) {
+      warn =
+        `DryRun فعال است — برای ${ficheNo} فقط SOAP ساخته می‌شود؛\n` +
+        'UPDATE تاریخ روز روی Sara زده نمی‌شود. ادامه؟';
+    } else {
+      warn =
+        `اجرای کامل تهاتر برای ${ficheNo}؟\n` +
+        '(وضعیت ۲ با تاریخ روز → SOAP → بازگردانی ۳ و تاریخ‌های اصلی)\n' +
+        'بعد از اتمام، SELECT همان تاریخ‌های اصلی را نشان می‌دهد — طبیعی است.\n' +
+        (force ? 'force=true\n' : '') +
+        'برای دیدن تاریخ روز: چک‌باکس «توقف روی وضعیت ۲» را بزنید.';
+    }
     if (!confirm(warn)) return;
 
     const btn = $('btnTahatorSend');
     btn.disabled = true;
-    showTahatorWaiting('اجرای تهاتر + SOAP… ممکن است طول بکشد');
+    showTahatorWaiting(
+      holdAfterStatus2
+        ? 'اعمال وضعیت ۲ (تاریخ روز) روی Sara…'
+        : 'اجرای تهاتر + SOAP… ممکن است طول بکشد'
+    );
     try {
       const res = await fetch('/api/tahator/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ficheNo,
+          force,
+          holdAfterStatus2,
           // تهاتر: Branch/Fund از Tahator1 روی سرور (Branch=102، Fund=۵۱–۶۳) — نه منطقه UI نوسازی
           branch: 0,
           fund: 0,
@@ -587,10 +619,49 @@ function setupEventHandlers() {
         $('xmlSection').hidden = false;
         $('xmlBox').textContent = data.soapResponse || data.previewXml;
       }
-      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ تاریخ روز روی Sara اعمال نشد.');
       else if (data.skipped) alert(data.message);
       else if (data.success) alert(data.message || 'تهاتر + SOAP موفق');
       else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  bindClick('btnTahatorRestore', async () => {
+    const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
+    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
+    if (!confirm(`بازگردانی وضعیت ۳ و تاریخ‌های اصلی برای ${ficheNo}؟`)) return;
+
+    const btn = $('btnTahatorRestore');
+    btn.disabled = true;
+    showTahatorWaiting('بازگردانی از snapshot…');
+    try {
+      const res = await fetch('/api/tahator/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ficheNo })
+      });
+      if (res.status === 404) {
+        throw new Error('API /api/tahator/restore یافت نشد — pull و restart کنید.');
+      }
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      showTahatorResult(
+        [
+          '=== بازگردانی وضعیت ۳ ===',
+          `FicheNo: ${data.ficheNo || ficheNo}`,
+          `Success: ${data.success}`,
+          data.snapshotId ? `SnapshotId: ${data.snapshotId}` : '',
+          `پیام: ${data.message || ''}`,
+          '',
+          '--- مراحل ---',
+          ...(data.steps || [])
+        ].filter(Boolean).join('\n')
+      );
+      alert(data.message || (data.success ? 'بازگردانی انجام شد' : 'بازگردانی ناموفق'));
     } catch (e) {
       alert(e.message);
     } finally {

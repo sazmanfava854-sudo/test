@@ -359,9 +359,11 @@ public sealed class TahatorResendService
                 SoapMessage = soapResult.Message,
                 Steps = steps,
                 Message = dryRun
-                    ? "DryRun تهاتر: SOAP ساخته شد؛ برای ارسال واقعی DryRun را false کنید."
+                    ? "DryRun تهاتر: SOAP ساخته شد؛ UPDATE تاریخ روز روی Sara زده نشد — DryRun=false کنید."
                     : success
-                        ? "تهاتر: SOAP ارسال و در واسط/رایورز تأیید شد."
+                        ? "تهاتر: SOAP ارسال و تأیید شد. Export/Break به مقادیر اصلی بازگردانده شد " +
+                          $"(Export={snapshot?.ExportPermanentDate}, Break={snapshot?.PaymentBreakDate}). " +
+                          "برای دیدن تاریخ روز: holdAfterStatus2=true بفرستید."
                         : string.IsNullOrWhiteSpace(notSent)
                             ? (soapResult.Message ?? "تهاتر ناموفق")
                             : $"تهاتر ناموفق — علت عدم ارسال: {notSent}"
