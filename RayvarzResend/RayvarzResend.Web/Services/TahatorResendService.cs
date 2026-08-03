@@ -166,7 +166,7 @@ public sealed class TahatorResendService
                 steps.Add($"⚠ چک incmdocsys ناموفق: {ex.Message}");
             }
 
-            if (inRayvarz)
+            if (inRayvarz && !req.Force)
             {
                 return new TahatorSendResult
                 {
@@ -176,17 +176,22 @@ public sealed class TahatorResendService
                     DryRun = dryRun,
                     ExistsInRayvarz = true,
                     Steps = steps,
-                    Message = "فیش در رایورز موجود است — SOAP ارسال نشد."
+                    Message = "فیش در رایورز موجود است — SOAP ارسال نشد. برای تست وضعیت ۲: force=true بفرستید."
                 };
             }
+
+            if (inRayvarz && req.Force)
+                steps.Add("2b) Force=true — وجود در رایورز نادیده گرفته شد (تست وضعیت ۲ / ارسال مجدد)");
 
             snapshot = await TryLoadSnapshotAsync(ficheNo, ct);
             if (snapshot == null)
                 return Fail(ficheNo, dryRun, steps, "Snapshot از Income_Fiche خوانده نشد.");
 
             steps.Add(
-                $"3) SELECT نگه‌داشت: Status={snapshot.EumFicheStatus}, Export={snapshot.ExportPermanentDate}, " +
-                $"Break={snapshot.PaymentBreakDate}, Pay={snapshot.PaymentDate}");
+                $"3) SELECT نگه‌داشت اصلی: Status={snapshot.EumFicheStatus}, " +
+                $"Export={snapshot.ExportPermanentDate}, Break={snapshot.PaymentBreakDate}, " +
+                $"Pay={snapshot.PaymentDate}, UserConfirm={snapshot.UserConfirmDate}, " +
+                $"User={snapshot.UsernameUserConfirm}");
 
             var today = DateHelper.CurrentShamsiSlashDate();
             var branch = ResolveBranch(fiche, req.Branch);
@@ -198,6 +203,13 @@ public sealed class TahatorResendService
             var docDate = FirstDate(req.DocDate, fiche.RayvarzDocDate);
             var actDate = FirstDate(req.ActDate, fiche.RayvarzActDate);
             var dueDate = FirstDate(req.DueDate, fiche.RayvarzDueDate);
+
+            // مرحله وضعیت ۲ نیاز به نوشتن روی Sara دارد — DryRun مانع می‌شود
+            if (dryRun && req.HoldAfterStatus2)
+            {
+                return Fail(ficheNo, dryRun, steps,
+                    "HoldAfterStatus2 با DryRun ممکن نیست — Rayvarz:DryRun=false بگذارید تا UPDATE تاریخ روز روی Income_Fiche زده شود.");
+            }
 
             long? snapshotId = null;
             if (!dryRun)
@@ -214,11 +226,39 @@ public sealed class TahatorResendService
 
                 await ApplyTriggerStatus2Async(ficheNo, today, ct);
                 statusChanged = true;
-                steps.Add($"4) UPDATE وضعیت ۲ (Export/Break={today}, PaymentDate='')");
+                steps.Add(
+                    $"4) UPDATE وضعیت ۲ روی Sara: EumFicheStatus=2, " +
+                    $"ExportPermanentDate={today}, PaymentBreakDate={today}, PaymentDate='' " +
+                    "(UserConfirm* دست نخورده). الان SELECT بزنید تا تاریخ روز را ببینید.");
             }
             else
             {
-                steps.Add($"4) DryRun — ذخیره snapshot و UPDATE وضعیت ۲ شبیه‌سازی شد (تاریخ={today})");
+                steps.Add(
+                    $"4) DryRun=true — UPDATE وضعیت ۲ زده نشد (تاریخ روز اعمال نمی‌شود). " +
+                    $"برای تست مرحله ۳: DryRun=false و در صورت نیاز holdAfterStatus2=true");
+            }
+
+            // فقط نگه‌داشت + وضعیت ۲ — توقف برای مشاهده تاریخ روز در Sara
+            if (!dryRun && req.HoldAfterStatus2 && snapshotId is > 0)
+            {
+                return new TahatorSendResult
+                {
+                    Success = true,
+                    FicheNo = ficheNo,
+                    DryRun = false,
+                    ExistsInRayvarz = inRayvarz,
+                    Snapshot = snapshot,
+                    SnapshotId = snapshotId,
+                    TriggerDate = today,
+                    DocTyp = fiche.DocTyp,
+                    Branch = branch,
+                    Fund = fund,
+                    Steps = steps,
+                    Message =
+                        $"وضعیت ۲ اعمال شد (تاریخ={today}). " +
+                        "در Sara همان SELECT را بزنید؛ Export/Break باید تاریخ روز باشد. " +
+                        "سپس POST /api/tahator/restore برای بازگردانی مقادیر اصلی."
+                };
             }
 
             steps.Add($"5) ساخت SOAP تهاتر via DSL/PayloadBuilder (Branch={branch}, Fund={fund}, Engine=Active)");

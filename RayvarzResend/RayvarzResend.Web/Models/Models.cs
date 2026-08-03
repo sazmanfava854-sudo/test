@@ -192,6 +192,13 @@ public class TahatorFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
+    /// <summary>اگر فیش در رایورز باشد هم ادامه بده (برای تست مرحله وضعیت ۲).</summary>
+    public bool Force { get; set; }
+    /// <summary>
+    /// فقط مرحله نگه‌داشت + UPDATE وضعیت ۲ (تاریخ روز) — بدون SOAP و بدون بازگردانی.
+    /// بعد از SELECT در Sara، با POST /api/tahator/restore بازگردانید.
+    /// </summary>
+    public bool HoldAfterStatus2 { get; set; }
 }
 
 public class TahatorCheckResult

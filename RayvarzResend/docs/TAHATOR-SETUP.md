@@ -31,24 +31,48 @@ POST /api/tahator/restore
 
 اسکریپت جدول: `database/05_TahatorRestoreSnapshot.sql` (روی سرور ۲۳۲ / `RayvarzRuleEngine`). در صورت نبود جدول، سرویس در اولین استفاده آن را می‌سازد.
 
-## API
+## مراحل ۲ و ۳ — نگه‌داشت + وضعیت ۲ (تاریخ روز)
 
-```http
-POST /api/tahator/check
-{ "ficheNo": "040933318150" }
+| مرحله | کار | نتیجه روی `Income_Fiche` |
+|-------|-----|---------------------------|
+| ۲ | `SELECT` فیلدهای اصلی + ذخیره در `TahatorRestoreSnapshot` | تغییری روی Sara نیست |
+| ۳ | `UPDATE` وضعیت **۲** | `ExportPermanentDate`/`PaymentBreakDate` = **تاریخ روز**، `PaymentDate=''`؛ UserConfirm* دست نخورده |
+| بعد از SOAP | بازگردانی از snapshot | دوباره مقادیر اصلی (مثل قبل از تریگر) |
 
+اگر بعد از ارسال کامل دوباره SELECT بزنید، تاریخ‌ها **اصلی** هستند (بازگردانی شده) — این درست است.
+
+چرا «تاریخ روز» نمی‌بینید؟
+
+1. **`Rayvarz:DryRun=true`** → UPDATE روی Sara زده نمی‌شود  
+2. فیش در **incmdocsys** هست → ارسال Skip می‌شود و به مرحله ۳ نمی‌رسد  
+3. ارسال کامل شده → بازگردانی شده و تاریخ‌ها برگشته‌اند
+
+### تست فقط مرحله ۲ و ۳ (دیدن تاریخ روز)
+
+```json
+// appsettings: "Rayvarz": { "DryRun": false }
 POST /api/tahator/send
 {
   "ficheNo": "040933318150",
-  "branch": 207,
-  "fund": 200207009,
-  "docDate": "14050323",
-  "actDate": "14050323",
-  "dueDate": "14050323"
+  "force": true,
+  "holdAfterStatus2": true
 }
 ```
 
-`branch` / تاریخ‌ها اختیاری‌اند؛ در صورت خالی از فیش / FundMap پر می‌شوند.
+سپس در Sara:
+```sql
+SELECT ExportPermanentDate, PaymentBreakDate, PaymentDate,
+       UserConfirmDate, UsernameUserConfirm, NidUserUserConfirm, EumFicheStatus
+FROM dbo.Income_Fiche WHERE FicheNo = '040933318150';
+-- انتظار: Status=2 ، Export/Break = امروز ، PaymentDate خالی ، UserConfirm* همان اصلی
+```
+
+بازگردانی:
+```http
+POST /api/tahator/restore
+{ "ficheNo": "040933318150" }
+```
+
 
 ## تنظیمات
 
