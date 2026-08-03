@@ -116,29 +116,42 @@ public sealed class TahatorResendService
 
         // دقیق همان FicheNo ورودی (اسلش حفظ می‌شود) — با فرم بدون اسلش قاطی نشود
         var ficheNo = NormalizeFicheNo(req.FicheNo);
-        steps.Add($"0) FicheNo دقیق={ficheNo}");
+        // holdAfterStatus2 برای تست تریگر تاریخ روز است → force ضمنی
+        var force = req.Force || req.HoldAfterStatus2;
+        steps.Add(
+            $"0) FicheNo دقیق={ficheNo} | DryRun={dryRun} (از config) | force={force}" +
+            (req.HoldAfterStatus2 && !req.Force ? " (به‌خاطر holdAfterStatus2)" : "") +
+            (req.HoldAfterStatus2 ? " | holdAfterStatus2=true" : ""));
+        if (dryRun)
+            steps.Add("⚠ DryRun=true در پروسه در حال اجرا — اگر در فایل false کردید، حتماً app را Restart کنید.");
 
         try
         {
             var inHeaderBefore = await ExistsInAccountingDocHeaderAsync(ficheNo, ct);
             steps.Add(inHeaderBefore
-                ? "1) Accounting_DocHeader: موجود — ارسال لازم نیست"
+                ? "1) Accounting_DocHeader: موجود"
                 : "1) Accounting_DocHeader: موجود نیست");
 
-            if (inHeaderBefore)
+            if (inHeaderBefore && !force)
             {
                 return new TahatorSendResult
                 {
-                    Success = true,
+                    Success = false,
                     Skipped = true,
                     FicheNo = ficheNo,
                     DryRun = dryRun,
                     ExistsInAccountingDocHeaderBefore = true,
                     ExistsInAccountingDocHeaderAfter = true,
+                    SkipReason = "InDocHeader",
                     Steps = steps,
-                    Message = "فیش از قبل در جدول واسط است — SOAP ارسال نشد."
+                    Message =
+                        "ارسال نشد: فیش در Accounting_DocHeader هست (ربطی به DryRun ندارد). " +
+                        "برای ادامه تست: force=true یا holdAfterStatus2=true بزنید؛ یا ردیف واسط را پاک کنید."
                 };
             }
+
+            if (inHeaderBefore && force)
+                steps.Add("1b) Force — وجود در Accounting_DocHeader نادیده گرفته شد");
 
             var fiche = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
             if (fiche == null || fiche.Category != FicheCategory.Income)
@@ -177,22 +190,25 @@ public sealed class TahatorResendService
                 steps.Add($"⚠ چک incmdocsys ناموفق: {ex.Message}");
             }
 
-            if (inRayvarz && !req.Force)
+            if (inRayvarz && !force)
             {
                 return new TahatorSendResult
                 {
-                    Success = true,
+                    Success = false,
                     Skipped = true,
                     FicheNo = ficheNo,
                     DryRun = dryRun,
                     ExistsInRayvarz = true,
+                    SkipReason = "InRayvarz",
                     Steps = steps,
-                    Message = "فیش در رایورز موجود است — SOAP ارسال نشد. برای تست وضعیت ۲: force=true بفرستید."
+                    Message =
+                        "ارسال نشد: فیش در رایورز (incmdocsys) هست (ربطی به DryRun ندارد). " +
+                        "برای ادامه: force=true یا holdAfterStatus2=true — یا سند را از رایورز حذف کنید."
                 };
             }
 
-            if (inRayvarz && req.Force)
-                steps.Add("2b) Force=true — وجود در رایورز نادیده گرفته شد (تست وضعیت ۲ / ارسال مجدد)");
+            if (inRayvarz && force)
+                steps.Add("2b) Force — وجود در رایورز نادیده گرفته شد (تست / ارسال مجدد)");
 
             snapshot = await TryLoadSnapshotAsync(ficheNo, ct);
             if (snapshot == null)

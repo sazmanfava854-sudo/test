@@ -266,11 +266,27 @@ async function init() {
   }
   const badge = $('configBadge');
   const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
+  const tahatorDry = config?.tahator?.dryRun ?? config.dryRun;
   badge.textContent = config.dryRun
     ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
     : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
   if (!config.dryRun) {
     badge.style.background = 'rgba(220, 53, 69, 0.35)';
+  }
+  const tahatorHint = $('tahatorDryRunHint');
+  if (tahatorHint) {
+    tahatorHint.textContent = tahatorDry
+      ? 'تهاتر: DryRun=true در پروسه جاری — بعد از تغییر appsettings حتماً Restart کنید.'
+      : 'تهاتر: DryRun=false — ارسال/UPDATE واقعی فعال است. اگر Skip شد، force یا hold را بزنید.';
+    tahatorHint.className = tahatorDry ? 'hint warn' : 'hint ok';
+  }
+
+  const holdEl = $('tahatorHoldStatus2');
+  const forceEl = $('tahatorForce');
+  if (holdEl && forceEl) {
+    holdEl.addEventListener('change', () => {
+      if (holdEl.checked) forceEl.checked = true;
+    });
   }
 
   const branchSel = $('branch');
@@ -554,14 +570,17 @@ function setupEventHandlers() {
   bindClick('btnTahatorSend', async () => {
     const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
     if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
-    const force = !!$('tahatorForce')?.checked;
     const holdAfterStatus2 = !!$('tahatorHoldStatus2')?.checked;
+    // hold برای تست تاریخ روز → force هم لازم است (اگر در رایورز/واسط باشد Skip نشود)
+    if (holdAfterStatus2 && $('tahatorForce')) $('tahatorForce').checked = true;
+    const force = !!$('tahatorForce')?.checked || holdAfterStatus2;
     const dry = config?.tahator?.dryRun ?? config?.dryRun;
 
     if (holdAfterStatus2 && dry) {
       return alert(
         'توقف روی وضعیت ۲ با DryRun ممکن نیست.\n' +
-        'در appsettings مقدار Rayvarz:DryRun=false بگذارید، سپس دوباره امتحان کنید.'
+        'Rayvarz:DryRun=false بگذارید و حتماً برنامه را Restart کنید، بعد دوباره امتحان کنید.\n' +
+        '(اگر فقط فایل را عوض کردید بدون Restart، پروسه هنوز DryRun=true می‌بیند.)'
       );
     }
 
@@ -723,6 +742,7 @@ function formatTahatorSend(d) {
     `FicheNo: ${d.ficheNo}`,
     `Success: ${d.success}`,
     `Skipped: ${d.skipped}`,
+    d.skipReason ? `SkipReason: ${d.skipReason}  ← این غیر از DryRun است` : '',
     `DryRun: ${d.dryRun}`,
     `Engine: ${d.engineName || '-'}`,
     `DocTyp: ${d.docTyp || '-'}`,

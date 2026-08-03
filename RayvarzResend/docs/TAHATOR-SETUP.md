@@ -43,9 +43,12 @@ POST /api/tahator/restore
 
 چرا «تاریخ روز» نمی‌بینید؟
 
-1. **`Rayvarz:DryRun=true`** → UPDATE روی Sara زده نمی‌شود  
-2. فیش در **incmdocsys** هست → ارسال Skip می‌شود و به مرحله ۳ نمی‌رسد  
+1. **`Rayvarz:DryRun=true`** در پروسه جاری → UPDATE روی Sara زده نمی‌شود  
+   بعد از تغییر به `false` **حتماً Restart** کنید؛ فقط ذخیره فایل کافی نیست.
+2. فیش در **incmdocsys** یا **Accounting_DocHeader** هست → ارسال Skip می‌شود (`SkipReason`) — ربطی به DryRun ندارد؛ `force` یا `holdAfterStatus2` بزنید
 3. ارسال کامل شده → بازگردانی شده و تاریخ‌ها برگشته‌اند
+
+در پاسخ API به خط `0) ... DryRun=...` نگاه کنید: همان مقدار واقعی پروسه است.
 
 ### تست فقط مرحله ۲ و ۳ (دیدن تاریخ روز)
 

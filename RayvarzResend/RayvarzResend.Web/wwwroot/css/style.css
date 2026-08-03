@@ -145,6 +145,22 @@ h3 {
   border-radius: 4px;
 }
 
+.tahator-card .hint.warn {
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.tahator-card .hint.ok {
+  color: #115e59;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
 .card-head {
   display: flex;
   align-items: center;

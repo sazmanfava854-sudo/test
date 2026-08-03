@@ -223,6 +223,8 @@ public class TahatorSendResult
     public bool DryRun { get; set; }
     public string FicheNo { get; set; } = "";
     public string Message { get; set; } = "";
+    /// <summary>InDocHeader | InRayvarz | null</summary>
+    public string? SkipReason { get; set; }
     public bool ExistsInAccountingDocHeaderBefore { get; set; }
     public bool ExistsInAccountingDocHeaderAfter { get; set; }
     public bool ExistsInRayvarz { get; set; }
