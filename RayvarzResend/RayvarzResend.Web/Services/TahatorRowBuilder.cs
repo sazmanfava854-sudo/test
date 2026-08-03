@@ -79,7 +79,8 @@ public static class TahatorRowBuilder
     }
 
     /// <summary>
-    /// فقط Trim — اسلش FicheNo را حذف نکن؛ در Sara ممکن است <c>040933/318150</c> باشد.
+    /// فقط Trim — اسلش را حذف نکن و واریانت نساز.
+    /// <c>040933/318150</c> و <c>040933318150</c> دو فیش جدا هستند.
     /// </summary>
     public static string NormalizeFicheNo(string? ficheNo)
     {
@@ -87,26 +88,6 @@ public static class TahatorRowBuilder
         if (string.IsNullOrWhiteSpace(f))
             throw new ArgumentException("شماره فیش تهاتر الزامی است.");
         return f;
-    }
-
-    /// <summary>واریانت‌های جستجو: همان ورودی، بدون اسلش، و با اسلش اگر الگوی ۱۲ رقمی باشد.</summary>
-    public static IReadOnlyList<string> FicheNoLookupVariants(string? ficheNo)
-    {
-        var raw = NormalizeFicheNo(ficheNo);
-        var list = new List<string> { raw };
-        var noSlash = raw.Replace("/", "", StringComparison.Ordinal);
-        if (!string.Equals(noSlash, raw, StringComparison.Ordinal))
-            list.Add(noSlash);
-
-        // 040933318150 → 040933/318150 (۶ رقم + / + بقیه) اگر اسلش نداشت
-        if (noSlash.Length >= 7 && !raw.Contains('/'))
-        {
-            var withSlash = noSlash[..6] + "/" + noSlash[6..];
-            if (!list.Contains(withSlash, StringComparer.Ordinal))
-                list.Add(withSlash);
-        }
-
-        return list;
     }
 
     /// <summary>

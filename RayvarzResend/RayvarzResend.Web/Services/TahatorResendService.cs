@@ -46,19 +46,23 @@ public sealed class TahatorResendService
 
     public async Task<TahatorCheckResult> CheckAsync(string ficheNo, CancellationToken ct = default)
     {
-        var (resolvedNo, fiche) = await ResolveIncomeFicheAsync(ficheNo, ct);
-        ficheNo = resolvedNo;
-        var inHeader = await ExistsInAccountingDocHeaderAnyAsync(ficheNo, ct);
-        var snapshot = await TryLoadSnapshotAnyAsync(ficheNo, ct);
+        ficheNo = NormalizeFicheNo(ficheNo);
+        var inHeader = await ExistsInAccountingDocHeaderAsync(ficheNo, ct);
+        var snapshot = await TryLoadSnapshotAsync(ficheNo, ct);
+        var fiche = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
         if (fiche != null)
+        {
+            ficheNo = fiche.FicheNo.Trim(); // همان کلید Sara — بدون تغییر اسلش
             ApplyTahatorDocTyp(fiche);
+        }
 
         var notSent = inHeader ? null : await _fiches.GetDocNotSentErrorAsync(ficheNo, ct);
         bool inRayvarz = false;
         try
         {
             if (fiche != null)
-                inRayvarz = await ExistsInRayvarzAnyAsync(ficheNo, DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate), ct);
+                inRayvarz = await _fiches.ExistsInRayvarzAsync(
+                    ficheNo, DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate), ct);
         }
         catch (SqlException)
         {
@@ -69,7 +73,7 @@ public sealed class TahatorResendService
         try
         {
             if (_snapshots.IsConfigured)
-                pendingStored = await GetPendingSnapshotAnyAsync(ficheNo, ct);
+                pendingStored = await _snapshots.GetPendingAsync(ficheNo, ct);
         }
         catch (Exception ex)
         {
@@ -110,12 +114,13 @@ public sealed class TahatorResendService
         var statusChanged = false;
         IncomeFicheTahatorSnapshot? snapshot = null;
 
-        var (ficheNo, fiche) = await ResolveIncomeFicheAsync(req.FicheNo, ct);
-        steps.Add($"0) FicheNo ورودی={req.FicheNo?.Trim()} → Sara={ficheNo}");
+        // دقیق همان FicheNo ورودی (اسلش حفظ می‌شود) — با فرم بدون اسلش قاطی نشود
+        var ficheNo = NormalizeFicheNo(req.FicheNo);
+        steps.Add($"0) FicheNo دقیق={ficheNo}");
 
         try
         {
-            var inHeaderBefore = await ExistsInAccountingDocHeaderAnyAsync(ficheNo, ct);
+            var inHeaderBefore = await ExistsInAccountingDocHeaderAsync(ficheNo, ct);
             steps.Add(inHeaderBefore
                 ? "1) Accounting_DocHeader: موجود — ارسال لازم نیست"
                 : "1) Accounting_DocHeader: موجود نیست");
@@ -135,10 +140,11 @@ public sealed class TahatorResendService
                 };
             }
 
+            var fiche = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
             if (fiche == null || fiche.Category != FicheCategory.Income)
             {
                 return Fail(ficheNo, dryRun, steps,
-                    $"فیش درآمدی برای تهاتر در Sara یافت نشد (ورودی={req.FicheNo?.Trim()}).");
+                    $"فیش درآمدی برای تهاتر در Sara یافت نشد (FicheNo={ficheNo}).");
             }
 
             // گروه 157 از Load قبلاً ردیف تهاتر + Centers دارد؛ در غیر این صورت اینجا بساز
@@ -149,7 +155,6 @@ public sealed class TahatorResendService
             else
                 ApplyTahatorDocTyp(fiche);
 
-            // FicheNo را از رکورد Sara نگه دار (مثلاً 040933/318150) — اسلش را حذف نکن
             ficheNo = fiche.FicheNo.Trim();
 
             steps.Add(
@@ -162,7 +167,8 @@ public sealed class TahatorResendService
             bool inRayvarz;
             try
             {
-                inRayvarz = await ExistsInRayvarzAnyAsync(
+                // فقط همان RowDocNo دقیق — نه فرم بدون اسلش
+                inRayvarz = await _fiches.ExistsInRayvarzAsync(
                     ficheNo, DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate), ct);
             }
             catch (SqlException ex)
@@ -188,7 +194,7 @@ public sealed class TahatorResendService
             if (inRayvarz && req.Force)
                 steps.Add("2b) Force=true — وجود در رایورز نادیده گرفته شد (تست وضعیت ۲ / ارسال مجدد)");
 
-            snapshot = await TryLoadSnapshotAnyAsync(ficheNo, ct);
+            snapshot = await TryLoadSnapshotAsync(ficheNo, ct);
             if (snapshot == null)
                 return Fail(ficheNo, dryRun, steps, "Snapshot از Income_Fiche خوانده نشد.");
 
@@ -289,13 +295,13 @@ public sealed class TahatorResendService
                 steps.Add("7) DryRun — بازگردانی وضعیت ۳ شبیه‌سازی شد");
             }
 
-            var inHeaderAfter = await ExistsInAccountingDocHeaderAnyAsync(ficheNo, ct);
+            var inHeaderAfter = await ExistsInAccountingDocHeaderAsync(ficheNo, ct);
             bool verifiedRay = false;
             if (!dryRun && soapResult.Success)
             {
                 try
                 {
-                    verifiedRay = await ExistsInRayvarzAnyAsync(
+                    verifiedRay = await _fiches.ExistsInRayvarzAsync(
                         ficheNo, DateHelper.ExtractShamsiYear(docDate), ct);
                 }
                 catch (SqlException ex)
@@ -395,21 +401,21 @@ public sealed class TahatorResendService
     /// <summary>بازگردانی دستی از snapshot Pending ذخیره‌شده (بعد از قطع فرایند).</summary>
     public async Task<TahatorSendResult> RestorePendingAsync(string ficheNo, CancellationToken ct = default)
     {
+        ficheNo = NormalizeFicheNo(ficheNo);
         var steps = new List<string>();
         if (!_snapshots.IsConfigured)
-            return Fail(NormalizeFicheNo(ficheNo), false, steps, "RayvarzRuleEngine تنظیم نشده.");
+            return Fail(ficheNo, false, steps, "RayvarzRuleEngine تنظیم نشده.");
 
-        var pending = await GetPendingSnapshotAnyAsync(ficheNo, ct);
+        var pending = await _snapshots.GetPendingAsync(ficheNo, ct);
         if (pending == null)
-            return Fail(NormalizeFicheNo(ficheNo), false, steps, "Snapshot Pending برای این فیش یافت نشد.");
+            return Fail(ficheNo, false, steps, "Snapshot Pending برای این فیش یافت نشد.");
 
-        ficheNo = pending.FicheNo;
-        steps.Add($"SnapshotId={pending.SnapshotId} از RayvarzRuleEngine خوانده شد (FicheNo={ficheNo})");
+        steps.Add($"SnapshotId={pending.SnapshotId} از RayvarzRuleEngine خوانده شد (FicheNo={pending.FicheNo})");
         await RestoreFromStoredSnapshotAsync(pending.SnapshotId, steps, ct);
         return new TahatorSendResult
         {
             Success = true,
-            FicheNo = ficheNo,
+            FicheNo = pending.FicheNo,
             SnapshotId = pending.SnapshotId,
             Snapshot = pending,
             Steps = steps,
@@ -562,68 +568,6 @@ WHERE FicheNo = @f";
 
     private static string NormalizeFicheNo(string ficheNo) =>
         TahatorRowBuilder.NormalizeFicheNo(ficheNo);
-
-    /// <summary>جستجو با واریانت اسلش‌دار / بدون اسلش؛ FicheNo برگشتی همان مقدار ستون Sara است.</summary>
-    private async Task<(string FicheNo, FicheHeaderDto? Fiche)> ResolveIncomeFicheAsync(
-        string? input, CancellationToken ct)
-    {
-        string? last = null;
-        foreach (var v in TahatorRowBuilder.FicheNoLookupVariants(input))
-        {
-            last = v;
-            var fiche = await _fiches.LoadAsync(IdentifierType.FicheNo, v, ct);
-            if (fiche != null && fiche.Category == FicheCategory.Income)
-                return (fiche.FicheNo.Trim(), fiche);
-        }
-
-        return (last ?? (string.IsNullOrWhiteSpace(input) ? "" : NormalizeFicheNo(input!)), null);
-    }
-
-    private async Task<bool> ExistsInAccountingDocHeaderAnyAsync(string ficheNo, CancellationToken ct)
-    {
-        foreach (var v in TahatorRowBuilder.FicheNoLookupVariants(ficheNo))
-        {
-            if (await ExistsInAccountingDocHeaderAsync(v, ct))
-                return true;
-        }
-
-        return false;
-    }
-
-    private async Task<bool> ExistsInRayvarzAnyAsync(string ficheNo, int year, CancellationToken ct)
-    {
-        foreach (var v in TahatorRowBuilder.FicheNoLookupVariants(ficheNo))
-        {
-            if (await _fiches.ExistsInRayvarzAsync(v, year, ct))
-                return true;
-        }
-
-        return false;
-    }
-
-    private async Task<IncomeFicheTahatorSnapshot?> TryLoadSnapshotAnyAsync(string ficheNo, CancellationToken ct)
-    {
-        foreach (var v in TahatorRowBuilder.FicheNoLookupVariants(ficheNo))
-        {
-            var snap = await TryLoadSnapshotAsync(v, ct);
-            if (snap != null)
-                return snap;
-        }
-
-        return null;
-    }
-
-    private async Task<IncomeFicheTahatorSnapshot?> GetPendingSnapshotAnyAsync(string ficheNo, CancellationToken ct)
-    {
-        foreach (var v in TahatorRowBuilder.FicheNoLookupVariants(ficheNo))
-        {
-            var pending = await _snapshots.GetPendingAsync(v, ct);
-            if (pending != null)
-                return pending;
-        }
-
-        return null;
-    }
 
     private static string? NullIfEmpty(string? s) =>
         string.IsNullOrWhiteSpace(s) ? null : s;

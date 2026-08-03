@@ -126,22 +126,13 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void NormalizeFicheNo_keeps_slash_as_stored_in_Sara()
+    public void NormalizeFicheNo_keeps_slash_exact_no_variant()
     {
         Assert.Equal("040933/318150", TahatorRowBuilder.NormalizeFicheNo("040933/318150"));
         Assert.Equal("040933318150", TahatorRowBuilder.NormalizeFicheNo("040933318150"));
-    }
-
-    [Fact]
-    public void FicheNoLookupVariants_tries_with_and_without_slash()
-    {
-        var fromSlash = TahatorRowBuilder.FicheNoLookupVariants("040933/318150");
-        Assert.Contains("040933/318150", fromSlash);
-        Assert.Contains("040933318150", fromSlash);
-
-        var fromPlain = TahatorRowBuilder.FicheNoLookupVariants("040933318150");
-        Assert.Contains("040933318150", fromPlain);
-        Assert.Contains("040933/318150", fromPlain);
+        Assert.NotEqual(
+            TahatorRowBuilder.NormalizeFicheNo("040933/318150"),
+            TahatorRowBuilder.NormalizeFicheNo("040933318150"));
     }
 
     [Fact]
