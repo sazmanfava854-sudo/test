@@ -266,27 +266,11 @@ async function init() {
   }
   const badge = $('configBadge');
   const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
-  const tahatorDry = config?.tahator?.dryRun ?? config.dryRun;
   badge.textContent = config.dryRun
     ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
     : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
   if (!config.dryRun) {
     badge.style.background = 'rgba(220, 53, 69, 0.35)';
-  }
-  const tahatorHint = $('tahatorDryRunHint');
-  if (tahatorHint) {
-    tahatorHint.textContent = tahatorDry
-      ? 'تهاتر: DryRun=true در پروسه جاری — بعد از تغییر appsettings حتماً Restart کنید.'
-      : 'تهاتر: DryRun=false — ارسال/UPDATE واقعی فعال است. اگر Skip شد، force یا hold را بزنید.';
-    tahatorHint.className = tahatorDry ? 'hint warn' : 'hint ok';
-  }
-
-  const holdEl = $('tahatorHoldStatus2');
-  const forceEl = $('tahatorForce');
-  if (holdEl && forceEl) {
-    holdEl.addEventListener('change', () => {
-      if (holdEl.checked) forceEl.checked = true;
-    });
   }
 
   const branchSel = $('branch');
@@ -309,21 +293,6 @@ async function init() {
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   syncFundFromBranch();
-
-  if (config.uiVersion !== '3' || !config.features?.rayvarzPostTest) {
-    console.warn('Backend قدیمی — دکمه‌های تست POST ممکن است 404 بدهند. git pull و dotnet run مجدد');
-  }
-  if (!config.features?.rayvarzPostMinimalSave) {
-    const btn = $('btnPostMinimalSave');
-    if (btn) btn.hidden = true;
-  }
-}
-
-function showRayvarzTestWaiting(title) {
-  $('resultSection').hidden = false;
-  $('resultBox').textContent =
-    `${title}\n\nدر حال اتصال به MSB…\n(ممکن است ۱۵ تا ۱۲۰ ثانیه طول بکشد — صبر کنید)`;
-  $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function bindClick(id, handler) {
@@ -337,7 +306,7 @@ function bindClick(id, handler) {
 }
 
 function setupEventHandlers() {
-  const required = ['btnPing', 'btnPostTest', 'btnLoad', 'btnPreview', 'btnSend'];
+  const required = ['btnLoad', 'btnPreview', 'btnSend'];
   const missing = required.filter((id) => !$(id));
   if (missing.length) {
     alert(`فایل index.html قدیمی است یا ناقص.\nدکمه‌های گم‌شده: ${missing.join(', ')}\nاز شاخه rayvarz-resend دوباره کپی کنید.`);
@@ -366,7 +335,6 @@ function setupEventHandlers() {
     applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
     renderFiche(data);
-    const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
     updateSendButton(data);
     $('resultSection').hidden = true;
@@ -444,103 +412,6 @@ function setupEventHandlers() {
   }
   });
 
-  bindClick('btnPing', async () => {
-  $('btnPing').disabled = true;
-  showRayvarzTestWaiting('Rayvarz Ping (GET ?wsdl)');
-  try {
-    const res = await fetch('/api/rayvarz-ping');
-    if (res.status === 404) {
-      throw new Error('API /api/rayvarz-ping یافت نشد — برنامه را از شاخه rayvarz-resend دوباره build و dotnet run کنید.');
-    }
-    const data = await parseJsonResponse(res);
-    $('resultSection').hidden = false;
-    const head = [
-      `Rayvarz Ping`,
-      `Ok: ${data.ok}`,
-      `Url: ${data.url}`,
-      `StatusCode: ${data.statusCode ?? '-'}`,
-      `ElapsedMs: ${data.elapsedMs}`,
-      data.error ? `Error: ${data.error}` : '',
-      data.inner ? `Inner: ${data.inner}` : '',
-      data.hint ? `Hint: ${data.hint}` : '',
-      data.warning ? `Warning: ${data.warning}` : ''
-    ].filter(Boolean).join('\n');
-    $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
-    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (!data.ok) alert('Ping ناموفق — اتصال TCP/HTTP برقرار نشد. POST Test را هم چک کنید.');
-    else if (data.warning) alert(data.warning);
-    else alert('Ping موفق — WSDL در دسترس است.');
-  } catch (e) {
-    alert(e.message);
-  } finally {
-    $('btnPing').disabled = false;
-  }
-  });
-
-  bindClick('btnPostTest', async () => {
-  $('btnPostTest').disabled = true;
-  showRayvarzTestWaiting('Rayvarz POST Test (بدون ثبت سند)');
-  try {
-    const res = await fetch('/api/rayvarz-post-test');
-    if (res.status === 404) {
-      throw new Error('API /api/rayvarz-post-test یافت نشد — نسخه قدیمی backend است. git pull rayvarz-resend و dotnet run مجدد.');
-    }
-    const data = await parseJsonResponse(res);
-    $('resultSection').hidden = false;
-    const head = [
-      `Rayvarz POST Test (بدون ثبت سند)`,
-      `Ok: ${data.ok}`,
-      `Url: ${data.url}`,
-      `StatusCode: ${data.statusCode ?? '-'}`,
-      `ElapsedMs: ${data.elapsedMs}`,
-      data.error ? `Error: ${data.error}` : '',
-      data.inner ? `Inner: ${data.inner}` : '',
-      data.hint ? `Hint: ${data.hint}` : '',
-      data.bodyPreview ? `BodyPreview: ${data.bodyPreview}` : ''
-    ].filter(Boolean).join('\n');
-    $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
-    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (data.ok) alert('POST تا MSB رسید (پاسخ HTTP گرفت) — مسیر POST باز است.');
-    else alert('POST هم قطع شد — مسیر POST به MSB بسته است؛ با IT مجوز IP/فایروال را چک کنید.');
-  } catch (e) {
-    alert(e.message);
-  } finally {
-    $('btnPostTest').disabled = false;
-  }
-  });
-
-  bindClick('btnPostMinimalSave', async () => {
-  $('btnPostMinimalSave').disabled = true;
-  showRayvarzTestWaiting('Rayvarz SaveDocument حداقلی (ممکن است Fault — سند واقعی نیست)');
-  try {
-    const res = await fetch('/api/rayvarz-post-minimal-save');
-    if (res.status === 404) {
-      throw new Error('API /api/rayvarz-post-minimal-save یافت نشد — git pull و dotnet run مجدد.');
-    }
-    const data = await parseJsonResponse(res);
-    $('resultSection').hidden = false;
-    const head = [
-      `Rayvarz SaveDocument حداقلی`,
-      `Ok: ${data.ok}`,
-      `Url: ${data.url}`,
-      `StatusCode: ${data.statusCode ?? '-'}`,
-      `ElapsedMs: ${data.elapsedMs}`,
-      data.error ? `Error: ${data.error}` : '',
-      data.inner ? `Inner: ${data.inner}` : '',
-      data.hint ? `Hint: ${data.hint}` : '',
-      data.bodyPreview ? `BodyPreview: ${data.bodyPreview}` : ''
-    ].filter(Boolean).join('\n');
-    $('resultBox').textContent = head + '\n' + formatDiagnostics(data.diagnostics);
-    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (data.ok) alert('SaveDocument حداقلی تا MSB رسید — اگر ارسال فیش واقعی reset می‌شود، محتوای فیش/WAF را بررسی کنید.');
-    else alert('SaveDocument حداقلی هم reset شد — SoapVersion=soap11 و empty-header را در appsettings امتحان کنید.');
-  } catch (e) {
-    alert(e.message);
-  } finally {
-    $('btnPostMinimalSave').disabled = false;
-  }
-  });
-
   bindClick('btnTahatorCheck', async () => {
     const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
     if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
@@ -570,57 +441,21 @@ function setupEventHandlers() {
   bindClick('btnTahatorSend', async () => {
     const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
     if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
-    const holdAfterStatus2 = !!$('tahatorHoldStatus2')?.checked;
-    // hold برای تست تاریخ روز → force هم لازم است (اگر در رایورز/واسط باشد Skip نشود)
-    if (holdAfterStatus2 && $('tahatorForce')) $('tahatorForce').checked = true;
-    const force = !!$('tahatorForce')?.checked || holdAfterStatus2;
     const dry = config?.tahator?.dryRun ?? config?.dryRun;
-
-    if (holdAfterStatus2 && dry) {
-      return alert(
-        'توقف روی وضعیت ۲ با DryRun ممکن نیست.\n' +
-        'Rayvarz:DryRun=false بگذارید و حتماً برنامه را Restart کنید، بعد دوباره امتحان کنید.\n' +
-        '(اگر فقط فایل را عوض کردید بدون Restart، پروسه هنوز DryRun=true می‌بیند.)'
-      );
-    }
-
-    let warn;
-    if (holdAfterStatus2) {
-      warn =
-        `فقط وضعیت ۲ برای ${ficheNo}؟\n` +
-        `Export/Break = تاریخ روز روی Sara — بدون SOAP و بدون بازگردانی.\n` +
-        (force ? 'force=true\n' : '') +
-        'بعد از SELECT، دکمه «بازگردانی وضعیت ۳» را بزنید.';
-    } else if (dry) {
-      warn =
-        `DryRun فعال است — برای ${ficheNo} فقط SOAP ساخته می‌شود؛\n` +
-        'UPDATE تاریخ روز روی Sara زده نمی‌شود. ادامه؟';
-    } else {
-      warn =
-        `اجرای کامل تهاتر برای ${ficheNo}؟\n` +
-        '(وضعیت ۲ با تاریخ روز → SOAP → بازگردانی ۳ و تاریخ‌های اصلی)\n' +
-        'بعد از اتمام، SELECT همان تاریخ‌های اصلی را نشان می‌دهد — طبیعی است.\n' +
-        (force ? 'force=true\n' : '') +
-        'برای دیدن تاریخ روز: چک‌باکس «توقف روی وضعیت ۲» را بزنید.';
-    }
+    const warn = dry
+      ? `DryRun فعال است — برای ${ficheNo} فقط SOAP ساخته می‌شود؛ POST واقعی زده نمی‌شود. ادامه؟`
+      : `ارسال تهاتر ${ficheNo} به رایورز؟`;
     if (!confirm(warn)) return;
 
     const btn = $('btnTahatorSend');
     btn.disabled = true;
-    showTahatorWaiting(
-      holdAfterStatus2
-        ? 'اعمال وضعیت ۲ (تاریخ روز) روی Sara…'
-        : 'اجرای تهاتر + SOAP… ممکن است طول بکشد'
-    );
+    showTahatorWaiting('ارسال تهاتر به رایورز… ممکن است طول بکشد');
     try {
       const res = await fetch('/api/tahator/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ficheNo,
-          force,
-          holdAfterStatus2,
-          // تهاتر: Branch/Fund از Tahator1 روی سرور (Branch=102، Fund=۵۱–۶۳) — نه منطقه UI نوسازی
           branch: 0,
           fund: 0,
           docDate: $('docDate')?.value || '',
@@ -638,49 +473,10 @@ function setupEventHandlers() {
         $('xmlSection').hidden = false;
         $('xmlBox').textContent = data.soapResponse || data.previewXml;
       }
-      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ تاریخ روز روی Sara اعمال نشد.');
+      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
       else if (data.skipped) alert(data.message);
-      else if (data.success) alert(data.message || 'تهاتر + SOAP موفق');
+      else if (data.success) alert(data.message || 'ارسال تهاتر موفق');
       else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  bindClick('btnTahatorRestore', async () => {
-    const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
-    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
-    if (!confirm(`بازگردانی وضعیت ۳ و تاریخ‌های اصلی برای ${ficheNo}؟`)) return;
-
-    const btn = $('btnTahatorRestore');
-    btn.disabled = true;
-    showTahatorWaiting('بازگردانی از snapshot…');
-    try {
-      const res = await fetch('/api/tahator/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ficheNo })
-      });
-      if (res.status === 404) {
-        throw new Error('API /api/tahator/restore یافت نشد — pull و restart کنید.');
-      }
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showTahatorResult(
-        [
-          '=== بازگردانی وضعیت ۳ ===',
-          `FicheNo: ${data.ficheNo || ficheNo}`,
-          `Success: ${data.success}`,
-          data.snapshotId ? `SnapshotId: ${data.snapshotId}` : '',
-          `پیام: ${data.message || ''}`,
-          '',
-          '--- مراحل ---',
-          ...(data.steps || [])
-        ].filter(Boolean).join('\n')
-      );
-      alert(data.message || (data.success ? 'بازگردانی انجام شد' : 'بازگردانی ناموفق'));
     } catch (e) {
       alert(e.message);
     } finally {
@@ -718,7 +514,7 @@ function formatTahatorCheck(d) {
     f ? `DocTyp تهاتر: ${f.docTyp} — ${f.docTypDsc || f.docDsc || ''}` : '',
     f ? `Payable: ${Number(f.payable || 0).toLocaleString()} | ردیف: ${(f.rows || []).length}` : '',
     d.pendingStoredSnapshot
-      ? `Snapshot Pending ذخیره‌شده: Id=${d.pendingStoredSnapshot.snapshotId} (در صورت قطعی → restore)`
+      ? `Snapshot Pending ذخیره‌شده: Id=${d.pendingStoredSnapshot.snapshotId}`
       : 'Snapshot Pending: —',
     d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : 'DocNotSent: —',
     `پیام: ${d.message || ''}`,

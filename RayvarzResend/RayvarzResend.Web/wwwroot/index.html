@@ -59,15 +59,6 @@
         </label>
       </div>
       <div class="actions">
-        <button id="btnPing" class="btn secondary" type="button">
-          <span class="btn-icon">📡</span> تست اتصال رایورز (Ping)
-        </button>
-        <button id="btnPostTest" class="btn secondary" type="button">
-          <span class="btn-icon">📤</span> تست POST (بدون ثبت)
-        </button>
-        <button id="btnPostMinimalSave" class="btn secondary" type="button">
-          <span class="btn-icon">🧪</span> تست SaveDocument حداقلی
-        </button>
         <button id="btnLoad" class="btn primary">
           <span class="btn-icon">⬇</span> دریافت فیش
         </button>
@@ -128,24 +119,13 @@
         <h2>تهاتر — ارسال از مسیر جدول واسط</h2>
       </div>
       <p class="hint">
-        تهاتر با نوسازی/صنفی فرق دارد: فقط <strong>تک‌کد فیش</strong> (بدون اکسل).
+        فقط <strong>تک‌کد فیش</strong> (بدون اکسل).
         <code>040933/318150</code> با <code>040933318150</code> فرق دارد — اسلش را حذف نکنید.
-        جریان کامل: نگه‌داشت → وضعیت ۲ (تاریخ روز) → SOAP → بازگردانی وضعیت ۳ و تاریخ‌های اصلی.
-        اگر بعد از ارسال کامل، Export/Break را SELECT کنید همان مقادیر اصلی است (بازگردانی شده) — طبیعی است.
       </p>
-      <p id="tahatorDryRunHint" class="hint">وضعیت DryRun تهاتر بعد از بارگذاری config…</p>
       <div class="form-grid">
         <label class="field field-wide">
           <span class="field-label">شماره فیش تهاتر (FicheNo)</span>
           <input id="tahatorFicheNo" type="text" placeholder="مثلاً 040933/318150" autocomplete="off" />
-        </label>
-        <label class="field field-check">
-          <input id="tahatorForce" type="checkbox" />
-          <span>force — حتی اگر در رایورز باشد ادامه بده</span>
-        </label>
-        <label class="field field-check">
-          <input id="tahatorHoldStatus2" type="checkbox" />
-          <span>توقف روی وضعیت ۲ — فقط تاریخ روز روی Sara (بدون SOAP / بدون بازگردانی)</span>
         </label>
       </div>
       <div class="actions">
@@ -153,15 +133,12 @@
           <span class="btn-icon">🔍</span> بررسی واسط / DocNotSent
         </button>
         <button id="btnTahatorSend" class="btn danger" type="button">
-          <span class="btn-icon">⇄</span> اجرای فرایند تهاتر
-        </button>
-        <button id="btnTahatorRestore" class="btn secondary" type="button">
-          <span class="btn-icon">↩</span> بازگردانی وضعیت ۳
+          <span class="btn-icon">➤</span> ارسال به رایورز
         </button>
       </div>
       <pre id="tahatorResultBox" class="code-block" hidden></pre>
     </section>
   </div>
-  <script src="js/app.js?v=9" defer></script>
+  <script src="js/app.js?v=10" defer></script>
 </body>
 </html>
