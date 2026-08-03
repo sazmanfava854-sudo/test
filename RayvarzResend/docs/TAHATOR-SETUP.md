@@ -111,9 +111,20 @@ End If
 | 13 | `051133450714` | −3,603,899,024 | 320008535 | 700100001 |
 | 14 | `051233468141` | −26,841,652,707 | 320008535 | 700100001 |
 
-```powershell
-# روی RayvarzRuleEngine:
-# database/06_RuleGolden_Seed_Tahator.sql
-Invoke-RestMethod -Method POST -Uri "http://localhost:5000/api/rule/golden/dry-run" |
-  Select-Object engineName, total, passed, allPassed
-```
+## اختلاف تستی در برابر سند اصلی (نمونه `040933318150`)
+
+| فیلد | تست (اشتباه قبلی) | اصلی / Tahator1 | وضعیت |
+|------|-------------------|-----------------|--------|
+| DocTyp / IncmNo / Val / Center1 / Center3 | ✔ | ✔ | درست بود |
+| `RowDocNo` | `040933/318150` | `040933318150` | اسلش حذف می‌شود |
+| `Branch` | 201 (منطقه UI) | **102** (ثابت اسناد تهاتر) | اصلاح شد |
+| `Fund` | 200201012 (FundMap نوسازی) | **59** (Tahator1: منطقه۹→209→59) | اصلاح شد |
+| `BnkAcntNo` | `2-9-3-…` (City اول) | `9-3-161-2-1-0-0` (Nick) | اصلاح شد |
+| `PhasTyp` | 7 | **2** | اصلاح شد |
+| `VchrTyp` | 0 | **1** | اصلاح شد |
+| `ActTyp` | 3 | **1** | اصلاح شد |
+| `Bank` | 4 (CI_Bank) | NULL/0 (PaymentBranch خالی) | اصلاح شد |
+| تاریخ | روز ارسال | تاریخ پرداخت فیش | از فیش بیاید؛ در UI خالی بگذارید |
+
+بعد از pull، دوباره با `FicheNo=040933318150` (بدون اسلش) و DryRun تست کنید؛ در XML باید `Branch=102`، `Fund=59`، `PhasTyp=ptDraft`، `VchrTyp=pfPay` ببینید.
+

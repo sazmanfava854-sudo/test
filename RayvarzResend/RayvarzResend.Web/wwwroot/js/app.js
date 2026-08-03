@@ -569,8 +569,9 @@ function setupEventHandlers() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ficheNo,
-          branch: parseInt($('branch')?.value || '0', 10) || 0,
-          fund: parseInt($('fund')?.value || '0', 10) || 0,
+          // تهاتر: Branch/Fund از Tahator1 روی سرور (Branch=102، Fund=۵۱–۶۳) — نه منطقه UI نوسازی
+          branch: 0,
+          fund: 0,
           docDate: $('docDate')?.value || '',
           actDate: $('actDate')?.value || '',
           dueDate: $('dueDate')?.value || ''

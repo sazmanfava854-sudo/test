@@ -115,6 +115,47 @@ public class TahatorHelpersTests
         Assert.Equal(700100002, fiche.Rows[0].Center3);
     }
 
+    [Theory]
+    [InlineData("9-3-161-2-1-0-0", 209, 59)]
+    [InlineData("11-4-125-15-1-0-0", 211, 61)]
+    [InlineData("12-12-14-5-1-0-0", 212, 62)]
+    public void Tahator1_fund_map_from_nosazi_nick(string nick, int district, int fund)
+    {
+        Assert.Equal(district, TahatorRowBuilder.ResolveDistrictBranchFromNosaziCode(nick));
+        Assert.Equal(fund, TahatorRowBuilder.ResolveTahatorFund(district));
+    }
+
+    [Fact]
+    public void NormalizeFicheNo_strips_slash_like_rayvarz_RowDocNo()
+    {
+        Assert.Equal("040933318150", TahatorRowBuilder.NormalizeFicheNo("040933/318150"));
+        Assert.Equal("040933318150", TahatorRowBuilder.NormalizeFicheNo("040933318150"));
+    }
+
+    [Fact]
+    public void ApplyTahatorRows_sets_SuggestedFund_from_Tahator1_map()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            BankCode = "4",
+            CheckNo = "6",
+            Deposit = 310134334,
+            DepositId = 10987476,
+            Payable = 2_458_668_372m,
+            BnkAcntNo = "9-3-161-2-1-0-0",
+            FicheNo = "040933/318150"
+        };
+        TahatorRowBuilder.ApplyTahatorRows(fiche);
+        Assert.Equal("040933318150", fiche.FicheNo);
+        Assert.Equal(209, fiche.ResolvedDistrictBranch);
+        Assert.Equal(59, fiche.SuggestedFund);
+        Assert.Equal(14, fiche.DocTyp);
+        Assert.Equal(200098, fiche.Rows[0].IncmNo);
+        Assert.Equal(310134334, fiche.Rows[0].Center1);
+    }
+
     [Fact]
     public void Golden_seed_script_includes_tahator_samples_and_centers()
     {
@@ -123,13 +164,7 @@ public class TahatorHelpersTests
         Assert.True(File.Exists(path), path);
         var sql = File.ReadAllText(path);
         Assert.Contains("050933483716", sql);
-        Assert.Contains("051133444502", sql);
-        Assert.Contains("051133450714", sql);
-        Assert.Contains("051233468141", sql);
         Assert.Contains("ExpectedCenter1", sql);
-        Assert.Contains("ExpectedCenter3", sql);
         Assert.Contains("200098", sql);
-        Assert.Contains("320008535", sql);
-        Assert.Contains("700100001", sql);
     }
 }

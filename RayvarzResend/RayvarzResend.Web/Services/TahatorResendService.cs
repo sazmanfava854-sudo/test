@@ -192,7 +192,9 @@ public sealed class TahatorResendService
             var branch = ResolveBranch(fiche, req.Branch);
             var fund = req.Fund > 0
                 ? req.Fund
-                : FundResolver.Resolve(_config, branch, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
+                : fiche.SuggestedFund is > 0
+                    ? fiche.SuggestedFund.Value
+                    : TahatorRowBuilder.ResolveTahatorFund(fiche.ResolvedDistrictBranch ?? 0);
             var docDate = FirstDate(req.DocDate, fiche.RayvarzDocDate);
             var actDate = FirstDate(req.ActDate, fiche.RayvarzActDate);
             var dueDate = FirstDate(req.DueDate, fiche.RayvarzDueDate);
@@ -491,16 +493,9 @@ WHERE FicheNo = @f";
 
     private static int ResolveBranch(FicheHeaderDto fiche, int requestBranch)
     {
+        // اگر UI صریحاً branch بدهد همان را بفرست؛ وگرنه مثل نمونه‌های رایورز = ۱۰۲
         if (requestBranch > 0) return requestBranch;
-        if (fiche.ResolvedDistrictBranch is > 0) return fiche.ResolvedDistrictBranch.Value;
-
-        if (int.TryParse(fiche.IncomeRegion, out var region))
-        {
-            if (region == 218) return 218;
-            if (region is >= 1 and <= 12) return 200 + region;
-        }
-
-        return 207;
+        return TahatorRowBuilder.DefaultRayvarzBranch;
     }
 
     private static string FirstDate(string? fromReq, string? fromFiche)
@@ -520,13 +515,8 @@ WHERE FicheNo = @f";
             Message = message
         };
 
-    private static string NormalizeFicheNo(string ficheNo)
-    {
-        var f = (ficheNo ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(f))
-            throw new ArgumentException("شماره فیش تهاتر الزامی است.");
-        return f;
-    }
+    private static string NormalizeFicheNo(string ficheNo) =>
+        TahatorRowBuilder.NormalizeFicheNo(ficheNo);
 
     private static string? NullIfEmpty(string? s) =>
         string.IsNullOrWhiteSpace(s) ? null : s;

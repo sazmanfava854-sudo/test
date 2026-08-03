@@ -29,11 +29,9 @@ public class FicheRepository
 
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
-       ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
-       COALESCE(
-         NULLIF(LTRIM(RTRIM(CAST(f.CI_Bank AS nvarchar(20)))), ''),
-         NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '')
-       ) AS BankCode,
+       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBranch AS nvarchar(20)))), '') AS PaymentBranch,
+       NULLIF(LTRIM(RTRIM(CAST(f.CI_Bank AS nvarchar(20)))), '') AS CiBank,
+       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS PaymentBank,
        COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
        f.PaymentDate,
        f.BankPaymentDate,
@@ -51,8 +49,17 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
            CAST(b.Apartment AS varchar)
          )), '-'),
          ''
-       ) AS BnkAcntNo,
-       NULLIF(LTRIM(RTRIM(CAST(b.CI_City AS nvarchar(20)))), '') AS IncomeRegion
+       ) AS BnkAcntNoCityFirst,
+       ISNULL(
+         NULLIF(LTRIM(RTRIM(
+           CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+           CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+           CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
+           ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
+         )), '-'),
+         ''
+       ) AS BnkAcntNoNosaziNick,
+       NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS NosaziDistrict
 FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
 LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
@@ -68,7 +75,19 @@ WHERE {where}";
         if (!await reader.ReadAsync(ct)) return null;
 
         var group = ReadInt32(reader, "CI_IncomeAccountGroup");
-        var docTyp = group == 150 ? 11 : group == TahatorRowBuilder.IncomeAccountGroupTahator ? 14 : 3;
+        var isTahator = group == TahatorRowBuilder.IncomeAccountGroupTahator;
+        var docTyp = group == 150 ? 11 : isTahator ? 14 : 3;
+        var ciBank = reader.IsDBNull(reader.GetOrdinal("CiBank")) ? null : reader.GetString(reader.GetOrdinal("CiBank"));
+        var paymentBank = reader.IsDBNull(reader.GetOrdinal("PaymentBank")) ? null : reader.GetString(reader.GetOrdinal("PaymentBank"));
+        var nick = reader.IsDBNull(reader.GetOrdinal("BnkAcntNoNosaziNick"))
+            ? ""
+            : reader.GetString(reader.GetOrdinal("BnkAcntNoNosaziNick"));
+        var cityFirst = reader.IsDBNull(reader.GetOrdinal("BnkAcntNoCityFirst"))
+            ? ""
+            : reader.GetString(reader.GetOrdinal("BnkAcntNoCityFirst"));
+        var district = reader.IsDBNull(reader.GetOrdinal("NosaziDistrict"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("NosaziDistrict"));
 
         var dto = new FicheHeaderDto
         {
@@ -79,8 +98,13 @@ WHERE {where}";
             Payable = ReadDecimal(reader, "Payable"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
-            PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
-            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
+            PaymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
+                ? ""
+                : reader.GetString(reader.GetOrdinal("PaymentBranch")),
+            // تهاتر: DocTyp/IncmNo از CI_Bank؛ فیلد Bank در SOAP از PaymentBranch است
+            BankCode = isTahator
+                ? (ciBank ?? paymentBank)
+                : (paymentBank ?? ciBank),
             RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
@@ -89,16 +113,18 @@ WHERE {where}";
             DepositId = reader.IsDBNull(reader.GetOrdinal("DepositID")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("DepositID"))),
             CreditorPapers = reader.IsDBNull(reader.GetOrdinal("CreditorPapers")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("CreditorPapers"))),
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
-            BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
-            BnkAcntNoSource = "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
-            IncomeRegion = reader.IsDBNull(reader.GetOrdinal("IncomeRegion")) ? null : reader.GetString(reader.GetOrdinal("IncomeRegion")),
+            BnkAcntNo = isTahator && !string.IsNullOrWhiteSpace(nick) ? nick : cityFirst,
+            BnkAcntNoSource = isTahator
+                ? "کد نوسازی — GetNosaziNickName سبک (District-…-Shop)"
+                : "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
+            IncomeRegion = district,
             DocTyp = docTyp,
-            DocDsc = group == TahatorRowBuilder.IncomeAccountGroupTahator ? "اسناد تهاتر مبلغ" : "اسناد شهرسازی"
+            DocDsc = isTahator ? "اسناد تهاتر مبلغ" : "اسناد شهرسازی"
         };
 
-        if (group == TahatorRowBuilder.IncomeAccountGroupTahator)
+        if (isTahator)
         {
-            // ردیف SOAP تهاتر (نه Income_Calculation) — مطابق Tahator1 + نمونه‌های golden
+            // ردیف SOAP تهاتر (نه Income_Calculation) — مطابق Tahator1
             TahatorRowBuilder.ApplyTahatorRows(dto);
         }
         else

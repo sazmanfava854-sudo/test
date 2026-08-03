@@ -51,12 +51,23 @@ public class SoapBuilder
             dueDateRay = FicheDateResolver.FirstRayvarzDate(actDateRay, docDateRay);
 
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
+        var isTahator = TahatorRowBuilder.IsTahatorFiche(fiche);
         if (isDuty)
         {
             if (branch <= 0 && fiche.ResolvedDistrictBranch is > 0)
                 branch = fiche.ResolvedDistrictBranch.Value;
             if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
                 fund = DutyDistrictBranchResolver.ResolveFund(dist, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
+        }
+        else if (isTahator)
+        {
+            // Tahator1: Fund از نقشه ۵۱–۶۳؛ branch SaveDocument در نمونه‌های واقعی = ۱۰۲
+            if (fund <= 0 && fiche.SuggestedFund is > 0)
+                fund = fiche.SuggestedFund.Value;
+            if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
+                fund = TahatorRowBuilder.ResolveTahatorFund(dist);
+            if (branch <= 0)
+                branch = TahatorRowBuilder.DefaultRayvarzBranch;
         }
 
         if (fund <= 0)
@@ -72,11 +83,23 @@ public class SoapBuilder
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
-        var phasTyp = ResolveSoapDataContractEnum(_config["Rayvarz:PhasTyp"], "7", PhasTypCodeToWireName);
-        var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
-        var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
-        var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category);
-        var bank = ResolveBankCode(fiche.BankCode);
+        // Tahator1: PhasType=2, vchrtyp=1 ؛ ActTyp نمونه اصلی=1 — نه پیش‌فرض نوسازی (7/0/3)
+        var phasTyp = ResolveSoapDataContractEnum(
+            isTahator ? TahatorRowBuilder.PhasTypCode : _config["Rayvarz:PhasTyp"],
+            isTahator ? TahatorRowBuilder.PhasTypCode : "7",
+            PhasTypCodeToWireName);
+        var vchrTyp = ResolveSoapDataContractEnum(
+            isTahator ? TahatorRowBuilder.VchrTypCode : _config["Rayvarz:VchrTyp"],
+            isTahator ? TahatorRowBuilder.VchrTypCode : "0",
+            VchrTypCodeToWireName);
+        var actTyp = ResolveSoapActTyp(
+            isTahator ? TahatorRowBuilder.ActTypCode : _config["Rayvarz:ActTyp"],
+            isTahator ? TahatorRowBuilder.ActTypCode : "3");
+        var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category, isTahator);
+        // Tahator1: Bank از PaymentBranch (خالی→0)؛ CI_Bank فقط برای IncmNo/DocTyp
+        var bank = isTahator
+            ? ResolveBankCode(fiche.PaymentBranch)
+            : ResolveBankCode(fiche.BankCode);
 
         var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, dueDateRay)
             .Select(c => BuildIncmRow(c, sourceSystemId)));
@@ -229,12 +252,15 @@ public class SoapBuilder
             _ => fiche.DocTypDsc ?? fiche.DocDsc ?? ""
         };
 
-    private string ResolveIncmMkrTyp(FicheCategory category)
+    private string ResolveIncmMkrTyp(FicheCategory category, bool isTahator = false)
     {
         var configured = _config["Rayvarz:IncmMkrTyp"];
         if (!string.IsNullOrWhiteSpace(configured)
             && !configured.Equals("auto", StringComparison.OrdinalIgnoreCase))
             return configured!;
+        // نمونه اصلی تهاتر: IncmMkrTyp=1
+        if (isTahator)
+            return "1";
         return category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? "1" : "0";
     }
 
