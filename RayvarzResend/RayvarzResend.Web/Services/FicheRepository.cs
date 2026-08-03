@@ -75,8 +75,17 @@ WHERE {where}";
         if (!await reader.ReadAsync(ct)) return null;
 
         var group = ReadInt32(reader, "CI_IncomeAccountGroup");
-        var isTahator = group == TahatorRowBuilder.IncomeAccountGroupTahator;
-        var docTyp = group == 150 ? 11 : isTahator ? 14 : 3;
+        var isTahatorAmount = group == TahatorRowBuilder.IncomeAccountGroupTahatorAmount;
+        var isTahatorIncome = group == TahatorRowBuilder.IncomeAccountGroupTahatorIncome;
+        var isTahator = isTahatorAmount || isTahatorIncome;
+        // DocTyp نهایی بعد از ApplyTahator* با CI_Bank تصحیح می‌شود (۴→۱۴|۱۷ ، غیر۴→۱۵|۱۸)
+        var docTyp = group == 150
+            ? 11
+            : isTahatorAmount
+                ? 14
+                : isTahatorIncome
+                    ? 18
+                    : 3;
         var ciBank = reader.IsDBNull(reader.GetOrdinal("CiBank")) ? null : reader.GetString(reader.GetOrdinal("CiBank"));
         var paymentBank = reader.IsDBNull(reader.GetOrdinal("PaymentBank")) ? null : reader.GetString(reader.GetOrdinal("PaymentBank"));
         var nick = reader.IsDBNull(reader.GetOrdinal("BnkAcntNoNosaziNick"))
@@ -119,13 +128,24 @@ WHERE {where}";
                 : "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
             IncomeRegion = district,
             DocTyp = docTyp,
-            DocDsc = isTahator ? "اسناد تهاتر مبلغ" : "اسناد شهرسازی"
+            DocDsc = isTahatorAmount
+                ? "اسناد تهاتر مبلغ"
+                : isTahatorIncome
+                    ? "اسناد تهاتر درآمد"
+                    : "اسناد شهرسازی"
         };
 
-        if (isTahator)
+        if (isTahatorAmount)
         {
-            // ردیف SOAP تهاتر (نه Income_Calculation) — مطابق Tahator1
-            TahatorRowBuilder.ApplyTahatorRows(dto);
+            // ردیف SOAP تهاتر مبلغ (نه Income_Calculation) — مطابق Tahator1 / مرکز
+            TahatorRowBuilder.ApplyTahatorAmountRows(dto);
+        }
+        else if (isTahatorIncome)
+        {
+            // درآمدی تهاتر: ردیف از Calculation + DocTyp ۱۷/۱۸ + Branch منطقه
+            dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+            IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
+            TahatorRowBuilder.ApplyTahatorIncomeRows(dto);
         }
         else
         {

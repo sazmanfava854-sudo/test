@@ -28,11 +28,37 @@ public class TahatorHelpersTests
     [InlineData("", 15)]
     public void ApplyTahatorDocTyp_matches_member_Tahator1(string bank, int expectedDocTyp)
     {
-        var fiche = new FicheHeaderDto { BankCode = bank, DocTyp = 3 };
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            BankCode = bank,
+            DocTyp = 3
+        };
         TahatorResendService.ApplyTahatorDocTyp(fiche);
         Assert.Equal(expectedDocTyp, fiche.DocTyp);
         Assert.Equal("تهاتر مبلغ", fiche.DocTypDsc);
         Assert.Equal("اسناد تهاتر مبلغ", fiche.DocDsc);
+    }
+
+    [Theory]
+    [InlineData("4", 17)]
+    [InlineData("18", 18)]
+    [InlineData("2", 18)]
+    [InlineData("", 18)]
+    public void ApplyTahatorDocTyp_matches_Tahator_income_17_18(string bank, int expectedDocTyp)
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            BankCode = bank,
+            DocTyp = 3
+        };
+        TahatorResendService.ApplyTahatorDocTyp(fiche);
+        Assert.Equal(expectedDocTyp, fiche.DocTyp);
+        Assert.Equal("تهاتر درآمد", fiche.DocTypDsc);
+        Assert.Equal("اسناد تهاتر درآمد", fiche.DocDsc);
     }
 
     [Fact]
@@ -123,6 +149,92 @@ public class TahatorHelpersTests
     {
         Assert.Equal(district, TahatorRowBuilder.ResolveDistrictBranchFromNosaziCode(nick));
         Assert.Equal(fund, TahatorRowBuilder.ResolveTahatorFund(district));
+    }
+
+    [Theory]
+    [InlineData("9-3-161-2-1-0-0", 209, 39)]
+    [InlineData("11-4-125-15-1-0-0", 211, 41)]
+    [InlineData("12-12-14-5-1-0-0", 212, 42)]
+    [InlineData("1-2-3-0-0-0-0", 201, 31)]
+    public void Tahator_income_fund_map_31_42(string nick, int district, int fund)
+    {
+        Assert.Equal(district, TahatorRowBuilder.ResolveDistrictBranchFromNosaziCode(nick));
+        Assert.Equal(fund, TahatorRowBuilder.ResolveTahatorIncomeFund(district));
+    }
+
+    [Fact]
+    public void ApplyTahatorIncomeRows_DocTyp17_positive_Val_Center1_fixed_region_fund()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            BankCode = "4",
+            Payable = 1_500_000m,
+            CreditorPapers = 5510918,
+            BnkAcntNo = "9-3-161-2-1-0-0",
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1201, Val = 1_000_000m },
+                new IncmRowDto { IncmNo = 1202, Val = 500_000m }
+            }
+        };
+
+        TahatorRowBuilder.ApplyTahatorRows(fiche);
+
+        Assert.True(TahatorRowBuilder.IsTahatorIncomeFiche(fiche));
+        Assert.False(TahatorRowBuilder.IsTahatorAmountFiche(fiche));
+        Assert.Equal(17, fiche.DocTyp);
+        Assert.Equal(0, fiche.Center); // Bank≠2
+        Assert.Equal(209, fiche.ResolvedDistrictBranch);
+        Assert.Equal(39, fiche.SuggestedFund); // منطقه → Fund ۳۱–۴۲
+        Assert.Equal(2, fiche.Rows.Count);
+        Assert.All(fiche.Rows, r =>
+        {
+            Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1);
+            Assert.True(r.Val > 0);
+        });
+        Assert.True(TahatorRowBuilder.RowSumMatchesPayable(fiche, fiche.Rows.Sum(r => r.Val)));
+    }
+
+    [Fact]
+    public void ApplyTahatorIncomeRows_Bank2_DocTyp18_Center_CreditorPapers()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            BankCode = "2",
+            CreditorPapers = 5510918,
+            Payable = 100m,
+            BnkAcntNo = "5-1-1-0-0-0-0"
+        };
+        TahatorRowBuilder.ApplyTahatorRows(fiche);
+        Assert.Equal(18, fiche.DocTyp);
+        Assert.Equal(5510918, fiche.Center);
+        Assert.Equal(205, fiche.ResolvedDistrictBranch);
+        Assert.Equal(35, fiche.SuggestedFund);
+        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+        Assert.Equal(100m, fiche.Rows[0].Val);
+    }
+
+    [Fact]
+    public void Group_157_wins_over_stale_DocTyp_17()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            DocTyp = 17,
+            BankCode = "4",
+            Deposit = 1,
+            Payable = 50m
+        };
+        Assert.True(TahatorRowBuilder.IsTahatorAmountFiche(fiche));
+        Assert.False(TahatorRowBuilder.IsTahatorIncomeFiche(fiche));
+        TahatorRowBuilder.ApplyTahatorRows(fiche);
+        Assert.Equal(14, fiche.DocTyp);
+        Assert.Equal(-50m, fiche.Rows[0].Val);
     }
 
     [Fact]

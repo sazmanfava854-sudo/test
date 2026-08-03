@@ -6,7 +6,9 @@ namespace RayvarzResend.Web.Services;
 
 /// <summary>
 /// ارسال تهاتر: چک Accounting_DocHeader + نگه‌داشت Income_Fiche + وضعیت ۲
-/// + ساخت/ارسال SOAP (DocTyp 14/15 مثل تابع Tahator1 در Member 1388)
+/// + ساخت/ارسال SOAP:
+///   گروه ۱۵۷ / Tahator1 → مرکز Branch=102، DocTyp ۱۴/۱۵؛
+///   گروه ۱۵۸ / Tahator → منطقه Branch=۲۰۱–۲۱۲، DocTyp ۱۷/۱۸
 /// + بازگردانی وضعیت ۳ + بررسی واسط / DocNotSent / incmdocsys.
 /// </summary>
 public sealed class TahatorResendService
@@ -160,11 +162,15 @@ public sealed class TahatorResendService
                     $"فیش درآمدی برای تهاتر در Sara یافت نشد (FicheNo={ficheNo}).");
             }
 
-            // گروه 157 از Load قبلاً ردیف تهاتر + Centers دارد؛ در غیر این صورت اینجا بساز
-            if (!TahatorRowBuilder.IsTahatorFiche(fiche)
-                || fiche.Rows.Count != 1
-                || fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther))
+            // گروه ۱۵۷/۱۵۸ از Load قبلاً ردیف تهاتر + Centers دارد؛ در غیر این صورت اینجا بساز
+            if (!TahatorRowBuilder.IsTahatorFiche(fiche))
                 TahatorRowBuilder.ApplyTahatorRows(fiche);
+            else if (TahatorRowBuilder.IsTahatorAmountFiche(fiche)
+                && (fiche.Rows.Count != 1
+                    || fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther)))
+                TahatorRowBuilder.ApplyTahatorAmountRows(fiche);
+            else if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche))
+                TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
             else
                 ApplyTahatorDocTyp(fiche);
 
@@ -223,11 +229,14 @@ public sealed class TahatorResendService
             var today = DateHelper.CurrentShamsiSlashDate();
             var todayRay = DateHelper.CurrentShamsiRayvarzDate();
             var branch = ResolveBranch(fiche, req.Branch);
+            var district = fiche.ResolvedDistrictBranch ?? 0;
             var fund = req.Fund > 0
                 ? req.Fund
                 : fiche.SuggestedFund is > 0
                     ? fiche.SuggestedFund.Value
-                    : TahatorRowBuilder.ResolveTahatorFund(fiche.ResolvedDistrictBranch ?? 0);
+                    : TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
+                        ? TahatorRowBuilder.ResolveTahatorIncomeFund(district)
+                        : TahatorRowBuilder.ResolveTahatorFund(district);
             // تهاتر: تاریخ سند = امروز (مگر صریحاً در درخواست آمده باشد) — نه PaymentDate فیش
             var docDate = FirstDateOrToday(req.DocDate, todayRay);
             var actDate = FirstDateOrToday(req.ActDate, todayRay);
@@ -478,15 +487,9 @@ public sealed class TahatorResendService
             $", PaymentDate='{stored.PaymentDate ?? ""}'");
     }
 
-    /// <summary>مطابق Tahator1 در XmlBody: CI_Bank=4 → DocTyp 14 وگرنه 15.</summary>
-    public static void ApplyTahatorDocTyp(FicheHeaderDto fiche)
-    {
-        var bank = (fiche.BankCode ?? "").Trim();
-        fiche.DocTyp = bank == "4" ? 14 : 15;
-        fiche.DocDsc = "اسناد تهاتر مبلغ";
-        fiche.DocTypDsc = "تهاتر مبلغ";
-        fiche.Category = FicheCategory.Income;
-    }
+    /// <summary>DocTyp تهاتر — تفویض به <see cref="TahatorRowBuilder.ApplyTahatorDocTyp"/>.</summary>
+    public static void ApplyTahatorDocTyp(FicheHeaderDto fiche) =>
+        TahatorRowBuilder.ApplyTahatorDocTyp(fiche);
 
     public async Task<bool> ExistsInAccountingDocHeaderAsync(string ficheNo, CancellationToken ct = default)
     {
@@ -604,8 +607,12 @@ WHERE FicheNo = @f";
 
     private static int ResolveBranch(FicheHeaderDto fiche, int requestBranch)
     {
-        // اگر UI صریحاً branch بدهد همان را بفرست؛ وگرنه مثل نمونه‌های رایورز = ۱۰۲
         if (requestBranch > 0) return requestBranch;
+        // درآمدی تهاتر (۱۵۸): ارسال به منطقه — Branch = DistrickBranch
+        if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
+            && fiche.ResolvedDistrictBranch is > 0)
+            return fiche.ResolvedDistrictBranch.Value;
+        // مبلغ تهاتر (۱۵۷): ارسال به مرکز — Branch = ۱۰۲
         return TahatorRowBuilder.DefaultRayvarzBranch;
     }
 

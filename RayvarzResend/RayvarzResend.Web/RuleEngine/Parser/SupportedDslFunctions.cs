@@ -75,7 +75,7 @@ public static class SupportedDslFunctions
             DslFunctionRole.Income =>
                 fiche.Category == FicheCategory.Income,
             DslFunctionRole.Tahator =>
-                fiche.Category == FicheCategory.Income, // در Run درآمد صدا زده می‌شود؛ DocTyp 14/15 سند تهاتر است
+                fiche.Category == FicheCategory.Income, // Run درآمد: Tahator1(۱۵۷) و Tahator(۱۵۸)
             DslFunctionRole.IncomeCheck =>
                 fiche.Category == FicheCategory.Income,
             _ => true
@@ -93,7 +93,8 @@ public static class SupportedDslFunctions
 
         if (fiche.Category == FicheCategory.Income)
         {
-            if (fiche.DocTyp is 14 or 15)
+            if (fiche.DocTyp is 14 or 15 or 17 or 18
+                || fiche.IncomeAccountGroup is 157 or 158)
                 return new[] { DslFunctionRole.Income, DslFunctionRole.Tahator };
             return new[] { DslFunctionRole.Income };
         }

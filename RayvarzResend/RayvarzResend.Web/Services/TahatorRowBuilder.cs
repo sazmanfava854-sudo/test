@@ -3,41 +3,66 @@ using RayvarzResend.Web.Models;
 namespace RayvarzResend.Web.Services;
 
 /// <summary>
-/// ساخت ردیف SOAP تهاتر — منبع: تابع <c>Tahator1</c> در XmlBody Member NidMember=1388
-/// (DisplayName: «تهاتر تک مبلغی»)، نه استنتاج از نمونه فیش.
-/// شرط ورود مسیر: <c>CI_IncomeAccountGroup=157</c>.
-/// توجه: تابع <c>Tahator</c> («درآمدی تهاتر») منطق Center متفاوتی دارد و اینجا پیاده نشده.
+/// تهاتر — دو مسیر از Member 1388:
+/// <list type="bullet">
+/// <item><c>Tahator1</c> / <c>CI_IncomeAccountGroup=157</c> «مبلغ تهاتر» → ارسال به <b>مرکز</b> (Branch=102)، DocTyp ۱۴/۱۵</item>
+/// <item><c>Tahator</c> / <c>CI_IncomeAccountGroup=158</c> «درآمدی تهاتر» → ارسال به <b>منطقه</b> (Branch=۲۰۱–۲۱۲)، DocTyp ۱۷/۱۸</item>
+/// </list>
+/// DocTyp داخل هر مسیر با <c>CI_Bank</c> انتخاب می‌شود (۴→۱۴|۱۷ ، غیر۴→۱۵|۱۸).
 /// </summary>
 public static class TahatorRowBuilder
 {
-    public const int IncomeAccountGroupTahator = 157;
+    /// <summary>مبلغ تهاتر — تابع Tahator1 — مرکز</summary>
+    public const int IncomeAccountGroupTahatorAmount = 157;
+    /// <summary>درآمدی تهاتر — تابع Tahator — منطقه</summary>
+    public const int IncomeAccountGroupTahatorIncome = 158;
+
+    /// <summary>سازگاری با کد قدیمی (=157)</summary>
+    public const int IncomeAccountGroupTahator = IncomeAccountGroupTahatorAmount;
+
     public const int IncmNoBank4 = 200098;
     public const int IncmNoOther = 200099;
     public const long Center3Default = 700100001;
     public const long Center3CheckNo5 = 700100002;
 
-    /// <summary>
-    /// پارامتر branch در SaveDocument برای اسناد تهاتر گروه ۱۵۷ در نمونه‌های واقعی رایورز ثابت ۱۰۲ است
-    /// (نه DistrickBranch ۲۰۱–۲۱۲ که فقط برای Fund استفاده می‌شود).
-    /// </summary>
+    /// <summary>Tahator (درآمدی): Center1 ثابت در نمونه‌های رایورز</summary>
+    public const long TahatorIncomeCenter1 = 335000181;
+
+    /// <summary>Branch ثابت تهاتر مبلغ (مرکز) در نمونه‌های رایورز</summary>
     public const int DefaultRayvarzBranch = 102;
 
-    /// <summary>Tahator1: PhasType = 2 → ptDraft</summary>
+    /// <summary>PhasType = 2 → ptDraft</summary>
     public const string PhasTypCode = "2";
 
-    /// <summary>Tahator1: vchrtyp = 1 → pfPay</summary>
+    /// <summary>vchrtyp = 1 → pfPay (تهاتر مبلغ Val منفی)</summary>
     public const string VchrTypCode = "1";
 
     /// <summary>نمونه اصلی: ActTyp = 1</summary>
     public const string ActTypCode = "1";
 
+    /// <summary>گروه ۱۵۷ اولویت دارد؛ در غیر این صورت DocTyp ۱۴/۱۵.</summary>
+    public static bool IsTahatorAmountFiche(FicheHeaderDto fiche)
+    {
+        if (fiche.Category != FicheCategory.Income) return false;
+        if (fiche.IncomeAccountGroup == IncomeAccountGroupTahatorAmount) return true;
+        if (fiche.IncomeAccountGroup == IncomeAccountGroupTahatorIncome) return false;
+        return fiche.DocTyp is 14 or 15;
+    }
+
+    /// <summary>گروه ۱۵۸ اولویت دارد؛ در غیر این صورت DocTyp ۱۷/۱۸.</summary>
+    public static bool IsTahatorIncomeFiche(FicheHeaderDto fiche)
+    {
+        if (fiche.Category != FicheCategory.Income) return false;
+        if (fiche.IncomeAccountGroup == IncomeAccountGroupTahatorIncome) return true;
+        if (fiche.IncomeAccountGroup == IncomeAccountGroupTahatorAmount) return false;
+        return fiche.DocTyp is 17 or 18;
+    }
+
     public static bool IsTahatorFiche(FicheHeaderDto fiche) =>
-        fiche.Category == FicheCategory.Income
-        && (fiche.IncomeAccountGroup == IncomeAccountGroupTahator
-            || fiche.DocTyp is 14 or 15);
+        IsTahatorAmountFiche(fiche) || IsTahatorIncomeFiche(fiche);
 
     /// <summary>
-    /// Fund تهاتر از Tahator1 (RefFund): 201→51 … 209→59 … 218→63 — نه FundMap نوسازی 200xxx.
+    /// Fund تهاتر مبلغ (مرکز) — Tahator1 RefFund: 201→51 … 218→63
     /// </summary>
     public static int ResolveTahatorFund(int districtBranch) =>
         districtBranch switch
@@ -55,6 +80,28 @@ public static class TahatorRowBuilder
             211 => 61,
             212 => 62,
             218 => 63,
+            _ => 0
+        };
+
+    /// <summary>
+    /// Fund تهاتر درآمدی (منطقه) از نمونه‌های incmdocsys: 201→31 … 212→42
+    /// </summary>
+    public static int ResolveTahatorIncomeFund(int districtBranch) =>
+        districtBranch switch
+        {
+            201 => 31,
+            202 => 32,
+            203 => 33,
+            204 => 34,
+            205 => 35,
+            206 => 36,
+            207 => 37,
+            208 => 38,
+            209 => 39,
+            210 => 40,
+            211 => 41,
+            212 => 42,
+            218 => 43,
             _ => 0
         };
 
@@ -80,7 +127,6 @@ public static class TahatorRowBuilder
 
     /// <summary>
     /// فقط Trim — اسلش را حذف نکن و واریانت نساز.
-    /// <c>040933/318150</c> و <c>040933318150</c> دو فیش جدا هستند.
     /// </summary>
     public static string NormalizeFicheNo(string? ficheNo)
     {
@@ -91,10 +137,32 @@ public static class TahatorRowBuilder
     }
 
     /// <summary>
-    /// یک ردیف مبلغ تهاتر مطابق Tahator1:
-    /// Price=(-1)*Payable ؛ WrapperAccountNo=iif(CI_Bank=4,200098,200099) ؛
-    /// Center / Center1 / Center3 از RefParameetrs همان تابع.
+    /// DocTyp بر اساس گروه کاربری + CI_Bank.
+    /// مبلغ(۱۵۷): Bank=4→۱۴ وگرنه ۱۵ — درآمدی(۱۵۸): Bank=4→۱۷ وگرنه ۱۸.
     /// </summary>
+    public static void ApplyTahatorDocTyp(FicheHeaderDto fiche)
+    {
+        var bank = (fiche.BankCode ?? "").Trim();
+        // گروه حساب اولویت دارد؛ DocTyp فقط وقتی گروه مشخص نیست
+        var incomePath = IsTahatorIncomeFiche(fiche);
+
+        if (incomePath)
+        {
+            fiche.DocTyp = bank == "4" ? 17 : 18;
+            fiche.DocDsc = "اسناد تهاتر درآمد";
+            fiche.DocTypDsc = "تهاتر درآمد";
+        }
+        else
+        {
+            fiche.DocTyp = bank == "4" ? 14 : 15;
+            fiche.DocDsc = "اسناد تهاتر مبلغ";
+            fiche.DocTypDsc = "تهاتر مبلغ";
+        }
+
+        fiche.Category = FicheCategory.Income;
+    }
+
+    /// <summary>مسیر مناسب بر اساس CI_IncomeAccountGroup / DocTyp.</summary>
     public static void ApplyTahatorRows(FicheHeaderDto fiche)
     {
         if (fiche.Category != FicheCategory.Income)
@@ -102,30 +170,38 @@ public static class TahatorRowBuilder
 
         if (!string.IsNullOrWhiteSpace(fiche.FicheNo))
             fiche.FicheNo = fiche.FicheNo.Trim();
-        TahatorResendService.ApplyTahatorDocTyp(fiche);
+
+        if (IsTahatorIncomeFiche(fiche)
+            || fiche.IncomeAccountGroup == IncomeAccountGroupTahatorIncome)
+        {
+            ApplyTahatorIncomeRows(fiche);
+            return;
+        }
+
+        ApplyTahatorAmountRows(fiche);
+    }
+
+    /// <summary>
+    /// Tahator1 — مبلغ تهاتر — ارسال به مرکز (Branch=102):
+    /// Val=(-1)*Payable ؛ IncmNo=iif(CI_Bank=4,200098,200099).
+    /// </summary>
+    public static void ApplyTahatorAmountRows(FicheHeaderDto fiche)
+    {
+        if (fiche.IncomeAccountGroup <= 0)
+            fiche.IncomeAccountGroup = IncomeAccountGroupTahatorAmount;
+
+        ApplyTahatorDocTyp(fiche);
 
         var bank = (fiche.BankCode ?? "").Trim();
-        // Tahator1: TmpInComeCode = iif(CI_Bank=4, 200098, 200099) ; fileN = iif(CI_Bank=4, 4, 2)
         var incmNo = bank == "4" ? IncmNoBank4 : IncmNoOther;
         var fileNo = bank == "4" ? 4 : 2;
 
-        // Tahator1 RefParameetrs "Center":
-        //   if CI_Bank="2" Then CreditorPapers.ToString() Else "0"
         fiche.Center = bank == "2"
             ? (fiche.CreditorPapers ?? 0)
             : 0;
 
-        var district = ResolveDistrictBranchFromNosaziCode(fiche.BnkAcntNo);
-        if (district > 0)
-        {
-            fiche.ResolvedDistrictBranch = district;
-            var fund = ResolveTahatorFund(district);
-            if (fund > 0)
-                fiche.SuggestedFund = fund;
-        }
+        ApplyDistrictAndFund(fiche, amountPath: true);
 
-        // Tahator1: Center1 = deposit — Center2 در Tahator1 اصلاً ست نمی‌شود
-        // Tahator1: if CheckNo="5" Then Center3=700100002 Else Center3=700100001
         var center3 = string.Equals(fiche.CheckNo?.Trim(), "5", StringComparison.Ordinal)
             ? Center3CheckNo5
             : Center3Default;
@@ -140,18 +216,83 @@ public static class TahatorRowBuilder
                 Center1 = fiche.Deposit,
                 Center2 = null,
                 Center3 = center3,
-                // Tahator1: Ref = DepositID
                 Ref = fiche.DepositId?.ToString(),
                 Num = fileNo.ToString()
             }
         };
     }
 
-    /// <summary>Tahator1: جمع ردیف = (−1)×Payable.</summary>
+    /// <summary>
+    /// Tahator — درآمدی تهاتر — ارسال به منطقه (Branch=۲۰۱–۲۱۲):
+    /// ردیف‌ها از Income_Calculation (Val مثبت)؛ Center1=335000181؛ DocTyp ۱۷/۱۸.
+    /// اگر هنوز ردیفی نباشد، یک ردیف با Payable می‌سازد (تا Load بعدی Calculation را جایگزین کند).
+    /// </summary>
+    public static void ApplyTahatorIncomeRows(FicheHeaderDto fiche)
+    {
+        fiche.IncomeAccountGroup = IncomeAccountGroupTahatorIncome;
+        ApplyTahatorDocTyp(fiche);
+
+        var bank = (fiche.BankCode ?? "").Trim();
+        // مثل Tahator1: Bank=2 → Center=CreditorPapers (نمونه‌های DocTyp=18 اغلب Center دارند)
+        fiche.Center = bank == "2"
+            ? (fiche.CreditorPapers ?? 0)
+            : 0;
+
+        ApplyDistrictAndFund(fiche, amountPath: false);
+
+        if (fiche.Rows.Count == 0)
+        {
+            fiche.Rows =
+            [
+                new IncmRowDto
+                {
+                    IncmNo = 0,
+                    Val = Math.Abs(fiche.Payable),
+                    IncmRowDsc = "تهاتر درآمد",
+                    Center1 = TahatorIncomeCenter1,
+                    Center2 = null,
+                    Center3 = null
+                }
+            ];
+            return;
+        }
+
+        foreach (var row in fiche.Rows)
+        {
+            row.Center1 = TahatorIncomeCenter1;
+            row.Center2 = null;
+            row.Center3 = null;
+            // Val مثبت می‌ماند — نفی نمی‌شود
+            if (row.Val < 0)
+                row.Val = Math.Abs(row.Val);
+        }
+    }
+
+    private static void ApplyDistrictAndFund(FicheHeaderDto fiche, bool amountPath)
+    {
+        var district = ResolveDistrictBranchFromNosaziCode(fiche.BnkAcntNo);
+        if (district <= 0 && fiche.ResolvedDistrictBranch is > 0)
+            district = fiche.ResolvedDistrictBranch.Value;
+        if (district <= 0)
+            return;
+
+        fiche.ResolvedDistrictBranch = district;
+        var fund = amountPath
+            ? ResolveTahatorFund(district)
+            : ResolveTahatorIncomeFund(district);
+        if (fund > 0)
+            fiche.SuggestedFund = fund;
+    }
+
+    /// <summary>
+    /// مبلغ: جمع = (−1)×Payable ؛ درآمدی: جمع = +Payable.
+    /// </summary>
     public static bool RowSumMatchesPayable(FicheHeaderDto fiche, decimal rowSum)
     {
-        if (IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15)
+        if (IsTahatorAmountFiche(fiche) || fiche.DocTyp is 14 or 15)
             return rowSum == -Math.Abs(fiche.Payable);
+        if (IsTahatorIncomeFiche(fiche) || fiche.DocTyp is 17 or 18)
+            return rowSum == Math.Abs(fiche.Payable);
         return rowSum == fiche.Payable;
     }
 }

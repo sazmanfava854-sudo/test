@@ -38,7 +38,7 @@ Run()  ← قوانین قبل از SOAP
 | `ChangeDate`, `FnSMS`, … | Global (همه نوع فیش) |
 | `Nosazi` | Duty |
 | `iNcOME*` / `BazAfarine` / … | Income |
-| `Tahator` / `Tahator1` | Tahator (DocTyp 14/15 قبل از SOAP اجباری) |
+| `Tahator` / `Tahator1` | Tahator (۱۵۷→DocTyp ۱۴/۱۵ مرکز؛ ۱۵۸→۱۷/۱۸ منطقه) |
 | هر `iNcOME*` | با پیشوند `iNcOME` هم پشتیبانی می‌شود |
 
 `ParserVersion` → **2.3.0**

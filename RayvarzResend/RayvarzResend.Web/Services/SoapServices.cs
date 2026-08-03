@@ -51,7 +51,9 @@ public class SoapBuilder
             dueDateRay = FicheDateResolver.FirstRayvarzDate(actDateRay, docDateRay);
 
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
-        var isTahator = TahatorRowBuilder.IsTahatorFiche(fiche);
+        var isTahatorAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
+        var isTahatorIncome = TahatorRowBuilder.IsTahatorIncomeFiche(fiche);
+        var isTahator = isTahatorAmount || isTahatorIncome;
         if (isDuty)
         {
             if (branch <= 0 && fiche.ResolvedDistrictBranch is > 0)
@@ -59,15 +61,25 @@ public class SoapBuilder
             if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
                 fund = DutyDistrictBranchResolver.ResolveFund(dist, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
         }
-        else if (isTahator)
+        else if (isTahatorAmount)
         {
-            // Tahator1: Fund از نقشه ۵۱–۶۳؛ branch SaveDocument در نمونه‌های واقعی = ۱۰۲
+            // Tahator1 — مرکز: Fund ۵۱–۶۳ ؛ Branch = ۱۰۲
             if (fund <= 0 && fiche.SuggestedFund is > 0)
                 fund = fiche.SuggestedFund.Value;
             if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
                 fund = TahatorRowBuilder.ResolveTahatorFund(dist);
             if (branch <= 0)
                 branch = TahatorRowBuilder.DefaultRayvarzBranch;
+        }
+        else if (isTahatorIncome)
+        {
+            // Tahator — منطقه: Branch = DistrickBranch ؛ Fund ۳۱–۴۲
+            if (branch <= 0 && fiche.ResolvedDistrictBranch is > 0)
+                branch = fiche.ResolvedDistrictBranch.Value;
+            if (fund <= 0 && fiche.SuggestedFund is > 0)
+                fund = fiche.SuggestedFund.Value;
+            if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
+                fund = TahatorRowBuilder.ResolveTahatorIncomeFund(dist);
         }
 
         if (fund <= 0)
@@ -249,6 +261,7 @@ public class SoapBuilder
             FicheCategory.DutySenfi => "صنفی",
             FicheCategory.Income when fiche.DocTyp == 3 => "بهای هوشمندسازی خدمات شهری",
             FicheCategory.Income when fiche.DocTyp is 14 or 15 => "تهاتر مبلغ",
+            FicheCategory.Income when fiche.DocTyp is 17 or 18 => "تهاتر درآمد",
             _ => fiche.DocTypDsc ?? fiche.DocDsc ?? ""
         };
 
@@ -527,8 +540,8 @@ public class SoapBuilder
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
             return rows;
 
-        // تهاتر: ردیف منفی با Centers — اسکیل نکن
-        if (TahatorRowBuilder.IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15)
+        // تهاتر مبلغ (۱۴/۱۵ Val منفی) یا درآمدی (۱۷/۱۸ Val مثبت) — اسکیل نکن
+        if (TahatorRowBuilder.IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15 or 17 or 18)
             return rows;
 
         // اگر FicheRepository قبلاً اسکیل کرده باشد، sum≈Payable و این no-op است

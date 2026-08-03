@@ -227,12 +227,18 @@ public static class SaraOperationBootstrap
             if (ctx.Fiche.Category != FicheCategory.Income)
                 throw new InvalidOperationException($"Income.BuildIncomeRows برای {ctx.Fiche.Category} مجاز نیست.");
 
-            if (TahatorRowBuilder.IsTahatorFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 14 or 15)
+            if (TahatorRowBuilder.IsTahatorAmountFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 14 or 15)
             {
-                // تهاتر: ردیف منفی + Centers (اگر هنوز از Calculation باشند، دوباره بساز)
+                // تهاتر مبلغ: ردیف منفی + Centers
                 if (ctx.Fiche.Rows.Count != 1
                     || ctx.Fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther))
-                    TahatorRowBuilder.ApplyTahatorRows(ctx.Fiche);
+                    TahatorRowBuilder.ApplyTahatorAmountRows(ctx.Fiche);
+            }
+            else if (TahatorRowBuilder.IsTahatorIncomeFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 17 or 18)
+            {
+                // تهاتر درآمدی: ردیف مثبت Calculation + Center1 ثابت + DocTyp ۱۷/۱۸
+                IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
+                TahatorRowBuilder.ApplyTahatorIncomeRows(ctx.Fiche);
             }
             else
             {
