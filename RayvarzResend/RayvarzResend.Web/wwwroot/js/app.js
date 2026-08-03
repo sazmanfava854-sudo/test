@@ -457,10 +457,8 @@ function setupEventHandlers() {
         body: JSON.stringify({
           ficheNo,
           branch: 0,
-          fund: 0,
-          docDate: $('docDate')?.value || '',
-          actDate: $('actDate')?.value || '',
-          dueDate: $('dueDate')?.value || ''
+          fund: 0
+          // تاریخ SOAP تهاتر روی سرور = امروز — تاریخ فرم ورود فیش عادی را نفرست
         })
       });
       if (res.status === 404) {

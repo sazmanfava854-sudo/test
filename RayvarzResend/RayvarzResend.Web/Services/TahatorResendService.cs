@@ -221,15 +221,18 @@ public sealed class TahatorResendService
                 $"User={snapshot.UsernameUserConfirm}");
 
             var today = DateHelper.CurrentShamsiSlashDate();
+            var todayRay = DateHelper.CurrentShamsiRayvarzDate();
             var branch = ResolveBranch(fiche, req.Branch);
             var fund = req.Fund > 0
                 ? req.Fund
                 : fiche.SuggestedFund is > 0
                     ? fiche.SuggestedFund.Value
                     : TahatorRowBuilder.ResolveTahatorFund(fiche.ResolvedDistrictBranch ?? 0);
-            var docDate = FirstDate(req.DocDate, fiche.RayvarzDocDate);
-            var actDate = FirstDate(req.ActDate, fiche.RayvarzActDate);
-            var dueDate = FirstDate(req.DueDate, fiche.RayvarzDueDate);
+            // تهاتر: تاریخ سند = امروز (مگر صریحاً در درخواست آمده باشد) — نه PaymentDate فیش
+            var docDate = FirstDateOrToday(req.DocDate, todayRay);
+            var actDate = FirstDateOrToday(req.ActDate, todayRay);
+            var dueDate = FirstDateOrToday(req.DueDate, todayRay);
+            steps.Add($"3a) تاریخ SOAP تهاتر: DocDate/ActDate/Due={docDate} (امروز مگر override)");
 
             // مرحله وضعیت ۲ نیاز به نوشتن روی Sara دارد — DryRun مانع می‌شود
             if (dryRun && req.HoldAfterStatus2)
@@ -308,7 +311,13 @@ public sealed class TahatorResendService
 
             if (statusChanged && snapshotId is > 0)
             {
-                await RestoreFromStoredSnapshotAsync(snapshotId.Value, steps, ct);
+                // موفق: وضعیت ۳ ولی Export/Break = تاریخ روز می‌ماند
+                // ناموفق: همه چیز از جمله Export/Break به مقادیر اصلی برمی‌گردد
+                await RestoreFromStoredSnapshotAsync(
+                    snapshotId.Value,
+                    steps,
+                    ct,
+                    keepExportBreakSlash: soapResult.Success ? today : null);
                 statusChanged = false;
             }
             else
@@ -382,9 +391,7 @@ public sealed class TahatorResendService
                 Message = dryRun
                     ? "DryRun تهاتر: SOAP ساخته شد؛ UPDATE تاریخ روز روی Sara زده نشد — DryRun=false کنید."
                     : success
-                        ? "تهاتر: SOAP ارسال و تأیید شد. Export/Break به مقادیر اصلی بازگردانده شد " +
-                          $"(Export={snapshot?.ExportPermanentDate}, Break={snapshot?.PaymentBreakDate}). " +
-                          "برای دیدن تاریخ روز: holdAfterStatus2=true بفرستید."
+                        ? $"تهاتر: SOAP ارسال و تأیید شد. ExportPermanentDate/PaymentBreakDate={today} (تاریخ روز ماند)."
                         : string.IsNullOrWhiteSpace(notSent)
                             ? (soapResult.Message ?? "تهاتر ناموفق")
                             : $"تهاتر ناموفق — علت عدم ارسال: {notSent}"
@@ -451,17 +458,24 @@ public sealed class TahatorResendService
     public Task<IReadOnlyList<IncomeFicheTahatorSnapshot>> ListPendingAsync(CancellationToken ct = default) =>
         _snapshots.ListPendingAsync(50, ct);
 
-    private async Task RestoreFromStoredSnapshotAsync(long snapshotId, List<string> steps, CancellationToken ct)
+    private async Task RestoreFromStoredSnapshotAsync(
+        long snapshotId,
+        List<string> steps,
+        CancellationToken ct,
+        string? keepExportBreakSlash = null)
     {
         var stored = await _snapshots.GetByIdAsync(snapshotId, ct)
             ?? throw new InvalidOperationException($"SnapshotId={snapshotId} یافت نشد.");
 
-        await RestoreSnapshotStatus3Async(stored, ct);
+        await RestoreSnapshotStatus3Async(stored, ct, keepExportBreakSlash);
         await _snapshots.MarkRestoredAsync(snapshotId, "بازگردانی وضعیت ۳ روی Income_Fiche", ct);
+        var export = keepExportBreakSlash ?? stored.ExportPermanentDate;
+        var brk = keepExportBreakSlash ?? stored.PaymentBreakDate;
         steps.Add(
-            $"7) بازگردانی وضعیت ۳ از SnapshotId={snapshotId}: " +
-            $"Export={stored.ExportPermanentDate}, Break={stored.PaymentBreakDate}, " +
-            $"PaymentDate='{stored.PaymentDate ?? ""}'");
+            $"7) وضعیت ۳ از SnapshotId={snapshotId}: " +
+            $"Export={export}, Break={brk}" +
+            (keepExportBreakSlash != null ? " (تاریخ روز — نگه داشته شد)" : " (مقادیر اصلی snapshot)") +
+            $", PaymentDate='{stored.PaymentDate ?? ""}'");
     }
 
     /// <summary>مطابق Tahator1 در XmlBody: CI_Bank=4 → DocTyp 14 وگرنه 15.</summary>
@@ -543,7 +557,10 @@ WHERE FicheNo = @f";
         _logger.LogInformation("Tahator trigger status=2 FicheNo={FicheNo} Today={Today}", ficheNo, todaySlash);
     }
 
-    private async Task RestoreSnapshotStatus3Async(IncomeFicheTahatorSnapshot snap, CancellationToken ct)
+    private async Task RestoreSnapshotStatus3Async(
+        IncomeFicheTahatorSnapshot snap,
+        CancellationToken ct,
+        string? keepExportBreakSlash = null)
     {
         const string sql = @"
 UPDATE dbo.Income_Fiche
@@ -556,12 +573,15 @@ SET EumFicheStatus = 3,
     NidUserUserConfirm = @ucNid
 WHERE FicheNo = @f";
 
+        var export = keepExportBreakSlash ?? snap.ExportPermanentDate;
+        var brk = keepExportBreakSlash ?? snap.PaymentBreakDate;
+
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@f", snap.FicheNo);
-        AddSlashDateParam(cmd, "@export", snap.ExportPermanentDate);
-        AddSlashDateParam(cmd, "@brk", snap.PaymentBreakDate);
+        AddSlashDateParam(cmd, "@export", export);
+        AddSlashDateParam(cmd, "@brk", brk);
         // PaymentDate اصلی (مثلاً 1404/12/11) باید عین همان برگردد — نه NULL
         AddSlashDateParam(cmd, "@pay", snap.PaymentDate);
         AddSlashDateParam(cmd, "@ucDate", snap.UserConfirmDate);
@@ -571,8 +591,8 @@ WHERE FicheNo = @f";
         if (n == 0)
             throw new InvalidOperationException($"بازگردانی وضعیت ۳ برای فیش {snap.FicheNo} انجام نشد.");
         _logger.LogInformation(
-            "Tahator restore status=3 FicheNo={FicheNo} PaymentDate={Pay}",
-            snap.FicheNo, snap.PaymentDate ?? "");
+            "Tahator restore status=3 FicheNo={FicheNo} Export={Export} Break={Break} PaymentDate={Pay}",
+            snap.FicheNo, export ?? "", brk ?? "", snap.PaymentDate ?? "");
     }
 
     /// <summary>ستون‌های تاریخ شمسی Income_Fiche معمولاً NVARCHAR هستند — مقدار اسلش‌دار را عین خودش بنویس.</summary>
@@ -589,11 +609,10 @@ WHERE FicheNo = @f";
         return TahatorRowBuilder.DefaultRayvarzBranch;
     }
 
-    private static string FirstDate(string? fromReq, string? fromFiche)
+    private static string FirstDateOrToday(string? fromReq, string todayRayvarz)
     {
         if (!string.IsNullOrWhiteSpace(fromReq)) return fromReq.Trim();
-        if (!string.IsNullOrWhiteSpace(fromFiche)) return fromFiche.Trim();
-        return DateHelper.CurrentShamsiRayvarzDate();
+        return todayRayvarz;
     }
 
     private static TahatorSendResult Fail(string ficheNo, bool dryRun, List<string> steps, string message) =>
