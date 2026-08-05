@@ -100,7 +100,7 @@ public sealed class TahatorResendService
             members.Add(new TahatorPairMemberStatus
             {
                 FicheNo = no,
-                IncomeAccountGroup = fiche.IncomeAccountGroup,
+                IncomeAccountGroup = fiche.IncomeAccountGroup ?? 0,
                 DocTyp = fiche.DocTyp,
                 Branch = ResolveBranch(fiche, 0),
                 Fund = fiche.SuggestedFund ?? (TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
@@ -214,7 +214,7 @@ public sealed class TahatorResendService
                     ficheResults.Add(new TahatorFicheSendDetail
                     {
                         FicheNo = no,
-                        IncomeAccountGroup = fiche.IncomeAccountGroup,
+                        IncomeAccountGroup = fiche.IncomeAccountGroup ?? 0,
                         DocTyp = fiche.DocTyp,
                         Branch = ResolveBranch(fiche, req.Branch),
                         Fund = ResolveFund(fiche, req.Fund),
@@ -363,7 +363,7 @@ public sealed class TahatorResendService
                 ficheResults.Add(new TahatorFicheSendDetail
                 {
                     FicheNo = no,
-                    IncomeAccountGroup = fiche.IncomeAccountGroup,
+                    IncomeAccountGroup = fiche.IncomeAccountGroup ?? 0,
                     DocTyp = fiche.DocTyp,
                     Branch = branch,
                     Fund = fund,
