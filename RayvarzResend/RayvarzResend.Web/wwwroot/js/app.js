@@ -502,53 +502,46 @@ function showTahatorResult(text) {
 function formatTahatorCheck(d) {
   const snap = d.snapshot;
   const f = d.fiche;
+  const pairLines = (d.pairMembers || []).map(m =>
+    `  ${m.incomeAccountGroup} ${m.ficheNo}: DocTyp=${m.docTyp} Branch=${m.branch} Fund=${m.fund} | Header=${m.existsInAccountingDocHeader} Rayvarz=${m.existsInRayvarz} NeedsSend=${m.needsSend}`
+  );
   return [
-    '=== بررسی تهاتر ===',
-    `FicheNo: ${d.ficheNo}`,
-    `در Accounting_DocHeader: ${d.existsInAccountingDocHeader ? 'بله — ارسال لازم نیست' : 'خیر'}`,
-    `در Income_Fiche: ${d.existsInIncomeFiche ? 'بله' : 'خیر'}`,
-    `در رایورز (incmdocsys): ${d.existsInRayvarz ? 'بله' : 'خیر'}`,
-    `NeedsSend: ${d.needsSend}`,
-    f ? `DocTyp تهاتر: ${f.docTyp} — ${f.docTypDsc || f.docDsc || ''}` : '',
-    f ? `Payable: ${Number(f.payable || 0).toLocaleString()} | ردیف: ${(f.rows || []).length}` : '',
+    '=== بررسی جفت تهاتر (۱۵۷+۱۵۸) ===',
+    `FicheNo ورودی: ${d.ficheNo}`,
+    d.pair ? `جفت: ۱۵۷=${d.pair.amountFicheNo} | ۱۵۸=${d.pair.incomeFicheNo}` : 'جفت: —',
+    pairLines.length ? ['--- وضعیت هر فیش ---', ...pairLines].join('\n') : '',
+    `NeedsSend (هر کدام): ${d.needsSend}`,
+    f ? `فیش ورودی — Payable: ${Number(f.payable || 0).toLocaleString()}` : '',
     d.pendingStoredSnapshot
-      ? `Snapshot Pending ذخیره‌شده: Id=${d.pendingStoredSnapshot.snapshotId}`
+      ? `Snapshot Pending: Id=${d.pendingStoredSnapshot.snapshotId}`
       : 'Snapshot Pending: —',
     d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : 'DocNotSent: —',
     `پیام: ${d.message || ''}`,
     snap ? [
       '',
-      '--- Snapshot فعلی ---',
+      '--- Snapshot فعلی (فیش ورودی) ---',
       `EumFicheStatus: ${snap.eumFicheStatus}`,
       `ExportPermanentDate: ${snap.exportPermanentDate || ''}`,
       `PaymentBreakDate: ${snap.paymentBreakDate || ''}`,
-      `PaymentDate: ${snap.paymentDate || ''}`,
-      `UserConfirmDate: ${snap.userConfirmDate || ''}`,
-      `UsernameUserConfirm: ${snap.usernameUserConfirm || ''}`,
-      `NidUserUserConfirm: ${snap.nidUserUserConfirm || ''}`
+      `PaymentDate: ${snap.paymentDate || ''}`
     ].join('\n') : ''
   ].filter(Boolean).join('\n');
 }
 
 function formatTahatorSend(d) {
+  const resultLines = (d.ficheResults || []).map(r =>
+    `  ${r.incomeAccountGroup} ${r.ficheNo}: Success=${r.success} Skipped=${r.skipped}${r.skipReason ? ' (' + r.skipReason + ')' : ''} DocTyp=${r.docTyp} Branch=${r.branch}/${r.fund}${r.soapMessage ? ' — ' + r.soapMessage : ''}`
+  );
   return [
-    '=== نتیجه تهاتر + SOAP ===',
-    `FicheNo: ${d.ficheNo}`,
+    '=== نتیجه ارسال جفت تهاتر ===',
+    `FicheNo ورودی: ${d.ficheNo}`,
+    d.pair ? `جفت: ۱۵۷=${d.pair.amountFicheNo} → ۱۵۸=${d.pair.incomeFicheNo}` : '',
     `Success: ${d.success}`,
     `Skipped: ${d.skipped}`,
-    d.skipReason ? `SkipReason: ${d.skipReason}  ← این غیر از DryRun است` : '',
+    d.skipReason ? `SkipReason: ${d.skipReason}` : '',
     `DryRun: ${d.dryRun}`,
-    `Engine: ${d.engineName || '-'}`,
-    `DocTyp: ${d.docTyp || '-'}`,
-    d.snapshotId ? `SnapshotId (DB): ${d.snapshotId}` : '',
-    `Branch/Fund: ${d.branch || '-'} / ${d.fund || '-'}`,
-    `DocHeader قبل: ${d.existsInAccountingDocHeaderBefore}`,
-    `DocHeader بعد: ${d.existsInAccountingDocHeaderAfter}`,
-    `VerifiedInRayvarz: ${d.existsInRayvarz}`,
-    d.pursuitDocNo ? `PursuitDocNo: ${d.pursuitDocNo}` : '',
-    d.triggerDate ? `تاریخ تریگر وضعیت ۲: ${d.triggerDate}` : '',
-    d.soapMessage ? `SOAP Message: ${d.soapMessage}` : '',
-    d.docNotSentError ? `علت عدم ارسال (DocNotSent): ${d.docNotSentError}` : '',
+    resultLines.length ? ['--- هر فیش ---', ...resultLines].join('\n') : '',
+    d.triggerDate ? `تاریخ تریگر: ${d.triggerDate}` : '',
     `پیام: ${d.message || ''}`,
     '',
     '--- مراحل ---',

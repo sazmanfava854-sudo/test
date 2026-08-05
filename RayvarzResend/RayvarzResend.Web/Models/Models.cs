@@ -201,6 +201,30 @@ public class TahatorFicheRequest
     public bool HoldAfterStatus2 { get; set; }
 }
 
+/// <summary>جفت تهاتر — گروه ۱۵۷ (مبلغ/مرکز) + ۱۵۸ (درآمد/منطقه) با همان NidIncome.</summary>
+public class TahatorPairInfo
+{
+    public Guid NidIncome { get; set; }
+    public string AmountFicheNo { get; set; } = "";
+    public string IncomeFicheNo { get; set; } = "";
+    public FicheHeaderDto? AmountFiche { get; set; }
+    public FicheHeaderDto? IncomeFiche { get; set; }
+}
+
+/// <summary>وضعیت هر فیش جفت در check/send.</summary>
+public class TahatorPairMemberStatus
+{
+    public string FicheNo { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public int DocTyp { get; set; }
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public bool ExistsInAccountingDocHeader { get; set; }
+    public bool ExistsInRayvarz { get; set; }
+    public bool NeedsSend { get; set; }
+    public string? DocNotSentError { get; set; }
+}
+
 public class TahatorCheckResult
 {
     public string FicheNo { get; set; } = "";
@@ -214,6 +238,27 @@ public class TahatorCheckResult
     /// <summary>اگر فرایند قبلی قطع شده باشد، snapshot Pending از RayvarzRuleEngine.</summary>
     public IncomeFicheTahatorSnapshot? PendingStoredSnapshot { get; set; }
     public FicheHeaderDto? Fiche { get; set; }
+    /// <summary>جفت ۱۵۷+۱۵۸ — هر دو باید ارسال شوند.</summary>
+    public TahatorPairInfo? Pair { get; set; }
+    public List<TahatorPairMemberStatus> PairMembers { get; set; } = new();
+}
+
+public class TahatorFicheSendDetail
+{
+    public string FicheNo { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public int DocTyp { get; set; }
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public string? SkipReason { get; set; }
+    public bool ExistsInAccountingDocHeaderAfter { get; set; }
+    public bool ExistsInRayvarz { get; set; }
+    public string? SoapMessage { get; set; }
+    public string? PursuitDocNo { get; set; }
+    public string? PreviewXml { get; set; }
+    public string? DocNotSentError { get; set; }
 }
 
 public class TahatorSendResult
@@ -241,4 +286,6 @@ public class TahatorSendResult
     public string? PursuitDocNo { get; set; }
     public string? SoapMessage { get; set; }
     public List<string> Steps { get; set; } = new();
+    public TahatorPairInfo? Pair { get; set; }
+    public List<TahatorFicheSendDetail> FicheResults { get; set; } = new();
 }

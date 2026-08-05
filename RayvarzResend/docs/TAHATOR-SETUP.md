@@ -17,13 +17,17 @@
 
 ## جریان
 
-1. اگر در `Accounting_DocHeader` یا `incmdocsys` بود → ارسال لازم نیست  
-2. `SELECT` از `Income_Fiche`  
-3. **ذخیره پایدار** همان مقادیر در `RayvarzRuleEngine.dbo.TahatorRestoreSnapshot` (Status=`Pending`)  
-4. `UPDATE` وضعیت **۲** روی Sara  
-5. ساخت SOAP از **DSL / ActiveEngine** با `DocTyp` تهاتر و `POST SaveDocument`  
-6. `UPDATE` بازگردانی وضعیت **۳** از همان snapshot ذخیره‌شده → Status=`Restored`  
-7. اگر در واسط / رایورز نبود → علت از `Accounting_DocNotSent`
+1. **جفت تهاتر** — هر عملیات تهاتر دو فیش `Income_Fiche` دارد (همان `NidIncome`):
+   - **۱۵۷** مبلغ / `Tahator1` / Branch **۱۰۲** / DocTyp **۱۴|۱۵**
+   - **۱۵۸** درآمد / `Tahator` / Branch **۲۰۱–۲۱۲** / DocTyp **۱۷|۱۸**
+   - ارسال: **اول ۱۵۷، بعد ۱۵۸** (مثل Member 1388)
+2. اگر **هر دو** در `Accounting_DocHeader` یا **هر دو** در `incmdocsys` بود → ارسال لازم نیست  
+3. `SELECT` از `Income_Fiche` (هر دو فیش)  
+4. **ذخیره پایدار** snapshot هر فишی که ارسال می‌شود  
+5. `UPDATE` وضعیت **۲** روی Sara (فقط فیش‌های در صف ارسال)  
+6. ساخت SOAP و `POST SaveDocument` — **دو بار** در صورت نیاز  
+7. `UPDATE` بازگردانی وضعیت **۳**  
+8. اگر در واسط / رایورز نبود → علت از `Accounting_DocNotSent`
 
 اگر فرایند وسط کار قطع شود، snapshot با Status=`Pending` می‌ماند:
 

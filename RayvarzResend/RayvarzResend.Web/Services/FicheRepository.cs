@@ -21,6 +21,67 @@ public class FicheRepository
         return await TryLoadDutyAsync(type, value, ct);
     }
 
+    /// <summary>
+    /// جفت تهاتر: دو ردیف Income_Fiche با همان NidIncome — گروه ۱۵۷ (Tahator1) و ۱۵۸ (Tahator).
+    /// </summary>
+    public async Task<TahatorPairInfo?> ResolveTahatorPairAsync(string ficheNo, CancellationToken ct = default)
+    {
+        ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo);
+        var seed = await LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
+        if (seed?.NidIncome is not { } nid || nid == Guid.Empty)
+            return null;
+        if (!TahatorRowBuilder.IsTahatorFiche(seed))
+            return null;
+
+        const string sql = @"
+SELECT FicheNo, CI_IncomeAccountGroup
+FROM dbo.Income_Fiche
+WHERE NidIncome = @nid
+  AND CI_IncomeAccountGroup IN (@g157, @g158)";
+
+        string? amountNo = null;
+        string? incomeNo = null;
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nid);
+        cmd.Parameters.AddWithValue("@g157", TahatorRowBuilder.IncomeAccountGroupTahatorAmount);
+        cmd.Parameters.AddWithValue("@g158", TahatorRowBuilder.IncomeAccountGroupTahatorIncome);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var no = reader.GetString(reader.GetOrdinal("FicheNo")).Trim();
+            var group = ReadInt32(reader, "CI_IncomeAccountGroup");
+            if (group == TahatorRowBuilder.IncomeAccountGroupTahatorAmount)
+                amountNo = no;
+            else if (group == TahatorRowBuilder.IncomeAccountGroupTahatorIncome)
+                incomeNo = no;
+        }
+
+        if (string.IsNullOrWhiteSpace(amountNo) || string.IsNullOrWhiteSpace(incomeNo))
+            return null;
+
+        var amountFiche = seed.IncomeAccountGroup == TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+            ? seed
+            : await LoadAsync(IdentifierType.FicheNo, amountNo, ct);
+        var incomeFiche = seed.IncomeAccountGroup == TahatorRowBuilder.IncomeAccountGroupTahatorIncome
+            ? seed
+            : await LoadAsync(IdentifierType.FicheNo, incomeNo, ct);
+
+        if (amountFiche == null || incomeFiche == null)
+            return null;
+
+        return new TahatorPairInfo
+        {
+            NidIncome = nid,
+            AmountFicheNo = amountNo,
+            IncomeFicheNo = incomeNo,
+            AmountFiche = amountFiche,
+            IncomeFiche = incomeFiche
+        };
+    }
+
     private async Task<FicheHeaderDto?> TryLoadIncomeAsync(IdentifierType type, string value, CancellationToken ct)
     {
         var where = type == IdentifierType.FicheNo

@@ -300,6 +300,35 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void Tahator_pair_model_documents_157_amount_before_158_income()
+    {
+        var pair = new TahatorPairInfo
+        {
+            NidIncome = Guid.NewGuid(),
+            AmountFicheNo = "50533511617",
+            IncomeFicheNo = "50533511618",
+            AmountFiche = new FicheHeaderDto { IncomeAccountGroup = 157, FicheNo = "50533511617" },
+            IncomeFiche = new FicheHeaderDto { IncomeAccountGroup = 158, FicheNo = "50533511618" }
+        };
+        Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorAmount, pair.AmountFiche!.IncomeAccountGroup);
+        Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorIncome, pair.IncomeFiche!.IncomeAccountGroup);
+        // SendAsync sends AmountFiche (157) before IncomeFiche (158) — VB Tahator1 then Tahator
+        var order = new[] { pair.AmountFiche, pair.IncomeFiche }.Select(f => f.IncomeAccountGroup).ToArray();
+        Assert.Equal(new[] { 157, 158 }, order);
+    }
+
+    [Fact]
+    public void ResolveTahatorPair_sql_targets_groups_157_and_158()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "Services", "FicheRepository.cs"));
+        var cs = File.ReadAllText(path);
+        Assert.Contains("ResolveTahatorPairAsync", cs);
+        Assert.Contains("CI_IncomeAccountGroup IN (@g157, @g158)", cs);
+    }
+
+    [Fact]
     public void Full_member_1388_fixture_contains_Tahator_bodies()
     {
         var path = Path.GetFullPath(Path.Combine(
