@@ -98,9 +98,9 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        f.BankPaymentDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
        CAST(f.CheckNo AS nvarchar(20)) AS CheckNo,
-       CAST(f.Deposit AS bigint) AS Deposit,
-       CAST(f.DepositID AS bigint) AS DepositID,
-       CAST(f.CreditorPapers AS bigint) AS CreditorPapers,
+       NULLIF(LTRIM(RTRIM(CAST(f.Deposit AS nvarchar(50)))), '') AS Deposit,
+       NULLIF(LTRIM(RTRIM(CAST(f.DepositID AS nvarchar(50)))), '') AS DepositID,
+       NULLIF(LTRIM(RTRIM(CAST(f.CreditorPapers AS nvarchar(50)))), '') AS CreditorPapers,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        ISNULL(
          NULLIF(LTRIM(RTRIM(
@@ -179,9 +179,9 @@ WHERE {where}";
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
             CheckNo = reader.IsDBNull(reader.GetOrdinal("CheckNo")) ? null : reader.GetString(reader.GetOrdinal("CheckNo")),
-            Deposit = reader.IsDBNull(reader.GetOrdinal("Deposit")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("Deposit"))),
-            DepositId = reader.IsDBNull(reader.GetOrdinal("DepositID")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("DepositID"))),
-            CreditorPapers = reader.IsDBNull(reader.GetOrdinal("CreditorPapers")) ? null : Convert.ToInt64(reader.GetValue(reader.GetOrdinal("CreditorPapers"))),
+            Deposit = ReadNullableInt64(reader, "Deposit"),
+            DepositId = ReadNullableInt64(reader, "DepositID"),
+            CreditorPapers = ReadNullableInt64(reader, "CreditorPapers"),
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = isTahator && !string.IsNullOrWhiteSpace(nick) ? nick : cityFirst,
             BnkAcntNoSource = isTahator
@@ -472,6 +472,13 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    private static long? ReadNullableInt64(SqlDataReader reader, string column)
+    {
+        var ord = reader.GetOrdinal(column);
+        if (reader.IsDBNull(ord)) return null;
+        return NumericHelper.TryParseLegacyLong(reader.GetValue(ord));
     }
 
     private static int ReadInt32(SqlDataReader reader, string column)

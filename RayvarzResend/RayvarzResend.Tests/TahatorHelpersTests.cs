@@ -300,6 +300,16 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void NumericHelper_parses_Persian_and_Arabic_digit_Deposit()
+    {
+        Assert.Equal(320006748L, NumericHelper.TryParseLegacyLong("٣٢٠٠٠٦٧٤٨"));
+        Assert.Equal(320006098L, NumericHelper.TryParseLegacyLong("320006098"));
+        Assert.Equal(5510917L, NumericHelper.TryParseLegacyLong("5510917"));
+        Assert.Null(NumericHelper.TryParseLegacyLong(""));
+        Assert.Null(NumericHelper.TryParseLegacyLong(null));
+    }
+
+    [Fact]
     public void Tahator_pair_model_documents_157_amount_before_158_income()
     {
         var pair = new TahatorPairInfo
