@@ -34,13 +34,12 @@ public class FicheRepository
             return null;
 
         const string sql = @"
-SELECT FicheNo, CI_IncomeAccountGroup
+SELECT FicheNo, CI_IncomeAccountGroup, EumFicheStatus, NidExportation, Payable
 FROM dbo.Income_Fiche
 WHERE NidIncome = @nid
   AND CI_IncomeAccountGroup IN (@g157, @g158)";
 
-        string? amountNo = null;
-        string? incomeNo = null;
+        var candidates = new List<TahatorPairResolver.Candidate>();
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
@@ -51,21 +50,37 @@ WHERE NidIncome = @nid
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var no = reader.GetString(reader.GetOrdinal("FicheNo")).Trim();
-            var group = ReadInt32(reader, "CI_IncomeAccountGroup");
-            if (group == TahatorRowBuilder.IncomeAccountGroupTahatorAmount)
-                amountNo = no;
-            else if (group == TahatorRowBuilder.IncomeAccountGroupTahatorIncome)
-                incomeNo = no;
+            var exportOrd = reader.GetOrdinal("NidExportation");
+            candidates.Add(new TahatorPairResolver.Candidate(
+                reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
+                ReadInt32(reader, "CI_IncomeAccountGroup"),
+                ReadInt32(reader, "EumFicheStatus"),
+                reader.IsDBNull(exportOrd) ? Guid.Empty : reader.GetGuid(exportOrd),
+                ReadDecimal(reader, "Payable")));
         }
 
-        if (string.IsNullOrWhiteSpace(amountNo) || string.IsNullOrWhiteSpace(incomeNo))
+        var seedRow = candidates.FirstOrDefault(c =>
+            string.Equals(c.FicheNo, ficheNo, StringComparison.Ordinal));
+        if (seedRow == null)
             return null;
 
-        var amountFiche = seed.IncomeAccountGroup == TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+        var resolved = TahatorPairResolver.Resolve(
+            candidates,
+            ficheNo,
+            seed.IncomeAccountGroup ?? seedRow.IncomeAccountGroup,
+            seedRow.NidExportation,
+            seedRow.Payable);
+        if (resolved == null)
+            return null;
+
+        var (amountNo, incomeNo) = resolved;
+
+        var amountFiche = string.Equals(amountNo, ficheNo, StringComparison.Ordinal)
+            && TahatorRowBuilder.IsTahatorAmountFiche(seed)
             ? seed
             : await LoadAsync(IdentifierType.FicheNo, amountNo, ct);
-        var incomeFiche = seed.IncomeAccountGroup == TahatorRowBuilder.IncomeAccountGroupTahatorIncome
+        var incomeFiche = string.Equals(incomeNo, ficheNo, StringComparison.Ordinal)
+            && TahatorRowBuilder.IsTahatorIncomeFiche(seed)
             ? seed
             : await LoadAsync(IdentifierType.FicheNo, incomeNo, ct);
 
@@ -75,8 +90,8 @@ WHERE NidIncome = @nid
         return new TahatorPairInfo
         {
             NidIncome = nid,
-            AmountFicheNo = amountNo,
-            IncomeFicheNo = incomeNo,
+            AmountFicheNo = amountFiche.FicheNo.Trim(),
+            IncomeFicheNo = incomeFiche.FicheNo.Trim(),
             AmountFiche = amountFiche,
             IncomeFiche = incomeFiche
         };

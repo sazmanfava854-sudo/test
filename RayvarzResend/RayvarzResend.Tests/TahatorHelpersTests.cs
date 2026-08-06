@@ -300,6 +300,27 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void TahatorPairResolver_prefers_same_NidExportation_and_excludes_status_4()
+    {
+        var exportActive = Guid.Parse("CB71424F-BA17-4A7A-8FEB-E5394BED24AD");
+        var exportOld = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var candidates = new List<TahatorPairResolver.Candidate>
+        {
+            new("050133472490", 157, 4, exportOld, 127669469251),
+            new("050133472491", 158, 4, exportOld, 127669469251),
+            new("050133472495", 157, 3, exportActive, 127669469251),
+            new("050133472496", 158, 3, exportActive, 127669469251),
+        };
+
+        var pair = TahatorPairResolver.Resolve(
+            candidates, "050133472495", 157, exportActive, 127669469251);
+
+        Assert.NotNull(pair);
+        Assert.Equal("050133472495", pair.Value.AmountFicheNo);
+        Assert.Equal("050133472496", pair.Value.IncomeFicheNo);
+    }
+
+    [Fact]
     public void NumericHelper_parses_Persian_and_Arabic_digit_Deposit()
     {
         Assert.Equal(320006748L, NumericHelper.TryParseLegacyLong("٣٢٠٠٠٦٧٤٨"));

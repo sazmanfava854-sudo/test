@@ -91,7 +91,7 @@ public sealed class TahatorResendService
                 // optional
             }
 
-            var notSent = inHeader ? null : await _fiches.GetDocNotSentErrorAsync(no, ct);
+            var notSent = inHeader ? null : await TryGetDocNotSentAsync(no, ct);
             var needs = !inHeader && !inRayvarz;
             anyNeedsSend |= needs;
             allInHeader &= inHeader;
@@ -125,9 +125,11 @@ public sealed class TahatorResendService
             _logger.LogWarning(ex, "خواندن snapshot Pending تهاتر ناموفق");
         }
 
-        var primary = string.Equals(ficheNo, pair.AmountFicheNo, StringComparison.Ordinal)
+        var primary = string.Equals(ficheNo, pair.AmountFiche!.FicheNo, StringComparison.Ordinal)
             ? pair.AmountFiche
-            : pair.IncomeFiche;
+            : string.Equals(ficheNo, pair.IncomeFiche!.FicheNo, StringComparison.Ordinal)
+                ? pair.IncomeFiche
+                : pair.AmountFiche;
         var msg = allInHeader
             ? "هر دو فیش در Accounting_DocHeader هست — ارسال لازم نیست."
             : allInRayvarz
@@ -351,7 +353,7 @@ public sealed class TahatorResendService
                 string? notSent = null;
                 if (!dryRun && !inHeaderAfter && !verifiedRay)
                 {
-                    notSent = await _fiches.GetDocNotSentErrorAsync(no, ct);
+                    notSent = await TryGetDocNotSentAsync(no, ct);
                     if (!string.IsNullOrWhiteSpace(notSent))
                         steps.Add($"7) DocNotSent {no}: {notSent}");
                 }
@@ -669,6 +671,19 @@ WHERE FicheNo = @f";
     {
         if (!string.IsNullOrWhiteSpace(fromReq)) return fromReq.Trim();
         return todayRayvarz;
+    }
+
+    private async Task<string?> TryGetDocNotSentAsync(string ficheNo, CancellationToken ct)
+    {
+        try
+        {
+            return await _fiches.GetDocNotSentErrorAsync(ficheNo, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Accounting_DocNotSent read failed for {FicheNo}", ficheNo);
+            return $"Accounting_DocNotSent: {ex.Message}";
+        }
     }
 
     private static TahatorSendResult Fail(string ficheNo, bool dryRun, List<string> steps, string message) =>
