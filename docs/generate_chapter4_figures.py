@@ -427,47 +427,199 @@ def fig_spearman_correlation():
 def export_excel() -> None:
     try:
         from openpyxl import Workbook
+        from openpyxl.chart import BarChart, LineChart, Reference
+        from openpyxl.chart.label import DataLabelList
+        from openpyxl.styles import Alignment, Font
     except ImportError:
         print("  Excel: skipped (openpyxl not installed)")
         return
 
     wb = Workbook()
     wb.remove(wb.active)
-
-    def sheet(name: str, headers: list, rows: list):
-        ws = wb.create_sheet(name[:31])
-        ws.append(headers)
-        for row in rows:
-            ws.append(row)
-
-    ce = DATA["clustering_evaluation"]
-    sheet("خوشه‌بندی_k", ["k", "Inertia", "Silhouette"], list(zip(ce["k"], ce["inertia"], ce["silhouette"])))
-
-    cs = DATA["cluster_sizes"]
-    sheet("اندازه_خوشه‌ها", ["خوشه", "تعداد"], list(zip(cs["labels"], cs["sizes"])))
-
-    aw = DATA["ahp_weights"]
-    sheet("وزن_AHP", ["معیار", "سهم_%"], list(zip(aw["criteria"], aw["percent"])))
-
-    wc = DATA["weight_comparison"]
-    sheet("وزن_پایه_تطبیقی", ["معیار", "پایه", "تطبیقی"], list(zip(wc["criteria"], wc["base"], wc["adaptive"])))
-
     techs = tech_labels()
-    vk = DATA["vikor"]
-    sheet("VIKOR", ["فناوری", "S", "R", "Q"], list(zip(techs, vk["s"], vk["r"], vk["q"])))
 
+    def clean_label(text: str) -> str:
+        return text.replace("\n", " — ")
+
+    def write_title(ws, title: str, cols: int = 6) -> int:
+        ws.cell(row=1, column=1, value=title)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=cols)
+        ws.cell(row=1, column=1).font = Font(bold=True, size=12)
+        ws.cell(row=1, column=1).alignment = Alignment(horizontal="center", wrap_text=True)
+        return 3
+
+    def write_headers(ws, row: int, headers: list) -> None:
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=row, column=col, value=header)
+            cell.font = Font(bold=True)
+
+    def write_rows(ws, start_row: int, rows: list) -> int:
+        for ri, row in enumerate(rows, start_row):
+            for ci, val in enumerate(row, 1):
+                ws.cell(row=ri, column=ci, value=val)
+        return start_row + len(rows) - 1
+
+    def place_chart(ws, chart, anchor: str) -> None:
+        chart.width = 20
+        chart.height = 12
+        ws.add_chart(chart, anchor)
+
+    def col_chart(ws, header_row: int, last_row: int, title: str, y_title: str = "", data_cols: int = 2):
+        chart = BarChart()
+        chart.type = "col"
+        chart.grouping = "clustered"
+        chart.style = 10
+        chart.title = title
+        if y_title:
+            chart.y_axis.title = y_title
+        data = Reference(ws, min_col=2, min_row=header_row, max_col=1 + data_cols, max_row=last_row)
+        cats = Reference(ws, min_col=1, min_row=header_row + 1, max_row=last_row)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+        chart.dataLabels = DataLabelList()
+        chart.dataLabels.showVal = True
+        return chart
+
+    def bar_h_chart(ws, header_row: int, last_row: int, title: str, y_title: str = ""):
+        chart = BarChart()
+        chart.type = "bar"
+        chart.style = 10
+        chart.title = title
+        if y_title:
+            chart.y_axis.title = y_title
+        data = Reference(ws, min_col=2, min_row=header_row, max_col=2, max_row=last_row)
+        cats = Reference(ws, min_col=1, min_row=header_row + 1, max_row=last_row)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+        chart.dataLabels = DataLabelList()
+        chart.dataLabels.showVal = True
+        return chart
+
+    def line_chart(ws, header_row: int, last_row: int, title: str, num_series: int = 2):
+        chart = LineChart()
+        chart.style = 10
+        chart.title = title
+        for col in range(2, 2 + num_series):
+            data = Reference(ws, min_col=col, min_row=header_row, max_col=col, max_row=last_row)
+            chart.add_data(data, titles_from_data=True)
+        cats = Reference(ws, min_col=1, min_row=header_row + 1, max_row=last_row)
+        chart.set_categories(cats)
+        return chart
+
+    # ── نمودار ۴-۱: Inertia + Silhouette ──
+    ce = DATA["clustering_evaluation"]
+    ws = wb.create_sheet("نمودار۴-۱")
+    hr = write_title(ws, ce["title"])
+    headers = ["k", "Inertia", "Silhouette"]
+    rows = list(zip(ce["k"], ce["inertia"], ce["silhouette"]))
+    write_headers(ws, hr, headers)
+    last = write_rows(ws, hr + 1, rows)
+    place_chart(ws, line_chart(ws, hr, last, "Inertia & Silhouette", 2), f"E{hr}")
+
+    # ── نمودار ۴-۲: Inertia ──
+    ws = wb.create_sheet("نمودار۴-۲")
+    hr = write_title(ws, "نمودار ۴-۲ — تغییرات Inertia در مقادیر مختلف k")
+    write_headers(ws, hr, ["k", "Inertia"])
+    last = write_rows(ws, hr + 1, list(zip(ce["k"], ce["inertia"])))
+    place_chart(ws, col_chart(ws, hr, last, "Inertia (WCSS)", "Inertia"), f"D{hr}")
+
+    # ── نمودار ۴-۳: Silhouette ──
+    ws = wb.create_sheet("نمودار۴-۳")
+    hr = write_title(ws, "نمودار ۴-۳ — تغییرات ضریب Silhouette در مقادیر مختلف k")
+    write_headers(ws, hr, ["k", "Silhouette"])
+    last = write_rows(ws, hr + 1, list(zip(ce["k"], ce["silhouette"])))
+    place_chart(ws, col_chart(ws, hr, last, "Silhouette", "ضریب"), f"D{hr}")
+
+    # ── نمودار ۴-۴: اندازه خوشه‌ها ──
+    cs = DATA["cluster_sizes"]
+    ws = wb.create_sheet("نمودار۴-۴")
+    hr = write_title(ws, cs["title"])
+    write_headers(ws, hr, ["خوشه", "تعداد اعضا"])
+    last = write_rows(ws, hr + 1, list(zip([clean_label(l) for l in cs["labels"]], cs["sizes"])))
+    place_chart(ws, col_chart(ws, hr, last, "تعداد اعضای خوشه"), f"D{hr}")
+
+    # ── نمودار ۴-۵: وزن AHP ──
+    aw = DATA["ahp_weights"]
+    ws = wb.create_sheet("نمودار۴-۵")
+    hr = write_title(ws, aw["title"])
+    write_headers(ws, hr, ["معیار", "سهم (%)"])
+    last = write_rows(ws, hr + 1, list(zip(aw["criteria"], aw["percent"])))
+    place_chart(ws, bar_h_chart(ws, hr, last, "وزن معیارها (AHP)", "سهم (%)"), f"D{hr}")
+
+    # ── نمودار ۴-۶: وزن پایه vs تطبیقی ──
+    wc = DATA["weight_comparison"]
+    ws = wb.create_sheet("نمودار۴-۶")
+    hr = write_title(ws, wc["title"])
+    write_headers(ws, hr, ["معیار", "وزن پایه AHP", "وزن تطبیقی"])
+    last = write_rows(ws, hr + 1, list(zip(wc["criteria"], wc["base"], wc["adaptive"])))
+    place_chart(ws, col_chart(ws, hr, last, "مقایسه وزن‌ها", "وزن", data_cols=2), f"E{hr}")
+
+    # ── نمودار ۴-۷: وزن تطبیقی ──
+    ad = DATA["adaptive_weights"]
+    ws = wb.create_sheet("نمودار۴-۷")
+    hr = write_title(ws, ad["title"])
+    pct = [round(w * 100, 2) for w in ad["weights"]]
+    write_headers(ws, hr, ["معیار", "سهم (%)"])
+    last = write_rows(ws, hr + 1, list(zip(ad["criteria"], pct)))
+    place_chart(ws, bar_h_chart(ws, hr, last, "وزن تطبیقی", "سهم (%)"), f"D{hr}")
+
+    # ── نمودار ۴-۸: TOPSIS ──
     tp = DATA["topsis"]
-    sheet("TOPSIS", ["فناوری", "ضریب_نزدیکی"], list(zip(techs, tp["closeness"])))
+    ws = wb.create_sheet("نمودار۴-۸")
+    hr = write_title(ws, tp["title"])
+    write_headers(ws, hr, ["فناوری", "ضریب نزدیکی (C_i)"])
+    last = write_rows(ws, hr + 1, list(zip(techs, tp["closeness"])))
+    place_chart(ws, col_chart(ws, hr, last, "TOPSIS — ضریب نزدیکی"), f"D{hr}")
 
+    # ── نمودار ۴-۹: VIKOR (S, R, Q) ──
+    vk = DATA["vikor"]
+    ws = wb.create_sheet("نمودار۴-۹")
+    hr = write_title(ws, vk["title_indices"])
+    write_headers(ws, hr, ["فناوری", "S_i", "R_i", "Q_i"])
+    last = write_rows(ws, hr + 1, list(zip(techs, vk["s"], vk["r"], vk["q"])))
+    place_chart(ws, col_chart(ws, hr, last, "VIKOR — شاخص‌ها", data_cols=3), f"F{hr}")
+
+    # ── نمودار ۴-۹ب: VIKOR Q ──
+    ws = wb.create_sheet("نمودار۴-۹ب")
+    hr = write_title(ws, vk["title_q"])
+    write_headers(ws, hr, ["فناوری", "Q_i"])
+    last = write_rows(ws, hr + 1, list(zip(techs, vk["q"])))
+    place_chart(ws, col_chart(ws, hr, last, "VIKOR — شاخص نهایی Q"), f"D{hr}")
+
+    # ── نمودار ۴-۱۰: COPRAS ──
     cp = DATA["copras"]
-    sheet("COPRAS", ["فناوری", "Q", "N"], list(zip(techs, cp["q"], cp["n"])))
+    ws = wb.create_sheet("نمودار۴-۱۰")
+    hr = write_title(ws, cp["title"])
+    write_headers(ws, hr, ["فناوری", "Q_i", "N_i (%)"])
+    last = write_rows(ws, hr + 1, list(zip(techs, cp["q"], cp["n"])))
+    place_chart(ws, col_chart(ws, hr, last, "COPRAS", data_cols=2), f"E{hr}")
 
+    # ── نمودار ۴-۱۱: مقایسه رتبه ──
     rc = DATA["ranking_comparison"]
-    sheet("رتبه‌بندی", ["فناوری", "TOPSIS", "VIKOR", "COPRAS"], list(zip(techs, rc["topsis"], rc["vikor"], rc["copras"])))
+    ws = wb.create_sheet("نمودار۴-۱۱")
+    hr = write_title(ws, rc["title"])
+    write_headers(ws, hr, ["فناوری", "TOPSIS", "VIKOR", "COPRAS"])
+    last = write_rows(ws, hr + 1, list(zip(techs, rc["topsis"], rc["vikor"], rc["copras"])))
+    place_chart(ws, col_chart(ws, hr, last, "مقایسه رتبه", data_cols=3), f"F{hr}")
+
+    # ── نمودار ۴-۱۲: اسپیرمن ──
+    sp = DATA["spearman"]
+    ws = wb.create_sheet("نمودار۴-۱۲")
+    hr = write_title(ws, sp["title"])
+    write_headers(ws, hr, ["جفت روش‌ها", "ضریب اسپیرمن"])
+    last = write_rows(ws, hr + 1, list(zip([clean_label(p) for p in sp["pairs"]], sp["rho"])))
+    place_chart(ws, col_chart(ws, hr, last, "همبستگی اسپیرمن"), f"D{hr}")
+
+    # تنظیم عرض ستون‌ها
+    for ws in wb.worksheets:
+        ws.column_dimensions["A"].width = 28
+        ws.column_dimensions["B"].width = 16
+        ws.column_dimensions["C"].width = 16
+        ws.column_dimensions["D"].width = 16
 
     path = OUTPUT_DIR / "chapter4-data.xlsx"
     wb.save(path)
-    print(f"  Excel: {path.name}")
+    print(f"  Excel: {path.name} ({len(wb.worksheets)} sheets with charts)")
 
 
 def main():
