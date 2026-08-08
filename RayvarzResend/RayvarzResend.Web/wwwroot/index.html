@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=12" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -126,41 +126,58 @@
         <h2>فیش‌های ارسال نشده به رایورز</h2>
       </div>
       <p class="hint">فیش‌های تاییدشده که در <code>Accounting_DocHeader</code> نیستند. فیلتر تاریخ بر اساس <code>PaymentDate</code> یا <code>BankPaymentDate</code> است.</p>
-      <div class="form-grid">
-        <label class="field">
+      <div class="form-grid unsent-form-grid">
+        <label class="field field-required">
           <span class="field-label">نوع فیش</span>
           <select id="unsentFicheKind">
-            <option value="Income">شهرسازی (Income_Fiche)</option>
-            <option value="Duty">نوسازی و صنفی (Duty_Fiche)</option>
+            <option value="Income">شهرسازی</option>
+            <option value="Duty">نوسازی و صنفی</option>
           </select>
         </label>
         <label class="field">
           <span class="field-label">شماره فیش</span>
-          <input id="unsentFicheNo" type="text" placeholder="اختیاری" autocomplete="off" />
+          <input id="unsentFicheNo" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
-        <label class="field">
+        <label class="field field-required">
           <span class="field-label">از تاریخ</span>
-          <input id="unsentFromDate" type="text" placeholder="1402/08/01" />
+          <input id="unsentFromDate" type="text" placeholder="1402/08/01" required />
         </label>
-        <label class="field">
+        <label class="field field-required">
           <span class="field-label">تا تاریخ</span>
-          <input id="unsentToDate" type="text" placeholder="1402/08/20" />
+          <input id="unsentToDate" type="text" placeholder="1402/08/20" required />
         </label>
         <label class="field">
           <span class="field-label">شناسه قبض</span>
-          <input id="unsentBillId" type="text" placeholder="اختیاری" autocomplete="off" />
+          <input id="unsentBillId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
         <label class="field">
           <span class="field-label">شناسه پرداخت</span>
-          <input id="unsentPaymentId" type="text" placeholder="اختیاری" autocomplete="off" />
+          <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
-        <label class="field">
+        <label class="field field-required">
           <span class="field-label">منطقه</span>
           <select id="unsentDistrict">
-            <option value="">همه</option>
+            <option value="">همه مناطق</option>
+            <option value="1">منطقه ۱</option>
+            <option value="2">منطقه ۲</option>
+            <option value="3">منطقه ۳</option>
+            <option value="4">منطقه ۴</option>
+            <option value="5">منطقه ۵</option>
+            <option value="6">منطقه ۶</option>
+            <option value="7">منطقه ۷</option>
+            <option value="8">منطقه ۸</option>
+            <option value="9">منطقه ۹</option>
+            <option value="10">منطقه ۱۰</option>
+            <option value="11">منطقه ۱۱</option>
+            <option value="12">منطقه ۱۲</option>
+            <option value="218">منطقه ثامن</option>
           </select>
         </label>
       </div>
+      <ul class="unsent-notes">
+        <li>نوع فیش کمبو باکس — قابلیت انتخاب: <strong>شهرسازی</strong> / <strong>نوسازی و صنفی</strong></li>
+        <li>منطقه کمبو باکس — قابلیت انتخاب منطقه ۱ تا ۱۲ و ثامن</li>
+      </ul>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
@@ -215,6 +232,6 @@
     </section>
     </div>
   </div>
-  <script src="js/app.js?v=15" defer></script>
+  <script src="js/app.js?v=16" defer></script>
 </body>
 </html>

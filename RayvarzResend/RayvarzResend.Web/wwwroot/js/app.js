@@ -86,8 +86,9 @@ function setupMainTabs() {
 }
 
 function populateUnsentDistricts() {
+  // گزینه‌های منطقه در HTML ثابت هستند — در صورت نیاز از config همگام‌سازی می‌شود
   const sel = $('unsentDistrict');
-  if (!sel || !config?.branches) return;
+  if (!sel || sel.options.length > 1 || !config?.branches) return;
   config.branches.forEach((b) => {
     const district = b.id === 218 ? '218' : String(b.id - 200);
     const opt = document.createElement('option');
