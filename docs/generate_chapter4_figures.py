@@ -3,17 +3,22 @@
 
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+import arabic_reshaper
 import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
 import numpy as np
+from bidi.algorithm import get_display
+from matplotlib.ticker import FuncFormatter
 
 OUTPUT_DIR = Path(__file__).parent / "chapter4-figures"
+FONT_PATH = Path(__file__).parent / "fonts" / "Vazirmatn-Regular.ttf"
 
-# Persian + Latin fallback (Naskh for Arabic script, DejaVu for English/numbers)
+# Register Vazirmatn (Persian + Latin)
+fm.fontManager.addfont(str(FONT_PATH))
 plt.rcParams.update(
     {
-        "font.family": ["Noto Naskh Arabic", "DejaVu Sans"],
-        "font.sans-serif": ["Noto Naskh Arabic", "DejaVu Sans"],
+        "font.family": "Vazirmatn",
+        "font.sans-serif": ["Vazirmatn"],
         "font.size": 11,
         "axes.unicode_minus": False,
         "figure.dpi": 150,
@@ -27,6 +32,9 @@ plt.rcParams.update(
     }
 )
 
+_PERSIAN_DIGITS = str.maketrans("0123456789.", "۰۱۲۳۴۵۶۷۸۹٫")
+_PERSIAN_DIGITS_INT = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
 COLORS = {
     "primary": "#2E86AB",
     "secondary": "#A23B72",
@@ -35,6 +43,40 @@ COLORS = {
     "neutral": "#6C757D",
     "light": "#E8EEF2",
 }
+
+
+def fa(text: str) -> str:
+    """Shape Persian/RTL text for correct matplotlib rendering."""
+    if not text:
+        return text
+    return get_display(arabic_reshaper.reshape(text))
+
+
+def fa_num(value, decimals: int | None = None, percent: bool = False) -> str:
+    """Format a number using Persian digits."""
+    if decimals is not None:
+        formatted = f"{float(value):.{decimals}f}"
+    else:
+        formatted = str(value)
+    translated = formatted.translate(_PERSIAN_DIGITS)
+    return f"{translated}٪" if percent else translated
+
+
+def fa_labels(labels: list[str]) -> list[str]:
+    return [fa(label) for label in labels]
+
+
+def apply_persian_yticks(ax, decimals: int = 0) -> None:
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda x, _pos: fa_num(x, decimals=decimals) if decimals else fa_num(int(x)))
+    )
+
+
+def apply_persian_xticks(ax, ticks, decimals: int = 0) -> None:
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(
+        [fa_num(t, decimals=decimals) if decimals else fa_num(int(t)) for t in ticks]
+    )
 
 
 def save_fig(fig, filename: str) -> None:
@@ -54,22 +96,23 @@ def fig_clustering_inertia_silhouette():
     fig, ax1 = plt.subplots(figsize=(8, 5))
     color1 = COLORS["primary"]
     ax1.plot(k, inertia, "o-", color=color1, linewidth=2, markersize=8, label="Inertia (WCSS)")
-    ax1.set_xlabel("تعداد خوشه‌ها (k)")
+    ax1.set_xlabel(fa("تعداد خوشه‌ها (k)"))
     ax1.set_ylabel("Inertia (WCSS)", color=color1)
     ax1.tick_params(axis="y", labelcolor=color1)
-    ax1.set_xticks(k)
+    apply_persian_xticks(ax1, k)
+    apply_persian_yticks(ax1, decimals=1)
     ax1.grid(True, alpha=0.3, linestyle="--")
 
     ax2 = ax1.twinx()
     color2 = COLORS["accent"]
-    ax2.plot(k, silhouette, "s-", color=color2, linewidth=2, markersize=8, label="ضریب Silhouette")
-    ax2.set_ylabel("ضریب Silhouette", color=color2)
+    ax2.plot(k, silhouette, "s-", color=color2, linewidth=2, markersize=8, label=fa("ضریب Silhouette"))
+    ax2.set_ylabel(fa("ضریب Silhouette"), color=color2)
     ax2.tick_params(axis="y", labelcolor=color2)
+    ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, _pos: fa_num(x, decimals=3)))
 
-    # Highlight k=5 selection
     ax1.axvline(x=5, color=COLORS["success"], linestyle="--", alpha=0.7, linewidth=1.5)
     ax1.annotate(
-        "k=5 (انتخاب نهایی)",
+        fa("k=5 (انتخاب نهایی)"),
         xy=(5, 14.242),
         xytext=(4.2, 30),
         fontsize=10,
@@ -82,7 +125,7 @@ def fig_clustering_inertia_silhouette():
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
 
     fig.suptitle(
-        "نمودار ۴-۱ — تغییرات شاخص Inertia و Silhouette برحسب تعداد خوشه‌ها",
+        fa("نمودار ۴-۱ — تغییرات شاخص Inertia و Silhouette برحسب تعداد خوشه‌ها"),
         fontsize=13,
         y=1.02,
     )
@@ -99,11 +142,12 @@ def fig_clustering_inertia_only():
     ax.plot(k, inertia, "o--", color=COLORS["secondary"], linewidth=1.5, markersize=6)
     bars[3].set_color(COLORS["success"])
     bars[3].set_alpha(1.0)
-    ax.set_xlabel("تعداد خوشه‌ها (k)")
+    ax.set_xlabel(fa("تعداد خوشه‌ها (k)"))
     ax.set_ylabel("Inertia (WCSS)")
-    ax.set_xticks(k)
+    apply_persian_xticks(ax, k)
+    apply_persian_yticks(ax, decimals=1)
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۲ — تغییرات Inertia در مقادیر مختلف k", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۲ — تغییرات Inertia در مقادیر مختلف k"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-2_inertia_vs_k.png")
 
 
@@ -117,24 +161,27 @@ def fig_clustering_silhouette_only():
     ax.plot(k, silhouette, "o--", color=COLORS["secondary"], linewidth=1.5, markersize=6)
     bars[3].set_color(COLORS["success"])
     bars[3].set_alpha(1.0)
-    ax.set_xlabel("تعداد خوشه‌ها (k)")
-    ax.set_ylabel("ضریب Silhouette")
-    ax.set_xticks(k)
+    ax.set_xlabel(fa("تعداد خوشه‌ها (k)"))
+    ax.set_ylabel(fa("ضریب Silhouette"))
+    apply_persian_xticks(ax, k)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _pos: fa_num(x, decimals=3)))
     ax.set_ylim(0.28, 0.52)
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۳ — تغییرات ضریب Silhouette در مقادیر مختلف k", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۳ — تغییرات ضریب Silhouette در مقادیر مختلف k"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-3_silhouette_vs_k.png")
 
 
 def fig_cluster_sizes():
     """Figure 4-4: Cluster member counts."""
-    labels = [
-        "خوشه ۰\nLong-Range LPWAN",
-        "خوشه ۱\nHigh-Throughput WLAN",
-        "خوشه ۲\nShort-Range PAN",
-        "خوشه ۳\nExtended-Range",
-        "خوشه ۴\nCellular IoT",
-    ]
+    labels = fa_labels(
+        [
+            "خوشه ۰\nLong-Range LPWAN",
+            "خوشه ۱\nHigh-Throughput WLAN",
+            "خوشه ۲\nShort-Range PAN",
+            "خوشه ۳\nExtended-Range",
+            "خوشه ۴\nCellular IoT",
+        ]
+    )
     sizes = [3, 2, 3, 3, 2]
     colors = [COLORS["primary"], COLORS["accent"], COLORS["secondary"], COLORS["success"], COLORS["neutral"]]
 
@@ -144,31 +191,35 @@ def fig_cluster_sizes():
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.05,
-            str(size),
+            fa_num(size),
             ha="center",
             va="bottom",
             fontsize=12,
             fontweight="bold",
         )
-    ax.set_ylabel("تعداد اعضا")
+    ax.set_ylabel(fa("تعداد اعضا"))
     ax.set_ylim(0, 4)
+    ax.set_yticks([0, 1, 2, 3, 4])
+    ax.set_yticklabels([fa_num(i) for i in range(5)])
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۴ — تعداد اعضای هر خوشه در ساختار نهایی خوشه‌بندی", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۴ — تعداد اعضای هر خوشه در ساختار نهایی خوشه‌بندی"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-4_cluster_sizes.png")
 
 
 def fig_ahp_weights():
     """Figure 4-5: AHP criteria weights (horizontal bar)."""
-    criteria = [
-        "تأخیر رفت‌وبرگشتی",
-        "وابستگی سلولی",
-        "نرخ داده",
-        "بودجه لینک",
-        "مصرف انرژی",
-        "برد انتقال",
-        "هزینه بهره‌برداری سالانه",
-        "هزینه اولیه سخت‌افزار",
-    ]
+    criteria = fa_labels(
+        [
+            "تأخیر رفت‌وبرگشتی",
+            "وابستگی سلولی",
+            "نرخ داده",
+            "بودجه لینک",
+            "مصرف انرژی",
+            "برد انتقال",
+            "هزینه بهره‌برداری سالانه",
+            "هزینه اولیه سخت‌افزار",
+        ]
+    )
     weights = [8.66, 9.88, 11.08, 12.07, 12.59, 13.05, 15.74, 16.92]
 
     fig, ax = plt.subplots(figsize=(9, 6))
@@ -176,27 +227,36 @@ def fig_ahp_weights():
     bars = ax.barh(y_pos, weights, color=COLORS["primary"], height=0.6, edgecolor="white")
     ax.set_yticks(y_pos)
     ax.set_yticklabels(criteria)
-    ax.set_xlabel("سهم (%)")
+    ax.set_xlabel(fa("سهم (%)"))
     ax.set_xlim(0, 20)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _pos: fa_num(x, decimals=0)))
     for bar, w in zip(bars, weights):
-        ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2, f"{w:.2f}%", va="center", fontsize=9)
+        ax.text(
+            bar.get_width() + 0.3,
+            bar.get_y() + bar.get_height() / 2,
+            fa_num(w, decimals=2, percent=True),
+            va="center",
+            fontsize=9,
+        )
     ax.grid(True, axis="x", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۵ — وزن نهایی معیارهای تصمیم‌گیری بر اساس روش AHP", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۵ — وزن نهایی معیارهای تصمیم‌گیری بر اساس روش AHP"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-5_ahp_weights.png")
 
 
 def fig_base_vs_adaptive_weights():
     """Figure 4-6: Base AHP vs adaptive weights (grouped bar)."""
-    criteria = [
-        "تأخیر",
-        "مصرف انرژی",
-        "نرخ داده",
-        "بودجه لینک",
-        "هزینه سخت‌افزار",
-        "برد انتقال",
-        "هزینه بهره‌برداری",
-        "وابستگی سلولی",
-    ]
+    criteria = fa_labels(
+        [
+            "تأخیر",
+            "مصرف انرژی",
+            "نرخ داده",
+            "بودجه لینک",
+            "هزینه سخت‌افزار",
+            "برد انتقال",
+            "هزینه بهره‌برداری",
+            "وابستگی سلولی",
+        ]
+    )
     base = [0.0866, 0.1259, 0.1108, 0.1207, 0.1692, 0.1305, 0.1574, 0.0988]
     adaptive = [0.0164, 0.0238, 0.0345, 0.0620, 0.0869, 0.1821, 0.2197, 0.3747]
 
@@ -204,30 +264,33 @@ def fig_base_vs_adaptive_weights():
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(11, 6))
-    ax.bar(x - width / 2, base, width, label="وزن پایه AHP", color=COLORS["primary"], alpha=0.85)
-    ax.bar(x + width / 2, adaptive, width, label="وزن تطبیقی نهایی", color=COLORS["accent"], alpha=0.85)
+    ax.bar(x - width / 2, base, width, label=fa("وزن پایه AHP"), color=COLORS["primary"], alpha=0.85)
+    ax.bar(x + width / 2, adaptive, width, label=fa("وزن تطبیقی نهایی"), color=COLORS["accent"], alpha=0.85)
     ax.set_xticks(x)
     ax.set_xticklabels(criteria, rotation=35, ha="right")
-    ax.set_ylabel("وزن معیار")
+    ax.set_ylabel(fa("وزن معیار"))
     ax.set_ylim(0, 0.45)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=2)))
     ax.legend(loc="upper left")
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۶ — مقایسه وزن پایه و وزن تطبیقی معیارهای تصمیم‌گیری", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۶ — مقایسه وزن پایه و وزن تطبیقی معیارهای تصمیم‌گیری"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-6_base_vs_adaptive_weights.png")
 
 
 def fig_adaptive_weights_only():
     """Figure 4-7: Adaptive weights in main scenario."""
-    criteria = [
-        "تأخیر رفت‌وبرگشتی",
-        "مصرف انرژی",
-        "نرخ داده",
-        "بودجه لینک",
-        "هزینه سخت‌افزار",
-        "برد انتقال",
-        "هزینه بهره‌برداری سالانه",
-        "وابستگی سلولی",
-    ]
+    criteria = fa_labels(
+        [
+            "تأخیر رفت‌وبرگشتی",
+            "مصرف انرژی",
+            "نرخ داده",
+            "بودجه لینک",
+            "هزینه سخت‌افزار",
+            "برد انتقال",
+            "هزینه بهره‌برداری سالانه",
+            "وابستگی سلولی",
+        ]
+    )
     weights = [0.0164, 0.0238, 0.0345, 0.0620, 0.0869, 0.1821, 0.2197, 0.3747]
     pct = [w * 100 for w in weights]
 
@@ -237,11 +300,18 @@ def fig_adaptive_weights_only():
     bars = ax.barh(y_pos, pct, color=colors, height=0.6, edgecolor="white")
     ax.set_yticks(y_pos)
     ax.set_yticklabels(criteria)
-    ax.set_xlabel("سهم (%)")
+    ax.set_xlabel(fa("سهم (%)"))
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=0)))
     for bar, p in zip(bars, pct):
-        ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2, f"{p:.1f}%", va="center", fontsize=9)
+        ax.text(
+            bar.get_width() + 0.5,
+            bar.get_y() + bar.get_height() / 2,
+            fa_num(p, decimals=1, percent=True),
+            va="center",
+            fontsize=9,
+        )
     ax.grid(True, axis="x", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۷ — وزن تطبیقی معیارها در سناریوی اصلی", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۷ — وزن تطبیقی معیارها در سناریوی اصلی"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-7_adaptive_weights.png")
 
 
@@ -257,15 +327,16 @@ def fig_topsis_closeness():
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.02,
-            f"{c:.4f}",
+            fa_num(c, decimals=4),
             ha="center",
             va="bottom",
             fontsize=10,
         )
-    ax.set_ylabel("ضریب نزدیکی (Cᵢ)")
+    ax.set_ylabel(fa("ضریب نزدیکی (C_i)"))
     ax.set_ylim(0, 1.0)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=1)))
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۸ — مقایسه ضریب نزدیکی فناوری‌ها در روش TOPSIS", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۸ — مقایسه ضریب نزدیکی فناوری‌ها در روش TOPSIS"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-8_topsis_closeness.png")
 
 
@@ -280,15 +351,16 @@ def fig_vikor_indices():
     width = 0.25
 
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.bar(x - width, s_vals, width, label="Sᵢ (سودمندی گروهی)", color=COLORS["primary"])
-    ax.bar(x, r_vals, width, label="Rᵢ (نارضایتی فردی)", color=COLORS["accent"])
-    ax.bar(x + width, q_vals, width, label="Qᵢ (شاخص نهایی)", color=COLORS["secondary"])
+    ax.bar(x - width, s_vals, width, label=fa("S_i (سودمندی گروهی)"), color=COLORS["primary"])
+    ax.bar(x, r_vals, width, label=fa("R_i (نارضایتی فردی)"), color=COLORS["accent"])
+    ax.bar(x + width, q_vals, width, label=fa("Q_i (شاخص نهایی)"), color=COLORS["secondary"])
     ax.set_xticks(x)
     ax.set_xticklabels(techs)
-    ax.set_ylabel("مقدار شاخص")
+    ax.set_ylabel(fa("مقدار شاخص"))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=3)))
     ax.legend(loc="upper left")
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۹ — مقایسه فناوری‌ها بر اساس شاخص‌های روش VIKOR", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۹ — مقایسه فناوری‌ها بر اساس شاخص‌های روش VIKOR"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-9_vikor_indices.png")
 
 
@@ -300,11 +372,19 @@ def fig_vikor_q_only():
     fig, ax = plt.subplots(figsize=(7, 5))
     bars = ax.bar(techs, q_vals, color=[COLORS["success"], COLORS["accent"], COLORS["secondary"]], width=0.55)
     for bar, q in zip(bars, q_vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, f"{q:.3f}", ha="center", fontsize=10)
-    ax.set_ylabel("شاخص نهایی Qᵢ")
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.02,
+            fa_num(q, decimals=3),
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+    ax.set_ylabel(fa("شاخص نهایی Q_i"))
     ax.set_ylim(0, 1.15)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=1)))
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۹ — مقایسه فناوری‌ها بر اساس شاخص نهایی روش VIKOR", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۹ — مقایسه فناوری‌ها بر اساس شاخص نهایی روش VIKOR"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-9b_vikor_q_index.png")
 
 
@@ -317,22 +397,24 @@ def fig_copras_results():
     fig, ax1 = plt.subplots(figsize=(8, 5))
     x = np.arange(len(techs))
     width = 0.35
-    ax1.bar(x - width / 2, q_vals, width, label="Qᵢ (اهمیت نسبی)", color=COLORS["primary"])
-    ax1.set_ylabel("Qᵢ")
+    ax1.bar(x - width / 2, q_vals, width, label=fa("Q_i (اهمیت نسبی)"), color=COLORS["primary"])
+    ax1.set_ylabel("Q_i")
     ax1.set_xticks(x)
     ax1.set_xticklabels(techs)
+    ax1.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=2)))
     ax1.grid(True, axis="y", alpha=0.3, linestyle="--")
 
     ax2 = ax1.twinx()
-    ax2.bar(x + width / 2, n_vals, width, label="Nᵢ (درجه مطلوبیت %)", color=COLORS["accent"], alpha=0.85)
-    ax2.set_ylabel("Nᵢ (%)")
+    ax2.bar(x + width / 2, n_vals, width, label=fa("N_i (درجه مطلوبیت %)"), color=COLORS["accent"], alpha=0.85)
+    ax2.set_ylabel(fa("N_i (%)"))
     ax2.set_ylim(0, 115)
+    ax2.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=0)))
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
 
-    fig.suptitle("نمودار ۴-۱۰ — مقایسه فناوری‌ها بر اساس روش COPRAS", fontsize=13, y=1.02)
+    fig.suptitle(fa("نمودار ۴-۱۰ — مقایسه فناوری‌ها بر اساس روش COPRAS"), fontsize=13, y=1.02)
     save_fig(fig, "fig4-10_copras_results.png")
 
 
@@ -352,13 +434,14 @@ def fig_ranking_comparison():
     ax.bar(x + width, copras, width, label="COPRAS", color=COLORS["secondary"])
     ax.set_xticks(x)
     ax.set_xticklabels(techs)
-    ax.set_ylabel("رتبه")
+    ax.set_ylabel(fa("رتبه"))
     ax.set_yticks([1, 2, 3])
+    ax.set_yticklabels([fa_num(i) for i in [1, 2, 3]])
     ax.invert_yaxis()
     ax.legend(loc="lower right")
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
     fig.suptitle(
-        "نمودار ۴-۱۱ — مقایسه رتبه فناوری‌ها در روش‌های TOPSIS، VIKOR و COPRAS",
+        fa("نمودار ۴-۱۱ — مقایسه رتبه فناوری‌ها در روش‌های TOPSIS، VIKOR و COPRAS"),
         fontsize=13,
         y=1.02,
     )
@@ -367,7 +450,7 @@ def fig_ranking_comparison():
 
 def fig_spearman_correlation():
     """Figure 4-12: Spearman rank correlation between methods."""
-    pairs = ["TOPSIS\nو VIKOR", "TOPSIS\nو COPRAS", "VIKOR\nو COPRAS"]
+    pairs = fa_labels(["TOPSIS\nو VIKOR", "TOPSIS\nو COPRAS", "VIKOR\nو COPRAS"])
     rho = [1.0000, 1.0000, 1.0000]
 
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -376,18 +459,23 @@ def fig_spearman_correlation():
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() - 0.08,
-            "1.0000",
+            fa_num(1.0, decimals=4),
             ha="center",
             va="top",
             fontsize=11,
             fontweight="bold",
             color="white",
         )
-    ax.set_ylabel("ضریب همبستگی اسپیرمن (ρ)")
+    ax.set_ylabel(fa("ضریب همبستگی اسپیرمن (rho)"))
     ax.set_ylim(0, 1.15)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=1)))
     ax.axhline(y=1.0, color=COLORS["neutral"], linestyle="--", alpha=0.5)
     ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-    fig.suptitle("نمودار ۴-۱۲ — ضریب همبستگی رتبه‌ای اسپیرمن بین روش‌های تصمیم‌گیری", fontsize=13, y=1.02)
+    fig.suptitle(
+        fa("نمودار ۴-۱۲ — ضریب همبستگی رتبه‌ای اسپیرمن بین روش‌های تصمیم‌گیری"),
+        fontsize=13,
+        y=1.02,
+    )
     save_fig(fig, "fig4-12_spearman_correlation.png")
 
 
