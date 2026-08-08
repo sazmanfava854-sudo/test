@@ -109,6 +109,10 @@ input[readonly].pdate {
   background: #fff;
 }
 
+.datepicker-container {
+  z-index: 2000 !important;
+}
+
 .unsent-notes {
   margin: 14px 0 0;
   padding: 12px 14px 12px 28px;
