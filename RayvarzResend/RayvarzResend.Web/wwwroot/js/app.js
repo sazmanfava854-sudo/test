@@ -510,7 +510,7 @@ function formatTahatorCheck(d) {
     `FicheNo ورودی: ${d.ficheNo}`,
     d.pair ? `جفت: ۱۵۷=${d.pair.amountFicheNo} | ۱۵۸=${d.pair.incomeFicheNo}` : 'جفت: —',
     pairLines.length ? ['--- وضعیت هر فیش ---', ...pairLines].join('\n') : '',
-    `NeedsSend (هر کدام): ${d.needsSend}`,
+    `NeedsSend (حداقل یکی از جفت): ${d.needsSend}`,
     f ? `فیش ورودی — Payable: ${Number(f.payable || 0).toLocaleString()}` : '',
     d.pendingStoredSnapshot
       ? `Snapshot Pending: Id=${d.pendingStoredSnapshot.snapshotId}`
