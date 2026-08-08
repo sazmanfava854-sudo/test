@@ -90,9 +90,8 @@ function formatShamsiDisplay(yyyymmdd) {
 function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
-    single: $('tabSingle'),
     unsent: $('tabUnsent'),
-    tahator: $('tabTahator')
+    single: $('tabSingle')
   };
 
   tabs.forEach((tab) => {
@@ -110,6 +109,36 @@ function setupMainTabs() {
         panel.classList.toggle('active', show);
       });
     });
+  });
+}
+
+function getSingleFicheKind() {
+  return $('singleFicheKind')?.value || 'Income';
+}
+
+function updateSingleFormPanels() {
+  const kind = getSingleFicheKind();
+  const isTahator = kind === 'Tahator';
+  const regular = $('singleRegularPanel');
+  const tahator = $('singleTahatorPanel');
+  if (regular) regular.hidden = isTahator;
+  if (tahator) tahator.hidden = !isTahator;
+  if (isTahator) {
+    $('ficheSection').hidden = true;
+    $('btnPreview').disabled = true;
+    $('btnSend').disabled = true;
+  }
+}
+
+function initDatePickers() {
+  if (typeof window.jQuery === 'undefined' || !window.jQuery.fn?.persianDatepicker) return;
+  window.jQuery('.pdate').persianDatepicker({
+    format: 'YYYY/MM/DD',
+    autoClose: true,
+    initialValue: false,
+    calendar: { persian: { locale: 'fa' } },
+    navigator: { enabled: true },
+    toolbox: { enabled: true, calendarSwitch: { enabled: false } }
   });
 }
 
@@ -383,17 +412,8 @@ async function init() {
     const res = await fetch('/api/config');
     config = await parseJsonResponse(res);
   } catch (e) {
-    $('configBadge').textContent = 'خطا در اتصال به API — dotnet run را اجرا کنید';
     alert(e.message);
     return;
-  }
-  const badge = $('configBadge');
-  const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
-  badge.textContent = config.dryRun
-    ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
-    : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
-  if (!config.dryRun) {
-    badge.style.background = 'rgba(220, 53, 69, 0.35)';
   }
 
   const branchSel = $('branch');
@@ -412,8 +432,11 @@ async function init() {
   $('docDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
+  $('singleFicheKind')?.addEventListener('change', updateSingleFormPanels);
   syncFundFromBranch();
+  updateSingleFormPanels();
   setupMainTabs();
+  initDatePickers();
 }
 
 function bindClick(id, handler) {
@@ -434,6 +457,8 @@ function setupEventHandlers() {
   }
 
   bindClick('btnLoad', async () => {
+  const kind = getSingleFicheKind();
+  if (kind === 'Tahator') return alert('برای تهاتر از دکمه‌های بررسی/ارسال همان فرم استفاده کنید.');
   const value = $('identifierValue').value.trim();
   if (!value) return alert('شناسه فیش را وارد کنید');
 
@@ -453,6 +478,12 @@ function setupEventHandlers() {
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
     currentFiche = data;
+    if (kind === 'Income' && data.category !== 'Income') {
+      throw new Error('نوع فیش با شهرسازی انتخاب‌شده مطابقت ندارد');
+    }
+    if (kind === 'Duty' && data.category !== 'DutyNosazi' && data.category !== 'DutySenfi') {
+      throw new Error('نوع فیش با نوسازی/صنفی انتخاب‌شده مطابقت ندارد');
+    }
     applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
     renderFiche(data);

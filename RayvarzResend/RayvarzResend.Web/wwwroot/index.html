@@ -7,7 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=13" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css" />
+  <link rel="stylesheet" href="css/style.css?v=15" />
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -21,59 +22,159 @@
             <h1>ارسال مجدد فیش به رایورز</h1>
           </div>
         </div>
-        <div id="configBadge" class="badge">...</div>
       </div>
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active" data-tab="single" role="tab" aria-selected="true">ارسال تکی</button>
-      <button type="button" class="main-tab" data-tab="unsent" role="tab" aria-selected="false">فیش‌های ارسال نشده</button>
-      <button type="button" class="main-tab" data-tab="tahator" role="tab" aria-selected="false">تهاتر</button>
+      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش‌های ارسال نشده</button>
+      <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
     </nav>
 
-    <div id="tabSingle" class="tab-panel active" role="tabpanel">
-    <section class="card card-enter">
+    <div id="tabUnsent" class="tab-panel active" role="tabpanel">
+    <section class="card unsent-card card-enter">
       <div class="card-head">
-        <span class="card-icon" aria-hidden="true">📋</span>
-        <h2>ورود فیش</h2>
+        <span class="card-icon" aria-hidden="true">📤</span>
+        <h2>فیش‌های ارسال نشده به رایورز</h2>
       </div>
-      <div class="form-grid">
-        <label class="field">
-          <span class="field-label">نوع شناسه</span>
-          <select id="identifierType">
-            <option value="FicheNo">شماره فیش (FicheNo)</option>
-            <option value="BillPaymentKey">BillID + PaymentID</option>
+      <div class="form-grid unsent-form-grid">
+        <label class="field field-required">
+          <span class="field-label">نوع فیش</span>
+          <select id="unsentFicheKind">
+            <option value="Income">شهرسازی</option>
+            <option value="Duty">نوسازی و صنفی</option>
           </select>
         </label>
-        <label class="field field-wide">
-          <span class="field-label">مقدار شناسه</span>
-          <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
+        <label class="field field-required">
+          <span class="field-label">از تاریخ</span>
+          <input id="unsentFromDate" class="pdate" type="text" placeholder="1402/08/01" required autocomplete="off" />
         </label>
-        <label class="field">
+        <label class="field field-required">
+          <span class="field-label">تا تاریخ</span>
+          <input id="unsentToDate" class="pdate" type="text" placeholder="1402/08/20" required autocomplete="off" />
+        </label>
+        <label class="field field-required">
           <span class="field-label">شعبه / منطقه</span>
-          <select id="branch"></select>
+          <select id="unsentDistrict">
+            <option value="">همه مناطق</option>
+          </select>
         </label>
         <label class="field">
-          <span class="field-label">کد منبع (Fund)</span>
-          <select id="fund"></select>
+          <span class="field-label">شماره فیش</span>
+          <input id="unsentFicheNo" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
         <label class="field">
-          <span class="field-label">DocDate</span>
-          <input id="docDate" type="text" placeholder="1404/05/05" />
+          <span class="field-label">شناسه قبض</span>
+          <input id="unsentBillId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
         <label class="field">
-          <span class="field-label">ActDate</span>
-          <input id="actDate" type="text" placeholder="1404/05/05" />
-        </label>
-        <label class="field">
-          <span class="field-label">Due</span>
-          <input id="dueDate" type="text" placeholder="1404/05/05" />
+          <span class="field-label">شناسه پرداخت</span>
+          <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
       </div>
       <div class="actions">
-        <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
-        <button id="btnPreview" class="btn secondary" type="button" disabled>پیش‌نمایش XML</button>
-        <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
+        <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
+        <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
+      </div>
+      <div class="subsection" id="unsentResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="unsentSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="unsentCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="unsentTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>کد نوسازی</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+                <th>تاریخ پرداخت بانک</th>
+                <th>تاریخ پرداخت دستی</th>
+                <th>شماره فیش</th>
+                <th>مبلغ</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <pre id="unsentResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
+    <div id="tabSingle" class="tab-panel" role="tabpanel" hidden>
+    <section class="card card-enter">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">📋</span>
+        <h2>ارسال تکی</h2>
+      </div>
+      <div class="form-grid">
+        <label class="field field-required">
+          <span class="field-label">نوع فیش</span>
+          <select id="singleFicheKind">
+            <option value="Income">شهرسازی</option>
+            <option value="Duty">نوسازی و صنفی</option>
+            <option value="Tahator">تهاتر</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="singleRegularPanel">
+        <div class="form-grid">
+          <label class="field">
+            <span class="field-label">نوع شناسه</span>
+            <select id="identifierType">
+              <option value="FicheNo">شماره فیش (FicheNo)</option>
+              <option value="BillPaymentKey">BillID + PaymentID</option>
+            </select>
+          </label>
+          <label class="field field-wide">
+            <span class="field-label">مقدار شناسه</span>
+            <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">شعبه / منطقه</span>
+            <select id="branch"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">کد منبع (Fund)</span>
+            <select id="fund"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">DocDate</span>
+            <input id="docDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">ActDate</span>
+            <input id="actDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">Due</span>
+            <input id="dueDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
+          <button id="btnPreview" class="btn secondary" type="button" disabled>پیش‌نمایش XML</button>
+          <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
+        </div>
+      </div>
+
+      <div id="singleTahatorPanel" hidden>
+        <div class="tahator-row">
+          <label class="field field-grow">
+            <span class="field-label">شماره فیش تهاتر</span>
+            <input id="tahatorFicheNo" type="text" placeholder="جفت ۱۵۷+۱۵۸" autocomplete="off" />
+          </label>
+          <div class="actions actions-inline">
+            <button id="btnTahatorCheck" class="btn secondary" type="button">بررسی</button>
+            <button id="btnTahatorSend" class="btn danger" type="button">ارسال به رایورز</button>
+          </div>
+        </div>
+        <pre id="tahatorResultBox" class="code-block" hidden></pre>
       </div>
     </section>
 
@@ -118,107 +219,10 @@
       <pre id="xmlBox" class="code-block"></pre>
     </section>
     </div>
-
-    <div id="tabUnsent" class="tab-panel" role="tabpanel" hidden>
-    <section class="card unsent-card card-enter">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">📤</span>
-        <h2>فیش‌های ارسال نشده به رایورز</h2>
-      </div>
-      <p class="hint">فیش‌های تاییدشده که در <code>Accounting_DocHeader</code> نیستند. فیلتر تاریخ بر اساس <code>PaymentDate</code> یا <code>BankPaymentDate</code> است.</p>
-      <div class="form-grid unsent-form-grid">
-        <label class="field field-required">
-          <span class="field-label">نوع فیش</span>
-          <select id="unsentFicheKind">
-            <option value="Income">شهرسازی</option>
-            <option value="Duty">نوسازی و صنفی</option>
-          </select>
-        </label>
-        <label class="field">
-          <span class="field-label">شماره فیش</span>
-          <input id="unsentFicheNo" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
-        </label>
-        <label class="field field-required">
-          <span class="field-label">از تاریخ</span>
-          <input id="unsentFromDate" type="text" placeholder="1402/08/01" required />
-        </label>
-        <label class="field field-required">
-          <span class="field-label">تا تاریخ</span>
-          <input id="unsentToDate" type="text" placeholder="1402/08/20" required />
-        </label>
-        <label class="field">
-          <span class="field-label">شناسه قبض</span>
-          <input id="unsentBillId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span class="field-label">شناسه پرداخت</span>
-          <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
-        </label>
-        <label class="field field-required">
-          <span class="field-label">شعبه / منطقه</span>
-          <select id="unsentDistrict">
-            <option value="">همه مناطق</option>
-          </select>
-        </label>
-      </div>
-      <ul class="unsent-notes">
-        <li>نوع فیش کمبو باکس — قابلیت انتخاب: <strong>شهرسازی</strong> / <strong>نوسازی و صنفی</strong></li>
-        <li>منطقه کمبو باکس — همان لیست <strong>شعبه / منطقه</strong> تب ارسال تکی (۲۰۱–۲۱۲ و ثامن)</li>
-      </ul>
-      <div class="actions">
-        <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
-      </div>
-      <div class="subsection" id="unsentResultsSection" hidden>
-        <div class="unsent-toolbar">
-          <label class="check-all-label">
-            <input id="unsentSelectAll" type="checkbox" />
-            <span>انتخاب همه</span>
-          </label>
-          <span id="unsentCountLabel" class="unsent-count"></span>
-        </div>
-        <div class="table-wrap">
-          <table id="unsentTable">
-            <thead>
-              <tr>
-                <th class="col-check"></th>
-                <th>کد نوسازی</th>
-                <th>شناسه قبض</th>
-                <th>شناسه پرداخت</th>
-                <th>تاریخ پرداخت بانک</th>
-                <th>تاریخ پرداخت دستی</th>
-                <th>شماره فیش</th>
-                <th>مبلغ</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-      <pre id="unsentResultBox" class="code-block" hidden></pre>
-    </section>
-    </div>
-
-    <div id="tabTahator" class="tab-panel" role="tabpanel" hidden>
-    <section class="card tahator-card card-enter">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">⇄</span>
-        <h2>تهاتر</h2>
-      </div>
-      <div class="tahator-row">
-        <label class="field field-grow">
-          <span class="field-label">شماره فیش</span>
-          <input id="tahatorFicheNo" type="text" placeholder="50533511617 (جفت ۱۵۷+۱۵۸)" autocomplete="off" />
-        </label>
-        <div class="actions actions-inline">
-          <button id="btnTahatorCheck" class="btn secondary" type="button">بررسی</button>
-          <button id="btnTahatorSend" class="btn danger" type="button">ارسال به رایورز</button>
-        </div>
-      </div>
-      <pre id="tahatorResultBox" class="code-block" hidden></pre>
-    </section>
-    </div>
   </div>
-  <script src="js/app.js?v=16" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/persian-date@1.1.0/dist/persian-date.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
+  <script src="js/app.js?v=18" defer></script>
 </body>
 </html>
