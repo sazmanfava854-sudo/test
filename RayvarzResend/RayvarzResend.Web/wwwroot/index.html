@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=15" />
+  <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
+  <link rel="stylesheet" href="css/style.css?v=16" />
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -46,11 +46,17 @@
         </label>
         <label class="field field-required">
           <span class="field-label">از تاریخ</span>
-          <input id="unsentFromDate" class="pdate" type="text" placeholder="1402/08/01" required autocomplete="off" readonly />
+          <div class="date-input-wrap">
+            <input id="unsentFromDate" data-jdp type="text" placeholder="1402/08/01" required autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="unsentFromDate" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
         </label>
         <label class="field field-required">
           <span class="field-label">تا تاریخ</span>
-          <input id="unsentToDate" class="pdate" type="text" placeholder="1402/08/20" required autocomplete="off" readonly />
+          <div class="date-input-wrap">
+            <input id="unsentToDate" data-jdp type="text" placeholder="1402/08/20" required autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="unsentToDate" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
         </label>
         <label class="field field-required">
           <span class="field-label">شعبه / منطقه</span>
@@ -147,15 +153,24 @@
           </label>
           <label class="field">
             <span class="field-label">تاریخ سند</span>
-            <input id="docDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" readonly />
+            <div class="date-input-wrap">
+              <input id="docDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="docDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
           </label>
           <label class="field">
             <span class="field-label">تاریخ عملیات</span>
-            <input id="actDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" readonly />
+            <div class="date-input-wrap">
+              <input id="actDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="actDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
           </label>
           <label class="field">
             <span class="field-label">تاریخ سررسید</span>
-            <input id="dueDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" readonly />
+            <div class="date-input-wrap">
+              <input id="dueDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="dueDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
           </label>
         </div>
         <div class="actions">
@@ -222,9 +237,7 @@
     </section>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/persian-date@1.1.0/dist/persian-date.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
-  <script src="js/app.js?v=19"></script>
+  <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
+  <script src="js/app.js?v=20"></script>
 </body>
 </html>

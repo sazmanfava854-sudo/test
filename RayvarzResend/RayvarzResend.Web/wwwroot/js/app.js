@@ -130,23 +130,34 @@ function updateSingleFormPanels() {
   }
 }
 
+let datePickersReady = false;
+
 function initDatePickers() {
-  const jq = window.jQuery;
-  if (!jq) return;
-  const opts = {
-    format: 'YYYY/MM/DD',
-    autoClose: true,
-    initialValue: false,
-    observer: true,
-    calendar: { persian: { locale: 'fa' } },
-    navigator: { enabled: true },
-    toolbox: { enabled: true, calendarSwitch: { enabled: false } }
-  };
-  jq('.pdate').each(function initOne() {
-    const el = jq(this);
-    if (el.data('pDatepicker') || el.data('persianDatepicker')) return;
-    if (jq.fn.pDatepicker) el.pDatepicker(opts);
-    else if (jq.fn.persianDatepicker) el.persianDatepicker(opts);
+  if (typeof jalaliDatepicker === 'undefined') {
+    console.warn('jalaliDatepicker load نشد — CDN را چک کنید');
+    return;
+  }
+  if (!datePickersReady) {
+    jalaliDatepicker.startWatch({
+      time: false,
+      autoShow: true,
+      autoHide: true,
+      hideAfterChange: true,
+      persianDigits: false,
+      zIndex: 2500,
+      separatorChars: { date: '/', between: ' ', time: ':' }
+    });
+    datePickersReady = true;
+  }
+
+  document.querySelectorAll('.btn-date-icon').forEach((btn) => {
+    if (btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const input = document.getElementById(btn.dataset.for || '');
+      if (input) jalaliDatepicker.show(input);
+    });
   });
 }
 

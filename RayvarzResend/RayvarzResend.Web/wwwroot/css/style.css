@@ -104,13 +104,37 @@ body {
   margin-top: 4px;
 }
 
-input[readonly].pdate {
-  cursor: pointer;
-  background: #fff;
+.date-input-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
 }
 
-.datepicker-container {
-  z-index: 2000 !important;
+.date-input-wrap input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.btn-date-icon {
+  flex: 0 0 auto;
+  width: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-date-icon:hover {
+  background: #fff;
+  border-color: var(--primary);
+}
+
+jdp-container {
+  z-index: 2500 !important;
 }
 
 .unsent-notes {
