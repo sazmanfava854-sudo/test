@@ -513,6 +513,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               SELECT TOP (@max)
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
                      NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
                      '' AS BnkAcntNo
               FROM dbo.Income_Fiche f WITH (NOLOCK)
@@ -523,7 +524,6 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
                 AND f.EumFicheStatus <> 4
-                AND f.CI_IncomeAccountGroup NOT IN (@g157, @g158)
                 AND (
                       (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
                        AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
@@ -540,13 +540,13 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               SELECT TOP (@max)
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
                      '' AS District, '' AS BnkAcntNo
               FROM dbo.Income_Fiche f WITH (NOLOCK)
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
                 AND f.EumFicheStatus <> 4
-                AND f.CI_IncomeAccountGroup NOT IN (@g157, @g158)
                 AND (
                       (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
                        AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
@@ -653,15 +653,13 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : $"%{billId}%");
         cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : $"%{paymentId}%");
         cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
-        if (!isDuty)
-        {
-            cmd.Parameters.AddWithValue("@g157", TahatorRowBuilder.IncomeAccountGroupTahatorAmount);
-            cmd.Parameters.AddWithValue("@g158", TahatorRowBuilder.IncomeAccountGroupTahatorIncome);
-        }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
+            var group = isDuty ? 0 : ReadInt32(reader, "IncomeAccountGroup");
+            var isTahator = !isDuty && group is TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+                or TahatorRowBuilder.IncomeAccountGroupTahatorIncome;
             items.Add(new UnsentFicheListItem
             {
                 FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
@@ -677,7 +675,10 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     : reader.GetString(reader.GetOrdinal("District")).Trim(),
                 BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo"))
                     ? ""
-                    : reader.GetString(reader.GetOrdinal("BnkAcntNo")).Trim()
+                    : reader.GetString(reader.GetOrdinal("BnkAcntNo")).Trim(),
+                IncomeAccountGroup = isDuty ? null : group,
+                IsTahator = isTahator,
+                SubKindLabel = isDuty ? "نوسازی/صنفی" : isTahator ? "تهاتر" : "درآمدی"
             });
         }
 

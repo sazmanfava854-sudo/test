@@ -104,8 +104,9 @@ body {
   margin-top: 4px;
 }
 
-.datepicker-container {
-  z-index: 2000 !important;
+input[readonly].pdate {
+  cursor: pointer;
+  background: #fff;
 }
 
 .unsent-notes {

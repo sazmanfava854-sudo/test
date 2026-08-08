@@ -42,7 +42,7 @@ function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه م�
   config.branches.forEach((b) => {
     const opt = document.createElement('option');
     opt.value = b.id;
-    opt.textContent = `${b.id} — ${b.name}`;
+    opt.textContent = b.name;
     selectEl.appendChild(opt);
   });
 }
@@ -131,14 +131,22 @@ function updateSingleFormPanels() {
 }
 
 function initDatePickers() {
-  if (typeof window.jQuery === 'undefined' || !window.jQuery.fn?.persianDatepicker) return;
-  window.jQuery('.pdate').persianDatepicker({
+  const jq = window.jQuery;
+  if (!jq) return;
+  const opts = {
     format: 'YYYY/MM/DD',
     autoClose: true,
     initialValue: false,
+    observer: true,
     calendar: { persian: { locale: 'fa' } },
     navigator: { enabled: true },
     toolbox: { enabled: true, calendarSwitch: { enabled: false } }
+  };
+  jq('.pdate').each(function initOne() {
+    const el = jq(this);
+    if (el.data('pDatepicker') || el.data('persianDatepicker')) return;
+    if (jq.fn.pDatepicker) el.pDatepicker(opts);
+    else if (jq.fn.persianDatepicker) el.persianDatepicker(opts);
   });
 }
 
@@ -150,9 +158,11 @@ function getSelectedUnsentFicheNos() {
 
 function updateUnsentSendButton() {
   const btn = $('btnUnsentSend');
+  const planBtn = $('btnUnsentPlan');
   if (!btn) return;
   const selected = getSelectedUnsentFicheNos().length;
   btn.disabled = selected === 0;
+  if (planBtn) planBtn.disabled = selected === 0;
   btn.textContent = selected > 0
     ? `ارسال ${selected} فیش انتخاب‌شده`
     : 'ارسال انتخاب‌شده‌ها';
@@ -168,7 +178,7 @@ function renderUnsentTable(items) {
 
   if (!unsentItems.length) {
     section.hidden = false;
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
     if (countLabel) countLabel.textContent = '۰ مورد';
     if (selectAll) selectAll.checked = false;
     updateUnsentSendButton();
@@ -179,6 +189,7 @@ function renderUnsentTable(items) {
   tbody.innerHTML = unsentItems.map((item) => `
     <tr>
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}" /></td>
+      <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${item.bnkAcntNo || '-'}</td>
       <td>${item.billId || '-'}</td>
       <td>${item.paymentId || '-'}</td>
@@ -437,6 +448,7 @@ async function init() {
   updateSingleFormPanels();
   setupMainTabs();
   initDatePickers();
+  window.addEventListener('load', initDatePickers);
 }
 
 function bindClick(id, handler) {
@@ -680,6 +692,46 @@ function setupEventHandlers() {
     }
   });
 
+  bindClick('btnUnsentPlan', async () => {
+    const selected = getSelectedUnsentFicheNos();
+    if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
+
+    const btn = $('btnUnsentPlan');
+    btn.disabled = true;
+    const box = $('unsentResultBox');
+    box.hidden = false;
+    box.textContent = 'در حال بررسی مسیر ارسال هر فیش…';
+
+    try {
+      const res = await fetch('/api/unsent/plan-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ficheKind: $('unsentFicheKind').value,
+          ficheNos: selected,
+          resetStatus: true
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+      const lines = (data.items || []).map((p) =>
+        `${p.ficheNo} → ${p.sendPath}${p.canSend ? ' ✓' : ' ✗'} | ${p.detail || ''}${p.blockReason ? ' — ' + p.blockReason : ''}${p.tahatorPairFicheNo ? ' | جفت: ' + p.tahatorPairFicheNo : ''}`
+      );
+      box.textContent = [
+        '=== برنامه ارسال دسته‌ای (بدون ارسال واقعی) ===',
+        'برای هر فیش: Income=درآمدی | Tahator=تهاتر ۱۵۷+۱۵۸ | Duty=نوسازی/صنفی',
+        '',
+        ...lines
+      ].join('\n');
+    } catch (e) {
+      box.textContent = e.message;
+      alert(e.message);
+    } finally {
+      updateUnsentSendButton();
+    }
+  });
+
   bindClick('btnUnsentSend', async () => {
     const selected = getSelectedUnsentFicheNos();
     if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
@@ -712,7 +764,7 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
       const lines = (data.results || []).map((r) =>
-        `${r.ficheNo}: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
+        `${r.ficheNo} [${r.sendPath || '-'}]: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
       );
       box.textContent = [
         '=== نتیجه ارسال دسته‌ای ===',

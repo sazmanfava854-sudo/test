@@ -26,7 +26,7 @@
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش‌های ارسال نشده</button>
+      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش های جمعی</button>
       <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
     </nav>
 
@@ -34,7 +34,7 @@
     <section class="card unsent-card card-enter">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📤</span>
-        <h2>فیش‌های ارسال نشده به رایورز</h2>
+        <h2>فیش های جمعی</h2>
       </div>
       <div class="form-grid unsent-form-grid">
         <label class="field field-required">
@@ -46,11 +46,11 @@
         </label>
         <label class="field field-required">
           <span class="field-label">از تاریخ</span>
-          <input id="unsentFromDate" class="pdate" type="text" placeholder="1402/08/01" required autocomplete="off" />
+          <input id="unsentFromDate" class="pdate" type="text" placeholder="1402/08/01" required autocomplete="off" readonly />
         </label>
         <label class="field field-required">
           <span class="field-label">تا تاریخ</span>
-          <input id="unsentToDate" class="pdate" type="text" placeholder="1402/08/20" required autocomplete="off" />
+          <input id="unsentToDate" class="pdate" type="text" placeholder="1402/08/20" required autocomplete="off" readonly />
         </label>
         <label class="field field-required">
           <span class="field-label">شعبه / منطقه</span>
@@ -73,6 +73,7 @@
       </div>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
+        <button id="btnUnsentPlan" class="btn secondary" type="button" disabled>بررسی مسیر ارسال</button>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
@@ -88,6 +89,7 @@
             <thead>
               <tr>
                 <th class="col-check"></th>
+                <th>نوع</th>
                 <th>کد نوسازی</th>
                 <th>شناسه قبض</th>
                 <th>شناسه پرداخت</th>
@@ -136,24 +138,24 @@
             <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
           </label>
           <label class="field">
-            <span class="field-label">شعبه / منطقه</span>
+            <span class="field-label">منطقه</span>
             <select id="branch"></select>
           </label>
           <label class="field">
-            <span class="field-label">کد منبع (Fund)</span>
+            <span class="field-label">کد منبع</span>
             <select id="fund"></select>
           </label>
           <label class="field">
-            <span class="field-label">DocDate</span>
-            <input id="docDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" />
+            <span class="field-label">تاریخ سند</span>
+            <input id="docDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" readonly />
           </label>
           <label class="field">
-            <span class="field-label">ActDate</span>
-            <input id="actDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" />
+            <span class="field-label">تاریخ عملیات</span>
+            <input id="actDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" readonly />
           </label>
           <label class="field">
-            <span class="field-label">Due</span>
-            <input id="dueDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" />
+            <span class="field-label">تاریخ سررسید</span>
+            <input id="dueDate" class="pdate" type="text" placeholder="1404/05/05" autocomplete="off" readonly />
           </label>
         </div>
         <div class="actions">
@@ -223,6 +225,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/persian-date@1.1.0/dist/persian-date.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
-  <script src="js/app.js?v=18" defer></script>
+  <script src="js/app.js?v=19"></script>
 </body>
 </html>

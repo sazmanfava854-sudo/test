@@ -529,6 +529,20 @@ app.MapPost("/api/tahator/restore", async (TahatorFicheRequest? req, TahatorRese
     }
 });
 
+app.MapPost("/api/unsent/plan-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
+{
+    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+        return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
+    try
+    {
+        return Results.Ok(await unsent.PlanBatchAsync(req, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
 app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
 {
     if (req == null)

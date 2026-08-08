@@ -296,6 +296,25 @@ public class UnsentFicheListItem
     public int Status { get; set; }
     public string? District { get; set; }
     public string? DocNotSentError { get; set; }
+    public int? IncomeAccountGroup { get; set; }
+    public bool IsTahator { get; set; }
+    public string SubKindLabel { get; set; } = "";
+}
+
+public class UnsentBatchPlanItem
+{
+    public string FicheNo { get; set; } = "";
+    public string SendPath { get; set; } = "";
+    public string Detail { get; set; } = "";
+    public bool CanSend { get; set; }
+    public string? BlockReason { get; set; }
+    public string? TahatorPairFicheNo { get; set; }
+}
+
+public class UnsentBatchPlanResult
+{
+    public int Total { get; set; }
+    public List<UnsentBatchPlanItem> Items { get; set; } = new();
 }
 
 public class UnsentFicheSearchResult
@@ -316,6 +335,7 @@ public class UnsentBatchSendRequest
 public class UnsentBatchSendItemResult
 {
     public string FicheNo { get; set; } = "";
+    public string SendPath { get; set; } = "";
     public bool Success { get; set; }
     public bool Skipped { get; set; }
     public string Message { get; set; } = "";
