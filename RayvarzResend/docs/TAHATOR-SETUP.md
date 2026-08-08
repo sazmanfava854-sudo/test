@@ -45,10 +45,10 @@ POST /api/tahator/restore
 |-------|-----|---------------------------|
 | ۲ | `SELECT` فیلدهای اصلی + ذخیره در `TahatorRestoreSnapshot` | تغییری روی Sara نیست |
 | ۳ | `UPDATE` وضعیت **۲** | `ExportPermanentDate`/`PaymentBreakDate` = **تاریخ روز**، **`PaymentDate=''` (عمدی خالی)**؛ UserConfirm* دست نخورده |
-| بعد از SOAP موفق | وضعیت **۳** | **Export/Break همان تاریخ روز می‌ماند**؛ `PaymentDate` و UserConfirm از snapshot برمی‌گردند |
-| بعد از SOAP ناموفق | بازگردانی کامل | همه فیلدها از جمله Export/Break به مقادیر اصلی |
+| بعد از SOAP موفق | وضعیت **۳** | **همه فیلدها از snapshot اصلی** — Export/Break/PaymentDate/UserConfirm |
+| بعد از SOAP ناموفق | بازگردانی کامل | همان — همه فیلدها از snapshot |
 
-`PaymentDate` قبل از تریگر ممکن است مقدار داشته باشد (مثل `1404/12/11`). در وضعیت ۲ **عمداً خالی** می‌شود؛ بعد از ارسال موفق، Export/Break روی تاریخ روز می‌ماند.
+`PaymentDate` قبل از تریگر ممکن است مقدار داشته باشد (مثل `1404/12/11`). در وضعیت ۲ **عمداً خالی** می‌شود؛ بعد از ارسال (موفق یا ناموفق) **همه تاریخ‌ها از snapshot برمی‌گردند**.
 
 تاریخ SOAP تهاتر (`DocDate`/`ActDate`/`Due`) هم پیش‌فرض **امروز** است — نه `PaymentDate` فیش.
 
@@ -59,7 +59,7 @@ POST /api/tahator/restore
 1. **`Rayvarz:DryRun=true`** در پروسه جاری → UPDATE روی Sara زده نمی‌شود  
    بعد از تغییر به `false` **حتماً Restart** کنید؛ فقط ذخیره فایل کافی نیست.
 2. فیش در **incmdocsys** یا **Accounting_DocHeader** هست → ارسال Skip می‌شود (`SkipReason`) — سند تستی با اسلش را پاک کنید و دوباره بفرستید
-3. ~~ارسال کامل Export/Break را به قبل برمی‌گرداند~~ — دیگر این‌طور نیست: بعد از SOAP موفق، Export/Break روی **تاریخ روز** می‌ماند
+3. بعد از SOAP موفق هم Export/Break به مقادیر اصلی snapshot برمی‌گردد (مثل UPDATE دستی وضعیت ۳)
 
 در پاسخ API به خط `0) ... DryRun=...` و `3a) تاریخ SOAP` نگاه کنید.
 

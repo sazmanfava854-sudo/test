@@ -384,12 +384,10 @@ public sealed class TahatorResendService
             {
                 for (var i = 0; i < snapshots.Count; i++)
                 {
-                    var (fiche, snap, snapId) = snapshots[i];
+                    var (_, snap, snapId) = snapshots[i];
                     if (snapId is not > 0) continue;
-                    var no = fiche.FicheNo.Trim();
-                    var detail = ficheResults.FirstOrDefault(r => string.Equals(r.FicheNo, no, StringComparison.Ordinal));
-                    var keepToday = detail is { Success: true } ? today : null;
-                    await RestoreFromStoredSnapshotAsync(snapId.Value, steps, ct, keepExportBreakSlash: keepToday);
+                    // پس از SOAP (موفق یا ناموفق): بازگردانی کامل از snapshot — شامل Export/Break
+                    await RestoreFromStoredSnapshotAsync(snapId.Value, steps, ct);
                     statusChangedFiches.Remove(snap.FicheNo);
                 }
             }
@@ -427,7 +425,7 @@ public sealed class TahatorResendService
                 Message = dryRun
                     ? "DryRun جفت تهاتر: SOAP ساخته شد؛ UPDATE Sara زده نشد."
                     : success
-                        ? $"جفت تهاتر ارسال شد: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}."
+                        ? $"جفت تهاتر ارسال شد: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}. تاریخ‌های Sara از snapshot اصلی بازگردانی شد."
                         : "ارسال جفت تهاتر ناموفق — جزئیات در ficheResults."
             };
         }
