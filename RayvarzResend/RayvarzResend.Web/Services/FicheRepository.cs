@@ -662,10 +662,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var ficheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim();
             items.Add(new UnsentFicheListItem
             {
-                FicheNo = ficheNo,
+                FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
                 NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
                 BillId = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
                 PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
