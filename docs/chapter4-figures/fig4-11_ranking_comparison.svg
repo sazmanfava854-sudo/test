@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="495.575pt" height="359.000781pt" viewBox="0 0 495.575 359.000781" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-08-08T19:33:59.872519</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 359.000781 
+L 495.575 359.000781 
+L 495.575 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 41.975 334.8 
+L 488.375 334.8 
+L 488.375 57.6 
+L 41.975 57.6 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 62.265909 57.6 
+L 99.158471 57.6 
+L 99.158471 145.6 
+L 62.265909 145.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #2e86ab"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 209.836157 57.6 
+L 246.728719 57.6 
+L 246.728719 233.6 
+L 209.836157 233.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #2e86ab"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 357.406405 57.6 
+L 394.298967 57.6 
+L 394.298967 321.6 
+L 357.406405 321.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #2e86ab"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 99.158471 57.6 
+L 136.051033 57.6 
+L 136.051033 145.6 
+L 99.158471 145.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #f18f01"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 246.728719 57.6 
+L 283.621281 57.6 
+L 283.621281 233.6 
+L 246.728719 233.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #f18f01"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 394.298967 57.6 
+L 431.191529 57.6 
+L 431.191529 321.6 
+L 394.298967 321.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #f18f01"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 136.051033 57.6 
+L 172.943595 57.6 
+L 172.943595 145.6 
+L 136.051033 145.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #a23b72"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 283.621281 57.6 
+L 320.513843 57.6 
+L 320.513843 233.6 
+L 283.621281 233.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #a23b72"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 431.191529 57.6 
+L 468.084091 57.6 
+L 468.084091 321.6 
+L 431.191529 321.6 
+z
+" clip-path="url(#pfe70437bf8)" style="fill: #a23b72"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <defs>
+       <path id="m731afb24c5" d="M 0 0 
+L 0 3.5 
+" style="stroke: #000000; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#m731afb24c5" x="117.604752" y="334.8" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="117.604752" y="349.397656" transform="rotate(-0 117.604752 349.397656)">LoRaWAN</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2">
+      <g>
+       <use xlink:href="#m731afb24c5" x="265.175" y="334.8" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="265.175" y="349.398437" transform="rotate(-0 265.175 349.398437)">Sigfox</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3">
+      <g>
+       <use xlink:href="#m731afb24c5" x="412.745248" y="334.8" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="412.745248" y="349.397656" transform="rotate(-0 412.745248 349.397656)">NB-IoT</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_4">
+      <path d="M 41.975 145.6 
+L 488.375 145.6 
+" clip-path="url(#pfe70437bf8)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-width: 0.8"/>
+     </g>
+     <g id="line2d_5">
+      <defs>
+       <path id="m2480ef3659" d="M 0 0 
+L -3.5 0 
+" style="stroke: #000000; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#m2480ef3659" x="41.975" y="145.6" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end" x="34.975" y="150.726953" transform="rotate(-0 34.975 150.726953)">۱</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_6">
+      <path d="M 41.975 233.6 
+L 488.375 233.6 
+" clip-path="url(#pfe70437bf8)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-width: 0.8"/>
+     </g>
+     <g id="line2d_7">
+      <g>
+       <use xlink:href="#m2480ef3659" x="41.975" y="233.6" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end" x="34.975" y="238.726953" transform="rotate(-0 34.975 238.726953)">۲</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_8">
+      <path d="M 41.975 321.6 
+L 488.375 321.6 
+" clip-path="url(#pfe70437bf8)" style="fill: none; stroke-dasharray: 2.96,1.28; stroke-dashoffset: 0; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-width: 0.8"/>
+     </g>
+     <g id="line2d_9">
+      <g>
+       <use xlink:href="#m2480ef3659" x="41.975" y="321.6" style="stroke: #000000; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_6">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: end" x="34.975" y="326.726953" transform="rotate(-0 34.975 326.726953)">۳</text>
+     </g>
+    </g>
+    <g id="text_7">
+     <text style="font-size: 11px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle" x="18.479297" y="196.2" transform="rotate(-90 18.479297 196.2)">ﻪﺒﺗﺭ</text>
+    </g>
+   </g>
+   <g id="patch_12">
+    <path d="M 41.975 334.8 
+L 41.975 57.6 
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 488.375 334.8 
+L 488.375 57.6 
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 41.975 334.8 
+L 488.375 334.8 
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 41.975 57.6 
+L 488.375 57.6 
+" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="legend_1">
+    <g id="patch_16">
+     <path d="M 408.757812 329.8 
+L 481.375 329.8 
+Q 483.375 329.8 483.375 327.8 
+L 483.375 283.797656 
+Q 483.375 281.797656 481.375 281.797656 
+L 408.757812 281.797656 
+Q 406.757812 281.797656 406.757812 283.797656 
+L 406.757812 327.8 
+Q 406.757812 329.8 408.757812 329.8 
+z
+" style="fill: #ffffff; opacity: 0.8; stroke: #cccccc; stroke-linejoin: miter"/>
+    </g>
+    <g id="patch_17">
+     <path d="M 410.757812 293.396094 
+L 430.757812 293.396094 
+L 430.757812 286.396094 
+L 410.757812 286.396094 
+z
+" style="fill: #2e86ab"/>
+    </g>
+    <g id="text_8">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="438.757812" y="293.396094" transform="rotate(-0 438.757812 293.396094)">TOPSIS</text>
+    </g>
+    <g id="patch_18">
+     <path d="M 410.757812 308.396875 
+L 430.757812 308.396875 
+L 430.757812 301.396875 
+L 410.757812 301.396875 
+z
+" style="fill: #f18f01"/>
+    </g>
+    <g id="text_9">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="438.757812" y="308.396875" transform="rotate(-0 438.757812 308.396875)">VIKOR</text>
+    </g>
+    <g id="patch_19">
+     <path d="M 410.757812 323.397656 
+L 430.757812 323.397656 
+L 430.757812 316.397656 
+L 410.757812 316.397656 
+z
+" style="fill: #a23b72"/>
+    </g>
+    <g id="text_10">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="438.757812" y="323.397656" transform="rotate(-0 438.757812 323.397656)">COPRAS</text>
+    </g>
+   </g>
+  </g>
+  <g id="text_11">
+   <text style="font-size: 13px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif; text-anchor: middle" x="257.975" y="20.530078" transform="rotate(-0 257.975 20.530078)">COPRAS ﻭ TOPSIS، VIKOR ﯼﺎﻫﺵﻭﺭ ﺭﺩ ﺎﻫﯼﺭﻭﺎﻨﻓ ﻪﺒﺗﺭ ﻪﺴﯾﺎﻘﻣ — ۱۱-۴ ﺭﺍﺩﻮﻤﻧ</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pfe70437bf8">
+   <rect x="41.975" y="57.6" width="446.4" height="277.2"/>
+  </clipPath>
+ </defs>
+</svg>
