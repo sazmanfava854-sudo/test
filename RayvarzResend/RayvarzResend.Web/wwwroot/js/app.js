@@ -19,6 +19,34 @@ function branchFromRegion(regionStr) {
   return null;
 }
 
+/** همان منطق تب تکی: branch ۲۰۱–۲۱۲ / ۲۱۸ → منطقه ۱–۱۲ / ۲۱۸ برای فیلتر SQL */
+function branchIdToDistrict(branchId) {
+  const id = parseInt(branchId, 10);
+  if (!id) return '';
+  if (id === 218) return '218';
+  if (id >= 201 && id <= 212) return String(id - 200);
+  if (id >= 1 && id <= 12) return String(id);
+  return '';
+}
+
+/** پر کردن کمبو منطقه/شعبه از config.branches — مشترک بین ارسال تکی و دسته‌ای */
+function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه مناطق' } = {}) {
+  if (!selectEl || !config?.branches) return;
+  selectEl.innerHTML = '';
+  if (includeAll) {
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = allLabel;
+    selectEl.appendChild(all);
+  }
+  config.branches.forEach((b) => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = `${b.id} — ${b.name}`;
+    selectEl.appendChild(opt);
+  });
+}
+
 function applyBranchFromFiche(f) {
   if (f.resolvedDistrictBranch) {
     const branchId = f.resolvedDistrictBranch;
@@ -82,19 +110,6 @@ function setupMainTabs() {
         panel.classList.toggle('active', show);
       });
     });
-  });
-}
-
-function populateUnsentDistricts() {
-  // گزینه‌های منطقه در HTML ثابت هستند — در صورت نیاز از config همگام‌سازی می‌شود
-  const sel = $('unsentDistrict');
-  if (!sel || sel.options.length > 1 || !config?.branches) return;
-  config.branches.forEach((b) => {
-    const district = b.id === 218 ? '218' : String(b.id - 200);
-    const opt = document.createElement('option');
-    opt.value = district;
-    opt.textContent = `${district} — ${b.name}`;
-    sel.appendChild(opt);
   });
 }
 
@@ -383,12 +398,9 @@ async function init() {
 
   const branchSel = $('branch');
   const fundSel = $('fund');
+  fillBranchSelect(branchSel);
+  fillBranchSelect($('unsentDistrict'), { includeAll: true });
   config.branches.forEach(b => {
-    const optBranch = document.createElement('option');
-    optBranch.value = b.id;
-    optBranch.textContent = `${b.id} — ${b.name}`;
-    branchSel.appendChild(optBranch);
-
     const optFund = document.createElement('option');
     optFund.value = b.fund;
     optFund.textContent = `${b.fund} — ${b.name}`;
@@ -401,7 +413,6 @@ async function init() {
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   syncFundFromBranch();
-  populateUnsentDistricts();
   setupMainTabs();
 }
 
@@ -621,7 +632,7 @@ function setupEventHandlers() {
           toDate,
           billId: ($('unsentBillId')?.value || '').trim(),
           paymentId: ($('unsentPaymentId')?.value || '').trim(),
-          district: ($('unsentDistrict')?.value || '').trim()
+          district: branchIdToDistrict($('unsentDistrict')?.value)
         })
       });
       const data = await parseJsonResponse(res);
