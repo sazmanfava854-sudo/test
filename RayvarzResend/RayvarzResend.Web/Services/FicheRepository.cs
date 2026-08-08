@@ -490,6 +490,167 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         return result as string;
     }
 
+    public async Task<bool> ExistsInAccountingDocHeaderAsync(string ficheNo, CancellationToken ct = default)
+    {
+        const string sql = @"SELECT TOP 1 1 FROM dbo.Accounting_DocHeader WHERE FicheNo = @f";
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo.Trim());
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result != null;
+    }
+
+    public async Task<UnsentFicheSearchResult> SearchUnsentIncomeAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    {
+        var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var from = DateHelper.ToShamsiSlashDate(req.FromDate);
+        var to = DateHelper.ToShamsiSlashDate(req.ToDate);
+
+        const string sql = @"
+SELECT TOP (@max)
+       f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+       f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+       NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
+       ISNULL(
+         NULLIF(LTRIM(RTRIM(
+           CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+           CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+           CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
+           ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
+         )), '-'),
+         ''
+       ) AS BnkAcntNo
+FROM dbo.Income_Fiche f
+LEFT JOIN dbo.Accounting_DocHeader h ON f.NidFiche = h.NidFiche
+LEFT JOIN dbo.Income i ON i.NidIncome = f.NidIncome
+LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
+LEFT JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
+WHERE h.FicheNo IS NULL
+  AND f.EumFicheStatus <> 4
+  AND f.CI_IncomeAccountGroup NOT IN (@g157, @g158)
+  AND (
+        (@from = '' AND @to = '')
+        OR (
+          (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
+           AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
+          OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
+              AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+        )
+      )
+  AND (@ficheNo = '' OR f.FicheNo LIKE '%' + @ficheNo + '%')
+  AND (@billId = '' OR f.BillID LIKE '%' + @billId + '%')
+  AND (@paymentId = '' OR f.PaymentID LIKE '%' + @paymentId + '%')
+  AND (@district = '' OR CAST(b.District AS nvarchar(20)) = @district)
+ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo";
+
+        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct);
+        return new UnsentFicheSearchResult
+        {
+            FicheKind = UnsentFicheKind.Income,
+            Count = items.Count,
+            Truncated = items.Count >= max,
+            Items = items
+        };
+    }
+
+    public async Task<UnsentFicheSearchResult> SearchUnsentDutyAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    {
+        var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var from = DateHelper.ToShamsiSlashDate(req.FromDate);
+        var to = DateHelper.ToShamsiSlashDate(req.ToDate);
+
+        const string sql = @"
+SELECT TOP (@max)
+       d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+       d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+       NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
+       COALESCE(
+           NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
+           NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""حوزه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""بلوک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+           ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ساختمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+           ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""آپارتمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+           ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""واحد صنفی""]/Value)[1]', 'nvarchar(20)'))), ''), '0')
+       ) AS BnkAcntNo
+FROM dbo.Duty_Fiche d
+LEFT JOIN dbo.Accounting_DocHeader h ON d.NidFiche = h.NidFiche
+WHERE h.FicheNo IS NULL
+  AND d.EumDutyFicheStatus <> 2
+  AND (
+        (@from = '' AND @to = '')
+        OR (
+          (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
+           AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
+          OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
+              AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+        )
+      )
+  AND (@ficheNo = '' OR d.FicheNo LIKE '%' + @ficheNo + '%')
+  AND (@billId = '' OR d.BillID LIKE '%' + @billId + '%')
+  AND (@paymentId = '' OR d.PaymentID LIKE '%' + @paymentId + '%')
+  AND (@district = '' OR LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district)
+ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo";
+
+        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, isDuty: true);
+        return new UnsentFicheSearchResult
+        {
+            FicheKind = UnsentFicheKind.Duty,
+            Count = items.Count,
+            Truncated = items.Count >= max,
+            Items = items
+        };
+    }
+
+    private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
+        string sql, int max, string from, string to, UnsentFicheSearchRequest req, CancellationToken ct, bool isDuty = false)
+    {
+        var items = new List<UnsentFicheListItem>();
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@max", max);
+        cmd.Parameters.AddWithValue("@from", from);
+        cmd.Parameters.AddWithValue("@to", to);
+        cmd.Parameters.AddWithValue("@ficheNo", (req.FicheNo ?? "").Trim());
+        cmd.Parameters.AddWithValue("@billId", (req.BillId ?? "").Trim());
+        cmd.Parameters.AddWithValue("@paymentId", (req.PaymentId ?? "").Trim());
+        cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
+        if (!isDuty)
+        {
+            cmd.Parameters.AddWithValue("@g157", TahatorRowBuilder.IncomeAccountGroupTahatorAmount);
+            cmd.Parameters.AddWithValue("@g158", TahatorRowBuilder.IncomeAccountGroupTahatorIncome);
+        }
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var ficheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim();
+            items.Add(new UnsentFicheListItem
+            {
+                FicheNo = ficheNo,
+                NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
+                BillId = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
+                PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
+                Payable = ReadDecimal(reader, "Payable"),
+                PaymentDate = ReadRowDate(reader, "PaymentDate"),
+                BankPaymentDate = ReadRowDate(reader, "BankPaymentDate"),
+                Status = ReadInt32(reader, "EumFicheStatus"),
+                District = reader.IsDBNull(reader.GetOrdinal("District"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("District")).Trim(),
+                BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo"))
+                    ? ""
+                    : reader.GetString(reader.GetOrdinal("BnkAcntNo")).Trim()
+            });
+        }
+
+        return items;
+    }
+
     private static long? ReadNullableInt64(SqlDataReader reader, string column)
     {
         var ord = reader.GetOrdinal(column);

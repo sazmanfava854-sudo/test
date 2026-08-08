@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=11" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -25,6 +25,13 @@
       </div>
     </header>
 
+    <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
+      <button type="button" class="main-tab active" data-tab="single" role="tab" aria-selected="true">ارسال تکی</button>
+      <button type="button" class="main-tab" data-tab="unsent" role="tab" aria-selected="false">فیش‌های ارسال نشده</button>
+      <button type="button" class="main-tab" data-tab="tahator" role="tab" aria-selected="false">تهاتر</button>
+    </nav>
+
+    <div id="tabSingle" class="tab-panel active" role="tabpanel">
     <section class="card card-enter">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📋</span>
@@ -110,7 +117,85 @@
       </div>
       <pre id="xmlBox" class="code-block"></pre>
     </section>
+    </div>
 
+    <div id="tabUnsent" class="tab-panel" role="tabpanel" hidden>
+    <section class="card unsent-card card-enter">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">📤</span>
+        <h2>فیش‌های ارسال نشده به رایورز</h2>
+      </div>
+      <p class="hint">فیش‌های تاییدشده که در <code>Accounting_DocHeader</code> نیستند. فیلتر تاریخ بر اساس <code>PaymentDate</code> یا <code>BankPaymentDate</code> است.</p>
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">نوع فیش</span>
+          <select id="unsentFicheKind">
+            <option value="Income">شهرسازی (Income_Fiche)</option>
+            <option value="Duty">نوسازی و صنفی (Duty_Fiche)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">شماره فیش</span>
+          <input id="unsentFicheNo" type="text" placeholder="اختیاری" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">از تاریخ</span>
+          <input id="unsentFromDate" type="text" placeholder="1402/08/01" />
+        </label>
+        <label class="field">
+          <span class="field-label">تا تاریخ</span>
+          <input id="unsentToDate" type="text" placeholder="1402/08/20" />
+        </label>
+        <label class="field">
+          <span class="field-label">شناسه قبض</span>
+          <input id="unsentBillId" type="text" placeholder="اختیاری" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">شناسه پرداخت</span>
+          <input id="unsentPaymentId" type="text" placeholder="اختیاری" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">منطقه</span>
+          <select id="unsentDistrict">
+            <option value="">همه</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
+        <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
+      </div>
+      <div class="subsection" id="unsentResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="unsentSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="unsentCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="unsentTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>کد نوسازی</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+                <th>تاریخ پرداخت بانک</th>
+                <th>تاریخ پرداخت دستی</th>
+                <th>شماره فیش</th>
+                <th>مبلغ</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <pre id="unsentResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
+    <div id="tabTahator" class="tab-panel" role="tabpanel" hidden>
     <section class="card tahator-card card-enter">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">⇄</span>
@@ -128,7 +213,8 @@
       </div>
       <pre id="tahatorResultBox" class="code-block" hidden></pre>
     </section>
+    </div>
   </div>
-  <script src="js/app.js?v=14" defer></script>
+  <script src="js/app.js?v=15" defer></script>
 </body>
 </html>

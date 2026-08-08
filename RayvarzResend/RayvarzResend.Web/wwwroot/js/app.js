@@ -1,5 +1,6 @@
 let currentFiche = null;
 let config = null;
+let unsentItems = [];
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,6 +50,112 @@ function syncBranchFromFund() {
   const fund = parseInt($('fund').value);
   const item = config.branches.find(b => b.fund === fund);
   if (item) $('branch').value = item.id;
+}
+
+function formatShamsiDisplay(yyyymmdd) {
+  if (!yyyymmdd) return '-';
+  const d = String(yyyymmdd).replace(/\D/g, '');
+  if (d.length < 8) return String(yyyymmdd);
+  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+}
+
+function setupMainTabs() {
+  const tabs = document.querySelectorAll('.main-tab');
+  const panels = {
+    single: $('tabSingle'),
+    unsent: $('tabUnsent'),
+    tahator: $('tabTahator')
+  };
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const key = tab.dataset.tab;
+      tabs.forEach((t) => {
+        const active = t === tab;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      Object.entries(panels).forEach(([name, panel]) => {
+        if (!panel) return;
+        const show = name === key;
+        panel.hidden = !show;
+        panel.classList.toggle('active', show);
+      });
+    });
+  });
+}
+
+function populateUnsentDistricts() {
+  const sel = $('unsentDistrict');
+  if (!sel || !config?.branches) return;
+  config.branches.forEach((b) => {
+    const district = b.id === 218 ? '218' : String(b.id - 200);
+    const opt = document.createElement('option');
+    opt.value = district;
+    opt.textContent = `${district} — ${b.name}`;
+    sel.appendChild(opt);
+  });
+}
+
+function getSelectedUnsentFicheNos() {
+  return Array.from(document.querySelectorAll('.unsent-row-check:checked'))
+    .map((el) => el.dataset.ficheNo)
+    .filter(Boolean);
+}
+
+function updateUnsentSendButton() {
+  const btn = $('btnUnsentSend');
+  if (!btn) return;
+  const selected = getSelectedUnsentFicheNos().length;
+  btn.disabled = selected === 0;
+  btn.textContent = selected > 0
+    ? `ارسال ${selected} فیش انتخاب‌شده`
+    : 'ارسال انتخاب‌شده‌ها';
+}
+
+function renderUnsentTable(items) {
+  unsentItems = items || [];
+  const section = $('unsentResultsSection');
+  const tbody = $('unsentTable')?.querySelector('tbody');
+  const countLabel = $('unsentCountLabel');
+  const selectAll = $('unsentSelectAll');
+  if (!section || !tbody) return;
+
+  if (!unsentItems.length) {
+    section.hidden = false;
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
+    if (countLabel) countLabel.textContent = '۰ مورد';
+    if (selectAll) selectAll.checked = false;
+    updateUnsentSendButton();
+    return;
+  }
+
+  section.hidden = false;
+  tbody.innerHTML = unsentItems.map((item) => `
+    <tr>
+      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}" /></td>
+      <td>${item.bnkAcntNo || '-'}</td>
+      <td>${item.billId || '-'}</td>
+      <td>${item.paymentId || '-'}</td>
+      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
+      <td>${formatShamsiDisplay(item.paymentDate)}</td>
+      <td>${item.ficheNo}</td>
+      <td>${Number(item.payable || 0).toLocaleString()}</td>
+    </tr>
+  `).join('');
+
+  if (countLabel) countLabel.textContent = `${unsentItems.length.toLocaleString('fa-IR')} مورد`;
+  if (selectAll) selectAll.checked = false;
+
+  document.querySelectorAll('.unsent-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const all = document.querySelectorAll('.unsent-row-check');
+      const checked = document.querySelectorAll('.unsent-row-check:checked');
+      if (selectAll) selectAll.checked = all.length > 0 && checked.length === all.length;
+      updateUnsentSendButton();
+    });
+  });
+  updateUnsentSendButton();
 }
 
 function formatShamsiInput(yyyymmdd) {
@@ -293,6 +400,8 @@ async function init() {
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   syncFundFromBranch();
+  populateUnsentDistricts();
+  setupMainTabs();
 }
 
 function bindClick(id, handler) {
@@ -479,6 +588,106 @@ function setupEventHandlers() {
       alert(e.message);
     } finally {
       btn.disabled = false;
+    }
+  });
+
+  const selectAll = $('unsentSelectAll');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      document.querySelectorAll('.unsent-row-check').forEach((cb) => {
+        cb.checked = selectAll.checked;
+      });
+      updateUnsentSendButton();
+    });
+  }
+
+  bindClick('btnUnsentSearch', async () => {
+    const fromDate = ($('unsentFromDate')?.value || '').trim();
+    const toDate = ($('unsentToDate')?.value || '').trim();
+    if (!fromDate || !toDate) return alert('از تاریخ و تا تاریخ الزامی است');
+
+    const btn = $('btnUnsentSearch');
+    btn.disabled = true;
+    $('unsentResultBox').hidden = true;
+    try {
+      const res = await fetch('/api/unsent/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ficheKind: $('unsentFicheKind').value,
+          ficheNo: ($('unsentFicheNo')?.value || '').trim(),
+          fromDate,
+          toDate,
+          billId: ($('unsentBillId')?.value || '').trim(),
+          paymentId: ($('unsentPaymentId')?.value || '').trim(),
+          district: ($('unsentDistrict')?.value || '').trim()
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      renderUnsentTable(data.items || []);
+      if (data.truncated) {
+        alert(`بیش از ${data.count} مورد یافت شد — فقط ${data.count} مورد اول نمایش داده شد. فیلترها را محدودتر کنید.`);
+      }
+    } catch (e) {
+      alert(e.message);
+      renderUnsentTable([]);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  bindClick('btnUnsentSend', async () => {
+    const selected = getSelectedUnsentFicheNos();
+    if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
+
+    const dry = config?.dryRun;
+    const kind = $('unsentFicheKind').value;
+    const kindLabel = kind === 'Duty' ? 'نوسازی/صنفی' : 'شهرسازی';
+    const warn = dry
+      ? `DryRun فعال — ${selected.length} فیش ${kindLabel} فقط SOAP می‌سازد. ادامه؟`
+      : `ارسال ${selected.length} فیش ${kindLabel} به رایورز؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnUnsentSend');
+    btn.disabled = true;
+    const box = $('unsentResultBox');
+    box.hidden = false;
+    box.textContent = `در حال ارسال ${selected.length} فیش…\n\nصبر کنید…`;
+
+    try {
+      const res = await fetch('/api/unsent/send-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ficheKind: kind,
+          ficheNos: selected,
+          resetStatus: true
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+      const lines = (data.results || []).map((r) =>
+        `${r.ficheNo}: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
+      );
+      box.textContent = [
+        '=== نتیجه ارسال دسته‌ای ===',
+        `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
+        `DryRun: ${data.dryRun}`,
+        '',
+        ...lines
+      ].join('\n');
+
+      if (data.dryRun) alert('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      else alert(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+
+      $('btnUnsentSearch').click();
+    } catch (e) {
+      box.textContent = e.message;
+      alert(e.message);
+    } finally {
+      updateUnsentSendButton();
     }
   });
 }

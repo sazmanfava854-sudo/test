@@ -17,6 +17,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<FicheSendService>();
+builder.Services.AddSingleton<UnsentFicheService>();
 builder.Services.AddSingleton<TahatorSnapshotStore>();
 builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
@@ -69,7 +71,7 @@ app.MapGet("/api/config", (IConfiguration config) => new
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "3",
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -527,108 +529,57 @@ app.MapPost("/api/tahator/restore", async (TahatorFicheRequest? req, TahatorRese
     }
 });
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
 {
-    var fiche = req.Fiche;
-    var incmdocsysYear = ResolveIncmdocsysYear(req);
-
-    bool existsInRayvarz;
-    string? sendWarning = null;
+    if (req == null)
+        return Results.BadRequest(new { error = "پارامترهای جستجو الزامی است" });
+    if (string.IsNullOrWhiteSpace(req.FromDate) || string.IsNullOrWhiteSpace(req.ToDate))
+        return Results.BadRequest(new { error = "از تاریخ و تا تاریخ الزامی است" });
     try
     {
-        existsInRayvarz = fiche.ExistsInRayvarz
-            || await repo.ExistsInRayvarzAsync(fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
+        return Results.Ok(await unsent.SearchAsync(req, ct));
     }
-    catch (SqlException ex)
+    catch (Exception ex)
     {
-        if (config.GetValue<bool>("Rayvarz:RequireRayvarzDbForSend"))
-        {
-            return Results.Json(new
-            {
-                error = $"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}",
-                hint = ConnectionHint("Rayvarz", config.GetConnectionString("Rayvarz") ?? "", ex)
-            }, statusCode: 503);
-        }
-
-        existsInRayvarz = fiche.ExistsInRayvarz;
-        sendWarning = $"چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت: {ex.Message}";
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-
-    if (existsInRayvarz)
-        return Results.BadRequest(new { error = "فیش در رایورز موجود است — ارسال نشد" });
-
-    if (req.ResetStatus)
-    {
-        try { await repo.ResetStatusAsync(fiche, ct); }
-        catch (Exception ex) { return Results.Problem($"خطا در ریست وضعیت: {ex.Message}"); }
-    }
-
-    var built = await payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
-    var xml = built.Xml;
-    var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
-    var result = await client.SendAsync(xml, dryRun, ct);
-    result.Warning = CombineWarnings(sendWarning, built.Warning);
-
-    if (!dryRun && result.Success)
-    {
-        try
-        {
-            result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(
-                fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
-        }
-        catch (SqlException ex)
-        {
-            result.VerifiedInRayvarz = false;
-            result.Message = (result.Message ?? "") + $" | تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}";
-        }
-    }
-
-    if (!dryRun && !result.VerifiedInRayvarz)
-    {
-        try
-        {
-            result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
-        }
-        catch (SqlException ex)
-        {
-            result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
-        }
-
-        if (result.Success)
-        {
-            result.Success = false;
-            result.Message = string.IsNullOrWhiteSpace(result.Message)
-                ? "SOAP موفق گزارش شد ولی فیش در incmdocsys ثبت نشد"
-                : result.Message + " — ولی فیش در incmdocsys ثبت نشده";
-        }
-    }
-
-    return Results.Ok(result);
 });
 
-static int ResolveIncmdocsysYear(SendFicheRequest req)
+app.MapPost("/api/unsent/send-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
 {
-    foreach (var d in new[] { req.DocDate, req.ActDate, req.DueDate })
+    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+        return Results.BadRequest(new { error = "حداقل یک فیش برای ارسال انتخاب کنید" });
+    try
     {
-        var y = DateHelper.ExtractShamsiYear(d);
-        if (y > 0) return y;
+        return Results.Ok(await unsent.SendBatchAsync(req, ct));
     }
-
-    foreach (var d in new[] { req.Fiche.RayvarzDocDate, req.Fiche.RayvarzActDate, req.Fiche.RayvarzDueDate })
+    catch (Exception ex)
     {
-        var y = DateHelper.ExtractShamsiYear(d);
-        if (y > 0) return y;
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
+});
 
-    return 0;
-}
-
-static string? CombineWarnings(string? a, string? b)
+app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheSendService send, CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(a)) return b;
-    if (string.IsNullOrWhiteSpace(b)) return a;
-    return a + " | " + b;
-}
+    try
+    {
+        var result = await send.SendAsync(req, ct);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Message.Contains("Ray_CityHall", StringComparison.OrdinalIgnoreCase)
+        || ex.Message.Contains("incmdocsys", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Json(new { error = $"اتصال SQL رایورز ناموفق: {ex.Message}" }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
 
 static string? ConnectionHint(string name, string cs, Exception ex)
 {
