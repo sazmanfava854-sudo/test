@@ -73,7 +73,8 @@ WHERE NidIncome = @nid
         if (resolved == null)
             return null;
 
-        var (amountNo, incomeNo) = resolved;
+        var amountNo = resolved.Value.AmountFicheNo;
+        var incomeNo = resolved.Value.IncomeFicheNo;
 
         var amountFiche = string.Equals(amountNo, ficheNo, StringComparison.Ordinal)
             && TahatorRowBuilder.IsTahatorAmountFiche(seed)
