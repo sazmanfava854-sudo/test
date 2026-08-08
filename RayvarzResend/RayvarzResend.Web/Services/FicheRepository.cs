@@ -5,6 +5,16 @@ namespace RayvarzResend.Web.Services;
 
 public class FicheRepository
 {
+    /// <summary>
+    /// کد نوسازی Rayvarz (GetNosaziNickName): منطقه-حوزه-بلوک-ملک-ساختمان-آپارتمان-واحد — بدون CI_City.
+    /// </summary>
+    private const string NosaziNickSql = """
+        CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+        CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+        CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
+        ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
+        """;
+
     private readonly string _saraCs;
     private readonly string _rayCs;
 
@@ -119,21 +129,7 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        NULLIF(LTRIM(RTRIM(CAST(f.CreditorPapers AS nvarchar(50)))), '') AS CreditorPapers,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        ISNULL(
-         NULLIF(LTRIM(RTRIM(
-           CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
-           CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
-           CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-           CAST(b.Apartment AS varchar)
-         )), '-'),
-         ''
-       ) AS BnkAcntNoCityFirst,
-       ISNULL(
-         NULLIF(LTRIM(RTRIM(
-           CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
-           CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
-           CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
-           ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
-         )), '-'),
+         NULLIF(LTRIM(RTRIM({NosaziNickSql})), '-'),
          ''
        ) AS BnkAcntNoNosaziNick,
        NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS NosaziDistrict
@@ -168,9 +164,6 @@ WHERE {where}";
         var nick = reader.IsDBNull(reader.GetOrdinal("BnkAcntNoNosaziNick"))
             ? ""
             : reader.GetString(reader.GetOrdinal("BnkAcntNoNosaziNick"));
-        var cityFirst = reader.IsDBNull(reader.GetOrdinal("BnkAcntNoCityFirst"))
-            ? ""
-            : reader.GetString(reader.GetOrdinal("BnkAcntNoCityFirst"));
         var district = reader.IsDBNull(reader.GetOrdinal("NosaziDistrict"))
             ? null
             : reader.GetString(reader.GetOrdinal("NosaziDistrict"));
@@ -199,10 +192,8 @@ WHERE {where}";
             DepositId = ReadNullableInt64(reader, "DepositID"),
             CreditorPapers = ReadNullableInt64(reader, "CreditorPapers"),
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
-            BnkAcntNo = isTahator && !string.IsNullOrWhiteSpace(nick) ? nick : cityFirst,
-            BnkAcntNoSource = isTahator
-                ? "کد نوسازی — GetNosaziNickName سبک (District-…-Shop)"
-                : "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
+            BnkAcntNo = nick,
+            BnkAcntNoSource = "کد نوسازی — GetNosaziNickName (منطقه-حوزه-بلوک-ملک-ساختمان-آپارتمان-واحد)",
             IncomeRegion = district,
             DocTyp = docTyp,
             DocDsc = isTahatorAmount
@@ -403,13 +394,9 @@ WHERE NidFiche = @nid";
 
     private async Task<string?> TryLoadNosaziNickNameAsync(Guid nidFiche, CancellationToken ct)
     {
-        const string sql = @"
+        var sql = $@"
 SELECT TOP 1
-  CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
-  CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
-  CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-  CAST(b.Apartment AS varchar) + '-' +
-  ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0') AS Nick
+  {NosaziNickSql} AS Nick
 FROM dbo.Duty_FicheSub fs
 INNER JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = fs.NidFK
 WHERE fs.NidFiche = @nid
