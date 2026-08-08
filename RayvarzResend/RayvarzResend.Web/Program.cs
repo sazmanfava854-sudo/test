@@ -547,8 +547,10 @@ app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFi
 {
     if (req == null)
         return Results.BadRequest(new { error = "پارامترهای جستجو الزامی است" });
-    if (string.IsNullOrWhiteSpace(req.FromDate) || string.IsNullOrWhiteSpace(req.ToDate))
-        return Results.BadRequest(new { error = "از تاریخ و تا تاریخ الزامی است" });
+    if (req.HasPartialDateRange)
+        return Results.BadRequest(new { error = "هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید" });
+    if (!req.HasAnyFilter)
+        return Results.BadRequest(new { error = "حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید" });
     try
     {
         return Results.Ok(await unsent.SearchAsync(req, ct));

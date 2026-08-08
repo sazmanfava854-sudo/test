@@ -488,15 +488,35 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         return result != null;
     }
 
+    private const string IncomeUnsentDateClause = """
+        AND (
+              (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
+               AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
+              OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
+                  AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+            )
+        """;
+
+    private const string DutyUnsentDateClause = """
+        AND (
+              (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
+               AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
+              OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
+                  AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+            )
+        """;
+
     public async Task<UnsentFicheSearchResult> SearchUnsentIncomeAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
     {
         var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
-        var from = DateHelper.ToShamsiSlashDate(req.FromDate);
-        var to = DateHelper.ToShamsiSlashDate(req.ToDate);
+        var hasDateRange = req.HasDateRange;
+        var from = hasDateRange ? DateHelper.ToShamsiSlashDate(req.FromDate) : "";
+        var to = hasDateRange ? DateHelper.ToShamsiSlashDate(req.ToDate) : "";
+        var dateClause = hasDateRange ? IncomeUnsentDateClause : "";
         var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
 
         var sql = hasDistrict
-            ? """
+            ? $"""
               SELECT TOP (@max)
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
@@ -511,19 +531,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
                 AND f.EumFicheStatus <> 4
-                AND (
-                      (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
-                       AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
-                      OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
-                          AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
-                    )
+                {dateClause}
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
                 AND CAST(b.District AS nvarchar(20)) = @district
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               """
-            : """
+            : $"""
               SELECT TOP (@max)
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
@@ -534,19 +549,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
                 AND f.EumFicheStatus <> 4
-                AND (
-                      (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
-                       AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
-                      OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
-                          AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
-                    )
+                {dateClause}
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               """;
 
-        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct);
+        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, hasDateRange: hasDateRange);
         return new UnsentFicheSearchResult
         {
             FicheKind = UnsentFicheKind.Income,
@@ -559,12 +569,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     public async Task<UnsentFicheSearchResult> SearchUnsentDutyAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
     {
         var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
-        var from = DateHelper.ToShamsiSlashDate(req.FromDate);
-        var to = DateHelper.ToShamsiSlashDate(req.ToDate);
+        var hasDateRange = req.HasDateRange;
+        var from = hasDateRange ? DateHelper.ToShamsiSlashDate(req.FromDate) : "";
+        var to = hasDateRange ? DateHelper.ToShamsiSlashDate(req.ToDate) : "";
+        var dateClause = hasDateRange ? DutyUnsentDateClause : "";
         var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
 
         var sql = hasDistrict
-            ? """
+            ? $"""
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
@@ -575,19 +587,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)
                 AND d.EumDutyFicheStatus <> 2
-                AND (
-                      (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
-                       AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
-                      OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
-                          AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
-                    )
+                {dateClause}
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
                 AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district
               ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
               """
-            : """
+            : $"""
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
@@ -597,19 +604,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)
                 AND d.EumDutyFicheStatus <> 2
-                AND (
-                      (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
-                       AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
-                      OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
-                          AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
-                    )
+                {dateClause}
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
               ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
               """;
 
-        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, isDuty: true);
+        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, isDuty: true, hasDateRange: hasDateRange);
         return new UnsentFicheSearchResult
         {
             FicheKind = UnsentFicheKind.Duty,
@@ -620,7 +622,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     }
 
     private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
-        string sql, int max, string from, string to, UnsentFicheSearchRequest req, CancellationToken ct, bool isDuty = false)
+        string sql, int max, string from, string to, UnsentFicheSearchRequest req, CancellationToken ct,
+        bool isDuty = false, bool hasDateRange = false)
     {
         var items = new List<UnsentFicheListItem>();
         var ficheNo = (req.FicheNo ?? "").Trim();
@@ -631,8 +634,11 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
         cmd.Parameters.AddWithValue("@max", max);
-        cmd.Parameters.AddWithValue("@from", from);
-        cmd.Parameters.AddWithValue("@to", to);
+        if (hasDateRange)
+        {
+            cmd.Parameters.AddWithValue("@from", from);
+            cmd.Parameters.AddWithValue("@to", to);
+        }
         cmd.Parameters.AddWithValue("@ficheNo", ficheNo);
         cmd.Parameters.AddWithValue("@billId", billId);
         cmd.Parameters.AddWithValue("@paymentId", paymentId);

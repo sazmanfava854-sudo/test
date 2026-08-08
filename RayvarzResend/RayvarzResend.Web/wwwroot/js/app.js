@@ -670,7 +670,17 @@ function setupEventHandlers() {
   bindClick('btnUnsentSearch', async () => {
     const fromDate = ($('unsentFromDate')?.value || '').trim();
     const toDate = ($('unsentToDate')?.value || '').trim();
-    if (!fromDate || !toDate) return alert('از تاریخ و تا تاریخ الزامی است');
+    const ficheNo = ($('unsentFicheNo')?.value || '').trim();
+    const billId = ($('unsentBillId')?.value || '').trim();
+    const paymentId = ($('unsentPaymentId')?.value || '').trim();
+    const district = branchIdToDistrict($('unsentDistrict')?.value);
+
+    if ((fromDate && !toDate) || (!fromDate && toDate)) {
+      return alert('هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید');
+    }
+    if (!ficheNo && !billId && !paymentId && !district && !fromDate) {
+      return alert('حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید');
+    }
 
     const btn = $('btnUnsentSearch');
     btn.disabled = true;
@@ -681,12 +691,12 @@ function setupEventHandlers() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ficheKind: $('unsentFicheKind').value,
-          ficheNo: ($('unsentFicheNo')?.value || '').trim(),
-          fromDate,
-          toDate,
-          billId: ($('unsentBillId')?.value || '').trim(),
-          paymentId: ($('unsentPaymentId')?.value || '').trim(),
-          district: branchIdToDistrict($('unsentDistrict')?.value)
+          ficheNo,
+          fromDate: fromDate || null,
+          toDate: toDate || null,
+          billId,
+          paymentId,
+          district
         })
       });
       const data = await parseJsonResponse(res);

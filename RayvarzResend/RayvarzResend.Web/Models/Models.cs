@@ -281,6 +281,20 @@ public class UnsentFicheSearchRequest
     /// <summary>منطقه (۱–۱۲ یا ۲۱۸)</summary>
     public string? District { get; set; }
     public int MaxResults { get; set; } = 500;
+
+    public bool HasDateRange =>
+        !string.IsNullOrWhiteSpace(FromDate) && !string.IsNullOrWhiteSpace(ToDate);
+
+    public bool HasPartialDateRange =>
+        !string.IsNullOrWhiteSpace(FromDate) != !string.IsNullOrWhiteSpace(ToDate);
+
+    /// <summary>حداقل یک فیلتر برای جلوگیری از اسکن کل جدول.</summary>
+    public bool HasAnyFilter =>
+        !string.IsNullOrWhiteSpace(FicheNo) ||
+        !string.IsNullOrWhiteSpace(BillId) ||
+        !string.IsNullOrWhiteSpace(PaymentId) ||
+        !string.IsNullOrWhiteSpace(District) ||
+        HasDateRange;
 }
 
 public class UnsentFicheListItem
