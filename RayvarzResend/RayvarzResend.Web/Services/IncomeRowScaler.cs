@@ -15,6 +15,9 @@ public static class IncomeRowScaler
         var sum = rows.Sum(r => r.Val);
         if (sum == payable || sum == 0) return;
 
+        // برگشت از سپرده: جمع عمداً منفی است (VB iNcOMEBackSeprdeh)
+        if (sum == -payable) return;
+
         var factor = payable / sum;
         foreach (var r in rows)
             r.Val = Math.Round(r.Val * factor, 0);

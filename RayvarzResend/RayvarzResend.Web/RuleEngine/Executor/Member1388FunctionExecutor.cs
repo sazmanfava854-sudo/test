@@ -220,7 +220,7 @@ public static class Member1388FunctionExecutor
     {
         if (functionName.Equals("iNcOMEOragh", StringComparison.OrdinalIgnoreCase))
         {
-            Member1388OraghRowBuilder.Apply(fiche);
+            Member1388IncomeRowProfiles.ApplyOragh(fiche);
             return;
         }
 
@@ -233,6 +233,49 @@ public static class Member1388FunctionExecutor
         if (functionName.Equals("IncomeSrvElectronic", StringComparison.OrdinalIgnoreCase))
         {
             Member1388SpecialIncomeRowBuilder.ApplySrvElectronic(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOME", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyIncome(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEHavaleT", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyHavaleT(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEGhatar_Shahri", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyGhatarShahri(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMESeprdeh", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplySeprdeh(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEEshghal", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyEshghal(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEBackSeprdeh", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyBackSeprdeh(fiche);
+            return;
+        }
+
+        if (functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
+            || functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyBazAfarine(fiche);
             return;
         }
 

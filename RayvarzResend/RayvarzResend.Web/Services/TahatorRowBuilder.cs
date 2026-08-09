@@ -316,6 +316,8 @@ public static class TahatorRowBuilder
             return rowSum == -Math.Abs(fiche.Payable);
         if (IsTahatorIncomeFiche(fiche) || fiche.DocTyp is 17 or 18)
             return rowSum == Math.Abs(fiche.Payable);
+        if (fiche.IncomeAccountGroup == 151)
+            return rowSum == -Math.Abs(fiche.Payable);
         return rowSum == fiche.Payable;
     }
 }
