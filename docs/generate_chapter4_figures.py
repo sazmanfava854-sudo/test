@@ -399,28 +399,46 @@ def fig_vikor_indices():
 
 
 def fig_copras_results():
+    """Figure 4-10: COPRAS combo — clustered columns (Q, S+, S-) + line (N)."""
     d = DATA["copras"]
     techs = tech_labels()
     x = np.arange(len(techs))
-    width = 0.35
-    fig, ax1 = plt.subplots(figsize=(8, 5))
-    ax1.bar(x - width / 2, d["q"], width, label=fa("Q_i (اهمیت نسبی)"), color=COLORS["primary"])
-    ax1.set_ylabel("Q_i", fontproperties=LATIN_FP)
+    width = 0.22
+
+    fig, ax1 = plt.subplots(figsize=(10, 5.5))
+    ax1.bar(x - width, d["q"], width, label=fa("Q_i (اهمیت نسبی)"), color=COLORS["primary"])
+    ax1.bar(x, d["s_plus"], width, label=fa("S_i+ (مجموع سود)"), color=COLORS["success"])
+    ax1.bar(x + width, d["s_minus"], width, label=fa("S_i- (مجموع هزینه)"), color=COLORS["secondary"])
+    ax1.set_ylabel("Q_i / S_i", fontproperties=LATIN_FP)
     ax1.set_xticks(x)
     set_latin_xticklabels(ax1, techs)
+    ax1.set_ylim(0, d.get("primary_axis_max", 0.7))
     ax1.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: fa_num(v, decimals=2)))
     ax1.grid(True, axis="y", alpha=0.3, linestyle="--")
 
     ax2 = ax1.twinx()
-    ax2.bar(x + width / 2, d["n"], width, label=fa("N_i (درجه مطلوبیت %)"), color=COLORS["accent"], alpha=0.85)
+    ax2.plot(
+        x,
+        d["n"],
+        "o-",
+        color="#C00000",
+        linewidth=2.5,
+        markersize=9,
+        markerfacecolor="#C00000",
+        markeredgecolor="white",
+        markeredgewidth=1.2,
+        label=fa("N_i (درجه مطلوبیت %)"),
+        zorder=5,
+    )
     set_persian_ylabel(ax2, "N_i (%)")
-    ax2.set_ylim(0, 115)
+    ax2.set_ylim(0, d.get("secondary_axis_max", 120))
     ax2.yaxis.set_major_formatter(persian_yformatter(0))
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", prop=PERSIAN_FP_SM)
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", prop=PERSIAN_FP_SM, fontsize=9)
     set_persian_title(fig, d["title"])
+    fig.tight_layout()
     save_fig(fig, "fig4-10_copras_results")
 
 

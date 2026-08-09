@@ -103,7 +103,67 @@ def export_chapter4_excel(data: dict, output_dir: Path, tech_labels: list[str]) 
     add_sheet("نمودار۴-۹ب", vk["title_q"], ["فناوری", "Q_i"], list(zip(tech_labels, vk["q"])), "VIKOR Q_i", [1])
 
     cp = data["copras"]
-    add_sheet("نمودار۴-۱۰", cp["title"], ["فناوری", "Q_i", "N_i"], list(zip(tech_labels, cp["q"], cp["n"])), "COPRAS", [1, 2])
+    sname = "نمودار۴-۱۰"
+    ws = wb.add_worksheet(sname)
+    copras_headers = [
+        "فناوری",
+        "اهمیت نسبی (Q_i)",
+        "درجه مطلوبیت (N_i)",
+        "مجموع سود (S_i+)",
+        "مجموع هزینه (S_i-)",
+    ]
+    copras_rows = list(
+        zip(tech_labels, cp["q"], cp["n"], cp["s_plus"], cp["s_minus"])
+    )
+    last_row = write_sheet(ws, cp["title"], copras_headers, copras_rows)
+
+    # Combo: ستون‌های Q_i, S_i+, S_i- روی محور اصلی + خط N_i روی محور ثانویه
+    col_chart = wb.add_chart({"type": "column", "subtype": "clustered"})
+    col_chart.set_title({"name": "COPRAS"})
+    col_chart.set_size({"width": 760, "height": 460})
+    col_chart.set_style(10)
+    col_chart.set_y_axis(
+        {
+            "name": "Q_i / S_i",
+            "min": 0,
+            "max": cp.get("primary_axis_max", 0.7),
+            "major_gridlines": {"visible": True},
+        }
+    )
+    col_chart.set_x_axis({"name": "فناوری"})
+    col_chart.set_legend({"position": "bottom"})
+
+    for col in (1, 3, 4):  # Q_i, S_i+, S_i-
+        col_chart.add_series(
+            {
+                "name": [sname, HDR, col],
+                "categories": [sname, DATA0, 0, last_row, 0],
+                "values": [sname, DATA0, col, last_row, col],
+            }
+        )
+
+    line_chart = wb.add_chart({"type": "line", "subtype": "straight_with_markers"})
+    line_chart.add_series(
+        {
+            "name": [sname, HDR, 2],  # N_i
+            "categories": [sname, DATA0, 0, last_row, 0],
+            "values": [sname, DATA0, 2, last_row, 2],
+            "y2_axis": True,
+            "line": {"width": 2.5, "color": "#C00000"},
+            "marker": {"type": "circle", "size": 8, "fill": {"color": "#C00000"}},
+        }
+    )
+    line_chart.set_y2_axis(
+        {
+            "name": "N_i (%)",
+            "min": 0,
+            "max": cp.get("secondary_axis_max", 120),
+            "major_gridlines": {"visible": False},
+        }
+    )
+
+    col_chart.combine(line_chart)
+    ws.insert_chart(1, 6, col_chart)
 
     rc = data["ranking_comparison"]
     add_sheet("نمودار۴-۱۱", rc["title"], ["فناوری", "TOPSIS", "VIKOR", "COPRAS"], list(zip(tech_labels, rc["topsis"], rc["vikor"], rc["copras"])), "رتبه‌بندی", [1, 2, 3])
