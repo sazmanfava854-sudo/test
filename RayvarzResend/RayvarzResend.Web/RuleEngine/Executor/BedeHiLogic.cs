@@ -5,6 +5,8 @@ namespace RayvarzResend.Web.RuleEngine.Executor;
 /// <summary>بدهی قبلی — VB BedeHi (member-1388-full-body.vb خطوط ۴۸۱۲–۴۸۷۰).</summary>
 public static class BedeHiLogic
 {
+  public const string PriorCandidatesKey = "PriorIncomeCandidates";
+
   private static readonly int[] RegionalAccountGroups = [1, 7, 10];
   private static readonly int[] StandardAccountGroups =
   [
@@ -16,6 +18,33 @@ public static class BedeHiLogic
 
   public static IReadOnlyList<int> AllowedAccountGroups(int districtBranch) =>
     districtBranch is 80 or 218 ? RegionalAccountGroups : StandardAccountGroups;
+
+  /// <summary>انتخاب آخرین فیش قبلی — VB M_AllFiche مرتب‌شده بر BankPaymentDate.</summary>
+  public static PriorIncomeFicheDto? SelectPrior(
+    IEnumerable<PriorIncomeFicheDto> candidates,
+    int districtBranch,
+    string currentFicheNo)
+  {
+    var allowedGroups = AllowedAccountGroups(districtBranch);
+    var current = currentFicheNo.Trim();
+
+    return candidates
+      .Where(p => !string.IsNullOrWhiteSpace(p.FicheNo))
+      .Where(p => !p.FicheNo.Trim().Equals(current, StringComparison.OrdinalIgnoreCase))
+      .Where(p => allowedGroups.Contains(p.IncomeAccountGroup))
+      .Where(p => p.FicheStatus is null or 5 or 7)
+      .Select(p => new
+      {
+        Fiche = p,
+        PaymentDate = NormalizeDate(p.PaymentDate),
+        BankPaymentDate = NormalizeDate(p.BankPaymentDate)
+      })
+      .Where(p => string.CompareOrdinal(p.PaymentDate, MinPaymentDate) >= 0
+                  && string.CompareOrdinal(p.BankPaymentDate, MinPaymentDate) >= 0)
+      .OrderByDescending(p => p.BankPaymentDate)
+      .Select(p => p.Fiche)
+      .FirstOrDefault();
+  }
 
   public static decimal Resolve(int districtBranch, string currentFicheNo, PriorIncomeFicheDto? prior)
   {

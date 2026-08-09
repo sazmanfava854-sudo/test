@@ -98,6 +98,8 @@ public class FicheHeaderDto
     public List<IncomeOddmentDto> Oddments { get; set; } = new();
     /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>
     public List<DutyOddmentDto> DutyOddments { get; set; } = new();
+    /// <summary>زیرفیش نوسازی — برای ساخت ردیف در Member 1388 Nosazi.</summary>
+    public List<DutySubDto> DutySubs { get; set; } = new();
     public List<IncmRowDto> Rows { get; set; } = new();
 }
 
@@ -111,7 +113,17 @@ public class PriorIncomeFicheDto
     public string PaymentDate { get; set; } = "";
     public string BankPaymentDate { get; set; } = "";
     public int IncomeAccountGroup { get; set; }
+    /// <summary>وضعیت فیش — VB BedeHi: EumFicheStatus 5 یا 7.</summary>
+    public int? FicheStatus { get; set; }
     public List<IncmRowDto> CalculationRows { get; set; } = new();
+}
+
+/// <summary>زیرفیش نوسازی — Duty_FicheSub برای Member 1388 Nosazi.</summary>
+public class DutySubDto
+{
+    public int DutyFormula { get; set; }
+    public int DutyFormulaFiche { get; set; }
+    public decimal Price { get; set; }
 }
 
 /// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>

@@ -64,10 +64,14 @@ public static class Member1388FunctionExecutor
         }
 
         context.Variables["ExistRayvarz"] = false;
-        registry.Invoke("Nosazi.BuildDutyRows", context, Array.Empty<string>());
+        var hadEffect = Member1388NosaziRowBuilder.Apply(context.Fiche);
+        context.Rows.Clear();
+        context.Rows.AddRange(context.Fiche.Rows);
         RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context));
-        trace.Add("Nosazi: BuildDutyRows + RefParams");
-        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
+        trace.Add(hadEffect
+            ? "Nosazi: Member1388NosaziRowBuilder + RefParams"
+            : "Nosazi: skipped (no duty rows)");
+        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: hadEffect);
     }
 
     private static Member1388FunctionResult ExecuteTahator(
@@ -191,7 +195,7 @@ public static class Member1388FunctionExecutor
             ? branchFromVar
             : Member1388IncomeCenterResolver.ResolveDistrictBranch(context.Fiche);
 
-        var amount = Member1388OraghRowBuilder.ResolveBedeHiAmount(context.Fiche, district);
+        var amount = Member1388BedeHiHelper.Resolve(context, context.Fiche, district);
         context.Variables["BedeHiResult"] = amount;
         context.Fiche.PriorBedeHiAmount ??= amount;
         trace.Add($"BedeHi: {amount}");

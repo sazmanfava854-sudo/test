@@ -220,6 +220,7 @@ public static class SaraOperationBootstrap
             if (ctx.Fiche.Category is not (FicheCategory.DutyNosazi or FicheCategory.DutySenfi))
                 throw new InvalidOperationException($"Nosazi.BuildDutyRows برای {ctx.Fiche.Category} مجاز نیست.");
 
+            Member1388NosaziRowBuilder.Apply(ctx.Fiche);
             ctx.Rows.Clear();
             ctx.Rows.AddRange(ctx.Fiche.Rows);
             ctx.Variables["rowsBuilt"] = ctx.Rows.Count;
