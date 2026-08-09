@@ -60,6 +60,10 @@ public class FicheHeaderDto
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
     public string StatusMessage { get; set; } = "";
+    /// <summary>آیا فیش از نظر اعتبارسنجی قابل ارسال است.</summary>
+    public bool CanSend { get; set; }
+    /// <summary>دلیل عدم ارسال — برای نمایش در UI.</summary>
+    public string? BlockReason { get; set; }
     /// <summary>DocumentItem.Center — از Tahator1: Bank=2→CreditorPapers وگرنه 0.</summary>
     public long? Center { get; set; }
     /// <summary>Income_Fiche.Deposit → Center1 ردیف تهاتر.</summary>

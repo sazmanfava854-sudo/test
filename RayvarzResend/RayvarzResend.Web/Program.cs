@@ -206,12 +206,6 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
             });
         }
 
-        if (!TahatorRowBuilder.IsTahatorFiche(fiche)
-            && !FicheBranchResolver.TryResolve(fiche, out _, out _, out var branchError))
-        {
-            return Results.BadRequest(new { error = branchError ?? FicheBranchResolver.RegionNotResolvedMessage });
-        }
-
         try
         {
             var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
@@ -220,19 +214,15 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
         catch (Exception rayEx)
         {
             fiche.ExistsInRayvarz = false;
-            fiche.StatusMessage = $"فیش بارگذاری شد — اتصال رایورز ناموفق: {rayEx.Message}";
+            FicheSendService.ApplySendStatus(fiche);
+            var rayWarn = $"بررسی تکراری رایورز ناموفق: {rayEx.Message}";
+            fiche.StatusMessage = fiche.CanSend
+                ? $"آماده ارسال — {rayWarn}"
+                : $"{fiche.BlockReason} ({rayWarn})";
             return Results.Ok(fiche);
         }
 
-        if (fiche.ExistsInRayvarz)
-            fiche.StatusMessage = "تکراری — در رایورز موجود است";
-        else if (fiche.Payable <= 0)
-            fiche.StatusMessage = "مبلغ قابل پرداخت صفر است";
-        else if (fiche.Rows.Count == 0)
-            fiche.StatusMessage = "ردیف IncmNo یافت نشد";
-        else
-            fiche.StatusMessage = "آماده ارسال";
-
+        FicheSendService.ApplySendStatus(fiche);
         return Results.Ok(fiche);
     }
     catch (Exception ex)
@@ -505,6 +495,10 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
 
 app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
 {
+    var blockReason = FicheSendService.ValidateSendable(req.Fiche);
+    if (blockReason != null)
+        return Results.BadRequest(new { error = blockReason });
+
     var built = await payload.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
     return Results.Ok(new
     {

@@ -559,6 +559,21 @@ input:focus, select:focus {
   color: var(--danger);
 }
 
+.fiche-alert {
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.fiche-alert-err {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
 .subsection {
   margin-top: 20px;
   padding-top: 16px;

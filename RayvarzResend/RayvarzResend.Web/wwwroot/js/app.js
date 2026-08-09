@@ -315,36 +315,37 @@ function formatDiagnostics(d) {
   return lines.join('\n') + '\n';
 }
 
+function ficheStatusClass(f) {
+  if (f.canSend) return 'status-ok';
+  if (f.existsInRayvarz || f.blockReason) return 'status-err';
+  return 'status-warn';
+}
+
 function updateSendButton(f) {
   const btn = $('btnSend');
+  const previewBtn = $('btnPreview');
   if (!f) {
     btn.disabled = true;
     btn.title = 'ابتدا فیش را دریافت کنید';
-    return;
-  }
-  if (f.existsInRayvarz) {
-    btn.disabled = true;
-    btn.title = 'فیش در رایورز تکراری است';
+    if (previewBtn) previewBtn.disabled = true;
     return;
   }
   if (isTahatorIncomeFiche(f)) {
     btn.disabled = false;
+    if (previewBtn) previewBtn.disabled = true;
     btn.title = config?.tahator?.dryRun ?? config?.dryRun
       ? 'تهاتر — DryRun فعال'
       : 'ارسال جفت تهاتر (۱۵۷+۱۵۸) به رایورز';
     return;
   }
-  if (f.payable <= 0) {
+  if (!f.canSend) {
     btn.disabled = true;
-    btn.title = 'مبلغ قابل پرداخت صفر است';
-    return;
-  }
-  if (!f.rows?.length) {
-    btn.disabled = true;
-    btn.title = 'ردیف IncmNo یافت نشد';
+    if (previewBtn) previewBtn.disabled = true;
+    btn.title = f.blockReason || f.statusMessage || 'قابل ارسال نیست';
     return;
   }
   btn.disabled = false;
+  if (previewBtn) previewBtn.disabled = false;
   btn.title = config?.dryRun
     ? 'DryRun فعال — SOAP ساخته می‌شود ولی به MSB POST نمی‌شود'
     : 'ارسال SaveDocument به MSB';
@@ -421,9 +422,13 @@ function renderMappingTable(f) {
 
 function renderFiche(f) {
   $('ficheSection').hidden = false;
-  const statusClass = f.existsInRayvarz ? 'status-err' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn');
+  const statusClass = ficheStatusClass(f);
+  const alertHtml = f.blockReason
+    ? `<div class="fiche-alert fiche-alert-err" role="alert">${f.blockReason}</div>`
+    : '';
 
   $('ficheSummary').innerHTML = `
+    ${alertHtml}
     <div class="stat-card">
       <span class="stat-label">شماره فیش</span>
       <span class="stat-value">${f.ficheNo}</span>
@@ -539,12 +544,9 @@ function setupEventHandlers() {
       throw new Error('نوع فیش با «نوسازی و صنفی» انتخاب‌شده مطابقت ندارد');
     }
     updateIdentifierHint();
-    if (!isTahatorIncomeFiche(data) && !applyBranchFromFiche(data)) {
-      throw new Error('منطقه/شعبه از فیش قابل تشخیص نیست — ارسال ممکن نیست');
-    }
+    applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
     renderFiche(data);
-    $('btnPreview').disabled = false;
     updateSendButton(data);
     $('resultSection').hidden = true;
     $('xmlSection').hidden = true;
@@ -561,6 +563,9 @@ function setupEventHandlers() {
 
   bindClick('btnPreview', async () => {
   if (!currentFiche) return;
+  if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
+    return alert(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل پیش‌نمایش نیست');
+  }
   $('btnPreview').disabled = true;
   try {
     const res = await fetch('/api/fiche/preview', {
@@ -582,7 +587,9 @@ function setupEventHandlers() {
 
   bindClick('btnSend', async () => {
   if (!currentFiche) return;
-  if (currentFiche.existsInRayvarz) return alert('فیش تکراری است');
+  if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
+    return alert(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
+  }
 
   if (isTahatorIncomeFiche(currentFiche)) {
     const dry = config?.tahator?.dryRun ?? config?.dryRun;
@@ -638,7 +645,7 @@ function setupEventHandlers() {
     } else if (data.success && data.verifiedInRayvarz === false) {
       alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
     } else if (!data.success) {
-      alert('ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
+      alert(data.message || data.docNotSentError || 'ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz) {
       alert('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
     }
