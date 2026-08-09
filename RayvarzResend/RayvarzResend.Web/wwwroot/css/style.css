@@ -243,21 +243,7 @@ td.col-check input {
 }
 
 .hero-brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.hero-mark {
-  width: 54px;
-  height: 54px;
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  display: grid;
-  place-items: center;
-  font-size: 1.45rem;
-  backdrop-filter: blur(6px);
+  display: block;
 }
 
 .brand-name {
