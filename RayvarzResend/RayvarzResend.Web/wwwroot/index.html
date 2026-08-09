@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=16" />
+  <link rel="stylesheet" href="css/style.css?v=17" />
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -119,21 +119,18 @@
         <span class="card-icon" aria-hidden="true">📋</span>
         <h2>ارسال تکی</h2>
       </div>
-      <div class="form-grid">
-        <label class="field field-required">
-          <span class="field-label">نوع فیش</span>
-          <select id="singleFicheKind">
-            <option value="Income">درآمد</option>
-            <option value="Duty">نوسازی و صنفی</option>
-          </select>
-        </label>
-      </div>
-
       <div id="singleRegularPanel">
-        <div class="form-grid">
-          <label class="field field-wide field-required">
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">نوع فیش</span>
+            <select id="singleFicheKind">
+              <option value="Income">درآمد</option>
+              <option value="Duty">نوسازی و صنفی</option>
+            </select>
+          </label>
+          <label class="field field-required">
             <span class="field-label">شناسه فیش</span>
-            <input id="identifierValue" type="text" placeholder="شماره فیش (مثلاً 101104/9881711) یا BillID+PaymentID (مثلاً 90000273516650048062122597)" autocomplete="off" />
+            <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
             <span id="identifierHint" class="field-hint" hidden></span>
           </label>
           <label class="field">
@@ -217,6 +214,6 @@
     </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=20"></script>
+  <script src="js/app.js?v=21"></script>
 </body>
 </html>

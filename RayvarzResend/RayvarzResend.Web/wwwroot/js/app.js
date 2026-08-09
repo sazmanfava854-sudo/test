@@ -159,7 +159,7 @@ function initDatePickers() {
   if (!datePickersReady) {
     jalaliDatepicker.startWatch({
       time: false,
-      autoShow: true,
+      autoShow: false,
       autoHide: true,
       hideAfterChange: true,
       persianDigits: false,
@@ -177,6 +177,12 @@ function initDatePickers() {
       const input = document.getElementById(btn.dataset.for || '');
       if (input) jalaliDatepicker.show(input);
     });
+  });
+
+  document.querySelectorAll('input[data-jdp]').forEach((input) => {
+    if (input.dataset.jdpBound === '1') return;
+    input.dataset.jdpBound = '1';
+    input.addEventListener('click', () => jalaliDatepicker.show(input));
   });
 }
 

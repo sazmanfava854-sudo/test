@@ -93,6 +93,14 @@ body {
 .unsent-form-grid {
   margin-top: 4px;
 }
+
+/* جلوگیری از آیکن تقویم تکراری کتابخانه jalaliDatepicker */
+.date-input-wrap .jdp-icon,
+.date-input-wrap [class*="jdp-icon"],
+.date-input-wrap button:not(.btn-date-icon) {
+  display: none !important;
+}
+
 .field-hint {
   display: block;
   margin-top: 0.35rem;
