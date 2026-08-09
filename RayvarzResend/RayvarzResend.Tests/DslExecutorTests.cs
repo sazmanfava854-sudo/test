@@ -94,7 +94,8 @@ public class DslExecutorTests
         Assert.True(registry.IsKnown("ListAcc.Add"));
 
         var ctx = new DslExecutionContext { DryRun = true };
-        Assert.Null(registry.Invoke("ListRefP.Add", ctx, Array.Empty<string>()));
+        RefParameterCollector.AddPending(ctx, ["Refcenter"]);
+        Assert.NotNull(ctx.Variables.GetValueOrDefault(RefParameterCollector.ListKey));
     }
 
     [Fact]

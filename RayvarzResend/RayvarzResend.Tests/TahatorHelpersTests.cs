@@ -345,7 +345,7 @@ public class TahatorHelpersTests
         Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorIncome, pair.IncomeFiche!.IncomeAccountGroup);
         // SendAsync sends AmountFiche (157) before IncomeFiche (158) — VB Tahator1 then Tahator
         var order = new[] { pair.AmountFiche, pair.IncomeFiche }.Select(f => f.IncomeAccountGroup).ToArray();
-        Assert.Equal(new[] { 157, 158 }, order);
+        Assert.Equal<int?>(new int?[] { 157, 158 }, order);
     }
 
     [Fact]

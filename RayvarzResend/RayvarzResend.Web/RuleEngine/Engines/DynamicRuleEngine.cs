@@ -73,7 +73,8 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 DueDate = context.DueDate,
                 DryRun = true,
                 BuildSoap = buildSoap,
-                AllowLegacyFallback = context.AllowLegacyFallback
+                AllowLegacyFallback = context.AllowLegacyFallback,
+                Member1388FullExecution = _config.GetValue("RuleEngine:Member1388FullExecution", true)
             };
 
             var executed = _executor.Execute(program, execContext);

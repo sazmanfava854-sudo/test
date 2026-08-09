@@ -26,20 +26,27 @@ public static class SaraOperationBootstrap
 
     private static void RegisterCollectionNoOps(OperationRegistry r)
     {
-        OperationHandler addNoOp = (ctx, _) =>
+        OperationHandler addHandler = (ctx, args) =>
         {
+            if (args.Count > 0 && (args[0].Contains("Ref", StringComparison.OrdinalIgnoreCase)
+                || args[0].Contains("ListRefP", StringComparison.OrdinalIgnoreCase)))
+            {
+                RefParameterCollector.AddPending(ctx, args);
+                return null;
+            }
+
             ctx.Variables["collectionAddSkipped"] = true;
             return null;
         };
 
-        // صریح — از XmlBody واقعی Member 1388
-        r.Register("TmpAccounting_DocDetailsList.Add", addNoOp);
-        r.Register("ListRefP.Add", addNoOp);
-        r.Register("ListRefP.add", addNoOp);
-        r.Register("ListAcc.Add", addNoOp);
-        r.Register("ListAcc.add", addNoOp);
-        r.Register("PParamName.Add", addNoOp);
-        r.Register("PParamValue.Add", addNoOp);
+        // ListRefP — Center/Center1/Center2/Center3 از VB
+        r.Register("ListRefP.Add", addHandler);
+        r.Register("ListRefP.add", addHandler);
+        r.Register("TmpAccounting_DocDetailsList.Add", addHandler);
+        r.Register("ListAcc.Add", addHandler);
+        r.Register("ListAcc.add", addHandler);
+        r.Register("PParamName.Add", addHandler);
+        r.Register("PParamValue.Add", addHandler);
     }
 
     private static void RegisterCommunication(OperationRegistry r)

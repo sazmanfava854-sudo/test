@@ -13,6 +13,8 @@ public sealed class DslExecutionContext
     public string? DueDate { get; init; }
     /// <summary>حالت ارزیابی قوانین: خطوط VB غیرقابل‌parse و operation ناشناخته soft-skip می‌شوند.</summary>
     public bool DryRun { get; init; } = true;
+    /// <summary>اجرای کامل Member 1388 — هر تابع از Member1388FunctionExecutor قبل از بدنه AST.</summary>
+    public bool Member1388FullExecution { get; init; } = true;
     public bool BuildSoap { get; init; }
     public bool AllowLegacyFallback { get; init; } = true;
     public Dictionary<string, object?> Variables { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -24,6 +26,9 @@ public sealed class DslExecutionContext
     /// <summary>توابعی که به‌خاطر نوع فیش اعمال نشدند (نه Unsupported).</summary>
     public List<string> SkippedNotApplicable { get; } = new();
     public List<string> DeferredRuleLines { get; } = new();
+    /// <summary>توابعی که برای گروه حساب فیش اثر گذاشتند.</summary>
+    public List<string> FunctionsWithEffect { get; } = new();
+    public bool SkipCurrentFunctionBody { get; set; }
 }
 
 public sealed class DslExecutionResult
@@ -37,6 +42,7 @@ public sealed class DslExecutionResult
     public IReadOnlyList<string> AppliedFunctions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> SkippedNotApplicable { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> PreSoapRuleErrors { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> FunctionsWithEffect { get; init; } = Array.Empty<string>();
 }
 
 public sealed class DslValidationResult
