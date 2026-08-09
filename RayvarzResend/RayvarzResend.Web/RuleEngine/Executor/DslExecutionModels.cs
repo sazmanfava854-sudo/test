@@ -29,6 +29,10 @@ public sealed class DslExecutionContext
     /// <summary>توابعی که برای گروه حساب فیش اثر گذاشتند.</summary>
     public List<string> FunctionsWithEffect { get; } = new();
     public bool SkipCurrentFunctionBody { get; set; }
+    /// <summary>تقویم تعطیلات — AddDateForHolidays.</summary>
+    public IMember1388HolidayCalendar HolidayCalendar { get; init; } = EmptyMember1388HolidayCalendar.Instance;
+    /// <summary>خروجی trace برای FnSMS / Logfile (بدون IO واقعی).</summary>
+    public List<string> HelperTrace { get; } = new();
 }
 
 public sealed class DslExecutionResult

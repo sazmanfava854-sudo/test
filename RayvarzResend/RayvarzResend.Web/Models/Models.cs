@@ -58,6 +58,8 @@ public class FicheHeaderDto
     public string DocDsc { get; set; } = "";
     public string? DocTypDsc { get; set; }
     public int? IncomeAccountGroup { get; set; }
+    /// <summary>علت صدور سند — VB AccountingDocumentingCause (Confirm=0، تقسیط=7).</summary>
+    public byte? AccountingDocumentingCause { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }

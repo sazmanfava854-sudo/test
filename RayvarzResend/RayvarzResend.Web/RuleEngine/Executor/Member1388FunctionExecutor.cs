@@ -33,8 +33,11 @@ public static class Member1388FunctionExecutor
         if (functionName.Equals("BedeHi", StringComparison.OrdinalIgnoreCase))
             return ExecuteBedeHi(context, trace);
 
+        if (functionName.Equals("Run", StringComparison.OrdinalIgnoreCase))
+            return ExecuteRun(context, registry, trace);
+
         if (IsHelper(functionName))
-            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
+            return ExecuteHelper(functionName, context, trace);
 
         if (fiche.Category != FicheCategory.Income)
             return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
@@ -101,6 +104,82 @@ public static class Member1388FunctionExecutor
         trace.Add("iNcOMECheck: OK");
         return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
     }
+
+    private static Member1388FunctionResult ExecuteRun(
+        DslExecutionContext context,
+        IOperationRegistry registry,
+        List<string> trace)
+    {
+        var hadEffect = Member1388HelperFunctions.DispatchRun(context, registry, trace);
+        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: hadEffect);
+    }
+
+    private static Member1388FunctionResult ExecuteHelper(
+        string functionName,
+        DslExecutionContext context,
+        List<string> trace)
+    {
+        if (functionName.Equals("ChangeDate", StringComparison.OrdinalIgnoreCase))
+        {
+            var d1 = GetHelperArg(context, 0) ?? "";
+            var result = Member1388HelperFunctions.ChangeDate(d1);
+            context.Variables["ChangeDateResult"] = result;
+            trace.Add($"ChangeDate: {d1} → {result}");
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: result.Length > 0);
+        }
+
+        if (functionName.Equals("GetSara8Workflow", StringComparison.OrdinalIgnoreCase))
+        {
+            var group = Member1388HelperFunctions.GetSara8Workflow(context.Fiche.NidProc, context);
+            trace.Add($"GetSara8Workflow: group={group}");
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: group > 0);
+        }
+
+        if (functionName.Equals("GetDiffDate", StringComparison.OrdinalIgnoreCase))
+        {
+            var date1 = GetHelperArg(context, 0) ?? "";
+            var date2 = GetHelperArg(context, 1) ?? "";
+            var mood = int.TryParse(GetHelperArg(context, 2), out var m) ? m : 0;
+            var diff = Member1388HelperFunctions.GetDiffDate(date1, date2, mood);
+            context.Variables["GetDiffDateResult"] = diff;
+            trace.Add($"GetDiffDate: {diff}");
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
+        }
+
+        if (functionName.Equals("AddDateForHolidays", StringComparison.OrdinalIgnoreCase))
+        {
+            var date = GetHelperArg(context, 0) ?? "";
+            var days = int.TryParse(GetHelperArg(context, 1), out var d) ? d : 0;
+            var aa = int.TryParse(GetHelperArg(context, 2), out var a) ? a : 0;
+            var result = Member1388HelperFunctions.AddDateForHolidays(
+                date, days, aa, context.HolidayCalendar);
+            context.Variables["AddDateForHolidaysResult"] = result;
+            trace.Add($"AddDateForHolidays: {result}");
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
+        }
+
+        if (functionName.Equals("FnSMS", StringComparison.OrdinalIgnoreCase))
+        {
+            var text = GetHelperArg(context, 0) ?? "";
+            Member1388HelperFunctions.FnSms(text, context);
+            trace.Add("FnSMS: traced");
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: !string.IsNullOrEmpty(text));
+        }
+
+        if (functionName.Equals("Logfile", StringComparison.OrdinalIgnoreCase))
+        {
+            var n1 = GetHelperArg(context, 0) ?? "";
+            var n2 = GetHelperArg(context, 1) ?? "";
+            Member1388HelperFunctions.Logfile(n1, n2, context);
+            trace.Add($"Logfile: {n1}");
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: !string.IsNullOrEmpty(n1));
+        }
+
+        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
+    }
+
+    private static string? GetHelperArg(DslExecutionContext context, int index) =>
+        context.Variables.TryGetValue($"HelperArg{index}", out var value) ? value?.ToString() : null;
 
     private static Member1388FunctionResult ExecuteBedeHi(DslExecutionContext context, List<string> trace)
     {
@@ -241,8 +320,7 @@ public static class Member1388FunctionExecutor
         || name.Equals("GetDiffDate", StringComparison.OrdinalIgnoreCase)
         || name.Equals("FnSMS", StringComparison.OrdinalIgnoreCase)
         || name.Equals("AddDateForHolidays", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("Logfile", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("Run", StringComparison.OrdinalIgnoreCase);
+        || name.Equals("Logfile", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class Member1388FunctionResult
