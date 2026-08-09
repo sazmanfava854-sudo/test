@@ -109,6 +109,96 @@ public class Member1388FullExecutionTests
         Assert.Equal(700100001, fiche.Rows[0].Center3);
     }
 
+    [Theory]
+    [InlineData(209, 5519590L)]
+    [InlineData(9, 5519590L)]
+    [InlineData(218, 5519620L)]
+    [InlineData(80, 5519620L)]
+    [InlineData(99, 1200L)]
+    public void ResolveCenter2Eshghal_maps_district_to_vb_values(int district, long expected)
+    {
+        Assert.Equal(expected, Member1388IncomeCenterResolver.ResolveCenter2Eshghal(district));
+    }
+
+    [Theory]
+    [InlineData(209, 200209016)]
+    [InlineData(201, 200201021)]
+    [InlineData(218, 200218028)]
+    public void ResolveSeprdehFund_maps_district_to_vb_values(int district, int expected)
+    {
+        Assert.Equal(expected, Member1388IncomeCenterResolver.ResolveSeprdehFund(district));
+    }
+
+    [Fact]
+    public void Execute_iNcOMEOragh_sets_center1_fund_and_file_no()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 154,
+            Deposit = 320008535,
+            Payable = 500_000m,
+            Rows = { new IncmRowDto { IncmNo = 1025, Val = 500_000m } }
+        };
+
+        var result = Member1388FunctionExecutor.Execute(
+            "iNcOMEOragh",
+            new DslExecutionContext { Fiche = fiche, Member1388FullExecution = true },
+            SaraOperationBootstrap.CreateDefault());
+
+        Assert.True(result.HadEffect);
+        Assert.Equal(320008535, fiche.Rows[0].Center1);
+        Assert.Equal(Member1388IncomeCenterResolver.OraghFund, fiche.SuggestedFund);
+        Assert.Equal("4", fiche.Rows[0].Num);
+    }
+
+    [Fact]
+    public void Execute_iNcOMEEshghal_sets_regional_center2_and_fund()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 124,
+            Deposit = 320008535,
+            IncomeRegion = "9",
+            Payable = 500_000m,
+            Rows = { new IncmRowDto { IncmNo = 1025, Val = 500_000m } }
+        };
+
+        var result = Member1388FunctionExecutor.Execute(
+            "iNcOMEEshghal",
+            new DslExecutionContext { Fiche = fiche, Member1388FullExecution = true },
+            SaraOperationBootstrap.CreateDefault());
+
+        Assert.True(result.HadEffect);
+        Assert.Equal(5519590L, fiche.Rows[0].Center2);
+        Assert.Equal(200209016, fiche.SuggestedFund);
+    }
+
+    [Fact]
+    public void Execute_BazAfarine_sets_regional_center_and_fixed_centers()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 156,
+            BnkAcntNo = "9-1-1-0-0-0-0",
+            Payable = 500_000m,
+            Rows = { new IncmRowDto { IncmNo = 1025, Val = 500_000m } }
+        };
+
+        var result = Member1388FunctionExecutor.Execute(
+            "BazAfarine",
+            new DslExecutionContext { Fiche = fiche, Member1388FullExecution = true },
+            SaraOperationBootstrap.CreateDefault());
+
+        Assert.True(result.HadEffect);
+        Assert.Equal(910900001L, fiche.Center);
+        Assert.Equal(Member1388IncomeCenterResolver.BazAfarineCenter1, fiche.Rows[0].Center1);
+        Assert.Equal(Member1388IncomeCenterResolver.BazAfarineCenter2, fiche.Rows[0].Center2);
+        Assert.Equal(910900001L, fiche.Rows[0].Center3);
+    }
+
     private static DslProgram LoadFullProgram()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "member-1388-full-body.vb");

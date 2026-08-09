@@ -115,16 +115,9 @@ public static class Member1388FunctionExecutor
         IOperationRegistry registry,
         List<string> trace)
     {
-        IncomeRowScaler.ScaleToPayable(context.Fiche.Rows, context.Fiche.Payable);
-
-        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase))
-            context.Fiche.ResolvedDistrictBranch = 682;
-        else if (functionName.Equals("iNcOME", StringComparison.OrdinalIgnoreCase)
-            || functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
-            || functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
-        {
-            ApplyIncomeCentersFromDeposit(context.Fiche);
-        }
+        var fiche = context.Fiche;
+        IncomeRowScaler.ScaleToPayable(fiche.Rows, fiche.Payable);
+        ApplyIncomeCentersForFunction(functionName, fiche);
 
         registry.Invoke("Income.BuildIncomeRows", context, Array.Empty<string>());
         RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context));
@@ -134,13 +127,59 @@ public static class Member1388FunctionExecutor
         return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
     }
 
-    private static void ApplyIncomeCentersFromDeposit(FicheHeaderDto fiche)
+    private static void ApplyIncomeCentersForFunction(string functionName, FicheHeaderDto fiche)
     {
-        if (fiche.Deposit is > 0)
+        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var row in fiche.Rows)
-                row.Center1 = fiche.Deposit;
+            fiche.ResolvedDistrictBranch = 682;
+            return;
         }
+
+        if (functionName.Equals("iNcOMEOragh", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyOragh(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEHavaleT", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyHavaleT(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEGhatar_Shahri", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyGhatarShahri(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMESeprdeh", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplySeprdeh(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOMEEshghal", StringComparison.OrdinalIgnoreCase)
+            || functionName.Equals("iNcOMEBackSeprdeh", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyEshghal(fiche);
+            return;
+        }
+
+        if (functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
+            || functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyBazAfarine(fiche);
+            return;
+        }
+
+        if (functionName.Equals("iNcOME", StringComparison.OrdinalIgnoreCase))
+            ApplyStandardIncomeCenters(fiche);
+    }
+
+    private static void ApplyStandardIncomeCenters(FicheHeaderDto fiche)
+    {
+        Member1388IncomeCenterResolver.ApplyCenter1FromDeposit(fiche);
 
         var center3 = string.Equals(fiche.CheckNo?.Trim(), "5", StringComparison.Ordinal)
             ? TahatorRowBuilder.Center3CheckNo5
