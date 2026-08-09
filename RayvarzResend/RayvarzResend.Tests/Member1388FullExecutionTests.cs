@@ -199,6 +199,140 @@ public class Member1388FullExecutionTests
         Assert.Equal(910900001L, fiche.Rows[0].Center3);
     }
 
+    [Fact]
+    public void BedeHiLogic_returns_payable_minus_brokers_for_valid_prior_fiche()
+    {
+        var prior = new PriorIncomeFicheDto
+        {
+            FicheNo = "OLD001",
+            Payable = 2_000_000m,
+            Brokers = 200_000m,
+            PaymentDate = "1400/01/01",
+            BankPaymentDate = "1400/01/02",
+            IncomeAccountGroup = 150
+        };
+
+        Assert.Equal(1_800_000m, BedeHiLogic.Resolve(209, "NEW001", prior));
+    }
+
+    [Fact]
+    public void BedeHiLogic_returns_zero_when_prior_dates_before_1399()
+    {
+        var prior = new PriorIncomeFicheDto
+        {
+            FicheNo = "OLD001",
+            Payable = 2_000_000m,
+            PaymentDate = "1398/12/29",
+            BankPaymentDate = "1398/12/29",
+            IncomeAccountGroup = 150
+        };
+
+        Assert.Equal(0m, BedeHiLogic.Resolve(209, "NEW001", prior));
+    }
+
+    [Fact]
+    public void IncomeOddmentLogic_subtracts_and_adds_by_type()
+    {
+        var rows = new List<IncmRowDto> { new() { IncmNo = 1025, Val = 1_000_000m } };
+        IncomeOddmentLogic.ApplyToRows(rows,
+        [
+            new IncomeOddmentDto { IncmNo = 1025, Value = 100_000m, OddmentType = 2 },
+            new IncomeOddmentDto { IncmNo = 1025, Value = 50_000m, OddmentType = 4 }
+        ], null);
+
+        Assert.Equal(950_000m, rows[0].Val);
+    }
+
+    [Fact]
+    public void Execute_iNcOMEOragh_applies_oddment_and_bedehi_rows()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 154,
+            Deposit = 320008535,
+            FicheNo = "NEW001",
+            Payable = 1_000_000m,
+            PriorBedeHiAmount = 200_000m,
+            PriorIncomeFiche = new PriorIncomeFicheDto
+            {
+                FicheNo = "OLD001",
+                CalculationRows =
+                {
+                    new IncmRowDto { IncmNo = 1025, Val = 600_000m },
+                    new IncmRowDto { IncmNo = 1271, Val = 400_000m }
+                }
+            },
+            Oddments =
+            {
+                new IncomeOddmentDto { IncmNo = 1025, Value = 100_000m, OddmentType = 2 }
+            },
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1025, Val = 600_000m },
+                new IncmRowDto { IncmNo = 1271, Val = 400_000m }
+            }
+        };
+
+        var result = Member1388FunctionExecutor.Execute(
+            "iNcOMEOragh",
+            new DslExecutionContext { Fiche = fiche, Member1388FullExecution = true },
+            SaraOperationBootstrap.CreateDefault());
+
+        Assert.True(result.HadEffect);
+        Assert.Equal(1_000_000m, fiche.Rows.Sum(r => r.Val));
+        Assert.Contains(fiche.Rows, r => r.Val < 0);
+        Assert.All(fiche.Rows, r => Assert.Equal("4", r.Num));
+    }
+
+    [Fact]
+    public void Execute_IncomeHoushmand_builds_vat_split_rows()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 163,
+            Payable = 1_100_000m,
+            Rows = { new IncmRowDto { IncmNo = 1, Val = 999_999m } }
+        };
+
+        var result = Member1388FunctionExecutor.Execute(
+            "IncomeHoushmand",
+            new DslExecutionContext { Fiche = fiche, Member1388FullExecution = true },
+            SaraOperationBootstrap.CreateDefault());
+
+        Assert.True(result.HadEffect);
+        Assert.Equal(2, fiche.Rows.Count);
+        Assert.Equal(Member1388SpecialIncomeRowBuilder.BaseIncmNo, fiche.Rows[0].IncmNo);
+        Assert.Equal(Member1388SpecialIncomeRowBuilder.VatIncmNo, fiche.Rows[1].IncmNo);
+        Assert.Equal(1_100_000m, fiche.Rows.Sum(r => r.Val));
+        Assert.Equal(Member1388SpecialIncomeRowBuilder.Branch682, fiche.ResolvedDistrictBranch);
+        Assert.Equal(Member1388SpecialIncomeRowBuilder.Fund682, fiche.SuggestedFund);
+        Assert.Equal(0L, fiche.Rows[0].Center1);
+    }
+
+    [Fact]
+    public void Execute_IncomeSrvElectronic_builds_rows_with_branch_682()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 164,
+            Payable = 1_000_000m,
+            Rows = { new IncmRowDto { IncmNo = 1, Val = 500_000m } }
+        };
+
+        var result = Member1388FunctionExecutor.Execute(
+            "IncomeSrvElectronic",
+            new DslExecutionContext { Fiche = fiche, Member1388FullExecution = true },
+            SaraOperationBootstrap.CreateDefault());
+
+        Assert.True(result.HadEffect);
+        Assert.Equal(2, fiche.Rows.Count);
+        Assert.Equal(1_000_000m, fiche.Rows.Sum(r => r.Val));
+        Assert.Equal(Member1388SpecialIncomeRowBuilder.Fund682, fiche.SuggestedFund);
+    }
+
     private static DslProgram LoadFullProgram()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "member-1388-full-body.vb");

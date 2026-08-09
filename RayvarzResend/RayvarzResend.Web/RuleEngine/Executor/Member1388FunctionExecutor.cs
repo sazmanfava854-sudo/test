@@ -104,9 +104,16 @@ public static class Member1388FunctionExecutor
 
     private static Member1388FunctionResult ExecuteBedeHi(DslExecutionContext context, List<string> trace)
     {
-        context.Variables["BedeHiResult"] = 0m;
-        trace.Add("BedeHi: 0");
-        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
+        var district = context.Variables.TryGetValue("DistrickBranch", out var branchObj)
+                       && branchObj is int branchFromVar
+            ? branchFromVar
+            : Member1388IncomeCenterResolver.ResolveDistrictBranch(context.Fiche);
+
+        var amount = Member1388OraghRowBuilder.ResolveBedeHiAmount(context.Fiche, district);
+        context.Variables["BedeHiResult"] = amount;
+        context.Fiche.PriorBedeHiAmount ??= amount;
+        trace.Add($"BedeHi: {amount}");
+        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: amount > 0);
     }
 
     private static Member1388FunctionResult ExecuteIncomeFunction(
@@ -116,7 +123,7 @@ public static class Member1388FunctionExecutor
         List<string> trace)
     {
         var fiche = context.Fiche;
-        IncomeRowScaler.ScaleToPayable(fiche.Rows, fiche.Payable);
+        ApplyIncomeRowsForFunction(functionName, fiche);
         ApplyIncomeCentersForFunction(functionName, fiche);
 
         registry.Invoke("Income.BuildIncomeRows", context, Array.Empty<string>());
@@ -127,13 +134,34 @@ public static class Member1388FunctionExecutor
         return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
     }
 
-    private static void ApplyIncomeCentersForFunction(string functionName, FicheHeaderDto fiche)
+    private static void ApplyIncomeRowsForFunction(string functionName, FicheHeaderDto fiche)
     {
-        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase))
+        if (functionName.Equals("iNcOMEOragh", StringComparison.OrdinalIgnoreCase))
         {
-            fiche.ResolvedDistrictBranch = 682;
+            Member1388OraghRowBuilder.Apply(fiche);
             return;
         }
+
+        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388SpecialIncomeRowBuilder.ApplyHoushmand(fiche);
+            return;
+        }
+
+        if (functionName.Equals("IncomeSrvElectronic", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388SpecialIncomeRowBuilder.ApplySrvElectronic(fiche);
+            return;
+        }
+
+        IncomeRowScaler.ScaleToPayable(fiche.Rows, fiche.Payable);
+    }
+
+    private static void ApplyIncomeCentersForFunction(string functionName, FicheHeaderDto fiche)
+    {
+        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase)
+            || functionName.Equals("IncomeSrvElectronic", StringComparison.OrdinalIgnoreCase))
+            return;
 
         if (functionName.Equals("iNcOMEOragh", StringComparison.OrdinalIgnoreCase))
         {

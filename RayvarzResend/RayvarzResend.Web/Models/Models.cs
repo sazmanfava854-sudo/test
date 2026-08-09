@@ -74,7 +74,35 @@ public class FicheHeaderDto
     public long? CreditorPapers { get; set; }
     /// <summary>Income_Fiche.CheckNo — Center3: 5→700100002 وگرنه 700100001.</summary>
     public string? CheckNo { get; set; }
+    /// <summary>کارمزد کارگزار — برای BedeHi: Payable-Brokers.</summary>
+    public decimal Brokers { get; set; }
+    /// <summary>مبلغ بدهی قبلی — اگر از DB بارگذاری شده یا BedeHi محاسبه شده.</summary>
+    public decimal? PriorBedeHiAmount { get; set; }
+    /// <summary>فیش درآمد قبلی همان پرونده — برای BedeHi و ردیف‌های بدهی.</summary>
+    public PriorIncomeFicheDto? PriorIncomeFiche { get; set; }
+    /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
+    public List<IncomeOddmentDto> Oddments { get; set; } = new();
     public List<IncmRowDto> Rows { get; set; } = new();
+}
+
+/// <summary>فیش درآمد قبلی — ورودی BedeHi (VB: M_AllFiche(0)).</summary>
+public class PriorIncomeFicheDto
+{
+    public string FicheNo { get; set; } = "";
+    public decimal Payable { get; set; }
+    public decimal Brokers { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string BankPaymentDate { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public List<IncmRowDto> CalculationRows { get; set; } = new();
+}
+
+/// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>
+public class IncomeOddmentDto
+{
+    public int IncmNo { get; set; }
+    public decimal Value { get; set; }
+    public int OddmentType { get; set; }
 }
 
 public class RuleDslParsePreviewRequest
