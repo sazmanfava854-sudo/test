@@ -163,6 +163,18 @@ public static class Member1388IncomeCenterResolver
         }
     }
 
+    public static void ApplyHoushmand(FicheHeaderDto fiche) => ApplyBranch682(fiche);
+
+    public static void ApplySrvElectronic(FicheHeaderDto fiche) => ApplyBranch682(fiche);
+
+    private static void ApplyBranch682(FicheHeaderDto fiche)
+    {
+        fiche.ResolvedDistrictBranch = Member1388SpecialIncomeRowBuilder.Branch682;
+        fiche.SuggestedFund = Member1388SpecialIncomeRowBuilder.Fund682;
+        foreach (var row in fiche.Rows)
+            row.Center1 = 0;
+    }
+
     private static void SetRowNum(FicheHeaderDto fiche, string num)
     {
         foreach (var row in fiche.Rows)

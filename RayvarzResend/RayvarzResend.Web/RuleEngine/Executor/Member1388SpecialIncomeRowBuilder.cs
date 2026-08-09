@@ -37,7 +37,7 @@ public static class Member1388SpecialIncomeRowBuilder
     ];
 
     ReconcileToPayable(fiche.Rows, fiche.Payable);
-    ApplyBranch682Metadata(fiche);
+    Member1388IncomeCenterResolver.ApplyHoushmand(fiche);
   }
 
   public static void ApplySrvElectronic(FicheHeaderDto fiche)
@@ -67,15 +67,7 @@ public static class Member1388SpecialIncomeRowBuilder
     ];
 
     ReconcileToPayable(fiche.Rows, fiche.Payable);
-    ApplyBranch682Metadata(fiche);
-  }
-
-  private static void ApplyBranch682Metadata(FicheHeaderDto fiche)
-  {
-    fiche.ResolvedDistrictBranch = Branch682;
-    fiche.SuggestedFund = Fund682;
-    foreach (var row in fiche.Rows)
-      row.Center1 = 0;
+    Member1388IncomeCenterResolver.ApplySrvElectronic(fiche);
   }
 
   private static void ReconcileSum(IList<IncmRowDto> rows, decimal target)

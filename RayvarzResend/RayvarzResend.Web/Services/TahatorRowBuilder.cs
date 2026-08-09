@@ -1,4 +1,5 @@
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.RuleEngine.Executor;
 
 namespace RayvarzResend.Web.Services;
 
@@ -244,23 +245,31 @@ public static class TahatorRowBuilder
     /// </summary>
     public static void ApplyTahatorIncomeRows(FicheHeaderDto fiche)
     {
+        Member1388IncomeRowProfiles.ApplyTahatorIncome(fiche);
+        ApplyTahatorIncomeCenters(fiche);
+    }
+
+    /// <summary>Center/Ref/DocTyp تهاتر درآمدی — بعد از ساخت ردیف.</summary>
+    public static void ApplyTahatorIncomeCenters(FicheHeaderDto fiche)
+    {
         fiche.IncomeAccountGroup = IncomeAccountGroupTahatorIncome;
         ApplyTahatorDocTyp(fiche);
 
         var bank = (fiche.BankCode ?? "").Trim();
-        // VB: CI_Bank="2" → CreditorPapers وگرنه "0"
         fiche.Center = bank == "2"
             ? (fiche.CreditorPapers ?? 0)
             : 0;
 
         ApplyDistrictAndFund(fiche, amountPath: false);
 
-        // VB: Ref = iif(CI_Bank=4,4,2) ؛ FileNo = DepositID
         var refVal = bank == "4" ? "4" : "2";
         var depositId = fiche.DepositId?.ToString();
 
         if (fiche.Rows.Count == 0)
         {
+            if (fiche.Payable <= 0)
+                return;
+
             fiche.Rows =
             [
                 new IncmRowDto
@@ -269,8 +278,6 @@ public static class TahatorRowBuilder
                     Val = Math.Abs(fiche.Payable),
                     IncmRowDsc = "تهاتر درآمد",
                     Center1 = TahatorIncomeCenter1,
-                    Center2 = null,
-                    Center3 = null,
                     Ref = refVal,
                     Num = depositId
                 }
@@ -284,8 +291,7 @@ public static class TahatorRowBuilder
             row.Center2 = null;
             row.Center3 = null;
             row.Ref = refVal;
-            row.Num = depositId;
-            // Val مثبت می‌ماند — نفی نمی‌شود
+            row.Num = depositId ?? row.Num;
             if (row.Val < 0)
                 row.Val = Math.Abs(row.Val);
         }

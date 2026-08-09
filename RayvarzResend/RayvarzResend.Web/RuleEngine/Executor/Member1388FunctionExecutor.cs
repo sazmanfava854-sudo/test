@@ -284,9 +284,17 @@ public static class Member1388FunctionExecutor
 
     private static void ApplyIncomeCentersForFunction(string functionName, FicheHeaderDto fiche)
     {
-        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase)
-            || functionName.Equals("IncomeSrvElectronic", StringComparison.OrdinalIgnoreCase))
+        if (functionName.Equals("IncomeHoushmand", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyHoushmand(fiche);
             return;
+        }
+
+        if (functionName.Equals("IncomeSrvElectronic", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplySrvElectronic(fiche);
+            return;
+        }
 
         if (functionName.Equals("iNcOMEOragh", StringComparison.OrdinalIgnoreCase))
         {
