@@ -18,6 +18,8 @@ public class LoadFicheRequest
 {
     public IdentifierType IdentifierType { get; set; }
     public string IdentifierValue { get; set; } = "";
+    /// <summary>درآمد یا نوسازی/صنفی — جدول جستجو را محدود می‌کند.</summary>
+    public UnsentFicheKind? FicheKind { get; set; }
     public int Branch { get; set; }
     public string DocDate { get; set; } = ""; // 1405/03/23 or 14050323
 }

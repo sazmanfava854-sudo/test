@@ -116,18 +116,37 @@ function getSingleFicheKind() {
   return $('singleFicheKind')?.value || 'Income';
 }
 
-function updateSingleFormPanels() {
-  const kind = getSingleFicheKind();
-  const isTahator = kind === 'Tahator';
-  const regular = $('singleRegularPanel');
-  const tahator = $('singleTahatorPanel');
-  if (regular) regular.hidden = isTahator;
-  if (tahator) tahator.hidden = !isTahator;
-  if (isTahator) {
-    $('ficheSection').hidden = true;
-    $('btnPreview').disabled = true;
-    $('btnSend').disabled = true;
+/** همان منطق سرور IdentifierDetector — فقط برای نمایش راهنما */
+function detectIdentifierType(value) {
+  const v = (value || '').trim();
+  if (!v) return null;
+  if (v.includes('/')) return 'FicheNo';
+  if (/^\d+$/.test(v) && v.length >= 20) return 'BillPaymentKey';
+  return 'FicheNo';
+}
+
+const identifierTypeLabels = {
+  FicheNo: 'شماره فیش (FicheNo)',
+  BillPaymentKey: 'BillID + PaymentID'
+};
+
+function updateIdentifierHint() {
+  const hint = $('identifierHint');
+  const input = $('identifierValue');
+  if (!hint || !input) return;
+  const t = detectIdentifierType(input.value);
+  if (!t) {
+    hint.hidden = true;
+    hint.textContent = '';
+    return;
   }
+  hint.hidden = false;
+  hint.textContent = `تشخیص سیستم: ${identifierTypeLabels[t]}`;
+}
+
+function isTahatorIncomeFiche(f) {
+  const g = f?.incomeAccountGroup;
+  return g === 157 || g === 158;
 }
 
 let datePickersReady = false;
@@ -301,6 +320,13 @@ function updateSendButton(f) {
     btn.title = 'فیش در رایورز تکراری است';
     return;
   }
+  if (isTahatorIncomeFiche(f)) {
+    btn.disabled = false;
+    btn.title = config?.tahator?.dryRun ?? config?.dryRun
+      ? 'تهاتر — DryRun فعال'
+      : 'ارسال جفت تهاتر (۱۵۷+۱۵۸) به رایورز';
+    return;
+  }
   if (f.payable <= 0) {
     btn.disabled = true;
     btn.title = 'مبلغ قابل پرداخت صفر است';
@@ -397,7 +423,7 @@ function renderFiche(f) {
     </div>
     <div class="stat-card">
       <span class="stat-label">نوع</span>
-      <span class="stat-value">${categoryLabels[f.category] || f.category}</span>
+      <span class="stat-value">${isTahatorIncomeFiche(f) ? 'تهاتر (درآمد)' : (categoryLabels[f.category] || f.category)}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">مبلغ قابل پرداخت</span>
@@ -454,9 +480,8 @@ async function init() {
   $('docDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
-  $('singleFicheKind')?.addEventListener('change', updateSingleFormPanels);
+  $('identifierValue')?.addEventListener('input', updateIdentifierHint);
   syncFundFromBranch();
-  updateSingleFormPanels();
   setupMainTabs();
   initDatePickers();
   window.addEventListener('load', initDatePickers);
@@ -481,7 +506,6 @@ function setupEventHandlers() {
 
   bindClick('btnLoad', async () => {
   const kind = getSingleFicheKind();
-  if (kind === 'Tahator') return alert('برای تهاتر از دکمه‌های بررسی/ارسال همان فرم استفاده کنید.');
   const value = $('identifierValue').value.trim();
   if (!value) return alert('شناسه فیش را وارد کنید');
 
@@ -491,7 +515,7 @@ function setupEventHandlers() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        identifierType: $('identifierType').value,
+        ficheKind: kind,
         identifierValue: value,
         branch: parseInt($('branch').value),
         docDate: $('docDate').value
@@ -502,11 +526,12 @@ function setupEventHandlers() {
 
     currentFiche = data;
     if (kind === 'Income' && data.category !== 'Income') {
-      throw new Error('نوع فیش با شهرسازی انتخاب‌شده مطابقت ندارد');
+      throw new Error('نوع فیش با «درآمد» انتخاب‌شده مطابقت ندارد');
     }
     if (kind === 'Duty' && data.category !== 'DutyNosazi' && data.category !== 'DutySenfi') {
-      throw new Error('نوع فیش با نوسازی/صنفی انتخاب‌شده مطابقت ندارد');
+      throw new Error('نوع فیش با «نوسازی و صنفی» انتخاب‌شده مطابقت ندارد');
     }
+    updateIdentifierHint();
     applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
     renderFiche(data);
@@ -549,6 +574,41 @@ function setupEventHandlers() {
   bindClick('btnSend', async () => {
   if (!currentFiche) return;
   if (currentFiche.existsInRayvarz) return alert('فیش تکراری است');
+
+  if (isTahatorIncomeFiche(currentFiche)) {
+    const dry = config?.tahator?.dryRun ?? config?.dryRun;
+    const warn = dry
+      ? `DryRun فعال — تهاتر ${currentFiche.ficheNo} فقط SOAP می‌سازد. ادامه؟`
+      : `ارسال تهاتر ${currentFiche.ficheNo} به رایورز؟`;
+    if (!confirm(warn)) return;
+    $('btnSend').disabled = true;
+    try {
+      const res = await fetch('/api/tahator/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ficheNo: currentFiche.ficheNo, branch: 0, fund: 0 })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      $('resultSection').hidden = false;
+      showTahatorSendResult(data);
+      if (data.previewXml || data.soapResponse) {
+        $('xmlSection').hidden = false;
+        $('xmlBox').textContent = data.soapResponse || data.previewXml;
+      }
+      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      else if (data.skipped) alert(data.message);
+      else if (data.success) alert(data.message || 'ارسال تهاتر موفق');
+      else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      $('btnSend').disabled = false;
+      updateSendButton(currentFiche);
+    }
+    return;
+  }
+
   if (!confirm(`ارسال فیش ${currentFiche.ficheNo} به رایورز؟`)) return;
 
   $('btnSend').disabled = true;
@@ -585,76 +645,6 @@ function setupEventHandlers() {
     $('btnSend').disabled = false;
     updateSendButton(currentFiche);
   }
-  });
-
-  bindClick('btnTahatorCheck', async () => {
-    const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
-    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
-    const btn = $('btnTahatorCheck');
-    btn.disabled = true;
-    showTahatorWaiting('بررسی Accounting_DocHeader / DocNotSent…');
-    try {
-      const res = await fetch('/api/tahator/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ficheNo })
-      });
-      if (res.status === 404) {
-        throw new Error('API /api/tahator/check یافت نشد — pull و restart کنید.');
-      }
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showTahatorResult(formatTahatorCheck(data));
-      alert(data.message || 'بررسی انجام شد');
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  bindClick('btnTahatorSend', async () => {
-    const ficheNo = ($('tahatorFicheNo')?.value || '').trim();
-    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید (تک‌کد).');
-    const dry = config?.tahator?.dryRun ?? config?.dryRun;
-    const warn = dry
-      ? `DryRun فعال است — برای ${ficheNo} فقط SOAP ساخته می‌شود؛ POST واقعی زده نمی‌شود. ادامه؟`
-      : `ارسال تهاتر ${ficheNo} به رایورز؟`;
-    if (!confirm(warn)) return;
-
-    const btn = $('btnTahatorSend');
-    btn.disabled = true;
-    showTahatorWaiting('ارسال تهاتر به رایورز… ممکن است طول بکشد');
-    try {
-      const res = await fetch('/api/tahator/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheNo,
-          branch: 0,
-          fund: 0
-          // تاریخ SOAP تهاتر روی سرور = امروز — تاریخ فرم ورود فیش عادی را نفرست
-        })
-      });
-      if (res.status === 404) {
-        throw new Error('API /api/tahator/send یافت نشد — pull و restart کنید.');
-      }
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showTahatorResult(formatTahatorSend(data));
-      if (data.previewXml || data.soapResponse) {
-        $('xmlSection').hidden = false;
-        $('xmlBox').textContent = data.soapResponse || data.previewXml;
-      }
-      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else if (data.skipped) alert(data.message);
-      else if (data.success) alert(data.message || 'ارسال تهاتر موفق');
-      else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      btn.disabled = false;
-    }
   });
 
   const selectAll = $('unsentSelectAll');
@@ -808,20 +798,8 @@ function setupEventHandlers() {
   });
 }
 
-function showTahatorWaiting(title) {
-  const box = $('tahatorResultBox');
-  if (!box) return;
-  box.hidden = false;
-  box.textContent = `${title}\n\nصبر کنید…`;
-  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function showTahatorResult(text) {
-  const box = $('tahatorResultBox');
-  if (!box) return;
-  box.hidden = false;
-  box.textContent = text;
-  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function showTahatorSendResult(data) {
+  $('resultBox').textContent = formatTahatorSend(data);
 }
 
 function formatTahatorCheck(d) {

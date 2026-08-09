@@ -31,6 +31,31 @@ public class FicheRepository
         return await TryLoadDutyAsync(type, value, ct);
     }
 
+    public async Task<FicheHeaderDto?> LoadByKindAsync(
+        UnsentFicheKind kind, IdentifierType type, string value, CancellationToken ct = default)
+    {
+        return kind == UnsentFicheKind.Duty
+            ? await TryLoadDutyAsync(type, value, ct)
+            : await TryLoadIncomeAsync(type, value, ct);
+    }
+
+    /// <summary>نوع شناسه را حدس می‌زند؛ در صورت عدم یافتن نوع دیگر را امتحان می‌کند.</summary>
+    public async Task<(FicheHeaderDto? Fiche, IdentifierType UsedType)> LoadByKindWithAutoDetectAsync(
+        UnsentFicheKind kind, string rawValue, CancellationToken ct = default)
+    {
+        var value = rawValue.Trim();
+        var primary = IdentifierDetector.Detect(value);
+        var fiche = await LoadByKindAsync(kind, primary, value, ct);
+        if (fiche != null)
+            return (fiche, primary);
+
+        var alternate = primary == IdentifierType.FicheNo
+            ? IdentifierType.BillPaymentKey
+            : IdentifierType.FicheNo;
+        fiche = await LoadByKindAsync(kind, alternate, value, ct);
+        return (fiche, fiche != null ? alternate : primary);
+    }
+
     /// <summary>
     /// جفت تهاتر: دو ردیف Income_Fiche با همان NidIncome — گروه ۱۵۷ (Tahator1) و ۱۵۸ (Tahator).
     /// </summary>

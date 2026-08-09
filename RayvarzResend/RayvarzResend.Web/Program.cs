@@ -173,9 +173,38 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
 
     try
     {
-        var fiche = await repo.LoadAsync(req.IdentifierType, req.IdentifierValue.Trim(), ct);
+        var value = req.IdentifierValue.Trim();
+        FicheHeaderDto? fiche;
+        IdentifierType usedType;
+
+        if (req.FicheKind is { } kind)
+        {
+            (fiche, usedType) = await repo.LoadByKindWithAutoDetectAsync(kind, value, ct);
+        }
+        else
+        {
+            usedType = IdentifierDetector.Detect(value);
+            fiche = await repo.LoadAsync(usedType, value, ct);
+            if (fiche == null)
+            {
+                var alt = usedType == IdentifierType.FicheNo
+                    ? IdentifierType.BillPaymentKey
+                    : IdentifierType.FicheNo;
+                fiche = await repo.LoadAsync(alt, value, ct);
+                if (fiche != null) usedType = alt;
+            }
+        }
+
         if (fiche == null)
-            return Results.NotFound(new { error = "فیش در Income_Fiche یا Duty_Fiche یافت نشد" });
+        {
+            var table = req.FicheKind == UnsentFicheKind.Duty ? "Duty_Fiche" : req.FicheKind == UnsentFicheKind.Income ? "Income_Fiche" : "Income_Fiche یا Duty_Fiche";
+            return Results.NotFound(new
+            {
+                error = $"فیش در {table} یافت نشد",
+                detectedIdentifierType = usedType.ToString(),
+                detectedIdentifierLabel = IdentifierDetector.Describe(usedType)
+            });
+        }
 
         try
         {

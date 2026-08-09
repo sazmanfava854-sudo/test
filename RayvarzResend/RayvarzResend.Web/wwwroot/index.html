@@ -40,7 +40,7 @@
         <label class="field field-required">
           <span class="field-label">نوع فیش</span>
           <select id="unsentFicheKind">
-            <option value="Income">شهرسازی</option>
+            <option value="Income">درآمد</option>
             <option value="Duty">نوسازی و صنفی</option>
           </select>
         </label>
@@ -123,25 +123,18 @@
         <label class="field field-required">
           <span class="field-label">نوع فیش</span>
           <select id="singleFicheKind">
-            <option value="Income">شهرسازی</option>
+            <option value="Income">درآمد</option>
             <option value="Duty">نوسازی و صنفی</option>
-            <option value="Tahator">تهاتر</option>
           </select>
         </label>
       </div>
 
       <div id="singleRegularPanel">
         <div class="form-grid">
-          <label class="field">
-            <span class="field-label">نوع شناسه</span>
-            <select id="identifierType">
-              <option value="FicheNo">شماره فیش (FicheNo)</option>
-              <option value="BillPaymentKey">BillID + PaymentID</option>
-            </select>
-          </label>
-          <label class="field field-wide">
-            <span class="field-label">مقدار شناسه</span>
-            <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
+          <label class="field field-wide field-required">
+            <span class="field-label">شناسه فیش</span>
+            <input id="identifierValue" type="text" placeholder="شماره فیش (مثلاً 101104/9881711) یا BillID+PaymentID (مثلاً 90000273516650048062122597)" autocomplete="off" />
+            <span id="identifierHint" class="field-hint" hidden></span>
           </label>
           <label class="field">
             <span class="field-label">منطقه</span>
@@ -178,20 +171,6 @@
           <button id="btnPreview" class="btn secondary" type="button" disabled>پیش‌نمایش XML</button>
           <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
         </div>
-      </div>
-
-      <div id="singleTahatorPanel" hidden>
-        <div class="tahator-row">
-          <label class="field field-grow">
-            <span class="field-label">شماره فیش تهاتر</span>
-            <input id="tahatorFicheNo" type="text" placeholder="جفت ۱۵۷+۱۵۸" autocomplete="off" />
-          </label>
-          <div class="actions actions-inline">
-            <button id="btnTahatorCheck" class="btn secondary" type="button">بررسی</button>
-            <button id="btnTahatorSend" class="btn danger" type="button">ارسال به رایورز</button>
-          </div>
-        </div>
-        <pre id="tahatorResultBox" class="code-block" hidden></pre>
       </div>
     </section>
 
