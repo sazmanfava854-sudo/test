@@ -122,7 +122,11 @@ public class Member1388HelperFunctionsTests
         {
             Category = FicheCategory.Income,
             AccountingDocumentingCause = Member1388AccountingCause.InstallmentCheck,
+            CurrentStatus = 5,
             Payable = 500_000m,
+            ExportPermanentDate = "1400/01/01",
+            PaymentBreakDate = "1400/01/20",
+            BankPaymentDate = "1400/01/10",
             Rows = { new IncmRowDto { IncmNo = 1025, Val = 500_000m } }
         };
 

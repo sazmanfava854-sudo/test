@@ -35,11 +35,18 @@ public sealed class DslExecutor
             // ۱) اجرای قوانین (Run و Call chain وابسته به نوع فیش)
             ExecuteFunction(entry, program, context, trace);
 
+            // ۱.۵) خطاهای اعتبارسنجی (iNcOMECheck و …)
+            var validationErrors = context.ValidationErrors.ToList();
+            if (!string.IsNullOrWhiteSpace(context.Fiche.BlockReason)
+                && !validationErrors.Contains(context.Fiche.BlockReason))
+                validationErrors.Add(context.Fiche.BlockReason);
+
             // ۲) ساخت ردیف از فیش live پس از اعمال قوانین
             FinalizeRowsByCategory(context, trace);
 
             // ۳) تأیید نقش‌های اجباری قبل از SOAP
             var preSoapErrors = ValidateRequiredRolesBeforeSoap(context, trace);
+            preSoapErrors.AddRange(validationErrors);
 
             var rows = context.Rows.Count > 0 ? context.Rows : context.Fiche.Rows;
             var sum = rows.Sum(r => r.Val);

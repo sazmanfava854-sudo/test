@@ -1,3 +1,5 @@
+using RayvarzResend.Web.Models;
+
 namespace RayvarzResend.Web.RuleEngine.Executor;
 
 /// <summary>فهرست توابع Member 1388 — همان ترتیب Run در فایل paste/VB.</summary>
@@ -21,6 +23,22 @@ public static class Member1388Catalog
         "Tahator1",
         "Tahator"
     ];
+
+    /// <summary>
+    /// زنجیره Run برای درآمد. BazAfarineOld در VB از Run صدا زده نمی‌شود؛
+    /// فقط با <see cref="FicheHeaderDto.UseBazAfarineOld"/> جایگزین BazAfarine می‌شود.
+    /// </summary>
+    public static IReadOnlyList<string> ResolveIncomeCallOrder(FicheHeaderDto fiche)
+    {
+        if (!fiche.UseBazAfarineOld)
+            return RunIncomeCallOrder;
+
+        return RunIncomeCallOrder
+            .Select(fn => fn.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
+                ? "BazAfarineOld"
+                : fn)
+            .ToList();
+    }
 
     public static readonly IReadOnlyList<Member1388FunctionDef> AllFunctions =
     [

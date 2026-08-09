@@ -33,6 +33,8 @@ public sealed class DslExecutionContext
     public IMember1388HolidayCalendar HolidayCalendar { get; init; } = EmptyMember1388HolidayCalendar.Instance;
     /// <summary>خروجی trace برای FnSMS / Logfile (بدون IO واقعی).</summary>
     public List<string> HelperTrace { get; } = new();
+    /// <summary>خطاهای اعتبارسنجی iNcOMECheck و مشابه.</summary>
+    public List<string> ValidationErrors { get; } = new();
 }
 
 public sealed class DslExecutionResult

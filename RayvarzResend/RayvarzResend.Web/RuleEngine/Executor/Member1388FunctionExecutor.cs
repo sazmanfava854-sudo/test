@@ -95,14 +95,17 @@ public static class Member1388FunctionExecutor
 
     private static Member1388FunctionResult ExecuteIncomeCheck(DslExecutionContext context, List<string> trace)
     {
-        if (context.Fiche.Payable <= 0)
+        var result = Member1388IncomeCheckLogic.Validate(context.Fiche, context);
+        trace.Add(result.TraceMessage ?? "iNcOMECheck");
+
+        if (!result.Success && result.BlockReason is not null)
         {
-            trace.Add("iNcOMECheck: مبلغ صفر");
-            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
+            context.Fiche.CanSend = false;
+            context.Fiche.BlockReason = result.BlockReason;
+            context.ValidationErrors.Add(result.BlockReason);
         }
 
-        trace.Add("iNcOMECheck: OK");
-        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
+        return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: result.HadEffect);
     }
 
     private static Member1388FunctionResult ExecuteRun(

@@ -60,6 +60,16 @@ public class FicheHeaderDto
     public int? IncomeAccountGroup { get; set; }
     /// <summary>علت صدور سند — VB AccountingDocumentingCause (Confirm=0، تقسیط=7).</summary>
     public byte? AccountingDocumentingCause { get; set; }
+    /// <summary>تاریخ دائم صادرشده — iNcOMECheck / تقسیط.</summary>
+    public string? ExportPermanentDate { get; set; }
+    /// <summary>تاریخ سررسید تقسیط — Molat در VB.</summary>
+    public string? PaymentBreakDate { get; set; }
+    /// <summary>تاریخ پرداخت بانک — Income_Fiche.BankPaymentDate.</summary>
+    public string? BankPaymentDate { get; set; }
+    /// <summary>تاریخ پرداخت — Income_Fiche.PaymentDate.</summary>
+    public string? PaymentDate { get; set; }
+    /// <summary>در Run به‌جای BazAfarine، BazAfarineOld فراخوانی شود (legacy opt-in).</summary>
+    public bool UseBazAfarineOld { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }

@@ -104,7 +104,7 @@ public static class Member1388HelperFunctions
 
         if (context.Fiche.Category == FicheCategory.Income)
         {
-            foreach (var fn in Member1388Catalog.RunIncomeCallOrder)
+            foreach (var fn in Member1388Catalog.ResolveIncomeCallOrder(context.Fiche))
                 Member1388RunDispatcher.DispatchChild(fn, context, registry, trace);
             trace.Add("Run: Confirm + Income → زنجیره درآمد");
             return context.FunctionsWithEffect.Count > 0;
