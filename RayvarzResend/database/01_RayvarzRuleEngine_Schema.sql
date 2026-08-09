@@ -122,10 +122,28 @@ BEGIN
         IncmRowDsc      NVARCHAR(200) NULL,
         ExpectedBranch  INT           NULL,
         ExpectedBank    INT           NULL,
+        ExpectedCenter  BIGINT        NULL,
+        ExpectedCenter1 BIGINT        NULL,
+        ExpectedCenter2 BIGINT        NULL,
+        ExpectedCenter3 BIGINT        NULL,
         CONSTRAINT PK_RuleGoldenExpectedRow PRIMARY KEY (GoldenFicheId, IncmRow),
         CONSTRAINT FK_RuleGoldenExpectedRow_Fiche FOREIGN KEY (GoldenFicheId)
             REFERENCES dbo.RuleGoldenFiche (GoldenFicheId)
     );
+END
+GO
+
+-- مهاجرت: ستون‌های Center برای گلدن تهاتر
+IF OBJECT_ID(N'dbo.RuleGoldenExpectedRow', N'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH(N'dbo.RuleGoldenExpectedRow', N'ExpectedCenter') IS NULL
+        ALTER TABLE dbo.RuleGoldenExpectedRow ADD ExpectedCenter BIGINT NULL;
+    IF COL_LENGTH(N'dbo.RuleGoldenExpectedRow', N'ExpectedCenter1') IS NULL
+        ALTER TABLE dbo.RuleGoldenExpectedRow ADD ExpectedCenter1 BIGINT NULL;
+    IF COL_LENGTH(N'dbo.RuleGoldenExpectedRow', N'ExpectedCenter2') IS NULL
+        ALTER TABLE dbo.RuleGoldenExpectedRow ADD ExpectedCenter2 BIGINT NULL;
+    IF COL_LENGTH(N'dbo.RuleGoldenExpectedRow', N'ExpectedCenter3') IS NULL
+        ALTER TABLE dbo.RuleGoldenExpectedRow ADD ExpectedCenter3 BIGINT NULL;
 END
 GO
 

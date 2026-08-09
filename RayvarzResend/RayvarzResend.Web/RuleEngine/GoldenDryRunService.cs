@@ -121,7 +121,7 @@ public sealed class GoldenDryRunService
             if (fiche.Rows.Count != golden.ExpectedRowCount)
                 mismatches.Add($"تعداد ردیف: expected={golden.ExpectedRowCount} actual={fiche.Rows.Count}");
 
-            if (evaluated.RowSum != fiche.Payable)
+            if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, evaluated.RowSum))
                 mismatches.Add($"جمع ردیف‌ها ({evaluated.RowSum}) ≠ PayablePrice ({fiche.Payable})");
 
             if (compareExpectedRows && _store.IsConfigured)
@@ -138,6 +138,18 @@ public sealed class GoldenDryRunService
 
                     if (actual.Val != exp.ExpectedVal)
                         mismatches.Add($"IncmNo {exp.IncmNo}: Val expected={exp.ExpectedVal} actual={actual.Val}");
+
+                    CompareCenter(mismatches, exp.IncmNo, "Center1", exp.ExpectedCenter1, actual.Center1);
+                    CompareCenter(mismatches, exp.IncmNo, "Center2", exp.ExpectedCenter2, actual.Center2);
+                    CompareCenter(mismatches, exp.IncmNo, "Center3", exp.ExpectedCenter3, actual.Center3);
+                }
+
+                // DocumentItem.Center — فقط وقتی در expected ست شده
+                var anyCenter = expected.FirstOrDefault(e => e.ExpectedCenter.HasValue);
+                if (anyCenter?.ExpectedCenter is long expCenter
+                    && (fiche.Center ?? 0) != expCenter)
+                {
+                    mismatches.Add($"Center (DocumentItem): expected={expCenter} actual={fiche.Center ?? 0}");
                 }
             }
 
@@ -147,7 +159,12 @@ public sealed class GoldenDryRunService
                 golden.FicheNo,
                 engine = engine.EngineName,
                 fiche.Payable,
-                rows = fiche.Rows.Select(r => new { r.IncmNo, r.Val, r.IncmRowDsc })
+                fiche.DocTyp,
+                fiche.Center,
+                rows = fiche.Rows.Select(r => new
+                {
+                    r.IncmNo, r.Val, r.IncmRowDsc, r.Center1, r.Center2, r.Center3, r.Ref, r.Num
+                })
             });
 
             await _store.InsertDryRunResultAsync(candidateId, snapshotId, golden.GoldenFicheId, engine.EngineName, success,
@@ -179,6 +196,16 @@ public sealed class GoldenDryRunService
             }
             return Fail(golden, ex.Message);
         }
+    }
+
+    private static void CompareCenter(
+        List<string> mismatches, int incmNo, string name, long? expected, long? actual)
+    {
+        if (!expected.HasValue)
+            return;
+        var a = actual ?? 0;
+        if (a != expected.Value)
+            mismatches.Add($"IncmNo {incmNo}: {name} expected={expected.Value} actual={a}");
     }
 
     private static GoldenDryRunCaseResult Fail(RuleGoldenFicheRow golden, string message) =>

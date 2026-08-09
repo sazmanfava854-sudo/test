@@ -61,10 +61,10 @@ FROM dbo.Duty_Fiche WHERE FicheNo = N'101104/9881711';
 
 **درآمد:**
 ```sql
-SELECT CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
-       CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
-       CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-       CAST(b.Apartment AS varchar) + '-' + CAST(b.Shop AS varchar) AS BnkAcntNo
+SELECT CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+       CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+       CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
+       ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0') AS BnkAcntNo
 FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
 JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc

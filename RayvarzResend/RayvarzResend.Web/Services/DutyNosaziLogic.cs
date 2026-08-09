@@ -62,19 +62,10 @@ public static class DutyNosaziLogic
     }
 
     public static string ResolvePaymentDateRay(int eumDutyFicheStatus, string paymentDateRay, string bankPaymentDateRay) =>
-        eumDutyFicheStatus == 1
-            ? FicheDateResolver.FirstRayvarzDate(paymentDateRay, bankPaymentDateRay)
-            : FicheDateResolver.FirstRayvarzDate(bankPaymentDateRay, paymentDateRay);
+        FicheDateResolver.ResolvePaymentDateByStatus(eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay);
 
-    public static void ApplyRayvarzDates(FicheHeaderDto dto, int eumDutyFicheStatus, string paymentDateRay, string bankPaymentDateRay)
-    {
-        var tmpDate = ResolvePaymentDateRay(eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay);
-        var today = DateHelper.CurrentShamsiRayvarzDate();
-        dto.RayvarzDocDate = today;
-        dto.RayvarzDueDate = today;
-        dto.RayvarzActDate = tmpDate;
-        dto.RowDate = tmpDate;
-    }
+    public static void ApplyRayvarzDates(FicheHeaderDto dto, int eumDutyFicheStatus, string paymentDateRay, string bankPaymentDateRay) =>
+        FicheDateResolver.ApplyFromPaymentColumns(dto, eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay);
 
     public static string NormalizeMergedId(string? raw)
     {

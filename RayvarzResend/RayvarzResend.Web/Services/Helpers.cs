@@ -29,6 +29,21 @@ public static class DateHelper
         return $"{pc.GetYear(now):0000}{pc.GetMonth(now):00}{pc.GetDayOfMonth(now):00}";
     }
 
+    /// <summary>تاریخ شمسی با اسلش — مطابق ستون‌های Income_Fiche (مثلاً 1405/03/23).</summary>
+    public static string CurrentShamsiSlashDate()
+    {
+        var d = CurrentShamsiRayvarzDate();
+        return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : d;
+    }
+
+    public static string ToShamsiSlashDate(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+        if (input.Contains('/')) return input.Trim();
+        var d = ToRayvarzDate(input);
+        return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();
+    }
+
     /// <summary>سال شمسی از رشته yyyyMMdd (برای ستون yr در incmdocsys).</summary>
     public static int ExtractShamsiYear(string rayvarzYyyyMmDd)
     {
@@ -49,6 +64,47 @@ public static class DateHelper
         }
 
         return ToRayvarzDate(value.ToString() ?? "");
+    }
+}
+
+/// <summary>اعداد legacy Sara — ممکن است فارسی/عربی یا nvarchar باشند.</summary>
+public static class NumericHelper
+{
+    public static long? TryParseLegacyLong(object? value)
+    {
+        if (value is null or DBNull) return null;
+        if (value is long l) return l;
+        if (value is int i) return i;
+        if (value is decimal d) return (long)d;
+        if (value is double dbl) return (long)dbl;
+
+        var s = value.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(s)) return null;
+
+        s = NormalizeDigits(s);
+        s = new string(s.Where(c => char.IsDigit(c) || c == '-').ToArray());
+        if (string.IsNullOrWhiteSpace(s)) return null;
+
+        return long.TryParse(s, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string NormalizeDigits(string input)
+    {
+        var chars = input.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            // Persian ۰-۹
+            if (chars[i] is >= '\u06F0' and <= '\u06F9')
+                chars[i] = (char)('0' + (chars[i] - '\u06F0'));
+            // Arabic-Indic ٠-٩
+            else if (chars[i] is >= '\u0660' and <= '\u0669')
+                chars[i] = (char)('0' + (chars[i] - '\u0660'));
+        }
+
+        return new string(chars);
     }
 }
 

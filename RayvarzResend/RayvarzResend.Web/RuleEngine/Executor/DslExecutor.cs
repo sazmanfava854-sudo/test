@@ -3,6 +3,10 @@ using RayvarzResend.Web.RuleEngine.Parser;
 
 namespace RayvarzResend.Web.RuleEngine.Executor;
 
+/// <summary>
+/// اجرای DSL: اول قوانین بر اساس نوع فیش (Run + Call chain)، بعد Build*Rows، بعد آماده‌سازی برای SOAP.
+/// هیچ تابعی Unsupported نیست؛ خطوط غیرقابل‌parse فقط soft-skip می‌شوند.
+/// </summary>
 public sealed class DslExecutor
 {
     private readonly IOperationRegistry _registry;
@@ -20,13 +24,41 @@ public sealed class DslExecutor
             if (entry == null)
                 return Fail("تابع Run یافت نشد.", trace);
 
+            trace.Add($"PreSOAP: نوع فیش={context.Fiche.Category}, DocTyp={context.Fiche.DocTyp}");
+            foreach (var fn in program.Functions)
+            {
+                var role = SupportedDslFunctions.GetRole(fn.Name, fn.DisplayName);
+                var applies = SupportedDslFunctions.AppliesToFiche(fn.Name, fn.DisplayName, context.Fiche);
+                trace.Add($"  fn {fn.Name} role={role} applies={applies}");
+            }
+
+            // ۱) اجرای قوانین (Run و Call chain وابسته به نوع فیش)
             ExecuteFunction(entry, program, context, trace);
 
-            // پس از همان Call chain فایل اصلی: ردیف از فیش live بر اساس Category
+            // ۲) ساخت ردیف از فیش live پس از اعمال قوانین
             FinalizeRowsByCategory(context, trace);
+
+            // ۳) تأیید نقش‌های اجباری قبل از SOAP
+            var preSoapErrors = ValidateRequiredRolesBeforeSoap(context, trace);
 
             var rows = context.Rows.Count > 0 ? context.Rows : context.Fiche.Rows;
             var sum = rows.Sum(r => r.Val);
+
+            if (preSoapErrors.Count > 0)
+            {
+                return new DslExecutionResult
+                {
+                    Success = false,
+                    ErrorMessage = string.Join("; ", preSoapErrors),
+                    DispatchedFunction = context.DispatchedFunction,
+                    Rows = rows,
+                    RowSum = sum,
+                    Trace = trace,
+                    AppliedFunctions = context.InvokedFunctions.ToList(),
+                    SkippedNotApplicable = context.SkippedNotApplicable.ToList(),
+                    PreSoapRuleErrors = preSoapErrors
+                };
+            }
 
             return new DslExecutionResult
             {
@@ -34,7 +66,10 @@ public sealed class DslExecutor
                 DispatchedFunction = context.DispatchedFunction,
                 Rows = rows,
                 RowSum = sum,
-                Trace = trace
+                Trace = trace,
+                AppliedFunctions = context.InvokedFunctions.ToList(),
+                SkippedNotApplicable = context.SkippedNotApplicable.ToList(),
+                PreSoapRuleErrors = Array.Empty<string>()
             };
         }
         catch (Exception ex)
@@ -44,18 +79,52 @@ public sealed class DslExecutor
         }
     }
 
+    private static List<string> ValidateRequiredRolesBeforeSoap(DslExecutionContext context, List<string> trace)
+    {
+        var errors = new List<string>();
+        var required = SupportedDslFunctions.RequiredRolesBeforeSoap(context.Fiche);
+        foreach (var role in required)
+        {
+            var hit = context.InvokedFunctions.Any(name =>
+                SupportedDslFunctions.GetRole(name) == role);
+            if (!hit)
+            {
+                // fallback در FinalizeRows ممکن است نقش را پر کرده باشد
+                if (role == DslFunctionRole.Duty
+                    && context.DispatchedFunction.Equals("Nosazi", StringComparison.OrdinalIgnoreCase))
+                    hit = true;
+                if (role == DslFunctionRole.Income
+                    && SupportedDslFunctions.IsIncome(context.DispatchedFunction))
+                    hit = true;
+                if (role == DslFunctionRole.Tahator
+                    && SupportedDslFunctions.IsTahator(context.DispatchedFunction))
+                    hit = true;
+            }
+
+            if (!hit)
+            {
+                var msg = $"قبل از SOAP: نقش اجباری {role} برای فیش {context.Fiche.Category}/DocTyp={context.Fiche.DocTyp} اعمال نشد.";
+                errors.Add(msg);
+                trace.Add("ERROR: " + msg);
+            }
+            else
+            {
+                trace.Add($"PreSOAP OK: نقش {role} اعمال شد");
+            }
+        }
+
+        return errors;
+    }
+
     private void FinalizeRowsByCategory(DslExecutionContext context, List<string> trace)
     {
         if (context.Fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
         {
-            if (!context.InvokedFunctions.Any(f =>
-                    SupportedDslFunctions.IsNosazi(f, null)
-                    || f.Equals("Nosazi", StringComparison.OrdinalIgnoreCase)))
+            if (!context.InvokedFunctions.Any(f => SupportedDslFunctions.IsNosazi(f, null)))
             {
-                // اگر شرط Run به‌هر دلیل Nosazi را صدا نزد، باز هم Duty باید ردیف داشته باشد
                 context.DispatchedFunction = "Nosazi";
                 context.InvokedFunctions.Add("Nosazi");
-                trace.Add("→ Nosazi() [category fallback for Duty]");
+                trace.Add("→ Nosazi() [اعمال قانون Duty قبل از SOAP]");
             }
             else
             {
@@ -69,17 +138,18 @@ public sealed class DslExecutor
 
         if (context.Fiche.Category == FicheCategory.Income)
         {
-            if (!context.InvokedFunctions.Any(SupportedDslFunctions.IsIncome))
+            if (!context.InvokedFunctions.Any(SupportedDslFunctions.IsIncome)
+                && !context.InvokedFunctions.Any(SupportedDslFunctions.IsTahator))
             {
                 context.DispatchedFunction = "iNcOME";
                 context.InvokedFunctions.Add("iNcOME");
-                trace.Add("→ iNcOME() [category fallback for Income]");
+                trace.Add("→ iNcOME() [اعمال قانون Income قبل از SOAP]");
             }
-            else if (string.IsNullOrWhiteSpace(context.DispatchedFunction)
-                     || !SupportedDslFunctions.IsIncome(context.DispatchedFunction))
+            else
             {
-                // آخرین Call ممکن است BazAfarine/Tahator باشد — برای Build از iNcOME استفاده کن
+                // آخرین Call ممکن است Tahator باشد — برای Build ردیف، تابع درآمدی اول را بگیر
                 context.DispatchedFunction = context.InvokedFunctions.FirstOrDefault(SupportedDslFunctions.IsIncome)
+                    ?? context.InvokedFunctions.FirstOrDefault(SupportedDslFunctions.IsTahator)
                     ?? "iNcOME";
             }
 
@@ -94,20 +164,25 @@ public sealed class DslExecutor
         DslExecutionContext context,
         List<string> trace)
     {
-        trace.Add($"→ {function.Name}()");
+        var applies = SupportedDslFunctions.AppliesToFiche(function.Name, function.DisplayName, context.Fiche);
+        var role = SupportedDslFunctions.GetRole(function.Name, function.DisplayName);
+
+        if (!SupportedDslFunctions.IsEntryPoint(function.Name) && !applies)
+        {
+            context.SkippedNotApplicable.Add(function.Name);
+            trace.Add($"→ {function.Name}() [غیرمرتبط با نوع فیش {context.Fiche.Category} — نقش={role}]");
+            return;
+        }
+
+        trace.Add($"→ {function.Name}() [اعمال قانون role={role}]");
         context.DispatchedFunction = function.Name;
         if (!SupportedDslFunctions.IsEntryPoint(function.Name))
             context.InvokedFunctions.Add(function.Name);
 
-        // DryRun: بدنه همه به‌جز Run skip — ردیف‌ها از Fiche live
-        if (context.DryRun && SupportedDslFunctions.IsDryRunBodySkip(function.Name, function.DisplayName))
-        {
-            if (SupportedDslFunctions.IsNosazi(function.Name, function.DisplayName))
-                context.DispatchedFunction = "Nosazi";
-            trace.Add($"→ {function.Name}() [DryRun: body skipped — same Call order as XmlBody]");
-            return;
-        }
+        if (SupportedDslFunctions.IsNosazi(function.Name, function.DisplayName))
+            context.DispatchedFunction = "Nosazi";
 
+        // بدنه AST اجرا می‌شود — نه skip کل تابع به‌عنوان Unsupported
         ExecuteStatements(function.Body, program, context, trace);
     }
 
@@ -129,6 +204,14 @@ public sealed class DslExecutor
                 case DslCallOperationStatement op:
                 {
                     var key = IOperationRegistry.BuildKey(op.Receiver, op.Operation);
+                    if (!_registry.IsKnown(key))
+                    {
+                        // قبل از SOAP: operation ناشناخته مانع کل قانون نمی‌شود
+                        context.DeferredRuleLines.Add(key);
+                        trace.Add($"  defer op (unknown): {key}");
+                        break;
+                    }
+
                     _registry.Invoke(key, context, op.Arguments);
                     trace.Add($"  call {key}");
                     break;
@@ -198,13 +281,10 @@ public sealed class DslExecutor
                     return;
 
                 case DslUnsupportedStatement u:
-                    // خطوط VB خارج از subset — در DryRun رد؛ ردیف از Fiche live.
-                    if (context.DryRun)
-                    {
-                        trace.Add($"  skip unsupported: {Truncate(u.SourceSnippet, 80)}");
-                        break;
-                    }
-                    throw new InvalidOperationException($"{u.Reason}: {u.SourceSnippet}");
+                    // خط VB خارج از subset — قانون تابع همچنان Supported است؛ فقط این خط به تعویق
+                    context.DeferredRuleLines.Add(u.SourceSnippet);
+                    trace.Add($"  defer line: {Truncate(u.SourceSnippet, 80)}");
+                    break;
             }
         }
     }
@@ -252,14 +332,12 @@ public sealed class DslExecutor
             return context.Fiche.Category == FicheCategory.Income;
         }
 
-        // AccountingDocumentingCause = Confirm → مسیر عادی ارسال/resend
         if (normalized.Contains("AccountingDocumentingCause", StringComparison.OrdinalIgnoreCase)
             && normalized.Contains("Confirm", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        // AccountingDocumentingCause = 7 → iNcOMECheck (مسیر خاص؛ در resend عادی نه)
         if (normalized.Contains("AccountingDocumentingCause", StringComparison.OrdinalIgnoreCase)
             && (normalized.Contains("=7", StringComparison.Ordinal)
                 || normalized.EndsWith("=7", StringComparison.Ordinal)))
@@ -267,7 +345,6 @@ public sealed class DslExecutor
             return false;
         }
 
-        // ObjOnPrice = Income → فیش درآمدی
         if (normalized.Contains("ObjOnPrice", StringComparison.OrdinalIgnoreCase)
             && normalized.Contains("Income", StringComparison.OrdinalIgnoreCase))
         {

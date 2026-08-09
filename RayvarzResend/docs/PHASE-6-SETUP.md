@@ -8,22 +8,25 @@
 |---|-----|--------|
 | 6.1 | Parser: `iNcOME`, `iNcOMEOragh`, `iNcOMESeprdeh`, `iNcOMEEshghal`, … | ✅ |
 | 6.2 | Operation: `Income.BuildIncomeRows` | ✅ |
-| 6.3 | DryRun: skip بدنه VB درآمد → ردیف از فیش live Sara | ✅ |
+| 6.3 | قوانین قبل از SOAP (کلی / وابسته به نوع فیش)؛ ردیف از فیش live | ✅ |
 | 6.4 | Golden Income (اختیاری) | ⏳ در صورت نیاز seed جدا |
 
 ## الگوی اجرا (مثل Nosazi)
 
 ```
-Run()
-  If DutyFicheResultList.Count > 0 → Nosazi()
-  ElseIf IncomeFicheResultList.Count > 0 → iNcOME()
+Run()  ← قوانین قبل از SOAP
+  If ObjOnPrice=Income → Call iNcOME* / BazAfarine / Tahator…
+  Else → Call Nosazi()
         │
-        ▼ DryRun
-  Income.BuildIncomeRows  ← ردیف‌ها از Income_Calculation + اسکیل به PayablePrice
-  Validate.RowSumEqualsPayable
+        ▼
+  Build*Rows  ← ردیف‌ها از Sara + اسکیل به PayablePrice
+  Validate.RowSumEqualsPayable + نقش‌های اجباری
+        │
+        ▼
+  SOAP
 ```
 
-بدنه کامل VB داخل `iNcOME*` (مثل Nosazi) در DryRun اجرا نمی‌شود؛ ردیف‌ها از `FicheRepository` (جدول `Income_Calculation`) می‌آیند.
+هیچ تابعی `Unsupported (بدنه اجرا نمی‌شود)` نیست. توابع **کلی** (مثل `ChangeDate`, `FnSMS`) برای همه نوع فیش؛ توابع **وابسته** (`Nosazi` / `iNcOME*` / `Tahator`) فقط وقتی نوع فیش مرتبط است اعمال می‌شوند. خطوط VB خارج از subset به‌صورت خط‌به‌خط defer می‌شوند؛ کل تابع skip نمی‌شود.
 
 **تخفیف درآمد:** جمع خام `IncomeValue` اغلب ≠ `PayablePrice`. همان منطق `SoapBuilder.NormalizeRows` در `IncomeRowScaler.ScaleToPayable` هنگام Load و در `Income.BuildIncomeRows` اعمال می‌شود تا موتور/golden با مبلغ ارسالی به Rayvarz یکی باشد.
 
@@ -31,18 +34,17 @@ Run()
 
 | تابع | نقش |
 |------|-----|
-| `Run` | EntryPoint / dispatch |
-| `Nosazi` | نوسازی / صنفی (Duty) |
-| `iNcOME` | درآمد اصلی |
-| `iNcOMEOragh` | اوراق |
-| `iNcOMESeprdeh` | سپرده |
-| `iNcOMEEshghal` | اشغال |
+| `Run` | EntryPoint |
+| `ChangeDate`, `FnSMS`, … | Global (همه نوع فیش) |
+| `Nosazi` | Duty |
+| `iNcOME*` / `BazAfarine` / … | Income |
+| `Tahator` / `Tahator1` | Tahator (۱۵۷→DocTyp ۱۴/۱۵ مرکز؛ ۱۵۸→۱۷/۱۸ منطقه) |
 | هر `iNcOME*` | با پیشوند `iNcOME` هم پشتیبانی می‌شود |
 
-`ParserVersion` → **2.2.0**
+`ParserVersion` → **2.3.0**
 
 از 2.2.0 همه توابع Member (Public/Private) با `IsSupported=true` در DSL هستند.
-اجرا: `Run` همان Call chain فایل اصلی را طی می‌کند؛ بدنه بقیه در DryRun skip می‌شود و ردیف با `Build*Rows` از فیش live ساخته می‌شود.
+از 2.3.0 بدنه توابع به‌خاطر Unsupported یکجا skip نمی‌شود؛ قوانین قبل از SOAP بر اساس نقش/نوع فیش اعمال می‌شوند.
 
 ## تست بعد از deploy
 
@@ -76,6 +78,12 @@ database/04_RuleGolden_Seed_Phase6_Samples.sql
 | 8 | `050733454216` | Income شهرسازی | 4 | 147,291,000 |
 | 9 | `071105/0385826` | Duty نوسازی | 4 | 38,688,000 |
 | 10 | `071205/20381801` | Duty صنفی | 3 | 8,089,000 |
+
+تهاتر (اسکریپت جدا: `database/06_RuleGolden_Seed_Tahator.sql`) — چک `Center` / `Center1` / `Center2` / `Center3`:
+
+| Id | FicheNo | نوع | ردیف | Val (تهاتر) |
+|----|---------|-----|------|-------------|
+| 11–14 | `050933483716` … `051233468141` | Tahator DocTyp14 | 1 | −Payable ؛ Center1=Deposit ؛ Center3=700100001 |
 
 منبع expected: `Ray_CityHall.ray.incmdocsys` — فیش‌ها در Sara (`Income_Fiche` / `Duty_Fiche`) موجودند.
 

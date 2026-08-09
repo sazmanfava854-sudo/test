@@ -87,10 +87,11 @@ public sealed class DslValidator
             switch (stmt)
             {
                 case DslUnsupportedStatement u:
+                    // خط VB خارج از subset — تابع همچنان Supported است؛ در اجرا defer می‌شود
                     if (strictUnsupportedStatements)
-                        errors.Add($"Unsupported: {u.Reason} — {u.SourceSnippet}");
+                        errors.Add($"Deferred VB line: {u.Reason} — {u.SourceSnippet}");
                     else
-                        warnings.Add($"Unsupported (skipped): {u.SourceSnippet}");
+                        warnings.Add($"Deferred VB line (evaluated before SOAP): {u.SourceSnippet}");
                     break;
                 case DslCallOperationStatement op:
                     unknownOps.Add(IOperationRegistry.BuildKey(op.Receiver, op.Operation));

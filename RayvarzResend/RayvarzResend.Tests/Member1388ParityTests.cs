@@ -91,17 +91,41 @@ public class Member1388ParityTests
     [Fact]
     public void Transpile_uploaded_member_1388_all_supported()
     {
-        var path = "/home/ubuntu/.cursor/projects/workspace/uploads/rayvarz_2e1f.txt";
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "RuleEngine", "Parser", "Fixtures", "member-1388-full.xml"));
         if (!File.Exists(path))
-            return; // cloud-only upload; skip locally
+        {
+            // fallback: cloud upload path used in older runs
+            path = "/home/ubuntu/.cursor/projects/workspace/uploads/rayvax_c9f4.txt";
+            if (!File.Exists(path))
+                return;
+            // raw VB — wrap minimally for reader
+            var vb = File.ReadAllText(path);
+            var wrapped =
+                "<?xml version=\"1.0\"?><ClsFunction><NidClass>360</NidClass><NidFunction>1388</NidFunction>" +
+                $"<Name>Run</Name><Body>{System.Security.SecurityElement.Escape(vb)}</Body></ClsFunction>";
+            var programFromVb = VbTranspiler.Transpile(XmlEnvelopeReader.Read(wrapped, "upload").Document);
+            Assert.Empty(programFromVb.UnsupportedFunctions);
+            Assert.Contains(programFromVb.Functions, f => f.Name.Equals("Tahator", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(programFromVb.Functions, f => f.Name.Equals("Tahator1", StringComparison.OrdinalIgnoreCase));
+            return;
+        }
 
         var xml = File.ReadAllText(path);
-        var program = VbTranspiler.Transpile(XmlEnvelopeReader.Read(xml, "upload").Document);
+        var program = VbTranspiler.Transpile(XmlEnvelopeReader.Read(xml, "full").Document);
 
         Assert.Empty(program.UnsupportedFunctions);
         Assert.All(program.Functions, f => Assert.True(f.IsSupported, f.Name));
         Assert.True(program.Functions.Count >= 22);
+        Assert.Contains(program.Functions, f => f.Name.Equals("Tahator", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(program.Functions, f => f.Name.Equals("Tahator1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(program.Functions, f => f.Name.Equals("ChangeDate", StringComparison.OrdinalIgnoreCase));
+
+        var tahator = program.Functions.First(f => f.Name.Equals("Tahator", StringComparison.OrdinalIgnoreCase));
+        var tahator1 = program.Functions.First(f => f.Name.Equals("Tahator1", StringComparison.OrdinalIgnoreCase));
+        Assert.True(tahator.Body.Count > 10, "Tahator must not be empty stub");
+        Assert.True(tahator1.Body.Count > 10, "Tahator1 must not be empty stub");
     }
 
     private static DslProgram LoadParityProgram()

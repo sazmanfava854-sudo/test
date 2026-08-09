@@ -227,8 +227,25 @@ public static class SaraOperationBootstrap
             if (ctx.Fiche.Category != FicheCategory.Income)
                 throw new InvalidOperationException($"Income.BuildIncomeRows برای {ctx.Fiche.Category} مجاز نیست.");
 
-            // دفاعی: اگر ردیف‌ها هنوز ناخالص باشند، به Payable اسکیل کن (parity با SOAP)
-            IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
+            if (TahatorRowBuilder.IsTahatorAmountFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 14 or 15)
+            {
+                // تهاتر مبلغ: ردیف منفی + Centers
+                if (ctx.Fiche.Rows.Count != 1
+                    || ctx.Fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther))
+                    TahatorRowBuilder.ApplyTahatorAmountRows(ctx.Fiche);
+            }
+            else if (TahatorRowBuilder.IsTahatorIncomeFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 17 or 18)
+            {
+                // تهاتر درآمدی: ردیف مثبت Calculation + Center1 ثابت + DocTyp ۱۷/۱۸
+                IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
+                TahatorRowBuilder.ApplyTahatorIncomeRows(ctx.Fiche);
+            }
+            else
+            {
+                // دفاعی: اگر ردیف‌ها هنوز ناخالص باشند، به Payable اسکیل کن (parity با SOAP)
+                IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
+            }
+
             ctx.Rows.Clear();
             ctx.Rows.AddRange(ctx.Fiche.Rows);
             ctx.Variables["rowsBuilt"] = ctx.Rows.Count;
@@ -246,7 +263,7 @@ public static class SaraOperationBootstrap
         r.Register("Validate.RowSumEqualsPayable", (ctx, _) =>
         {
             var sum = ctx.Rows.Count > 0 ? ctx.Rows.Sum(x => x.Val) : ctx.Fiche.Rows.Sum(x => x.Val);
-            if (sum != ctx.Fiche.Payable)
+            if (!TahatorRowBuilder.RowSumMatchesPayable(ctx.Fiche, sum))
                 throw new InvalidOperationException($"جمع ردیف‌ها ({sum}) ≠ Payable ({ctx.Fiche.Payable})");
             return true;
         });

@@ -4,97 +4,186 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ارسال مجدد به رایورز</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
 </head>
 <body>
-  <div class="page-bg"></div>
+  <div class="page-bg" aria-hidden="true"></div>
   <div class="container">
     <header class="hero">
-      <div class="hero-content">
-        <div class="hero-icon" aria-hidden="true">↻</div>
-        <div>
-          <h1>ارسال مجدد فیش به رایورز</h1>
-          <p class="subtitle">ابزار تست — بارگذاری از Sara8M03 و ارسال SaveDocument</p>
+      <div class="hero-top">
+        <div class="hero-brand">
+          <div>
+            <p class="brand-name">Rayvarz Resend</p>
+            <h1>ارسال مجدد فیش به رایورز</h1>
+          </div>
         </div>
       </div>
-      <div id="configBadge" class="badge">...</div>
     </header>
 
-    <section class="card">
+    <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
+      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش های جمعی</button>
+      <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
+    </nav>
+
+    <div id="tabUnsent" class="tab-panel active" role="tabpanel">
+    <section class="card unsent-card card-enter">
       <div class="card-head">
-        <span class="card-icon">📋</span>
-        <h2>ورود فیش</h2>
+        <span class="card-icon" aria-hidden="true">📤</span>
+        <h2>فیش های جمعی</h2>
       </div>
-      <div class="form-grid">
-        <label class="field">
-          <span class="field-label">نوع شناسه</span>
-          <select id="identifierType">
-            <option value="FicheNo">شماره فیش (FicheNo)</option>
-            <option value="BillPaymentKey">BillID + PaymentID</option>
+      <div class="form-grid unsent-form-grid">
+        <label class="field field-required">
+          <span class="field-label">نوع فیش</span>
+          <select id="unsentFicheKind">
+            <option value="Income">درآمد</option>
+            <option value="Duty">نوسازی و صنفی</option>
           </select>
         </label>
-        <label class="field field-wide">
-          <span class="field-label">مقدار شناسه</span>
-          <input id="identifierValue" type="text" placeholder="مثلاً 971030914186 یا 90004712516690002765712571" />
+        <label class="field">
+          <span class="field-label">از تاریخ</span>
+          <div class="date-input-wrap">
+            <input id="unsentFromDate" data-jdp type="text" placeholder="1402/08/01 (اختیاری)" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="unsentFromDate" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">تا تاریخ</span>
+          <div class="date-input-wrap">
+            <input id="unsentToDate" data-jdp type="text" placeholder="1402/08/20 (اختیاری)" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="unsentToDate" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
         </label>
         <label class="field">
           <span class="field-label">شعبه / منطقه</span>
-          <select id="branch"></select>
+          <select id="unsentDistrict">
+            <option value="">همه مناطق</option>
+          </select>
         </label>
         <label class="field">
-          <span class="field-label">کد منبع (Fund)</span>
-          <select id="fund"></select>
+          <span class="field-label">شماره فیش</span>
+          <input id="unsentFicheNo" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
         <label class="field">
-          <span class="field-label">DocDate — تاریخ سند</span>
-          <input id="docDate" type="text" placeholder="1404/05/05" />
+          <span class="field-label">شناسه قبض</span>
+          <input id="unsentBillId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
         <label class="field">
-          <span class="field-label">ActDate — تاریخ عملیات</span>
-          <input id="actDate" type="text" placeholder="1404/05/05" />
-        </label>
-        <label class="field">
-          <span class="field-label">Due — سررسید (ردیف درآمد)</span>
-          <input id="dueDate" type="text" placeholder="1404/05/05" />
+          <span class="field-label">شناسه پرداخت</span>
+          <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
       </div>
       <div class="actions">
-        <button id="btnPing" class="btn secondary" type="button">
-          <span class="btn-icon">📡</span> تست اتصال رایورز (Ping)
-        </button>
-        <button id="btnPostTest" class="btn secondary" type="button">
-          <span class="btn-icon">📤</span> تست POST (بدون ثبت)
-        </button>
-        <button id="btnPostMinimalSave" class="btn secondary" type="button">
-          <span class="btn-icon">🧪</span> تست SaveDocument حداقلی
-        </button>
-        <button id="btnLoad" class="btn primary">
-          <span class="btn-icon">⬇</span> دریافت فیش
-        </button>
-        <button id="btnPreview" class="btn secondary" disabled>
-          <span class="btn-icon">👁</span> پیش‌نمایش XML
-        </button>
-        <button id="btnSend" class="btn danger" disabled>
-          <span class="btn-icon">➤</span> ارسال به رایورز
-        </button>
+        <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
+        <button id="btnUnsentPlan" class="btn secondary" type="button" disabled>بررسی مسیر ارسال</button>
+        <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
+      </div>
+      <div class="subsection" id="unsentResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="unsentSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="unsentCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="unsentTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>نوع</th>
+                <th>کد نوسازی</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+                <th>تاریخ پرداخت بانک</th>
+                <th>تاریخ پرداخت دستی</th>
+                <th>شماره فیش</th>
+                <th>مبلغ</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <pre id="unsentResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
+    <div id="tabSingle" class="tab-panel" role="tabpanel" hidden>
+    <section class="card card-enter">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">📋</span>
+        <h2>ارسال تکی</h2>
+      </div>
+      <div id="singleRegularPanel">
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">نوع فیش</span>
+            <select id="singleFicheKind">
+              <option value="Income">درآمد</option>
+              <option value="Duty">نوسازی و صنفی</option>
+            </select>
+          </label>
+          <label class="field field-required">
+            <span class="field-label">شناسه فیش</span>
+            <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
+            <span id="identifierHint" class="field-hint" hidden></span>
+          </label>
+          <label class="field">
+            <span class="field-label">منطقه</span>
+            <select id="branch"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">کد منبع</span>
+            <select id="fund"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">تاریخ سند</span>
+            <div class="date-input-wrap">
+              <input id="docDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="docDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field">
+            <span class="field-label">تاریخ عملیات</span>
+            <div class="date-input-wrap">
+              <input id="actDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="actDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field">
+            <span class="field-label">تاریخ سررسید</span>
+            <div class="date-input-wrap">
+              <input id="dueDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="dueDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
+          <button id="btnPreview" class="btn secondary" type="button" disabled>پیش‌نمایش XML</button>
+          <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
+        </div>
       </div>
     </section>
 
-    <section class="card" id="ficheSection" hidden>
+    <section class="card card-enter" id="ficheSection" hidden>
       <div class="card-head">
-        <span class="card-icon">📄</span>
+        <span class="card-icon" aria-hidden="true">📄</span>
         <h2>اطلاعات فیش</h2>
       </div>
       <div id="ficheSummary" class="summary-grid"></div>
 
       <div class="subsection">
-        <h3>مپینگ فیلدهای SOAP</h3>
-        <p class="hint">فیلدهایی مثل BnkAcntOwnr، Center، Customer، Ref4–Ref6 در جریان شهرسازی معمولاً NULL می‌مانند و ارسال نمی‌شوند.</p>
+        <h3>مپینگ SOAP</h3>
         <div id="mappingTable" class="mapping-table"></div>
       </div>
 
       <div class="subsection">
-        <h3>ردیف‌های IncmNo (WrapperAccountNo)</h3>
+        <h3>ردیف‌های IncmNo</h3>
         <div class="table-wrap">
           <table id="rowsTable">
             <thead>
@@ -106,22 +195,24 @@
       </div>
     </section>
 
-    <section class="card" id="resultSection" hidden>
+    <section class="card card-enter" id="resultSection" hidden>
       <div class="card-head">
-        <span class="card-icon">✓</span>
+        <span class="card-icon" aria-hidden="true">✓</span>
         <h2>نتیجه ارسال</h2>
       </div>
       <pre id="resultBox" class="code-block"></pre>
     </section>
 
-    <section class="card" id="xmlSection" hidden>
+    <section class="card card-enter" id="xmlSection" hidden>
       <div class="card-head">
-        <span class="card-icon">&lt;/&gt;</span>
+        <span class="card-icon" aria-hidden="true">&lt;/&gt;</span>
         <h2>XML پیش‌نمایش</h2>
       </div>
       <pre id="xmlBox" class="code-block"></pre>
     </section>
+    </div>
   </div>
-  <script src="js/app.js?v=4" defer></script>
+  <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
+  <script src="js/app.js?v=24"></script>
 </body>
 </html>

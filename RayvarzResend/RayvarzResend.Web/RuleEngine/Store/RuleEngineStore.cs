@@ -330,7 +330,8 @@ public sealed class RuleEngineStore
         if (!IsConfigured) return Array.Empty<RuleGoldenExpectedRow>();
 
         const string sql = """
-            SELECT GoldenFicheId, IncmRow, IncmNo, ExpectedVal, IncmRowDsc, ExpectedBranch, ExpectedBank
+            SELECT GoldenFicheId, IncmRow, IncmNo, ExpectedVal, IncmRowDsc, ExpectedBranch, ExpectedBank,
+                   ExpectedCenter, ExpectedCenter1, ExpectedCenter2, ExpectedCenter3
             FROM dbo.RuleGoldenExpectedRow
             WHERE GoldenFicheId = @id
             ORDER BY IncmRow
@@ -352,7 +353,11 @@ public sealed class RuleEngineStore
                 ExpectedVal = r.GetDecimal(3),
                 IncmRowDsc = r.IsDBNull(4) ? null : r.GetString(4),
                 ExpectedBranch = r.IsDBNull(5) ? null : r.GetInt32(5),
-                ExpectedBank = r.IsDBNull(6) ? null : r.GetInt32(6)
+                ExpectedBank = r.IsDBNull(6) ? null : r.GetInt32(6),
+                ExpectedCenter = r.IsDBNull(7) ? null : Convert.ToInt64(r.GetValue(7)),
+                ExpectedCenter1 = r.IsDBNull(8) ? null : Convert.ToInt64(r.GetValue(8)),
+                ExpectedCenter2 = r.IsDBNull(9) ? null : Convert.ToInt64(r.GetValue(9)),
+                ExpectedCenter3 = r.IsDBNull(10) ? null : Convert.ToInt64(r.GetValue(10))
             });
         }
 
