@@ -249,6 +249,7 @@ WHERE {where}";
 
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
+            dto.CurrentStatus,
             ReadRowDate(reader, "PaymentDate"),
             ReadRowDate(reader, "BankPaymentDate"));
         return dto;
