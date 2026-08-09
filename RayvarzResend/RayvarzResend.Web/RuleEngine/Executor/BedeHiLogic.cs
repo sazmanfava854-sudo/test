@@ -14,6 +14,9 @@ public static class BedeHiLogic
 
   private const string MinPaymentDate = "1399/01/01";
 
+  public static IReadOnlyList<int> AllowedAccountGroups(int districtBranch) =>
+    districtBranch is 80 or 218 ? RegionalAccountGroups : StandardAccountGroups;
+
   public static decimal Resolve(int districtBranch, string currentFicheNo, PriorIncomeFicheDto? prior)
   {
     if (prior is null || string.IsNullOrWhiteSpace(prior.FicheNo))
@@ -22,9 +25,7 @@ public static class BedeHiLogic
     if (prior.FicheNo.Equals(currentFicheNo.Trim(), StringComparison.OrdinalIgnoreCase))
       return 0;
 
-    var allowedGroups = districtBranch is 80 or 218
-      ? RegionalAccountGroups
-      : StandardAccountGroups;
+    var allowedGroups = AllowedAccountGroups(districtBranch);
 
     if (!allowedGroups.Contains(prior.IncomeAccountGroup))
       return 0;

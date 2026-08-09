@@ -209,7 +209,7 @@ public class Member1388FullExecutionTests
             Brokers = 200_000m,
             PaymentDate = "1400/01/01",
             BankPaymentDate = "1400/01/02",
-            IncomeAccountGroup = 150
+            IncomeAccountGroup = 8
         };
 
         Assert.Equal(1_800_000m, BedeHiLogic.Resolve(209, "NEW001", prior));

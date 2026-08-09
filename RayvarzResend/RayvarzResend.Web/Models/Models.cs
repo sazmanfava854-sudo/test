@@ -36,6 +36,8 @@ public class FicheHeaderDto
     public decimal Payable { get; set; }
     public Guid NidFiche { get; set; }
     public Guid? NidIncome { get; set; }
+    /// <summary>پرونده درآمد — برای BedeHi و فیش قبلی همان NidProc.</summary>
+    public Guid? NidProc { get; set; }
     public string BnkAcntNo { get; set; } = "";
     public string BnkAcntNoSource { get; set; } = "";
     public string? DutyRegion { get; set; }
@@ -88,6 +90,7 @@ public class FicheHeaderDto
 /// <summary>فیش درآمد قبلی — ورودی BedeHi (VB: M_AllFiche(0)).</summary>
 public class PriorIncomeFicheDto
 {
+    public Guid NidIncome { get; set; }
     public string FicheNo { get; set; } = "";
     public decimal Payable { get; set; }
     public decimal Brokers { get; set; }

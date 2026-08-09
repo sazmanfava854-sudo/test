@@ -141,6 +141,8 @@ WHERE NidIncome = @nid
 
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
+       i.NidProc,
+       ISNULL(f.Brokers, 0) AS Brokers,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBranch AS nvarchar(20)))), '') AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(f.CI_Bank AS nvarchar(20)))), '') AS CiBank,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS PaymentBank,
@@ -197,11 +199,17 @@ WHERE {where}";
         {
             Category = FicheCategory.Income,
             FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
+            BillIdRaw = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
+            PaymentIdRaw = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
             BillId = reader.GetString(reader.GetOrdinal("BillID")),
             PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
             Payable = ReadDecimal(reader, "Payable"),
+            Brokers = ReadDecimal(reader, "Brokers"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
+            NidProc = reader.IsDBNull(reader.GetOrdinal("NidProc"))
+                ? null
+                : reader.GetGuid(reader.GetOrdinal("NidProc")),
             PaymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
                 ? ""
                 : reader.GetString(reader.GetOrdinal("PaymentBranch")),
@@ -228,6 +236,14 @@ WHERE {where}";
                     : "اسناد شهرسازی"
         };
 
+        var districtBranch = DutyDistrictBranchResolver.ResolveBranch(dto.BillIdRaw, dto.PaymentIdRaw);
+        if (districtBranch > 0)
+        {
+            dto.ResolvedDistrictBranch = districtBranch;
+            if (!isTahator)
+                dto.SuggestedFund ??= DutyDistrictBranchResolver.ResolveFund(districtBranch, dto.BankCode ?? "18");
+        }
+
         if (isTahatorAmount)
         {
             // ردیف SOAP تهاتر مبلغ (نه Income_Calculation) — مطابق Tahator1 / مرکز
@@ -246,6 +262,8 @@ WHERE {where}";
             // Income_Calculation = مبلغ ناخالص؛ PayablePrice پس از تخفیف است — مثل SOAP اسکیل کن
             IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
         }
+
+        await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, LoadIncomeRowsAsync, ct);
 
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
