@@ -135,37 +135,83 @@ def tech_labels() -> list[str]:
 
 
 def fig_clustering_inertia_silhouette():
+    """Figure 4-1: Inertia and Silhouette vs k (dual-axis line chart)."""
     d = DATA["clustering_evaluation"]
-    k = np.array(d["k"])
+    k = np.array(d["k"], dtype=float)
     inertia = np.array(d["inertia"])
     silhouette = np.array(d["silhouette"])
+    sel = d["selected_k"]
+    sel_idx = list(d["k"]).index(sel)
 
-    fig, ax1 = plt.subplots(figsize=(8, 5))
-    ax1.plot(k, inertia, "o-", color=COLORS["primary"], linewidth=2, markersize=8, label="Inertia (WCSS)")
+    fig, ax1 = plt.subplots(figsize=(9, 5.5))
+    color_inertia = COLORS["primary"]
+    color_sil = COLORS["accent"]
+
+    (line_inertia,) = ax1.plot(
+        k,
+        inertia,
+        "o-",
+        color=color_inertia,
+        linewidth=2.2,
+        markersize=9,
+        markerfacecolor=color_inertia,
+        markeredgecolor="white",
+        markeredgewidth=1.2,
+        label="Inertia (WCSS)",
+        zorder=3,
+    )
     set_persian_xlabel(ax1, "تعداد خوشه‌ها (k)")
-    ax1.set_ylabel("Inertia (WCSS)", color=COLORS["primary"], fontproperties=LATIN_FP)
+    ax1.set_ylabel("Inertia (WCSS)", color=color_inertia, fontproperties=LATIN_FP)
+    ax1.tick_params(axis="y", labelcolor=color_inertia)
     ax1.set_xticks(k)
-    ax1.set_xticklabels([fa_num(t) for t in k], fontproperties=PERSIAN_FP_SM)
+    ax1.set_xticklabels([fa_num(int(t)) for t in k], fontproperties=PERSIAN_FP_SM)
+    ax1.set_ylim(0, max(inertia) * 1.08)
     ax1.yaxis.set_major_formatter(persian_yformatter(1))
-    ax1.grid(True, alpha=0.3, linestyle="--")
+    ax1.grid(True, alpha=0.35, linestyle="--", linewidth=0.8)
 
     ax2 = ax1.twinx()
-    ax2.plot(k, silhouette, "s-", color=COLORS["accent"], linewidth=2, markersize=8, label=fa("ضریب Silhouette"))
-    ax2.set_ylabel(fa("ضریب Silhouette"), color=COLORS["accent"], fontproperties=PERSIAN_FP)
+    (line_sil,) = ax2.plot(
+        k,
+        silhouette,
+        "s-",
+        color=color_sil,
+        linewidth=2.2,
+        markersize=8,
+        markerfacecolor=color_sil,
+        markeredgecolor="white",
+        markeredgewidth=1.2,
+        label=fa("ضریب Silhouette"),
+        zorder=3,
+    )
+    ax2.set_ylabel(fa("ضریب Silhouette"), color=color_sil, fontproperties=PERSIAN_FP)
+    ax2.tick_params(axis="y", labelcolor=color_sil)
+    ax2.set_ylim(0.30, 0.50)
     ax2.yaxis.set_major_formatter(FuncFormatter(lambda x, _pos: fa_num(x, decimals=3)))
 
-    sel = d["selected_k"]
-    ax1.axvline(x=sel, color=COLORS["success"], linestyle="--", alpha=0.7, linewidth=1.5)
+    # خط عمودی و برچسب انتخاب k=5
+    ax1.axvline(x=sel, color=COLORS["success"], linestyle="--", alpha=0.85, linewidth=1.8, zorder=2)
     ax1.annotate(
-        fa(f"k={sel} (انتخاب نهایی)"),
-        xy=(sel, inertia[list(d["k"]).index(sel)]),
-        xytext=(sel - 1.2, max(inertia) * 0.55),
+        fa(f"k={fa_num(sel)} (انتخاب نهایی)"),
+        xy=(sel, inertia[sel_idx]),
+        xytext=(sel - 0.95, inertia[sel_idx] + 18),
         fontproperties=PERSIAN_FP_SM,
+        fontsize=10,
         color=COLORS["success"],
-        arrowprops=dict(arrowstyle="->", color=COLORS["success"], lw=1.2),
+        ha="center",
+        arrowprops=dict(arrowstyle="->", color=COLORS["success"], lw=1.4, connectionstyle="arc3,rad=0.1"),
     )
-    ax1.legend(loc="upper right", prop=LATIN_FP)
+
+    # راهنمای هر دو سری
+    ax1.legend(
+        [line_inertia, line_sil],
+        ["Inertia (WCSS)", fa("ضریب Silhouette")],
+        loc="upper right",
+        framealpha=0.95,
+        prop=LATIN_FP,
+    )
+
     set_persian_title(fig, d["title"])
+    fig.tight_layout()
     save_fig(fig, "fig4-1_inertia_silhouette_vs_k")
 
 
