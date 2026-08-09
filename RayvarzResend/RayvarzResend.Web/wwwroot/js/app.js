@@ -14,8 +14,9 @@ const categoryLabels = {
 function branchFromRegion(regionStr) {
   const r = parseInt(regionStr, 10);
   if (Number.isNaN(r)) return null;
-  if (r === 218) return 218;
+  if (r === 218 || r === 80) return 218;
   if (r >= 1 && r <= 12) return 200 + r;
+  if (r >= 201 && r <= 212) return r;
   return null;
 }
 
@@ -55,17 +56,17 @@ function applyBranchFromFiche(f) {
       $('branch').value = branchId;
       if (f.suggestedFund) $('fund').value = f.suggestedFund;
       else syncFundFromBranch();
-      return;
+      return true;
     }
   }
   const region = f.dutyRegion || f.incomeRegion;
   const branchId = region ? branchFromRegion(region) : null;
-  if (!branchId) return;
+  if (!branchId) return false;
   const match = config.branches.find(b => b.id === branchId);
-  if (match) {
-    $('branch').value = branchId;
-    syncFundFromBranch();
-  }
+  if (!match) return false;
+  $('branch').value = branchId;
+  syncFundFromBranch();
+  return true;
 }
 
 function syncFundFromBranch() {
@@ -538,7 +539,9 @@ function setupEventHandlers() {
       throw new Error('نوع فیش با «نوسازی و صنفی» انتخاب‌شده مطابقت ندارد');
     }
     updateIdentifierHint();
-    applyBranchFromFiche(data);
+    if (!isTahatorIncomeFiche(data) && !applyBranchFromFiche(data)) {
+      throw new Error('منطقه/شعبه از فیش قابل تشخیص نیست — ارسال ممکن نیست');
+    }
     applyFicheDatesToForm(data);
     renderFiche(data);
     $('btnPreview').disabled = false;

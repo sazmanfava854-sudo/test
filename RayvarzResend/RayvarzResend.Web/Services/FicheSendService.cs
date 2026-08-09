@@ -105,6 +105,10 @@ public class FicheSendService
         if (fiche.Rows.Count == 0)
             return "ردیف IncmNo یافت نشد";
 
+        if (!TahatorRowBuilder.IsTahatorFiche(fiche)
+            && !FicheBranchResolver.TryResolve(fiche, out _, out _, out var branchError))
+            return branchError;
+
         return null;
     }
 

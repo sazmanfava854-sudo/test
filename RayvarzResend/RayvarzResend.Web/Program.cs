@@ -206,6 +206,12 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
             });
         }
 
+        if (!TahatorRowBuilder.IsTahatorFiche(fiche)
+            && !FicheBranchResolver.TryResolve(fiche, out _, out _, out var branchError))
+        {
+            return Results.BadRequest(new { error = branchError ?? FicheBranchResolver.RegionNotResolvedMessage });
+        }
+
         try
         {
             var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);

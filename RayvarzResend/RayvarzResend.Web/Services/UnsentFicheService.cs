@@ -182,6 +182,13 @@ public class UnsentFicheService
             return item;
         }
 
+        if (!FicheBranchResolver.TryResolve(fiche, out _, out _, out var branchError))
+        {
+            item.SendPath = req.FicheKind == UnsentFicheKind.Duty ? "Duty" : "Income";
+            item.BlockReason = branchError;
+            return item;
+        }
+
         item.SendPath = req.FicheKind == UnsentFicheKind.Duty ? "Duty" : "Income";
         item.Detail = req.FicheKind == UnsentFicheKind.Duty ? "ارسال نوسازی/صنفی" : "ارسال درآمدی شهرسازی";
         item.CanSend = true;
@@ -230,7 +237,9 @@ public class UnsentFicheService
         if (fiche == null)
             return new ProcessOutcome(plan.SendPath, false, true, "فیش یافت نشد", "NotFound");
 
-        var (branch, fund) = FicheBranchResolver.Resolve(fiche);
+        if (!FicheBranchResolver.TryResolve(fiche, out var branch, out var fund, out var branchError))
+            return new ProcessOutcome(plan.SendPath, false, true, branchError ?? FicheBranchResolver.RegionNotResolvedMessage, "RegionUnresolved");
+
         var sendReq = new SendFicheRequest
         {
             Fiche = fiche,
