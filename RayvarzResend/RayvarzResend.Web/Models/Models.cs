@@ -479,6 +479,9 @@ public class UnsentBatchSendItemResult
     public string? SkipReason { get; set; }
     public bool VerifiedInRayvarz { get; set; }
     public string? DocNotSentError { get; set; }
+    public string? SoapMessage { get; set; }
+    public List<TahatorFicheSendDetail>? TahatorFicheResults { get; set; }
+    public List<string>? Steps { get; set; }
 }
 
 public class UnsentBatchSendResult

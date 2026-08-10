@@ -237,16 +237,16 @@ public static class SaraOperationBootstrap
 
             if (TahatorRowBuilder.IsTahatorAmountFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 14 or 15)
             {
-                // تهاتر مبلغ: ردیف منفی + Centers
-                if (ctx.Fiche.Rows.Count != 1
-                    || ctx.Fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther))
+                if (!TahatorRowBuilder.IsTahatorAmountRowsPrepared(ctx.Fiche))
                     TahatorRowBuilder.ApplyTahatorAmountRows(ctx.Fiche);
             }
             else if (TahatorRowBuilder.IsTahatorIncomeFiche(ctx.Fiche) || ctx.Fiche.DocTyp is 17 or 18)
             {
-                // تهاتر درآمدی: ردیف مثبت Calculation + Center1 ثابت + DocTyp ۱۷/۱۸
-                IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
-                TahatorRowBuilder.ApplyTahatorIncomeRows(ctx.Fiche);
+                if (!TahatorRowBuilder.IsTahatorIncomeRowsPrepared(ctx.Fiche))
+                {
+                    IncomeRowScaler.ScaleToPayable(ctx.Fiche.Rows, ctx.Fiche.Payable);
+                    TahatorRowBuilder.ApplyTahatorIncomeRows(ctx.Fiche);
+                }
             }
             else
             {

@@ -1,4 +1,5 @@
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.Services;
 
 namespace RayvarzResend.Web.RuleEngine.Executor;
 
@@ -45,13 +46,6 @@ public static class Member1388IncomeRowProfiles
         ApplyBedeHi = false
     };
 
-    private static readonly Member1388IncomeRowOptions TahatorIncomeOptions = new()
-    {
-        ApplyOddments = true,
-        ApplyBedeHi = false,
-        RowNumFromDepositId = true
-    };
-
     public static void ApplyIncome(FicheHeaderDto fiche) =>
         Member1388IncomeRowBuilderCore.ApplyStandard(fiche, IncomeOptions);
 
@@ -92,9 +86,9 @@ public static class Member1388IncomeRowProfiles
     public static void ApplyBazAfarineOld(FicheHeaderDto fiche) =>
         Member1388BazAfarineOldRowBuilder.Apply(fiche);
 
-    /// <summary>تهاتر درآمدی — Oddment + scale؛ Center/Ref در TahatorRowBuilder.</summary>
+    /// <summary>تهاتر درآمدی — یک ردیف در TahatorRowBuilder.</summary>
     public static void ApplyTahatorIncome(FicheHeaderDto fiche) =>
-        Member1388IncomeRowBuilderCore.ApplyStandard(fiche, TahatorIncomeOptions);
+        TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
 
     private static bool HasPrimaryCalculationRow(FicheHeaderDto fiche, int incmNo) =>
         fiche.Rows.Any(r => r.IncmNo == incmNo && r.Val != 0);

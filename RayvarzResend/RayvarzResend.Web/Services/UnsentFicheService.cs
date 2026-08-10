@@ -68,6 +68,9 @@ public class UnsentFicheService
                 item.Message = outcome.Message;
                 item.VerifiedInRayvarz = outcome.VerifiedInRayvarz;
                 item.DocNotSentError = outcome.DocNotSentError;
+                item.SoapMessage = outcome.SoapMessage;
+                item.TahatorFicheResults = outcome.TahatorFicheResults;
+                item.Steps = outcome.Steps;
 
                 if (outcome.Skipped)
                     result.Skipped++;
@@ -202,7 +205,10 @@ public class UnsentFicheService
         string Message,
         string? SkipReason = null,
         bool VerifiedInRayvarz = false,
-        string? DocNotSentError = null);
+        string? DocNotSentError = null,
+        string? SoapMessage = null,
+        List<TahatorFicheSendDetail>? TahatorFicheResults = null,
+        List<string>? Steps = null);
 
     private async Task<ProcessOutcome> ProcessOneAsync(
         UnsentBatchSendRequest req,
@@ -228,9 +234,12 @@ public class UnsentFicheService
                 "Tahator",
                 tahResult.Success,
                 tahResult.Skipped,
-                tahResult.Message ?? (tahResult.Success ? "ارسال تهاتر موفق" : "ارسال تهاتر ناموفق"),
+                BuildTahatorBatchMessage(tahResult),
                 tahResult.SkipReason,
-                DocNotSentError: tahResult.DocNotSentError);
+                DocNotSentError: tahResult.DocNotSentError,
+                SoapMessage: tahResult.SoapMessage,
+                TahatorFicheResults: tahResult.FicheResults,
+                Steps: tahResult.Steps);
         }
 
         var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
@@ -260,4 +269,25 @@ public class UnsentFicheService
             VerifiedInRayvarz: sendResult.VerifiedInRayvarz,
             DocNotSentError: sendResult.DocNotSentError);
     }
+
+    private static string BuildTahatorBatchMessage(TahatorSendResult tah)
+    {
+        var failed = tah.FicheResults?
+            .Where(r => !r.Skipped && !r.Success)
+            .Select(r => $"{r.FicheNo} (گروه {r.IncomeAccountGroup}): {FirstTahatorError(r)}")
+            .ToList();
+
+        if (failed is { Count: > 0 })
+            return string.Join(" | ", failed);
+
+        if (!string.IsNullOrWhiteSpace(tah.SoapMessage) && !tah.Success)
+            return tah.SoapMessage;
+
+        return tah.Message ?? (tah.Success ? "ارسال تهاتر موفق" : "ارسال تهاتر ناموفق");
+    }
+
+    private static string FirstTahatorError(TahatorFicheSendDetail r) =>
+        r.SoapMessage
+        ?? r.DocNotSentError
+        ?? (r.Success ? "OK" : "ناموفق بدون جزئیات");
 }

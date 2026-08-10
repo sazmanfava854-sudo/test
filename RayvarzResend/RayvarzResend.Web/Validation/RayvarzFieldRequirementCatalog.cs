@@ -41,7 +41,7 @@ public static class RayvarzFieldRequirementCatalog
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
         {
             req.RequiresRef = true;
-            req.RequiresQtyEqualsVal = true;
+            // نوسازی/صنفی: Qty = Payable کل فیش در هر ردیف؛ Val = سهم همان IncmNo
             return req;
         }
 

@@ -87,6 +87,14 @@ public static class Member1388FunctionExecutor
             return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
         }
 
+        if (TahatorRowsAlreadyPrepared(context.Fiche, functionName))
+        {
+            trace.Add($"{functionName}: ردیف‌های تهاتر از Sara آماده است — بدون اعمال مجدد");
+            context.Rows.Clear();
+            context.Rows.AddRange(context.Fiche.Rows);
+            return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: false);
+        }
+
         if (functionName.Equals("Tahator1", StringComparison.OrdinalIgnoreCase))
             TahatorRowBuilder.ApplyTahatorAmountRows(context.Fiche);
         else
@@ -409,6 +417,11 @@ public static class Member1388FunctionExecutor
         || name.Equals("FnSMS", StringComparison.OrdinalIgnoreCase)
         || name.Equals("AddDateForHolidays", StringComparison.OrdinalIgnoreCase)
         || name.Equals("Logfile", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TahatorRowsAlreadyPrepared(FicheHeaderDto fiche, string functionName) =>
+        functionName.Equals("Tahator1", StringComparison.OrdinalIgnoreCase)
+            ? TahatorRowBuilder.IsTahatorAmountRowsPrepared(fiche)
+            : TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche);
 }
 
 public sealed class Member1388FunctionResult

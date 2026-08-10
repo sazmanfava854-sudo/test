@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.Services;
 using Xunit;
@@ -163,7 +164,7 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void ApplyTahatorIncomeRows_DocTyp17_positive_Val_Center1_fixed_region_fund()
+    public void ApplyTahatorIncomeRows_DocTyp17_single_row_positive_payable()
     {
         var fiche = new FicheHeaderDto
         {
@@ -175,8 +176,8 @@ public class TahatorHelpersTests
             BnkAcntNo = "9-3-161-2-1-0-0",
             Rows =
             {
-                new IncmRowDto { IncmNo = 1201, Val = 1_000_000m },
-                new IncmRowDto { IncmNo = 1202, Val = 500_000m }
+                new IncmRowDto { IncmNo = 1278, Val = 1_000_000m },
+                new IncmRowDto { IncmNo = 100116, Val = 500_000m }
             }
         };
 
@@ -185,15 +186,14 @@ public class TahatorHelpersTests
         Assert.True(TahatorRowBuilder.IsTahatorIncomeFiche(fiche));
         Assert.False(TahatorRowBuilder.IsTahatorAmountFiche(fiche));
         Assert.Equal(17, fiche.DocTyp);
-        Assert.Equal(0, fiche.Center); // Bank≠2
+        Assert.Equal(0, fiche.Center);
         Assert.Equal(209, fiche.ResolvedDistrictBranch);
-        Assert.Equal(39, fiche.SuggestedFund); // منطقه → Fund ۳۱–۴۲
-        Assert.Equal(2, fiche.Rows.Count);
-        Assert.All(fiche.Rows, r =>
-        {
-            Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1);
-            Assert.True(r.Val > 0);
-        });
+        Assert.Equal(39, fiche.SuggestedFund);
+        Assert.Single(fiche.Rows);
+        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
+        Assert.Equal(1_500_000m, fiche.Rows[0].Val);
+        Assert.Equal("عوارض تهاتر درامد", fiche.Rows[0].IncmRowDsc);
+        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
         Assert.True(TahatorRowBuilder.RowSumMatchesPayable(fiche, fiche.Rows.Sum(r => r.Val)));
     }
 
@@ -379,5 +379,120 @@ public class TahatorHelpersTests
         Assert.Contains("335000181", vb);
         Assert.Contains("PhasType = 7", vb);
         Assert.Contains("PhasType = 2", vb);
+    }
+
+    [Fact]
+    public void IsTahatorIncomeRowsPrepared_false_for_calculation_rows()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            Payable = 100m,
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1278, Val = 100m, Center1 = TahatorRowBuilder.TahatorIncomeCenter1 }
+            }
+        };
+        TahatorRowBuilder.ApplyTahatorDocTyp(fiche);
+        Assert.False(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
+    }
+
+    [Fact]
+    public void ApplyTahatorIncomeRows_replaces_calculation_rows_with_single_tahator_row()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            BankCode = "4",
+            DepositId = 19684,
+            Payable = 1_000_000m,
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1278, Val = 600_000m },
+                new IncmRowDto { IncmNo = 100116, Val = 400_000m }
+            }
+        };
+        TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
+        Assert.Single(fiche.Rows);
+        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
+        Assert.Equal(1_000_000m, fiche.Rows[0].Val);
+        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+    }
+
+    [Fact]
+    public void IsTahatorIncomeRowsPrepared_detects_single_prepared_row()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            Rows =
+            {
+                new IncmRowDto
+                {
+                    IncmNo = TahatorRowBuilder.IncmNoBank4,
+                    Val = 100m,
+                    Center1 = TahatorRowBuilder.TahatorIncomeCenter1
+                }
+            }
+        };
+        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
+    }
+
+    [Fact]
+    public void TahatorSendPolicy_resend_when_in_doc_header_but_not_rayvarz()
+    {
+        Assert.True(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: false));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false));
+        Assert.False(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: true));
+    }
+
+    [Fact]
+    public void SoapBuilder_tahator_header_uses_fiche_no_detail_refrowdocno_is_int_row_ref()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+                ["Rayvarz:SourceSystemId"] = "RAYVARZ-RESEND",
+                ["Rayvarz:RefRowDocNoInDetail"] = "headerDocRow"
+            })
+            .Build();
+        var soap = new SoapBuilder(config);
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            FicheNo = "050633455406",
+            Payable = 1_000_000m,
+            BankCode = "4",
+            BnkAcntNo = "6-5-232-25-1-0-0",
+            ResolvedDistrictBranch = 206,
+            SuggestedFund = 56,
+            RayvarzDocDate = "14050519",
+            RayvarzActDate = "14050519",
+            Rows = { new IncmRowDto { IncmNo = 200098, Val = -1_000_000m, IncmRowDsc = "مبلغ تهاتر" } }
+        };
+        TahatorRowBuilder.ApplyTahatorAmountRows(fiche);
+
+        var xml = soap.Build(fiche, 102, 56, "14050519", "14050519", "14050519");
+
+        Assert.Contains("<b:RowDocNo>050633455406</b:RowDocNo>", xml);
+        Assert.DoesNotContain("<b:RefRowDocNo>050633455406</b:RefRowDocNo>", xml);
+        Assert.Contains("<b:RefRowDocNo>1</b:RefRowDocNo>", xml);
+    }
+
+    [Fact]
+    public void SoapBuilder_tahator_source_keeps_request_date_priority()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "Services", "SoapServices.cs"));
+        var cs = File.ReadAllText(path);
+        Assert.Contains("if (!isTahator)", cs);
+        Assert.Contains("headerRowDocNo = isTahator", cs);
+        Assert.Contains("incmRefRowDocNo", cs);
     }
 }

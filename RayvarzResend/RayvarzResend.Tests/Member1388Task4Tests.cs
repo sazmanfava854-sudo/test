@@ -138,11 +138,14 @@ public class Member1388Task4Tests
             SaraOperationBootstrap.CreateDefault());
 
         Assert.True(result.HadEffect);
-        Assert.Equal(900_000m, fiche.Rows.Sum(r => r.Val));
+        Assert.Single(fiche.Rows);
+        Assert.Equal(900_000m, fiche.Rows[0].Val);
+        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
+        Assert.Equal("عوارض تهاتر درامد", fiche.Rows[0].IncmRowDsc);
         Assert.Equal(17, fiche.DocTyp);
-        Assert.All(fiche.Rows, r => Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1));
-        Assert.All(fiche.Rows, r => Assert.Equal("4", r.Ref));
-        Assert.All(fiche.Rows, r => Assert.Equal("10987476", r.Num));
+        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+        Assert.Equal("4", fiche.Rows[0].Ref);
+        Assert.Equal("10987476", fiche.Rows[0].Num);
         Assert.Equal(39, fiche.SuggestedFund);
     }
 
