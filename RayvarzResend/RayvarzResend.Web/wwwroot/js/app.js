@@ -608,14 +608,12 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       $('resultSection').hidden = false;
       showTahatorSendResult(data);
+      $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
       if (data.previewXml || data.soapResponse) {
         $('xmlSection').hidden = false;
         $('xmlBox').textContent = data.soapResponse || data.previewXml;
       }
-      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else if (data.skipped) alert(data.message);
-      else if (data.success) alert(data.message || 'ارسال تهاتر موفق');
-      else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      alert(tahatorSendAlertMessage(data));
     } catch (e) {
       alert(e.message);
     } finally {
@@ -849,7 +847,7 @@ function formatTahatorCheck(d) {
 
 function formatTahatorSend(d) {
   const resultLines = (d.ficheResults || []).map(r =>
-    `  ${r.incomeAccountGroup} ${r.ficheNo}: Success=${r.success} Skipped=${r.skipped}${r.skipReason ? ' (' + r.skipReason + ')' : ''} DocTyp=${r.docTyp} Branch=${r.branch}/${r.fund}${r.soapMessage ? ' — ' + r.soapMessage : ''}`
+    `  ${r.incomeAccountGroup} ${r.ficheNo}: Success=${r.success} Skipped=${r.skipped}${r.skipReason ? ' (' + r.skipReason + ')' : ''} DocTyp=${r.docTyp} Branch=${r.branch}/${r.fund}${r.soapMessage ? ' — ' + r.soapMessage : ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
   );
   return [
     '=== نتیجه ارسال جفت تهاتر ===',
@@ -859,6 +857,7 @@ function formatTahatorSend(d) {
     `Skipped: ${d.skipped}`,
     d.skipReason ? `SkipReason: ${d.skipReason}` : '',
     `DryRun: ${d.dryRun}`,
+    d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : '',
     resultLines.length ? ['--- هر فیش ---', ...resultLines].join('\n') : '',
     d.triggerDate ? `تاریخ تریگر: ${d.triggerDate}` : '',
     `پیام: ${d.message || ''}`,
@@ -866,6 +865,32 @@ function formatTahatorSend(d) {
     '--- مراحل ---',
     ...(d.steps || [])
   ].filter(Boolean).join('\n');
+}
+
+function tahatorSendAlertMessage(data) {
+  const lines = [];
+  if (data.dryRun) {
+    lines.push('⚠ DryRun فعال است — SOAP ساخته می‌شود ولی POST واقعی به رایورز زده نمی‌شود.');
+    lines.push('برای ارسال واقعی: Rayvarz:DryRun=false در appsettings و Restart سرویس.');
+  }
+  if (data.message) lines.push(data.message);
+  if (data.ficheResults?.length) {
+    lines.push('');
+    lines.push('وضعیت هر فیش:');
+    data.ficheResults.forEach((r) => {
+      const st = r.skipped
+        ? `رد شد (${r.skipReason || 'Skip'})`
+        : r.success ? 'موفق' : `ناموفق — ${r.soapMessage || r.docNotSentError || 'بدون جزئیات'}`;
+      lines.push(`  • ${r.ficheNo} (گروه ${r.incomeAccountGroup}): ${st}`);
+    });
+  }
+  if (data.docNotSentError) lines.push(`\nDocNotSent: ${data.docNotSentError}`);
+  if (!data.success && !data.skipped && data.steps?.length) {
+    const last = data.steps.slice(-5).join('\n');
+    lines.push('\nآخرین مراحل:\n' + last);
+  }
+  lines.push('\nجزئیات کامل در باکس «نتیجه» پایین صفحه.');
+  return lines.join('\n');
 }
 
 setupEventHandlers();

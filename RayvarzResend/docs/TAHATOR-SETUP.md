@@ -21,7 +21,7 @@
    - **۱۵۷** مبلغ / `Tahator1` / Branch **۱۰۲** / DocTyp **۱۴|۱۵**
    - **۱۵۸** درآمد / `Tahator` / Branch **۲۰۱–۲۱۲** / DocTyp **۱۷|۱۸**
    - ارسال: **اول ۱۵۷، بعد ۱۵۸** (مثل Member 1388)
-2. اگر **هر دو** در `Accounting_DocHeader` یا **هر دو** در `incmdocsys` بود → ارسال لازم نیست  
+2. اگر **هر دو** در `incmdocsys` بود → ارسال لازم نیست (`Accounting_DocHeader` به‌تنهایی مانع ارسال مجدد نیست — سناریوی حذف از رایورز)  
 3. `SELECT` از `Income_Fiche` (هر دو فیش)  
 4. **ذخیره پایدار** snapshot هر فишی که ارسال می‌شود  
 5. `UPDATE` وضعیت **۲** روی Sara (فقط فیش‌های در صف ارسال)  
@@ -58,7 +58,8 @@ POST /api/tahator/restore
 
 1. **`Rayvarz:DryRun=true`** در پروسه جاری → UPDATE روی Sara زده نمی‌شود  
    بعد از تغییر به `false` **حتماً Restart** کنید؛ فقط ذخیره فایل کافی نیست.
-2. فیش در **incmdocsys** یا **Accounting_DocHeader** هست → ارسال Skip می‌شود (`SkipReason`) — سند تستی با اسلش را پاک کنید و دوباره بفرستید
+2. فیش در **incmdocsys** هست → Skip (`InRayvarz`) — حتی اگر در واسط نباشد  
+   فقط در **Accounting_DocHeader** بود ولی از رایورز حذف شده → **ارسال مجدد** انجام می‌شود
 3. بعد از SOAP موفق هم Export/Break به مقادیر اصلی snapshot برمی‌گردد (مثل UPDATE دستی وضعیت ۳)
 
 در پاسخ API به خط `0) ... DryRun=...` و `3a) تاریخ SOAP` نگاه کنید.

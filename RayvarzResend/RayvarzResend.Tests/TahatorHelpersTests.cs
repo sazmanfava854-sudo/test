@@ -421,6 +421,14 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void TahatorSendPolicy_resend_when_in_doc_header_but_not_rayvarz()
+    {
+        Assert.True(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: false));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false));
+        Assert.False(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: true));
+    }
+
+    [Fact]
     public void SoapBuilder_tahator_source_keeps_request_date_priority()
     {
         var path = Path.GetFullPath(Path.Combine(
