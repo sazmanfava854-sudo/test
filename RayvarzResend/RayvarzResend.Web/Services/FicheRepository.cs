@@ -446,15 +446,75 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
 
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)
     {
-        var sql = shamsiYear is > 0
-            ? """
-              SELECT TOP 1 1 FROM ray.incmdocsys
-              WHERE yr = @yr AND (Ref = @f OR RowDocNo = @f)
-              """
-            : """
-              SELECT TOP 1 1 FROM ray.incmdocsys
-              WHERE Ref = @f OR RowDocNo = @f
-              """;
+        ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo.Trim());
+        if (await QueryExistsInRayvarzAsync(ficheNo, shamsiYear, docTypFilter: null, ct))
+            return true;
+
+        // SOAP ممکن است با DocDate متفاوت از PaymentDate در yr دیگری ثبت شود
+        if (shamsiYear is > 0)
+            return await QueryExistsInRayvarzAsync(ficheNo, shamsiYear: null, docTypFilter: null, ct);
+
+        return false;
+    }
+
+    /// <summary>تهاتر: RowDocNo + DocTyp ۱۴|۱۵ (مبلغ) یا ۱۷|۱۸ (درآمد) — نه Ref عمومی.</summary>
+    public async Task<bool> ExistsTahatorDocumentInRayvarzAsync(
+        string ficheNo,
+        bool isAmountPath,
+        int? shamsiYear = null,
+        CancellationToken ct = default)
+    {
+        ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo.Trim());
+        var docTypes = isAmountPath ? new[] { 14, 15 } : new[] { 17, 18 };
+        if (await QueryExistsInRayvarzAsync(ficheNo, shamsiYear, docTypes, ct))
+            return true;
+
+        if (shamsiYear is > 0)
+            return await QueryExistsInRayvarzAsync(ficheNo, shamsiYear: null, docTypes, ct);
+
+        return false;
+    }
+
+    public async Task<bool> ExistsTahatorDocumentInRayvarzRobustAsync(
+        string ficheNo,
+        bool isAmountPath,
+        IEnumerable<int> yearCandidates,
+        CancellationToken ct = default)
+    {
+        foreach (var year in yearCandidates.Distinct().Where(y => y > 0))
+        {
+            if (await ExistsTahatorDocumentInRayvarzAsync(ficheNo, isAmountPath, year, ct))
+                return true;
+        }
+
+        return await ExistsTahatorDocumentInRayvarzAsync(ficheNo, isAmountPath, shamsiYear: null, ct);
+    }
+
+    private async Task<bool> QueryExistsInRayvarzAsync(
+        string ficheNo,
+        int? shamsiYear,
+        int[]? docTypFilter,
+        CancellationToken ct)
+    {
+        var sql = docTypFilter is { Length: > 0 }
+            ? shamsiYear is > 0
+                ? """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE yr = @yr AND RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  """
+                : """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  """
+            : shamsiYear is > 0
+                ? """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE yr = @yr AND (Ref = @f OR RowDocNo = @f)
+                  """
+                : """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE Ref = @f OR RowDocNo = @f
+                  """;
 
         await using var conn = new SqlConnection(_rayCs);
         await conn.OpenAsync(ct);
@@ -462,6 +522,12 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         if (shamsiYear is > 0)
             cmd.Parameters.AddWithValue("@yr", shamsiYear.Value);
+        if (docTypFilter is { Length: > 0 })
+        {
+            cmd.Parameters.AddWithValue("@d0", docTypFilter[0]);
+            cmd.Parameters.AddWithValue("@d1", docTypFilter[1]);
+        }
+
         var result = await cmd.ExecuteScalarAsync(ct);
         return result != null;
     }
