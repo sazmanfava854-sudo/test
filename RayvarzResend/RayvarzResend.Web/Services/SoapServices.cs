@@ -436,10 +436,12 @@ public class SoapBuilder
     {
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
         var isTahator = TahatorRowBuilder.IsTahatorFiche(fiche);
-        var detailRefRow = ResolveDetailRefRowDocNo(
-            isTahator ? fiche.FicheNo : FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo));
+        var detailRefRow = ResolveDetailRefRowDocNo(FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo));
+        // RefRowDocNo در ردیف Incm از نوع Int32 است — به ردیف سند (۱) اشاره می‌کند، نه شماره فیش.
+        var incmRefRowDocNo = isTahator
+            ? detailRefRow
+            : FirstNonEmpty(fiche.RefRowDocNo, detailRefRow);
         var dutyQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
-        var rowDocNo = isTahator ? fiche.FicheNo : FirstNonEmpty(fiche.RefRowDocNo, detailRefRow);
         var rowDue = !string.IsNullOrWhiteSpace(fiche.RayvarzDueDate)
             ? FicheDateResolver.ResolveForSoap(fiche.RayvarzDueDate, dueDateRay)
             : dueDateRay;
@@ -474,7 +476,7 @@ public class SoapBuilder
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
                 r.Ref,
                 r.Num,
-                rowDocNo,
+                incmRefRowDocNo,
                 rowDue,
                 TahatorRowBuilder.IsTahatorFiche(fiche) ? r.IncmRowDsc : null,
                 false);

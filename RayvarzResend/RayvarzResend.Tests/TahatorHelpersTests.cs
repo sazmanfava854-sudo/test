@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.Services;
 using Xunit;
@@ -429,6 +430,41 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void SoapBuilder_tahator_header_uses_fiche_no_detail_refrowdocno_is_int_row_ref()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+                ["Rayvarz:SourceSystemId"] = "RAYVARZ-RESEND",
+                ["Rayvarz:RefRowDocNoInDetail"] = "headerDocRow"
+            })
+            .Build();
+        var soap = new SoapBuilder(config);
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            FicheNo = "050633455406",
+            Payable = 1_000_000m,
+            BankCode = "4",
+            BnkAcntNo = "6-5-232-25-1-0-0",
+            ResolvedDistrictBranch = 206,
+            SuggestedFund = 56,
+            RayvarzDocDate = "14050519",
+            RayvarzActDate = "14050519",
+            Rows = { new IncmRowDto { IncmNo = 200098, Val = -1_000_000m, IncmRowDsc = "مبلغ تهاتر" } }
+        };
+        TahatorRowBuilder.ApplyTahatorAmountRows(fiche);
+
+        var xml = soap.Build(fiche, 102, 56, "14050519", "14050519", "14050519");
+
+        Assert.Contains("<b:RowDocNo>050633455406</b:RowDocNo>", xml);
+        Assert.DoesNotContain("<b:RefRowDocNo>050633455406</b:RefRowDocNo>", xml);
+        Assert.Contains("<b:RefRowDocNo>1</b:RefRowDocNo>", xml);
+    }
+
+    [Fact]
     public void SoapBuilder_tahator_source_keeps_request_date_priority()
     {
         var path = Path.GetFullPath(Path.Combine(
@@ -436,6 +472,7 @@ public class TahatorHelpersTests
             "RayvarzResend.Web", "Services", "SoapServices.cs"));
         var cs = File.ReadAllText(path);
         Assert.Contains("if (!isTahator)", cs);
-        Assert.Contains("isTahator ? fiche.FicheNo", cs);
+        Assert.Contains("headerRowDocNo = isTahator", cs);
+        Assert.Contains("incmRefRowDocNo", cs);
     }
 }
