@@ -107,6 +107,14 @@ public class RayvarzPayloadValidatorTests
         Assert.Equal("1025", parsed.IncmRows[0].IncmNo);
     }
 
+    [Fact]
+    public void Soap_includes_source_system_id_marker_when_configured()
+    {
+        var fiche = BuildValidIncomeFiche();
+        var xml = BuildSoapXml(fiche);
+        Assert.Contains("<b:SourceId>RAYVARZ-RESEND</b:SourceId>", xml);
+    }
+
     private static FicheHeaderDto BuildValidIncomeFiche() => new()
     {
         Category = FicheCategory.Income,
@@ -137,7 +145,7 @@ public class RayvarzPayloadValidatorTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
-                ["Rayvarz:SourceSystemId"] = "1",
+                ["Rayvarz:SourceSystemId"] = "RAYVARZ-RESEND",
                 ["Rayvarz:TransactionIdMode"] = "nidFiche"
             })
             .Build();
