@@ -63,53 +63,11 @@ public static class RefParameterCollector
         }
     }
 
-    public static void ApplyToFiche(FicheHeaderDto fiche, IEnumerable<RefParameter> refs)
-    {
-        foreach (var r in refs)
-        {
-            if (string.IsNullOrWhiteSpace(r.Name) || string.IsNullOrWhiteSpace(r.Value))
-                continue;
-
-            if (!long.TryParse(r.Value.Trim(), out var num))
-                continue;
-
-            switch (r.Name.ToUpperInvariant())
-            {
-                case "CENTER":
-                    fiche.Center = num;
-                    break;
-                case "CENTER1":
-                    ApplyCenter1ToRows(fiche, num);
-                    break;
-                case "CENTER2":
-                    ApplyCenter2ToRows(fiche, num);
-                    break;
-                case "CENTER3":
-                    ApplyCenter3ToRows(fiche, num);
-                    break;
-            }
-        }
-    }
-
-    private static void ApplyCenter1ToRows(FicheHeaderDto fiche, long value)
-    {
-        foreach (var row in fiche.Rows)
-            row.Center1 = value;
-        if (fiche.Rows.Count == 0)
-            fiche.Rows.Add(new IncmRowDto { Center1 = value });
-    }
-
-    private static void ApplyCenter2ToRows(FicheHeaderDto fiche, long value)
-    {
-        foreach (var row in fiche.Rows)
-            row.Center2 = value;
-    }
-
-    private static void ApplyCenter3ToRows(FicheHeaderDto fiche, long value)
-    {
-        foreach (var row in fiche.Rows)
-            row.Center3 = value;
-    }
+    public static void ApplyToFiche(
+        FicheHeaderDto fiche,
+        IEnumerable<RefParameter> refs,
+        IList<string>? warnings = null) =>
+        RefParameterRegistry.ApplyAll(fiche, refs, warnings);
 
     private static string Unquote(string raw)
     {

@@ -89,6 +89,9 @@ public static class Member1388IncomeRowProfiles
     public static void ApplyBazAfarine(FicheHeaderDto fiche) =>
         Member1388IncomeRowBuilderCore.ApplyStandard(fiche, BazAfarineOptions);
 
+    public static void ApplyBazAfarineOld(FicheHeaderDto fiche) =>
+        Member1388BazAfarineOldRowBuilder.Apply(fiche);
+
     /// <summary>تهاتر درآمدی — Oddment + scale؛ Center/Ref در TahatorRowBuilder.</summary>
     public static void ApplyTahatorIncome(FicheHeaderDto fiche) =>
         Member1388IncomeRowBuilderCore.ApplyStandard(fiche, TahatorIncomeOptions);

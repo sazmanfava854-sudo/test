@@ -82,10 +82,18 @@ public static class Member1388HelperFunctions
         context.HelperTrace.Add($"Logfile({name}): {content}");
     }
 
-    /// <summary>VB Run — dispatch بر اساس AccountingDocumentingCause و نوع فیش.</summary>
+    /// <summary>VB Run — dispatch از AST در صورت وجود؛ fallback به catalog با warning.</summary>
     public static bool DispatchRun(DslExecutionContext context, IOperationRegistry registry, IList<string> trace)
     {
         context.Variables["M_ShahrsaziArchiveGroup"] = 0;
+
+        if (context.Program is not null
+            && Member1388AstRunInterpreter.TryExecute(context.Program, context, registry, trace, out var astDriven)
+            && astDriven)
+        {
+            trace.Add("Run: زنجیره از AST");
+            return context.FunctionsWithEffect.Count > 0 || context.InvokedFunctions.Count > 0;
+        }
 
         var cause = context.Fiche.AccountingDocumentingCause ?? Member1388AccountingCause.Confirm;
 
@@ -104,9 +112,10 @@ public static class Member1388HelperFunctions
 
         if (context.Fiche.Category == FicheCategory.Income)
         {
+            context.CompatibilityWarnings.Add("Run: AST در دسترس نیست — fallback به Member1388Catalog.ResolveIncomeCallOrder");
             foreach (var fn in Member1388Catalog.ResolveIncomeCallOrder(context.Fiche))
                 Member1388RunDispatcher.DispatchChild(fn, context, registry, trace);
-            trace.Add("Run: Confirm + Income → زنجیره درآمد");
+            trace.Add("Run: Confirm + Income → زنجیره catalog (fallback)");
             return context.FunctionsWithEffect.Count > 0;
         }
 
@@ -265,6 +274,8 @@ internal static class Member1388RunDispatcher
         IOperationRegistry registry,
         IList<string> trace)
     {
+        functionName = ResolveRunCallName(functionName, context.Fiche);
+
         if (!context.InvokedFunctions.Contains(functionName, StringComparer.OrdinalIgnoreCase))
             context.InvokedFunctions.Add(functionName);
 
@@ -279,4 +290,11 @@ internal static class Member1388RunDispatcher
         if (result.HadEffect && !context.FunctionsWithEffect.Contains(functionName, StringComparer.OrdinalIgnoreCase))
             context.FunctionsWithEffect.Add(functionName);
     }
+
+    /// <summary>VB Run همیشه BazAfarine() را صدا می‌زند؛ UseBazAfarineOld در C# جایگزینی است.</summary>
+    internal static string ResolveRunCallName(string functionName, FicheHeaderDto fiche) =>
+        fiche.UseBazAfarineOld
+        && functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
+            ? "BazAfarineOld"
+            : functionName;
 }

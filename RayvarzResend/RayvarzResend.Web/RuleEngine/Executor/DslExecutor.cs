@@ -25,6 +25,7 @@ public sealed class DslExecutor
                 return Fail("تابع Run یافت نشد.", trace);
 
             trace.Add($"PreSOAP: نوع فیش={context.Fiche.Category}, DocTyp={context.Fiche.DocTyp}");
+            context.Program = program;
             foreach (var fn in program.Functions)
             {
                 var role = SupportedDslFunctions.GetRole(fn.Name, fn.DisplayName);
@@ -64,7 +65,8 @@ public sealed class DslExecutor
                     AppliedFunctions = context.InvokedFunctions.ToList(),
                     SkippedNotApplicable = context.SkippedNotApplicable.ToList(),
                     PreSoapRuleErrors = preSoapErrors,
-                    FunctionsWithEffect = context.FunctionsWithEffect.ToList()
+                    FunctionsWithEffect = context.FunctionsWithEffect.ToList(),
+                    CompatibilityWarnings = context.CompatibilityWarnings.ToList()
                 };
             }
 
@@ -78,7 +80,8 @@ public sealed class DslExecutor
                 AppliedFunctions = context.InvokedFunctions.ToList(),
                 SkippedNotApplicable = context.SkippedNotApplicable.ToList(),
                 PreSoapRuleErrors = Array.Empty<string>(),
-                FunctionsWithEffect = context.FunctionsWithEffect.ToList()
+                FunctionsWithEffect = context.FunctionsWithEffect.ToList(),
+                CompatibilityWarnings = context.CompatibilityWarnings.ToList()
             };
         }
         catch (Exception ex)
@@ -429,6 +432,7 @@ public sealed class DslExecutor
             ErrorMessage = message,
             Trace = trace,
             AppliedFunctions = context?.InvokedFunctions.ToList() ?? [],
-            FunctionsWithEffect = context?.FunctionsWithEffect.ToList() ?? []
+            FunctionsWithEffect = context?.FunctionsWithEffect.ToList() ?? [],
+            CompatibilityWarnings = context?.CompatibilityWarnings.ToList() ?? []
         };
 }

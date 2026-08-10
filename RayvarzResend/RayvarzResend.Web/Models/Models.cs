@@ -48,6 +48,22 @@ public class FicheHeaderDto
     public string PaymentBranch { get; set; } = "18";
     public string? BankCode { get; set; }
     public string RowDate { get; set; } = "";
+    /// <summary>RefParameter RowDocNo — اگر از DSL ست شود.</summary>
+    public string? RefRowDocNo { get; set; }
+    /// <summary>RefParameter RefownrDsc — اگر از DSL ست شود.</summary>
+    public string? RefOwnerDsc { get; set; }
+    /// <summary>RefParameter Ref2 — override سطح سند.</summary>
+    public string? Ref2Override { get; set; }
+    /// <summary>RefParameter Ref3 — override سطح سند.</summary>
+    public string? Ref3Override { get; set; }
+    /// <summary>RefParameter Ref6 — override سطح سند.</summary>
+    public string? Ref6Override { get; set; }
+    /// <summary>RefParameter PhasType — کد عددی قبل از enum SOAP.</summary>
+    public string? SoapPhasTypCode { get; set; }
+    /// <summary>RefParameter vchrtyp — کد عددی قبل از enum SOAP.</summary>
+    public string? SoapVchrTypCode { get; set; }
+    /// <summary>RefParameter QTY — override سطح سند برای SOAP.</summary>
+    public string? SoapQtyOverride { get; set; }
     /// <summary>تاریخ سند — از فیش (PaymentDate / PrintDate / …).</summary>
     public string RayvarzDocDate { get; set; } = "";
     /// <summary>تاریخ عملیات — معمولاً BankPaymentDate.</summary>

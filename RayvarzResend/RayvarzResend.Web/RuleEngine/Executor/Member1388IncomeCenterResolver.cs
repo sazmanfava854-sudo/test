@@ -149,6 +149,16 @@ public static class Member1388IncomeCenterResolver
 
     public static void ApplyBazAfarine(FicheHeaderDto fiche)
     {
+        ApplyBazAfarineRegionalCenters(fiche);
+    }
+
+    public static void ApplyBazAfarineOld(FicheHeaderDto fiche)
+    {
+        ApplyBazAfarineRegionalCenters(fiche);
+    }
+
+    private static void ApplyBazAfarineRegionalCenters(FicheHeaderDto fiche)
+    {
         var branch = ResolveDistrictBranch(fiche);
         var regional = branch > 0 ? ResolveRegionalCenter910(branch) : null;
         if (regional is > 0)

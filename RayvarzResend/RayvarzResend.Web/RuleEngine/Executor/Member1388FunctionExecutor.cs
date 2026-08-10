@@ -28,7 +28,7 @@ public static class Member1388FunctionExecutor
             return ExecuteIncomeCheck(context, trace);
 
         if (SupportedDslFunctions.IsTahator(functionName))
-            return ExecuteTahator(functionName, context, trace);
+            return ExecuteTahator(functionName, context, registry, trace);
 
         if (functionName.Equals("BedeHi", StringComparison.OrdinalIgnoreCase))
             return ExecuteBedeHi(context, trace);
@@ -67,7 +67,8 @@ public static class Member1388FunctionExecutor
         var hadEffect = Member1388NosaziRowBuilder.Apply(context.Fiche);
         context.Rows.Clear();
         context.Rows.AddRange(context.Fiche.Rows);
-        RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context));
+        RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context), context.CompatibilityWarnings);
+        ReplayRefParametersFromAst("Nosazi", context, registry, trace);
         trace.Add(hadEffect
             ? "Nosazi: Member1388NosaziRowBuilder + RefParams"
             : "Nosazi: skipped (no duty rows)");
@@ -77,6 +78,7 @@ public static class Member1388FunctionExecutor
     private static Member1388FunctionResult ExecuteTahator(
         string functionName,
         DslExecutionContext context,
+        IOperationRegistry registry,
         List<string> trace)
     {
         if (!Member1388AccountGroupRules.AppliesToFiche(functionName, context.Fiche))
@@ -92,8 +94,8 @@ public static class Member1388FunctionExecutor
 
         context.Rows.Clear();
         context.Rows.AddRange(context.Fiche.Rows);
-        RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context));
-        trace.Add($"{functionName}: TahatorRowBuilder");
+        RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context), context.CompatibilityWarnings);
+        ReplayRefParametersFromAst(functionName, context, registry, trace);
         return Member1388FunctionResult.Handled(trace, skipBody: true, hadEffect: true);
     }
 
@@ -213,7 +215,8 @@ public static class Member1388FunctionExecutor
         ApplyIncomeCentersForFunction(functionName, fiche);
 
         registry.Invoke("Income.BuildIncomeRows", context, Array.Empty<string>());
-        RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context));
+        RefParameterCollector.ApplyToFiche(context.Fiche, RefParameterCollector.GetOrCreateList(context), context.CompatibilityWarnings);
+        ReplayRefParametersFromAst(functionName, context, registry, trace);
         context.Rows.Clear();
         context.Rows.AddRange(context.Fiche.Rows);
         trace.Add($"{functionName}: income rows + centers");
@@ -276,10 +279,15 @@ public static class Member1388FunctionExecutor
             return;
         }
 
-        if (functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
-            || functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
+        if (functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase))
         {
             Member1388IncomeRowProfiles.ApplyBazAfarine(fiche);
+            return;
+        }
+
+        if (functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeRowProfiles.ApplyBazAfarineOld(fiche);
             return;
         }
 
@@ -331,10 +339,15 @@ public static class Member1388FunctionExecutor
             return;
         }
 
-        if (functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase)
-            || functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
+        if (functionName.Equals("BazAfarine", StringComparison.OrdinalIgnoreCase))
         {
             Member1388IncomeCenterResolver.ApplyBazAfarine(fiche);
+            return;
+        }
+
+        if (functionName.Equals("BazAfarineOld", StringComparison.OrdinalIgnoreCase))
+        {
+            Member1388IncomeCenterResolver.ApplyBazAfarineOld(fiche);
             return;
         }
 
@@ -370,6 +383,23 @@ public static class Member1388FunctionExecutor
             fiche.ResolvedDistrictBranch = branch;
             context.Variables["DistrickBranch"] = branch;
         }
+    }
+
+    private static void ReplayRefParametersFromAst(
+        string functionName,
+        DslExecutionContext context,
+        IOperationRegistry registry,
+        List<string> trace)
+    {
+        if (context.Program is null)
+            return;
+
+        var fn = context.Program.Functions.FirstOrDefault(f =>
+            f.Name.Equals(functionName, StringComparison.OrdinalIgnoreCase));
+        if (fn is null)
+            return;
+
+        Member1388AstRefParameterReplayer.Replay(fn.Body, context, registry, trace);
     }
 
     private static bool IsHelper(string name) =>

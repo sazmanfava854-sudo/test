@@ -5,6 +5,8 @@ namespace RayvarzResend.Web.RuleEngine.Executor;
 
 public sealed class DslExecutionContext
 {
+    /// <summary>برنامه DSL فعال — برای Run/RefParameter از AST.</summary>
+    public DslProgram? Program { get; set; }
     public FicheHeaderDto Fiche { get; init; } = new();
     public int Branch { get; init; }
     public int Fund { get; init; }
@@ -35,6 +37,8 @@ public sealed class DslExecutionContext
     public List<string> HelperTrace { get; } = new();
     /// <summary>خطاهای اعتبارسنجی iNcOMECheck و مشابه.</summary>
     public List<string> ValidationErrors { get; } = new();
+    /// <summary>هشدارهای سازگاری/deferred — تغییرات VB غیرقابل‌اجرا.</summary>
+    public List<string> CompatibilityWarnings { get; } = new();
 }
 
 public sealed class DslExecutionResult
@@ -49,6 +53,7 @@ public sealed class DslExecutionResult
     public IReadOnlyList<string> SkippedNotApplicable { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> PreSoapRuleErrors { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> FunctionsWithEffect { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> CompatibilityWarnings { get; init; } = Array.Empty<string>();
 }
 
 public sealed class DslValidationResult

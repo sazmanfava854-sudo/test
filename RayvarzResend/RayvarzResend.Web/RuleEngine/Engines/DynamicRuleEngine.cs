@@ -102,9 +102,11 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                     context.DocDate, context.ActDate, context.DueDate);
             }
 
-            var warning = validation.Warnings.Count > 0
-                ? string.Join(" | ", validation.Warnings.Take(3))
-                : null;
+            var warning = CombineWarnings(
+                validation.Warnings.Count > 0 ? string.Join(" | ", validation.Warnings.Take(3)) : null,
+                executed.CompatibilityWarnings.Count > 0
+                    ? string.Join(" | ", executed.CompatibilityWarnings.Take(5))
+                    : null);
 
             return new FicheRuleEvaluationResult
             {
