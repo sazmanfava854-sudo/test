@@ -40,6 +40,10 @@ public class SoapBuilder
 
     public string Build(FicheHeaderDto fiche, int branch, int fund, string? docDate, string? actDate, string? dueDate)
     {
+        docDate = FirstNonEmpty(fiche.RayvarzDocDate, docDate);
+        actDate = FirstNonEmpty(fiche.RayvarzActDate, fiche.RowDate, actDate);
+        dueDate = FirstNonEmpty(fiche.RayvarzDueDate, dueDate);
+
         var docDateRay = FicheDateResolver.ResolveForSoap(docDate, fiche.RayvarzDocDate);
         var actDateRay = FicheDateResolver.ResolveForSoap(actDate, fiche.RayvarzActDate);
         var dueDateRay = FicheDateResolver.ResolveForSoap(dueDate, fiche.RayvarzDueDate);
@@ -84,13 +88,18 @@ public class SoapBuilder
 
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
+        if (fiche.SuggestedFund is > 0)
+            fund = fiche.SuggestedFund.Value;
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
         var transactionId = ResolveTransactionId(fiche);
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
         var headerActDate = actDateRay;
-        var headerRowDate = actDateRay;
+        var headerRowDate = !string.IsNullOrWhiteSpace(fiche.RowDate)
+            ? FicheDateResolver.ResolveForSoap(fiche.RowDate, actDateRay)
+            : actDateRay;
+        var headerRowDocNo = FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo);
         var docTypDsc = ResolveDocTypDsc(fiche);
 
         const int docRow = 1;
@@ -99,12 +108,12 @@ public class SoapBuilder
         var tahatorPhas = isTahator ? TahatorRowBuilder.ResolvePhasTypCode(fiche) : null;
         var tahatorVchr = isTahator ? TahatorRowBuilder.ResolveVchrTypCode(fiche) : null;
         var phasTyp = ResolveSoapDataContractEnum(
-            tahatorPhas ?? _config["Rayvarz:PhasTyp"],
-            tahatorPhas ?? "7",
+            fiche.SoapPhasTypCode ?? tahatorPhas ?? _config["Rayvarz:PhasTyp"],
+            fiche.SoapPhasTypCode ?? tahatorPhas ?? "7",
             PhasTypCodeToWireName);
         var vchrTyp = ResolveSoapDataContractEnum(
-            tahatorVchr ?? _config["Rayvarz:VchrTyp"],
-            tahatorVchr ?? "0",
+            fiche.SoapVchrTypCode ?? tahatorVchr ?? _config["Rayvarz:VchrTyp"],
+            fiche.SoapVchrTypCode ?? tahatorVchr ?? "0",
             VchrTypCodeToWireName);
         var actTyp = ResolveSoapActTyp(
             isTahator ? TahatorRowBuilder.ActTypCode : _config["Rayvarz:ActTyp"],
@@ -154,7 +163,7 @@ public class SoapBuilder
                 {documentItemRefs}
                 {refRecon}
                 <b:RowDate>{headerRowDate}</b:RowDate>
-                <b:RowDocNo>{Escape(fiche.FicheNo)}</b:RowDocNo>
+                <b:RowDocNo>{Escape(headerRowDocNo)}</b:RowDocNo>
                 <b:VchrTyp>{vchrTyp}</b:VchrTyp>
               </b:DocumentItem>
             </b:Items>
@@ -379,19 +388,20 @@ public class SoapBuilder
     private static string BuildDocumentItemRefFields(FicheHeaderDto fiche)
     {
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
-        var ref2 = isDuty ? FirstNonEmpty(fiche.BillIdRaw, fiche.BillId) : fiche.BillId;
-        var ref3 = isDuty ? FirstNonEmpty(fiche.PaymentIdRaw, fiche.PaymentId) : fiche.PaymentId;
+        var ref2 = FirstNonEmpty(fiche.Ref2Override, isDuty ? FirstNonEmpty(fiche.BillIdRaw, fiche.BillId) : fiche.BillId);
+        var ref3 = FirstNonEmpty(fiche.Ref3Override, isDuty ? FirstNonEmpty(fiche.PaymentIdRaw, fiche.PaymentId) : fiche.PaymentId);
+        var refOwner = FirstNonEmpty(fiche.RefOwnerDsc, fiche.FicheNo);
         return $@"                <b:Ref1 i:nil=""true""/>
                 {XmlOptionalElement("b", "Ref2", ref2, nilIfEmpty: true)}
                 {XmlOptionalElement("b", "Ref3", ref3, nilIfEmpty: true)}
                 <b:Ref4 i:nil=""true""/>
                 <b:Ref5 i:nil=""true""/>
-                <b:Ref6 i:nil=""true""/>
+                {XmlOptionalElement("b", "Ref6", fiche.Ref6Override, nilIfEmpty: true)}
                 <b:RefIncmMkrDsc i:nil=""true""/>
                 <b:RefIncmMkrNo i:nil=""true""/>
                 <b:RefRegPlaque i:nil=""true""/>
                 <b:RefUserName i:nil=""true""/>
-                {XmlOptionalElement("b", "RefownrDsc", fiche.FicheNo, nilIfEmpty: true)}";
+                {XmlOptionalElement("b", "RefownrDsc", refOwner, nilIfEmpty: true)}";
     }
 
     private sealed record IncmContext(
@@ -414,8 +424,13 @@ public class SoapBuilder
         string dueDateRay)
     {
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
-        var detailRefRow = ResolveDetailRefRowDocNo(fiche.FicheNo);
+        var detailRefRow = ResolveDetailRefRowDocNo(FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo));
         var dutyQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
+        var rowDocNo = FirstNonEmpty(fiche.RefRowDocNo, detailRefRow);
+        var rowDue = !string.IsNullOrWhiteSpace(fiche.RayvarzDueDate)
+            ? FicheDateResolver.ResolveForSoap(fiche.RayvarzDueDate, dueDateRay)
+            : dueDateRay;
+        var rowQty = fiche.SoapQtyOverride;
 
         return rows.Select((r, i) =>
         {
@@ -440,14 +455,14 @@ public class SoapBuilder
             return new IncmContext(
                 r,
                 incmRow,
-                FormatRayvarzMoney(Math.Abs(r.Val)),
-                dueDateRay,
+                rowQty ?? FormatRayvarzMoney(Math.Abs(r.Val)),
+                rowDue,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
                 r.Ref,
                 r.Num,
-                detailRefRow,
-                dueDateRay,
+                rowDocNo,
+                rowDue,
                 TahatorRowBuilder.IsTahatorFiche(fiche) ? r.IncmRowDsc : null,
                 false);
         }).ToList();

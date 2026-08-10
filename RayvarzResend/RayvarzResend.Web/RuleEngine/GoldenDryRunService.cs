@@ -4,6 +4,8 @@ using RayvarzResend.Web.RuleEngine.Engines;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
+using RayvarzResend.Web.Validation;
+
 namespace RayvarzResend.Web.RuleEngine;
 
 public sealed class GoldenDryRunCaseResult
@@ -17,6 +19,7 @@ public sealed class GoldenDryRunCaseResult
     public decimal Payable { get; init; }
     public decimal RowSum { get; init; }
     public IReadOnlyList<string> Mismatches { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<RayvarzValidationIssueDto> SoapValidationIssues { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
 }
 
 public sealed class GoldenDryRunSummary
@@ -36,19 +39,28 @@ public sealed class GoldenDryRunService
     private readonly RuleEngineStore _store;
     private readonly FicheRepository _fiches;
     private readonly RuleEngineFactory _engineFactory;
+    private readonly RayvarzSoapPayloadValidator _soapValidator;
 
-    public GoldenDryRunService(RuleEngineStore store, FicheRepository fiches, RuleEngineFactory engineFactory)
+    public GoldenDryRunService(
+        RuleEngineStore store,
+        FicheRepository fiches,
+        RuleEngineFactory engineFactory,
+        RayvarzSoapPayloadValidator soapValidator)
     {
         _store = store;
         _fiches = fiches;
         _engineFactory = engineFactory;
+        _soapValidator = soapValidator;
     }
 
-    public async Task<GoldenDryRunSummary> RunAllAsync(bool compareExpectedRows = true, CancellationToken ct = default)
+    public async Task<GoldenDryRunSummary> RunAllAsync(bool compareExpectedRows = true, bool validateFullSoap = false, CancellationToken ct = default)
     {
         var engine = await _engineFactory.ResolveAsync(ct);
-        return await RunAllWithEngineAsync(engine, null, null, compareExpectedRows, allowLegacyFallback: true, ct);
+        return await RunAllWithEngineAsync(engine, null, null, compareExpectedRows, allowLegacyFallback: true, validateFullSoap, ct);
     }
+
+    public async Task<GoldenDryRunSummary> RunAllWithSoapValidationAsync(CancellationToken ct = default) =>
+        await RunAllAsync(compareExpectedRows: true, validateFullSoap: true, ct);
 
     public async Task<GoldenDryRunSummary> RunAllWithEngineAsync(
         IFicheRuleEngine engine,
@@ -56,6 +68,7 @@ public sealed class GoldenDryRunService
         long? snapshotId,
         bool compareExpectedRows = true,
         bool allowLegacyFallback = true,
+        bool validateFullSoap = false,
         CancellationToken ct = default)
     {
         var nidMember = _engineFactory.NidMember;
@@ -64,7 +77,7 @@ public sealed class GoldenDryRunService
 
         foreach (var g in goldens)
         {
-            results.Add(await RunOneAsync(engine, g, candidateId, snapshotId, compareExpectedRows, allowLegacyFallback, ct));
+            results.Add(await RunOneAsync(engine, g, candidateId, snapshotId, compareExpectedRows, allowLegacyFallback, validateFullSoap, ct));
         }
 
         return new GoldenDryRunSummary
@@ -80,7 +93,7 @@ public sealed class GoldenDryRunService
         RuleGoldenFicheRow golden, bool compareExpectedRows = true, CancellationToken ct = default)
     {
         var engine = await _engineFactory.ResolveAsync(ct);
-        return await RunOneAsync(engine, golden, null, null, compareExpectedRows, true, ct);
+        return await RunOneAsync(engine, golden, null, null, compareExpectedRows, true, validateFullSoap: false, ct);
     }
 
     private async Task<GoldenDryRunCaseResult> RunOneAsync(
@@ -90,6 +103,7 @@ public sealed class GoldenDryRunService
         long? snapshotId,
         bool compareExpectedRows,
         bool allowLegacyFallback,
+        bool validateFullSoap,
         CancellationToken ct)
     {
         try
@@ -123,6 +137,36 @@ public sealed class GoldenDryRunService
 
             if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, evaluated.RowSum))
                 mismatches.Add($"جمع ردیف‌ها ({evaluated.RowSum}) ≠ PayablePrice ({fiche.Payable})");
+
+            IReadOnlyList<RayvarzValidationIssueDto> soapIssues = Array.Empty<RayvarzValidationIssueDto>();
+            if (validateFullSoap)
+            {
+                var soapEval = await engine.EvaluateAsync(new FicheRuleContext
+                {
+                    Fiche = fiche,
+                    Branch = branch,
+                    Fund = fund,
+                    AllowLegacyFallback = allowLegacyFallback
+                }, buildSoap: true, ct);
+
+                if (!soapEval.Success || string.IsNullOrWhiteSpace(soapEval.SoapXml))
+                {
+                    mismatches.Add(soapEval.ErrorMessage ?? "ساخت SOAP در golden ناموفق بود");
+                }
+                else
+                {
+                    var soapValidation = _soapValidator.Validate(new RayvarzValidationInput
+                    {
+                        Fiche = fiche,
+                        SoapXml = soapEval.SoapXml,
+                        Branch = branch,
+                        Fund = fund
+                    });
+                    soapIssues = soapValidation.ToDto().Issues;
+                    foreach (var block in soapValidation.BlockingIssues)
+                        mismatches.Add($"SOAP [{block.Code}] {block.Field}/{block.Operation}: {block.Message}");
+                }
+            }
 
             if (compareExpectedRows && _store.IsConfigured)
             {
@@ -180,7 +224,8 @@ public sealed class GoldenDryRunService
                 RowCount = fiche.Rows.Count,
                 Payable = fiche.Payable,
                 RowSum = evaluated.RowSum,
-                Mismatches = mismatches
+                Mismatches = mismatches,
+                SoapValidationIssues = soapIssues
             };
         }
         catch (Exception ex)

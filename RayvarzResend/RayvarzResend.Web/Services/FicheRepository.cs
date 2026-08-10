@@ -141,12 +141,16 @@ WHERE NidIncome = @nid
 
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
+       i.NidProc,
+       ISNULL(f.Brokers, 0) AS Brokers,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBranch AS nvarchar(20)))), '') AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(f.CI_Bank AS nvarchar(20)))), '') AS CiBank,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS PaymentBank,
        COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
        f.PaymentDate,
        f.BankPaymentDate,
+       f.ExportPermanentDate,
+       f.PaymentBreakDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
        CAST(f.CheckNo AS nvarchar(20)) AS CheckNo,
        NULLIF(LTRIM(RTRIM(CAST(f.Deposit AS nvarchar(50)))), '') AS Deposit,
@@ -197,11 +201,17 @@ WHERE {where}";
         {
             Category = FicheCategory.Income,
             FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
+            BillIdRaw = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
+            PaymentIdRaw = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
             BillId = reader.GetString(reader.GetOrdinal("BillID")),
             PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
             Payable = ReadDecimal(reader, "Payable"),
+            Brokers = ReadDecimal(reader, "Brokers"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
+            NidProc = reader.IsDBNull(reader.GetOrdinal("NidProc"))
+                ? null
+                : reader.GetGuid(reader.GetOrdinal("NidProc")),
             PaymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
                 ? ""
                 : reader.GetString(reader.GetOrdinal("PaymentBranch")),
@@ -210,6 +220,10 @@ WHERE {where}";
                 ? (ciBank ?? paymentBank)
                 : (paymentBank ?? ciBank),
             RowDate = ReadRowDate(reader, "RowDate"),
+            PaymentDate = ReadRowDate(reader, "PaymentDate"),
+            BankPaymentDate = ReadRowDate(reader, "BankPaymentDate"),
+            ExportPermanentDate = ReadRowDate(reader, "ExportPermanentDate"),
+            PaymentBreakDate = ReadRowDate(reader, "PaymentBreakDate"),
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
             CheckNo = reader.IsDBNull(reader.GetOrdinal("CheckNo")) ? null : reader.GetString(reader.GetOrdinal("CheckNo")),
@@ -227,6 +241,14 @@ WHERE {where}";
                     ? "اسناد تهاتر درامد"
                     : "اسناد شهرسازی"
         };
+
+        var districtBranch = DutyDistrictBranchResolver.ResolveBranch(dto.BillIdRaw, dto.PaymentIdRaw);
+        if (districtBranch > 0)
+        {
+            dto.ResolvedDistrictBranch = districtBranch;
+            if (!isTahator)
+                dto.SuggestedFund ??= DutyDistrictBranchResolver.ResolveFund(districtBranch, dto.BankCode ?? "18");
+        }
 
         if (isTahatorAmount)
         {
@@ -246,6 +268,8 @@ WHERE {where}";
             // Income_Calculation = مبلغ ناخالص؛ PayablePrice پس از تخفیف است — مثل SOAP اسکیل کن
             IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
         }
+
+        await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, LoadIncomeRowsAsync, ct);
 
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
@@ -387,12 +411,28 @@ WHERE {where}";
             dto.BnkAcntNoSource = "کد ثابت صنفی — Rayvarz (7-14-55-1-1-0-1)";
         }
 
-        dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, exportType, ct);
+        await DutyFicheSupplementLoader.EnrichAsync(dto, _saraCs, dutyType, ct);
+
+        dto.Rows = await LoadDutyRowsAsync(
+            dto.NidFiche,
+            dto.Payable,
+            isSenfi,
+            exportType,
+            dto.DutyOddments,
+            dto.FicheNo,
+            ct);
         DutyNosaziLogic.ApplyRayvarzDates(dto, dutyStatus, paymentDateRay, bankPaymentDateRay);
         return dto;
     }
 
-    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(Guid nidFiche, decimal payable, bool isSenfi, int exportType, CancellationToken ct)
+    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(
+        Guid nidFiche,
+        decimal payable,
+        bool isSenfi,
+        int exportType,
+        IReadOnlyList<DutyOddmentDto> dutyOddments,
+        string ficheNo,
+        CancellationToken ct)
     {
         const string sql = @"
 SELECT CI_DutyFormula, CI_DutyFormulaFiche, Price
@@ -413,6 +453,8 @@ WHERE NidFiche = @nid";
                 ReadDecimal(reader, "Price")
             ));
         }
+
+        DutyOddmentLogic.ApplyToSubs(subs, dutyOddments, ficheNo);
 
         var amounts = DutyNosaziLogic.CalculateSubAmounts(subs, payable);
         return DutyNosaziLogic.BuildIncmRows(amounts, isSenfi, exportType);

@@ -36,6 +36,8 @@ public class FicheHeaderDto
     public decimal Payable { get; set; }
     public Guid NidFiche { get; set; }
     public Guid? NidIncome { get; set; }
+    /// <summary>پرونده درآمد — برای BedeHi و فیش قبلی همان NidProc.</summary>
+    public Guid? NidProc { get; set; }
     public string BnkAcntNo { get; set; } = "";
     public string BnkAcntNoSource { get; set; } = "";
     public string? DutyRegion { get; set; }
@@ -46,6 +48,22 @@ public class FicheHeaderDto
     public string PaymentBranch { get; set; } = "18";
     public string? BankCode { get; set; }
     public string RowDate { get; set; } = "";
+    /// <summary>RefParameter RowDocNo — اگر از DSL ست شود.</summary>
+    public string? RefRowDocNo { get; set; }
+    /// <summary>RefParameter RefownrDsc — اگر از DSL ست شود.</summary>
+    public string? RefOwnerDsc { get; set; }
+    /// <summary>RefParameter Ref2 — override سطح سند.</summary>
+    public string? Ref2Override { get; set; }
+    /// <summary>RefParameter Ref3 — override سطح سند.</summary>
+    public string? Ref3Override { get; set; }
+    /// <summary>RefParameter Ref6 — override سطح سند.</summary>
+    public string? Ref6Override { get; set; }
+    /// <summary>RefParameter PhasType — کد عددی قبل از enum SOAP.</summary>
+    public string? SoapPhasTypCode { get; set; }
+    /// <summary>RefParameter vchrtyp — کد عددی قبل از enum SOAP.</summary>
+    public string? SoapVchrTypCode { get; set; }
+    /// <summary>RefParameter QTY — override سطح سند برای SOAP.</summary>
+    public string? SoapQtyOverride { get; set; }
     /// <summary>تاریخ سند — از فیش (PaymentDate / PrintDate / …).</summary>
     public string RayvarzDocDate { get; set; } = "";
     /// <summary>تاریخ عملیات — معمولاً BankPaymentDate.</summary>
@@ -56,6 +74,18 @@ public class FicheHeaderDto
     public string DocDsc { get; set; } = "";
     public string? DocTypDsc { get; set; }
     public int? IncomeAccountGroup { get; set; }
+    /// <summary>علت صدور سند — VB AccountingDocumentingCause (Confirm=0، تقسیط=7).</summary>
+    public byte? AccountingDocumentingCause { get; set; }
+    /// <summary>تاریخ دائم صادرشده — iNcOMECheck / تقسیط.</summary>
+    public string? ExportPermanentDate { get; set; }
+    /// <summary>تاریخ سررسید تقسیط — Molat در VB.</summary>
+    public string? PaymentBreakDate { get; set; }
+    /// <summary>تاریخ پرداخت بانک — Income_Fiche.BankPaymentDate.</summary>
+    public string? BankPaymentDate { get; set; }
+    /// <summary>تاریخ پرداخت — Income_Fiche.PaymentDate.</summary>
+    public string? PaymentDate { get; set; }
+    /// <summary>در Run به‌جای BazAfarine، BazAfarineOld فراخوانی شود (legacy opt-in).</summary>
+    public bool UseBazAfarineOld { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
@@ -74,7 +104,62 @@ public class FicheHeaderDto
     public long? CreditorPapers { get; set; }
     /// <summary>Income_Fiche.CheckNo — Center3: 5→700100002 وگرنه 700100001.</summary>
     public string? CheckNo { get; set; }
+    /// <summary>کارمزد کارگزار — برای BedeHi: Payable-Brokers.</summary>
+    public decimal Brokers { get; set; }
+    /// <summary>مبلغ بدهی قبلی — اگر از DB بارگذاری شده یا BedeHi محاسبه شده.</summary>
+    public decimal? PriorBedeHiAmount { get; set; }
+    /// <summary>فیش درآمد قبلی همان پرونده — برای BedeHi و ردیف‌های بدهی.</summary>
+    public PriorIncomeFicheDto? PriorIncomeFiche { get; set; }
+    /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
+    public List<IncomeOddmentDto> Oddments { get; set; } = new();
+    /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>
+    public List<DutyOddmentDto> DutyOddments { get; set; } = new();
+    /// <summary>زیرفیش نوسازی — برای ساخت ردیف در Member 1388 Nosazi.</summary>
+    public List<DutySubDto> DutySubs { get; set; } = new();
     public List<IncmRowDto> Rows { get; set; } = new();
+}
+
+/// <summary>فیش درآمد قبلی — ورودی BedeHi (VB: M_AllFiche(0)).</summary>
+public class PriorIncomeFicheDto
+{
+    public Guid NidIncome { get; set; }
+    public string FicheNo { get; set; } = "";
+    public decimal Payable { get; set; }
+    public decimal Brokers { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string BankPaymentDate { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    /// <summary>وضعیت فیش — VB BedeHi: EumFicheStatus 5 یا 7.</summary>
+    public int? FicheStatus { get; set; }
+    public List<IncmRowDto> CalculationRows { get; set; } = new();
+}
+
+/// <summary>زیرفیش نوسازی — Duty_FicheSub برای Member 1388 Nosazi.</summary>
+public class DutySubDto
+{
+    public int DutyFormula { get; set; }
+    public int DutyFormulaFiche { get; set; }
+    public decimal Price { get; set; }
+}
+
+/// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>
+public class IncomeOddmentDto
+{
+    public int IncmNo { get; set; }
+    public decimal Value { get; set; }
+    public int OddmentType { get; set; }
+}
+
+/// <summary>رندمان dbo.Duty_OddmentAccount — از NidFK مرتبط با Duty_FicheSub.</summary>
+public class DutyOddmentDto
+{
+    public int DutyFormula { get; set; }
+    /// <summary>معادل CI_DutyFormulaFiche — از CI_DutyOddmentFor در DB.</summary>
+    public int DutyFormulaFiche { get; set; }
+    public decimal Price { get; set; }
+    public int OddmentType { get; set; }
+    public string? FicheNo { get; set; }
+    public int? DutyYear { get; set; }
 }
 
 public class RuleDslParsePreviewRequest
@@ -125,6 +210,38 @@ public class SendResultDto
     public string? DocNotSentError { get; set; }
     public string? Warning { get; set; }
     public RayvarzTransportDiagnostics? Diagnostics { get; set; }
+    public RayvarzValidationResultDto? Validation { get; set; }
+}
+
+/// <summary>خروجی Preview — ساخت SOAP + اعتبارسنجی بدون POST.</summary>
+public class FichePreviewResultDto
+{
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string Xml { get; init; } = "";
+    public bool CanSend { get; init; }
+    public string? PayloadMode { get; init; }
+    public string? EngineName { get; init; }
+    public string? Warning { get; init; }
+    public RayvarzValidationResultDto Validation { get; init; } = new();
+}
+
+public class RayvarzValidationResultDto
+{
+    public bool CanSend { get; init; }
+    public IReadOnlyList<RayvarzValidationIssueDto> Issues { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
+    public IReadOnlyList<RayvarzValidationIssueDto> BlockingIssues { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
+    public IReadOnlyList<RayvarzValidationIssueDto> Warnings { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
+}
+
+public class RayvarzValidationIssueDto
+{
+    public string Code { get; init; } = "";
+    public string Field { get; init; } = "";
+    public string Operation { get; init; } = "";
+    public string Severity { get; init; } = "";
+    public bool Blocking { get; init; }
+    public string Message { get; init; } = "";
 }
 
 /// <summary>جزئیات فنی ارسال/اتصال برای UI و لاگ (بدون ذخیره کل XML در لاگ فایل).</summary>

@@ -8,6 +8,7 @@ using RayvarzResend.Web.RuleEngine.Parser;
 using RayvarzResend.Web.RuleEngine.Promotion;
 using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
+using RayvarzResend.Web.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<RayvarzSoapPayloadValidator>();
 builder.Services.AddSingleton<FicheSendService>();
 builder.Services.AddSingleton<UnsentFicheService>();
 builder.Services.AddSingleton<TahatorSnapshotStore>();
@@ -299,7 +301,7 @@ app.MapPost("/api/rule/golden/dry-run", async (
     IConfiguration config,
     CancellationToken ct) =>
 {
-    var summary = await dryRun.RunAllAsync(compareExpectedRows: true, ct);
+    var summary = await dryRun.RunAllAsync(compareExpectedRows: true, validateFullSoap: false, ct);
     return Results.Ok(new
     {
         summary.EngineName,
@@ -308,6 +310,26 @@ app.MapPost("/api/rule/golden/dry-run", async (
         summary.AllPassed,
         forceEngine = config["RuleEngine:ForceEngine"],
         cases = summary.Cases
+    });
+});
+
+app.MapPost("/api/rule/golden/dry-run-soap", async (GoldenDryRunService dryRun, CancellationToken ct) =>
+{
+    var summary = await dryRun.RunAllWithSoapValidationAsync(ct);
+    return Results.Ok(new
+    {
+        summary.EngineName,
+        summary.Total,
+        summary.Passed,
+        summary.AllPassed,
+        cases = summary.Cases.Select(c => new
+        {
+            c.GoldenFicheId,
+            c.FicheNo,
+            c.Success,
+            c.Mismatches,
+            soapValidation = c.SoapValidationIssues
+        })
     });
 });
 
@@ -493,20 +515,20 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
     }
 });
 
-app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
+app.MapPost("/api/fiche/preview", async (SendFicheRequest req, FicheSendService send, CancellationToken ct) =>
 {
-    var blockReason = FicheSendService.ValidateSendable(req.Fiche);
-    if (blockReason != null)
-        return Results.BadRequest(new { error = blockReason });
+    var preview = await send.PreviewAsync(req, ct);
+    if (!preview.Success)
+        return Results.BadRequest(new { error = preview.ErrorMessage, validation = preview.Validation });
 
-    var built = await payload.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
     return Results.Ok(new
     {
-        xml = built.Xml,
-        payloadMode = built.Mode.ToString(),
-        engineName = built.EngineName,
-        warning = built.Warning,
-        ruleMeta = built.RuleMeta
+        xml = preview.Xml,
+        canSend = preview.CanSend,
+        payloadMode = preview.PayloadMode,
+        engineName = preview.EngineName,
+        warning = preview.Warning,
+        validation = preview.Validation
     });
 });
 

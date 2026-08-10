@@ -25,6 +25,7 @@ public sealed class DslExecutor
                 return Fail("تابع Run یافت نشد.", trace);
 
             trace.Add($"PreSOAP: نوع فیش={context.Fiche.Category}, DocTyp={context.Fiche.DocTyp}");
+            context.Program = program;
             foreach (var fn in program.Functions)
             {
                 var role = SupportedDslFunctions.GetRole(fn.Name, fn.DisplayName);
@@ -35,11 +36,18 @@ public sealed class DslExecutor
             // ۱) اجرای قوانین (Run و Call chain وابسته به نوع فیش)
             ExecuteFunction(entry, program, context, trace);
 
+            // ۱.۵) خطاهای اعتبارسنجی (iNcOMECheck و …)
+            var validationErrors = context.ValidationErrors.ToList();
+            if (!string.IsNullOrWhiteSpace(context.Fiche.BlockReason)
+                && !validationErrors.Contains(context.Fiche.BlockReason))
+                validationErrors.Add(context.Fiche.BlockReason);
+
             // ۲) ساخت ردیف از فیش live پس از اعمال قوانین
             FinalizeRowsByCategory(context, trace);
 
             // ۳) تأیید نقش‌های اجباری قبل از SOAP
             var preSoapErrors = ValidateRequiredRolesBeforeSoap(context, trace);
+            preSoapErrors.AddRange(validationErrors);
 
             var rows = context.Rows.Count > 0 ? context.Rows : context.Fiche.Rows;
             var sum = rows.Sum(r => r.Val);
@@ -56,7 +64,9 @@ public sealed class DslExecutor
                     Trace = trace,
                     AppliedFunctions = context.InvokedFunctions.ToList(),
                     SkippedNotApplicable = context.SkippedNotApplicable.ToList(),
-                    PreSoapRuleErrors = preSoapErrors
+                    PreSoapRuleErrors = preSoapErrors,
+                    FunctionsWithEffect = context.FunctionsWithEffect.ToList(),
+                    CompatibilityWarnings = context.CompatibilityWarnings.ToList()
                 };
             }
 
@@ -69,13 +79,15 @@ public sealed class DslExecutor
                 Trace = trace,
                 AppliedFunctions = context.InvokedFunctions.ToList(),
                 SkippedNotApplicable = context.SkippedNotApplicable.ToList(),
-                PreSoapRuleErrors = Array.Empty<string>()
+                PreSoapRuleErrors = Array.Empty<string>(),
+                FunctionsWithEffect = context.FunctionsWithEffect.ToList(),
+                CompatibilityWarnings = context.CompatibilityWarnings.ToList()
             };
         }
         catch (Exception ex)
         {
             trace.Add($"ERROR: {ex.Message}");
-            return Fail(ex.Message, trace);
+            return Fail(ex.Message, trace, context);
         }
     }
 
@@ -94,10 +106,14 @@ public sealed class DslExecutor
                     && context.DispatchedFunction.Equals("Nosazi", StringComparison.OrdinalIgnoreCase))
                     hit = true;
                 if (role == DslFunctionRole.Income
-                    && SupportedDslFunctions.IsIncome(context.DispatchedFunction))
+                    && (SupportedDslFunctions.IsIncome(context.DispatchedFunction)
+                        || SupportedDslFunctions.IsIncomeCheck(context.DispatchedFunction)))
                     hit = true;
                 if (role == DslFunctionRole.Tahator
                     && SupportedDslFunctions.IsTahator(context.DispatchedFunction))
+                    hit = true;
+                if (role == DslFunctionRole.IncomeCheck
+                    && context.InvokedFunctions.Any(SupportedDslFunctions.IsIncomeCheck))
                     hit = true;
             }
 
@@ -138,8 +154,11 @@ public sealed class DslExecutor
 
         if (context.Fiche.Category == FicheCategory.Income)
         {
-            if (!context.InvokedFunctions.Any(SupportedDslFunctions.IsIncome)
-                && !context.InvokedFunctions.Any(SupportedDslFunctions.IsTahator))
+            var hasIncomePath = context.InvokedFunctions.Any(SupportedDslFunctions.IsIncome)
+                || context.InvokedFunctions.Any(SupportedDslFunctions.IsTahator)
+                || context.InvokedFunctions.Any(SupportedDslFunctions.IsIncomeCheck);
+
+            if (!hasIncomePath)
             {
                 context.DispatchedFunction = "iNcOME";
                 context.InvokedFunctions.Add("iNcOME");
@@ -182,6 +201,24 @@ public sealed class DslExecutor
         if (SupportedDslFunctions.IsNosazi(function.Name, function.DisplayName))
             context.DispatchedFunction = "Nosazi";
 
+        if (context.Member1388FullExecution && Member1388Catalog.IsCatalogFunction(function.Name))
+        {
+            var m1388 = Member1388FunctionExecutor.Execute(function.Name, context, _registry);
+            foreach (var line in m1388.Trace)
+                trace.Add(line);
+            if (m1388.WasHandled)
+            {
+                if (m1388.HadEffect)
+                    context.FunctionsWithEffect.Add(function.Name);
+                if (m1388.SkipFunctionBody)
+                {
+                    context.SkipCurrentFunctionBody = false;
+                    return;
+                }
+            }
+        }
+
+        context.SkipCurrentFunctionBody = false;
         // بدنه AST اجرا می‌شود — نه skip کل تابع به‌عنوان Unsupported
         ExecuteStatements(function.Body, program, context, trace);
     }
@@ -198,6 +235,7 @@ public sealed class DslExecutor
             {
                 case DslAssignStatement assign:
                     context.Variables[assign.Target] = EvaluateExpression(assign.Expression, context);
+                    RefParameterCollector.TrackAssignment(context, assign.Target, assign.Expression);
                     trace.Add($"  {assign.Target} = …");
                     break;
 
@@ -335,14 +373,16 @@ public sealed class DslExecutor
         if (normalized.Contains("AccountingDocumentingCause", StringComparison.OrdinalIgnoreCase)
             && normalized.Contains("Confirm", StringComparison.OrdinalIgnoreCase))
         {
-            return true;
+            var cause = context.Fiche.AccountingDocumentingCause ?? Member1388AccountingCause.Confirm;
+            return cause == Member1388AccountingCause.Confirm;
         }
 
         if (normalized.Contains("AccountingDocumentingCause", StringComparison.OrdinalIgnoreCase)
             && (normalized.Contains("=7", StringComparison.Ordinal)
                 || normalized.EndsWith("=7", StringComparison.Ordinal)))
         {
-            return false;
+            var cause = context.Fiche.AccountingDocumentingCause ?? Member1388AccountingCause.Confirm;
+            return cause == Member1388AccountingCause.InstallmentCheck;
         }
 
         if (normalized.Contains("ObjOnPrice", StringComparison.OrdinalIgnoreCase)
@@ -351,12 +391,48 @@ public sealed class DslExecutor
             return context.Fiche.Category == FicheCategory.Income;
         }
 
+        if (normalized.Contains("ExistRayvarz=False", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("ExistRayvarz=0", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.Variables.TryGetValue("ExistRayvarz", out var ev) && ev is bool existVal)
+                return !existVal;
+            return !context.Fiche.ExistsInRayvarz;
+        }
+
+        if (normalized.Contains("ExistRayvarz=True", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.Variables.TryGetValue("ExistRayvarz", out var ev2) && ev2 is bool existVal2)
+                return existVal2;
+            return context.Fiche.ExistsInRayvarz;
+        }
+
+        if (normalized.Contains("Payable>0", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("PayablePrice>0", StringComparison.OrdinalIgnoreCase))
+            return context.Fiche.Payable > 0;
+
+        if (normalized.Contains("CI_IncomeAccountGroup=157", StringComparison.OrdinalIgnoreCase))
+            return context.Fiche.IncomeAccountGroup == 157;
+        if (normalized.Contains("CI_IncomeAccountGroup=158", StringComparison.OrdinalIgnoreCase))
+            return context.Fiche.IncomeAccountGroup == 158;
+        if (normalized.Contains("CI_IncomeAccountGroup=163", StringComparison.OrdinalIgnoreCase))
+            return context.Fiche.IncomeAccountGroup == 163;
+        if (normalized.Contains("CI_IncomeAccountGroup=164", StringComparison.OrdinalIgnoreCase))
+            return context.Fiche.IncomeAccountGroup == 164;
+
         if (bool.TryParse(condition, out var b))
             return b;
 
         return false;
     }
 
-    private static DslExecutionResult Fail(string message, List<string> trace) =>
-        new() { Success = false, ErrorMessage = message, Trace = trace };
+    private static DslExecutionResult Fail(string message, List<string> trace, DslExecutionContext? context = null) =>
+        new()
+        {
+            Success = false,
+            ErrorMessage = message,
+            Trace = trace,
+            AppliedFunctions = context?.InvokedFunctions.ToList() ?? [],
+            FunctionsWithEffect = context?.FunctionsWithEffect.ToList() ?? [],
+            CompatibilityWarnings = context?.CompatibilityWarnings.ToList() ?? []
+        };
 }

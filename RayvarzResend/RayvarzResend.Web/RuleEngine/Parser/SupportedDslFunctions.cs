@@ -48,7 +48,8 @@ public static class SupportedDslFunctions
         || name.Equals("GetDiffDate", StringComparison.OrdinalIgnoreCase)
         || name.Equals("GetSara8Workflow", StringComparison.OrdinalIgnoreCase)
         || name.Equals("FnSMS", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("AddDateForHolidays", StringComparison.OrdinalIgnoreCase);
+        || name.Equals("AddDateForHolidays", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Logfile", StringComparison.OrdinalIgnoreCase);
 
     public static DslFunctionRole GetRole(string name, string? displayName = null)
     {
@@ -93,6 +94,9 @@ public static class SupportedDslFunctions
 
         if (fiche.Category == FicheCategory.Income)
         {
+            if (fiche.AccountingDocumentingCause == 7)
+                return new[] { DslFunctionRole.IncomeCheck };
+
             if (fiche.DocTyp is 14 or 15 or 17 or 18
                 || fiche.IncomeAccountGroup is 157 or 158)
                 return new[] { DslFunctionRole.Income, DslFunctionRole.Tahator };

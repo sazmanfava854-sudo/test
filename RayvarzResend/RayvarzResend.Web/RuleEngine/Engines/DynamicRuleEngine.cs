@@ -73,7 +73,8 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                 DueDate = context.DueDate,
                 DryRun = true,
                 BuildSoap = buildSoap,
-                AllowLegacyFallback = context.AllowLegacyFallback
+                AllowLegacyFallback = context.AllowLegacyFallback,
+                Member1388FullExecution = _config.GetValue("RuleEngine:Member1388FullExecution", true)
             };
 
             var executed = _executor.Execute(program, execContext);
@@ -101,9 +102,11 @@ public sealed class DynamicRuleEngine : IFicheRuleEngine
                     context.DocDate, context.ActDate, context.DueDate);
             }
 
-            var warning = validation.Warnings.Count > 0
-                ? string.Join(" | ", validation.Warnings.Take(3))
-                : null;
+            var warning = CombineWarnings(
+                validation.Warnings.Count > 0 ? string.Join(" | ", validation.Warnings.Take(3)) : null,
+                executed.CompatibilityWarnings.Count > 0
+                    ? string.Join(" | ", executed.CompatibilityWarnings.Take(5))
+                    : null);
 
             return new FicheRuleEvaluationResult
             {

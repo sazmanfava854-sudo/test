@@ -12,9 +12,9 @@ public sealed class VbFunctionInfo
 
 internal static class VbFunctionExtractor
 {
-    /// <summary>Public / Private / Function بدون modifier — همه توابع Member.</summary>
-    private static readonly Regex FunctionStartRegex = new(
-        @"(?:<DisplayName\(""([^""]*)""\)>?\s*)?(?:(Public|Private)\s+)?Function\s+(\w+)\s*\(",
+    /// <summary>Public / Private Function و Sub — همه توابع Member.</summary>
+    private static readonly Regex MemberStartRegex = new(
+        @"(?:<DisplayName\(""([^""]*)""\)>?\s*)?(?:(Public|Private)\s+)?(Function|Sub)\s+(\w+)\s*\(",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static IReadOnlyList<VbFunctionInfo> Extract(string bodySource)
@@ -25,9 +25,8 @@ internal static class VbFunctionExtractor
         var functions = new List<VbFunctionInfo>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (Match match in FunctionStartRegex.Matches(bodySource))
+        foreach (Match match in MemberStartRegex.Matches(bodySource))
         {
-            // رد کردن "End Function" اگر به‌اشتباه match شود
             var prefixStart = Math.Max(0, match.Index - 4);
             var prefix = bodySource[prefixStart..match.Index];
             if (prefix.EndsWith("End ", StringComparison.OrdinalIgnoreCase)
@@ -38,17 +37,18 @@ internal static class VbFunctionExtractor
                 ? match.Groups[1].Value
                 : null;
             var modifier = match.Groups[2].Success ? match.Groups[2].Value : "";
-            var name = match.Groups[3].Value;
+            var memberKind = match.Groups[3].Value;
+            var name = match.Groups[4].Value;
             if (!seen.Add(name))
                 continue;
 
             var bodyStart = match.Index + match.Length;
-            var endFunctionIndex = FindEndFunction(bodySource, bodyStart);
-            if (endFunctionIndex < 0)
+            var endIndex = FindMemberEnd(bodySource, bodyStart, memberKind);
+            if (endIndex < 0)
                 continue;
 
-            var signatureRemainder = bodySource[bodyStart..endFunctionIndex];
-            var innerBody = TrimFunctionInnerBody(signatureRemainder);
+            var signatureRemainder = bodySource[bodyStart..endIndex];
+            var innerBody = TrimMemberInnerBody(signatureRemainder, memberKind);
             functions.Add(new VbFunctionInfo
             {
                 Name = name,
@@ -61,22 +61,19 @@ internal static class VbFunctionExtractor
         return functions;
     }
 
-    private static int FindEndFunction(string source, int fromIndex)
+    private static int FindMemberEnd(string source, int fromIndex, string memberKind)
     {
-        var searchFrom = fromIndex;
-        while (searchFrom < source.Length)
-        {
-            var idx = source.IndexOf("End Function", searchFrom, StringComparison.OrdinalIgnoreCase);
-            if (idx < 0)
-                return -1;
-            return idx;
-        }
-
-        return -1;
+        var endToken = memberKind.Equals("Sub", StringComparison.OrdinalIgnoreCase)
+            ? "End Sub"
+            : "End Function";
+        return source.IndexOf(endToken, fromIndex, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string TrimFunctionInnerBody(string signatureAndBody)
+    private static string TrimMemberInnerBody(string signatureAndBody, string memberKind)
     {
+        var endToken = memberKind.Equals("Sub", StringComparison.OrdinalIgnoreCase)
+            ? "End Sub"
+            : "End Function";
         var lines = signatureAndBody.Replace("\r\n", "\n").Split('\n');
         var bodyLines = new List<string>();
         var started = false;
@@ -92,7 +89,7 @@ internal static class VbFunctionExtractor
             }
 
             var trimmed = line.Trim();
-            if (trimmed.Equals("End Function", StringComparison.OrdinalIgnoreCase))
+            if (trimmed.Equals(endToken, StringComparison.OrdinalIgnoreCase))
                 break;
 
             bodyLines.Add(line);
