@@ -672,49 +672,7 @@ function setupEventHandlers() {
   }
 
   bindClick('btnUnsentSearch', async () => {
-    const fromDate = ($('unsentFromDate')?.value || '').trim();
-    const toDate = ($('unsentToDate')?.value || '').trim();
-    const ficheNo = ($('unsentFicheNo')?.value || '').trim();
-    const billId = ($('unsentBillId')?.value || '').trim();
-    const paymentId = ($('unsentPaymentId')?.value || '').trim();
-    const district = branchIdToDistrict($('unsentDistrict')?.value);
-
-    if ((fromDate && !toDate) || (!fromDate && toDate)) {
-      return alert('هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید');
-    }
-    if (!ficheNo && !billId && !paymentId && !district && !fromDate) {
-      return alert('حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید');
-    }
-
-    const btn = $('btnUnsentSearch');
-    btn.disabled = true;
-    $('unsentResultBox').hidden = true;
-    try {
-      const res = await fetch('/api/unsent/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind').value,
-          ficheNo,
-          fromDate: fromDate || null,
-          toDate: toDate || null,
-          billId,
-          paymentId,
-          district
-        })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      renderUnsentTable(data.items || []);
-      if (data.truncated) {
-        alert(`بیش از ${data.count} مورد یافت شد — فقط ${data.count} مورد اول نمایش داده شد. فیلترها را محدودتر کنید.`);
-      }
-    } catch (e) {
-      alert(e.message);
-      renderUnsentTable([]);
-    } finally {
-      btn.disabled = false;
-    }
+    await runUnsentSearch({ preserveResultBox: false });
   });
 
   bindClick('btnUnsentPlan', async () => {
@@ -788,20 +746,12 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      const lines = (data.results || []).map((r) =>
-        `${r.ficheNo} [${r.sendPath || '-'}]: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
-      );
-      box.textContent = [
-        '=== نتیجه ارسال دسته‌ای ===',
-        `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
-        `DryRun: ${data.dryRun}`,
-        '',
-        ...lines
-      ].join('\n');
+      box.textContent = formatUnsentBatchResult(data);
+      box.hidden = false;
       box.scrollIntoView({ behavior: 'smooth', block: 'start' });
       alert(unsentBatchSendAlertMessage(data));
 
-      $('btnUnsentSearch').click();
+      await runUnsentSearch({ preserveResultBox: true });
     } catch (e) {
       box.textContent = e.message;
       alert(e.message);
@@ -866,6 +816,104 @@ function formatTahatorSend(d) {
   ].filter(Boolean).join('\n');
 }
 
+function formatUnsentBatchItem(r) {
+  const lines = [];
+  const status = r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL');
+  lines.push(`${r.ficheNo} [${r.sendPath || '-'}]: ${status} — ${r.message || ''}`);
+  if (r.soapMessage) lines.push(`  SOAP: ${r.soapMessage}`);
+  if (r.docNotSentError) lines.push(`  DocNotSent: ${r.docNotSentError}`);
+  (r.tahatorFicheResults || []).forEach((fr) => {
+    const st = fr.skipped ? 'SKIP' : (fr.success ? 'OK' : 'FAIL');
+    lines.push(
+      `  • ${fr.ficheNo} (گروه ${fr.incomeAccountGroup}) ${st} DocTyp=${fr.docTyp} Branch=${fr.branch}/${fr.fund}` +
+      `${fr.soapMessage ? ' — ' + fr.soapMessage : ''}` +
+      `${fr.docNotSentError ? ' | DocNotSent: ' + fr.docNotSentError : ''}`
+    );
+  });
+  (r.steps || []).forEach((step) => lines.push(`  > ${step}`));
+  return lines.join('\n');
+}
+
+function formatUnsentBatchResult(data) {
+  const lines = (data.results || []).map((r) => formatUnsentBatchItem(r));
+  return [
+    '=== نتیجه ارسال دسته‌ای ===',
+    `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
+    `DryRun: ${data.dryRun}`,
+    '',
+    ...lines
+  ].join('\n');
+}
+
+function unsentBatchItemAlertLine(r) {
+  const path = r.sendPath ? `[${r.sendPath}] ` : '';
+  if (r.skipped) {
+    return `  • ${r.ficheNo} ${path}رد شد — ${r.message || r.skipReason || 'بدون جزئیات'}`;
+  }
+  const detail = [
+    r.message,
+    r.soapMessage ? `SOAP: ${r.soapMessage}` : '',
+    r.docNotSentError ? `DocNotSent: ${r.docNotSentError}` : ''
+  ].filter(Boolean).join(' | ');
+  return `  • ${r.ficheNo} ${path}ناموفق — ${detail || 'بدون جزئیات'}`;
+}
+
+async function runUnsentSearch({ preserveResultBox = false } = {}) {
+  const fromDate = ($('unsentFromDate')?.value || '').trim();
+  const toDate = ($('unsentToDate')?.value || '').trim();
+  const ficheNo = ($('unsentFicheNo')?.value || '').trim();
+  const billId = ($('unsentBillId')?.value || '').trim();
+  const paymentId = ($('unsentPaymentId')?.value || '').trim();
+  const district = branchIdToDistrict($('unsentDistrict')?.value);
+
+  if ((fromDate && !toDate) || (!fromDate && toDate)) {
+    return alert('هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید');
+  }
+  if (!ficheNo && !billId && !paymentId && !district && !fromDate) {
+    return alert('حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید');
+  }
+
+  const btn = $('btnUnsentSearch');
+  const box = $('unsentResultBox');
+  const savedResult = preserveResultBox ? box.textContent : '';
+  btn.disabled = true;
+  if (!preserveResultBox) box.hidden = true;
+  try {
+    const res = await fetch('/api/unsent/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ficheKind: $('unsentFicheKind').value,
+        ficheNo,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        billId,
+        paymentId,
+        district
+      })
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    renderUnsentTable(data.items || []);
+    if (data.truncated) {
+      alert(`بیش از ${data.count} مورد یافت شد — فقط ${data.count} مورد اول نمایش داده شد. فیلترها را محدودتر کنید.`);
+    }
+    if (preserveResultBox && savedResult) {
+      box.textContent = savedResult;
+      box.hidden = false;
+    }
+  } catch (e) {
+    alert(e.message);
+    renderUnsentTable([]);
+    if (preserveResultBox && savedResult) {
+      box.textContent = savedResult;
+      box.hidden = false;
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function unsentBatchSendAlertMessage(data) {
   const lines = [];
   if (data.dryRun) {
@@ -881,17 +929,7 @@ function unsentBatchSendAlertMessage(data) {
   if (problems.length) {
     lines.push('');
     lines.push('علت خطا / رد:');
-    problems.forEach((r) => {
-      const path = r.sendPath ? `[${r.sendPath}] ` : '';
-      if (r.skipped) {
-        lines.push(`  • ${r.ficheNo} ${path}رد شد — ${r.message || r.skipReason || 'بدون جزئیات'}`);
-      } else {
-        const detail = [r.message, r.docNotSentError ? `DocNotSent: ${r.docNotSentError}` : '']
-          .filter(Boolean)
-          .join(' | ');
-        lines.push(`  • ${r.ficheNo} ${path}ناموفق — ${detail || 'بدون جزئیات'}`);
-      }
-    });
+    problems.forEach((r) => lines.push(unsentBatchItemAlertLine(r)));
   }
 
   const successes = results.filter((r) => r.success && !r.skipped);
