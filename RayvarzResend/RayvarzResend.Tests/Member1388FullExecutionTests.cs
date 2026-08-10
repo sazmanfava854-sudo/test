@@ -64,7 +64,7 @@ public class Member1388FullExecutionTests
         var program = LoadFullProgram();
         var executor = new DslExecutor(SaraOperationBootstrap.CreateDefault());
 
-        var fiche157 = new FicheHeaderDto
+        var fiche157Unprepared = new FicheHeaderDto
         {
             Category = FicheCategory.Income,
             IncomeAccountGroup = 157,
@@ -72,11 +72,29 @@ public class Member1388FullExecutionTests
             BankCode = "18",
             BnkAcntNo = "9-1-1-0-0-0-0"
         };
-        TahatorRowBuilder.ApplyTahatorAmountRows(fiche157);
-
-        var ctx157 = new DslExecutionContext { Fiche = fiche157, Member1388FullExecution = true };
-        var r157 = Member1388FunctionExecutor.Execute("Tahator1", ctx157, SaraOperationBootstrap.CreateDefault());
+        var r157 = Member1388FunctionExecutor.Execute("Tahator1", new DslExecutionContext
+        {
+            Fiche = fiche157Unprepared,
+            Member1388FullExecution = true
+        }, SaraOperationBootstrap.CreateDefault());
         Assert.True(r157.HadEffect);
+        Assert.True(TahatorRowBuilder.IsTahatorAmountRowsPrepared(fiche157Unprepared));
+
+        var fiche157Prepared = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 157,
+            Payable = 500_000m,
+            BankCode = "18",
+            BnkAcntNo = "9-1-1-0-0-0-0"
+        };
+        TahatorRowBuilder.ApplyTahatorAmountRows(fiche157Prepared);
+        var r157Skip = Member1388FunctionExecutor.Execute("Tahator1", new DslExecutionContext
+        {
+            Fiche = fiche157Prepared,
+            Member1388FullExecution = true
+        }, SaraOperationBootstrap.CreateDefault());
+        Assert.False(r157Skip.HadEffect);
 
         var fiche150 = new FicheHeaderDto
         {

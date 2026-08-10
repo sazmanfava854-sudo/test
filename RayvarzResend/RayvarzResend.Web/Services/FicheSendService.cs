@@ -39,10 +39,22 @@ public class FicheSendService
     {
         try
         {
+            var blockReason = LegacyValidateSendable(req.Fiche);
+            if (blockReason != null)
+            {
+                return new FichePreviewResultDto
+                {
+                    Success = false,
+                    ErrorMessage = blockReason,
+                    CanSend = false,
+                    Validation = new RayvarzValidationResultDto()
+                };
+            }
+
+            var exists = await TryExistsInRayvarzAsync(req, ct);
             var built = await _payload.BuildAsync(
                 req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
 
-            var exists = await TryExistsInRayvarzAsync(req, ct);
             var validation = await ValidateBuiltPayloadAsync(req, built.Xml, exists, ct);
 
             return new FichePreviewResultDto
@@ -216,7 +228,7 @@ public class FicheSendService
         {
             if (_config.GetValue<bool>("Rayvarz:RequireRayvarzDbForSend"))
                 throw new InvalidOperationException($"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}", ex);
-            return false;
+            return fiche.ExistsInRayvarz;
         }
     }
 

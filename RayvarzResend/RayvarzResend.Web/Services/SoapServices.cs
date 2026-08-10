@@ -40,9 +40,17 @@ public class SoapBuilder
 
     public string Build(FicheHeaderDto fiche, int branch, int fund, string? docDate, string? actDate, string? dueDate)
     {
-        docDate = FirstNonEmpty(fiche.RayvarzDocDate, docDate);
-        actDate = FirstNonEmpty(fiche.RayvarzActDate, fiche.RowDate, actDate);
-        dueDate = FirstNonEmpty(fiche.RayvarzDueDate, dueDate);
+        var isTahatorAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
+        var isTahatorIncome = TahatorRowBuilder.IsTahatorIncomeFiche(fiche);
+        var isTahator = isTahatorAmount || isTahatorIncome;
+
+        // تهاتر: تاریخ‌های درخواست (امروز) اولویت دارند — مثل قبل از Member1388
+        if (!isTahator)
+        {
+            docDate = FirstNonEmpty(fiche.RayvarzDocDate, docDate);
+            actDate = FirstNonEmpty(fiche.RayvarzActDate, fiche.RowDate, actDate);
+            dueDate = FirstNonEmpty(fiche.RayvarzDueDate, dueDate);
+        }
 
         var docDateRay = FicheDateResolver.ResolveForSoap(docDate, fiche.RayvarzDocDate);
         var actDateRay = FicheDateResolver.ResolveForSoap(actDate, fiche.RayvarzActDate);
@@ -55,9 +63,6 @@ public class SoapBuilder
             dueDateRay = FicheDateResolver.FirstRayvarzDate(actDateRay, docDateRay);
 
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
-        var isTahatorAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
-        var isTahatorIncome = TahatorRowBuilder.IsTahatorIncomeFiche(fiche);
-        var isTahator = isTahatorAmount || isTahatorIncome;
         if (isDuty)
         {
             if (branch <= 0 && fiche.ResolvedDistrictBranch is > 0)
@@ -89,7 +94,11 @@ public class SoapBuilder
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
         if (fiche.SuggestedFund is > 0)
-            fund = fiche.SuggestedFund.Value;
+        {
+            // درآمد شهرسازی: RefFund از Member1388 اولویت دارد؛ تهاتر فقط وقتی Fund صریح نیامده
+            if (!isTahator || fund <= 0)
+                fund = fiche.SuggestedFund.Value;
+        }
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
         var transactionId = ResolveTransactionId(fiche);
@@ -99,7 +108,9 @@ public class SoapBuilder
         var headerRowDate = !string.IsNullOrWhiteSpace(fiche.RowDate)
             ? FicheDateResolver.ResolveForSoap(fiche.RowDate, actDateRay)
             : actDateRay;
-        var headerRowDocNo = FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo);
+        var headerRowDocNo = isTahator
+            ? fiche.FicheNo
+            : FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo);
         var docTypDsc = ResolveDocTypDsc(fiche);
 
         const int docRow = 1;
@@ -424,9 +435,11 @@ public class SoapBuilder
         string dueDateRay)
     {
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
-        var detailRefRow = ResolveDetailRefRowDocNo(FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo));
+        var isTahator = TahatorRowBuilder.IsTahatorFiche(fiche);
+        var detailRefRow = ResolveDetailRefRowDocNo(
+            isTahator ? fiche.FicheNo : FirstNonEmpty(fiche.RefRowDocNo, fiche.FicheNo));
         var dutyQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
-        var rowDocNo = FirstNonEmpty(fiche.RefRowDocNo, detailRefRow);
+        var rowDocNo = isTahator ? fiche.FicheNo : FirstNonEmpty(fiche.RefRowDocNo, detailRefRow);
         var rowDue = !string.IsNullOrWhiteSpace(fiche.RayvarzDueDate)
             ? FicheDateResolver.ResolveForSoap(fiche.RayvarzDueDate, dueDateRay)
             : dueDateRay;

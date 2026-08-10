@@ -245,11 +245,10 @@ public static class TahatorRowBuilder
     /// </summary>
     public static void ApplyTahatorIncomeRows(FicheHeaderDto fiche)
     {
-        Member1388IncomeRowProfiles.ApplyTahatorIncome(fiche);
         ApplyTahatorIncomeCenters(fiche);
     }
 
-    /// <summary>Center/Ref/DocTyp تهاتر درآمدی — بعد از ساخت ردیف.</summary>
+    /// <summary>Center/Ref/DocTyp تهاتر درآمدی — ردیف‌ها از Income_Calculation (بدون Oddment/BedeHi مجدد).</summary>
     public static void ApplyTahatorIncomeCenters(FicheHeaderDto fiche)
     {
         fiche.IncomeAccountGroup = IncomeAccountGroupTahatorIncome;
@@ -326,4 +325,17 @@ public static class TahatorRowBuilder
             return rowSum == -Math.Abs(fiche.Payable);
         return rowSum == fiche.Payable;
     }
+
+    /// <summary>ردیف مبلغ تهاتر از Sara/PrepareTahatorFiche آماده شده — از اعمال مجدد در موتور جلوگیری کن.</summary>
+    public static bool IsTahatorAmountRowsPrepared(FicheHeaderDto fiche) =>
+        IsTahatorAmountFiche(fiche)
+        && fiche.Rows.Count == 1
+        && fiche.Rows[0].IncmNo is IncmNoBank4 or IncmNoOther
+        && fiche.Rows[0].Val <= 0;
+
+    /// <summary>ردیف درآمد تهاتر از Sara آماده شده (Center1 ثابت).</summary>
+    public static bool IsTahatorIncomeRowsPrepared(FicheHeaderDto fiche) =>
+        IsTahatorIncomeFiche(fiche)
+        && fiche.Rows.Count > 0
+        && fiche.Rows.All(r => r.Center1 == TahatorIncomeCenter1);
 }

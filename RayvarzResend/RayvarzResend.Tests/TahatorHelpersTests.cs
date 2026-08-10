@@ -380,4 +380,54 @@ public class TahatorHelpersTests
         Assert.Contains("PhasType = 7", vb);
         Assert.Contains("PhasType = 2", vb);
     }
+
+    [Fact]
+    public void IsTahatorIncomeRowsPrepared_detects_center1_from_Sara_load()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            Payable = 100m,
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1278, Val = 100m, Center1 = TahatorRowBuilder.TahatorIncomeCenter1 }
+            }
+        };
+        TahatorRowBuilder.ApplyTahatorDocTyp(fiche);
+        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
+    }
+
+    [Fact]
+    public void ApplyTahatorIncomeRows_does_not_rescale_already_scaled_rows()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            BankCode = "4",
+            DepositId = 19684,
+            Payable = 1_000_000m,
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1278, Val = 600_000m },
+                new IncmRowDto { IncmNo = 100116, Val = 400_000m }
+            }
+        };
+        TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
+        Assert.Equal(600_000m, fiche.Rows[0].Val);
+        Assert.Equal(400_000m, fiche.Rows[1].Val);
+        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+    }
+
+    [Fact]
+    public void SoapBuilder_tahator_source_keeps_request_date_priority()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "Services", "SoapServices.cs"));
+        var cs = File.ReadAllText(path);
+        Assert.Contains("if (!isTahator)", cs);
+        Assert.Contains("isTahator ? fiche.FicheNo", cs);
+    }
 }

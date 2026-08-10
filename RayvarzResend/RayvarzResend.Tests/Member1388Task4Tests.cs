@@ -138,7 +138,8 @@ public class Member1388Task4Tests
             SaraOperationBootstrap.CreateDefault());
 
         Assert.True(result.HadEffect);
-        Assert.Equal(900_000m, fiche.Rows.Sum(r => r.Val));
+        // مسیر resend تهاتر: Oddment/BedeHi اعمال نمی‌شود — فقط Center/Ref (مثل قبل از Member1388)
+        Assert.Equal(1_000_000m, fiche.Rows.Sum(r => r.Val));
         Assert.Equal(17, fiche.DocTyp);
         Assert.All(fiche.Rows, r => Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1));
         Assert.All(fiche.Rows, r => Assert.Equal("4", r.Ref));
