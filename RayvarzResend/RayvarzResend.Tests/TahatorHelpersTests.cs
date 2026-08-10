@@ -164,7 +164,7 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void ApplyTahatorIncomeRows_DocTyp17_positive_Val_Center1_fixed_region_fund()
+    public void ApplyTahatorIncomeRows_DocTyp17_single_row_positive_payable()
     {
         var fiche = new FicheHeaderDto
         {
@@ -176,8 +176,8 @@ public class TahatorHelpersTests
             BnkAcntNo = "9-3-161-2-1-0-0",
             Rows =
             {
-                new IncmRowDto { IncmNo = 1201, Val = 1_000_000m },
-                new IncmRowDto { IncmNo = 1202, Val = 500_000m }
+                new IncmRowDto { IncmNo = 1278, Val = 1_000_000m },
+                new IncmRowDto { IncmNo = 100116, Val = 500_000m }
             }
         };
 
@@ -186,15 +186,14 @@ public class TahatorHelpersTests
         Assert.True(TahatorRowBuilder.IsTahatorIncomeFiche(fiche));
         Assert.False(TahatorRowBuilder.IsTahatorAmountFiche(fiche));
         Assert.Equal(17, fiche.DocTyp);
-        Assert.Equal(0, fiche.Center); // Bank≠2
+        Assert.Equal(0, fiche.Center);
         Assert.Equal(209, fiche.ResolvedDistrictBranch);
-        Assert.Equal(39, fiche.SuggestedFund); // منطقه → Fund ۳۱–۴۲
-        Assert.Equal(2, fiche.Rows.Count);
-        Assert.All(fiche.Rows, r =>
-        {
-            Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1);
-            Assert.True(r.Val > 0);
-        });
+        Assert.Equal(39, fiche.SuggestedFund);
+        Assert.Single(fiche.Rows);
+        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
+        Assert.Equal(1_500_000m, fiche.Rows[0].Val);
+        Assert.Equal("عوارض تهاتر درامد", fiche.Rows[0].IncmRowDsc);
+        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
         Assert.True(TahatorRowBuilder.RowSumMatchesPayable(fiche, fiche.Rows.Sum(r => r.Val)));
     }
 
@@ -383,7 +382,7 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void IsTahatorIncomeRowsPrepared_detects_center1_from_Sara_load()
+    public void IsTahatorIncomeRowsPrepared_false_for_calculation_rows()
     {
         var fiche = new FicheHeaderDto
         {
@@ -396,11 +395,11 @@ public class TahatorHelpersTests
             }
         };
         TahatorRowBuilder.ApplyTahatorDocTyp(fiche);
-        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
+        Assert.False(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
     }
 
     [Fact]
-    public void ApplyTahatorIncomeRows_does_not_rescale_already_scaled_rows()
+    public void ApplyTahatorIncomeRows_replaces_calculation_rows_with_single_tahator_row()
     {
         var fiche = new FicheHeaderDto
         {
@@ -416,9 +415,30 @@ public class TahatorHelpersTests
             }
         };
         TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
-        Assert.Equal(600_000m, fiche.Rows[0].Val);
-        Assert.Equal(400_000m, fiche.Rows[1].Val);
+        Assert.Single(fiche.Rows);
+        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
+        Assert.Equal(1_000_000m, fiche.Rows[0].Val);
         Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+    }
+
+    [Fact]
+    public void IsTahatorIncomeRowsPrepared_detects_single_prepared_row()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            Rows =
+            {
+                new IncmRowDto
+                {
+                    IncmNo = TahatorRowBuilder.IncmNoBank4,
+                    Val = 100m,
+                    Center1 = TahatorRowBuilder.TahatorIncomeCenter1
+                }
+            }
+        };
+        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
     }
 
     [Fact]

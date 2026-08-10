@@ -257,9 +257,7 @@ WHERE {where}";
         }
         else if (isTahatorIncome)
         {
-            // درآمدی تهاتر: ردیف از Calculation + DocTyp ۱۷/۱۸ + Branch منطقه
-            dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
-            IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
+            // درآمدی تهاتر: یک ردیف (نه Income_Calculation) — مطابق Tahator / منطقه
             TahatorRowBuilder.ApplyTahatorIncomeRows(dto);
         }
         else
