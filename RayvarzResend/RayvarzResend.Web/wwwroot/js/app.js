@@ -798,9 +798,8 @@ function setupEventHandlers() {
         '',
         ...lines
       ].join('\n');
-
-      if (data.dryRun) alert('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else alert(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      alert(unsentBatchSendAlertMessage(data));
 
       $('btnUnsentSearch').click();
     } catch (e) {
@@ -865,6 +864,45 @@ function formatTahatorSend(d) {
     '--- مراحل ---',
     ...(d.steps || [])
   ].filter(Boolean).join('\n');
+}
+
+function unsentBatchSendAlertMessage(data) {
+  const lines = [];
+  if (data.dryRun) {
+    lines.push('⚠ DryRun فعال است — SOAP ساخته می‌شود ولی POST واقعی به رایورز زده نمی‌شود.');
+    lines.push('برای ارسال واقعی: Rayvarz:DryRun=false در appsettings و Restart سرویس.');
+  }
+  lines.push(
+    `ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`
+  );
+
+  const results = data.results || [];
+  const problems = results.filter((r) => r.skipped || !r.success);
+  if (problems.length) {
+    lines.push('');
+    lines.push('علت خطا / رد:');
+    problems.forEach((r) => {
+      const path = r.sendPath ? `[${r.sendPath}] ` : '';
+      if (r.skipped) {
+        lines.push(`  • ${r.ficheNo} ${path}رد شد — ${r.message || r.skipReason || 'بدون جزئیات'}`);
+      } else {
+        const detail = [r.message, r.docNotSentError ? `DocNotSent: ${r.docNotSentError}` : '']
+          .filter(Boolean)
+          .join(' | ');
+        lines.push(`  • ${r.ficheNo} ${path}ناموفق — ${detail || 'بدون جزئیات'}`);
+      }
+    });
+  }
+
+  const successes = results.filter((r) => r.success && !r.skipped);
+  if (successes.length && problems.length) {
+    lines.push('');
+    lines.push(`موفق (${successes.length}): ${successes.map((r) => r.ficheNo).join(', ')}`);
+  }
+
+  lines.push('');
+  lines.push('جزئیات کامل در باکس «نتیجه» پایین صفحه.');
+  return lines.join('\n');
 }
 
 function tahatorSendAlertMessage(data) {
