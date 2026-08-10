@@ -83,8 +83,7 @@ public sealed class TahatorResendService
             var inRayvarz = false;
             try
             {
-                inRayvarz = await _fiches.ExistsInRayvarzAsync(
-                    no, DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate), ct);
+                inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, reqDates: null, ct);
             }
             catch (SqlException)
             {
@@ -130,13 +129,16 @@ public sealed class TahatorResendService
             : string.Equals(ficheNo, pair.IncomeFiche!.FicheNo, StringComparison.Ordinal)
                 ? pair.IncomeFiche
                 : pair.AmountFiche;
+        var rayvarzCount = members.Count(m => m.ExistsInRayvarz);
         var msg = allInHeader
             ? "هر دو فیش در Accounting_DocHeader هست — ارسال لازم نیست."
-            : allInRayvarz
-                ? "هر دو فیش در رایورز (incmdocsys) هست — ارسال لازم نیست."
-                : anyNeedsSend
-                    ? $"آماده ارسال جفت تهاتر: ۱۵۷={pair.AmountFicheNo} سپس ۱۵۸={pair.IncomeFicheNo}."
-                    : "وضعیت جفت تهاتر نامشخص.";
+            : rayvarzCount == 2
+                ? "هر دو فیش تهاتر در رایورز (incmdocsys) هست — ارسال لازم نیست."
+                : rayvarzCount == 1
+                    ? $"یکی از دو فیش جفت در رایورز است ({rayvarzCount}/۲) — فقط فیش دیگر ارسال می‌شود."
+                    : anyNeedsSend
+                        ? $"آماده ارسال جفت تهاتر: ۱۵۷={pair.AmountFicheNo} سپس ۱۵۸={pair.IncomeFicheNo}."
+                        : "وضعیت جفت تهاتر نامشخص.";
         if (pendingStored != null)
             msg += $" | Snapshot Pending: Id={pendingStored.SnapshotId} — POST /api/tahator/restore";
 
@@ -197,8 +199,7 @@ public sealed class TahatorResendService
                 bool inRayvarz;
                 try
                 {
-                    inRayvarz = await _fiches.ExistsInRayvarzAsync(
-                        no, DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate), ct);
+                    inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, req, ct);
                 }
                 catch (SqlException ex)
                 {
@@ -341,8 +342,15 @@ public sealed class TahatorResendService
                 {
                     try
                     {
-                        verifiedRay = await _fiches.ExistsInRayvarzAsync(
-                            no, DateHelper.ExtractShamsiYear(docDate), ct);
+                        verifiedRay = await TryExistsTahatorInRayvarzAsync(
+                            fiche,
+                            new TahatorFicheRequest
+                            {
+                                DocDate = docDate,
+                                ActDate = actDate,
+                                DueDate = dueDate
+                            },
+                            ct);
                     }
                     catch (SqlException ex)
                     {
@@ -682,6 +690,23 @@ WHERE FicheNo = @f";
             _logger.LogWarning(ex, "Accounting_DocNotSent read failed for {FicheNo}", ficheNo);
             return $"Accounting_DocNotSent: {ex.Message}";
         }
+    }
+
+    private async Task<bool> TryExistsTahatorInRayvarzAsync(
+        FicheHeaderDto fiche,
+        TahatorFicheRequest? reqDates,
+        CancellationToken ct)
+    {
+        var years = RayvarzYearResolver.CollectCandidates(
+            reqDates?.DocDate,
+            reqDates?.ActDate,
+            reqDates?.DueDate,
+            fiche.RayvarzDocDate,
+            fiche.RayvarzActDate,
+            fiche.RayvarzDueDate);
+        var isAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
+        return await _fiches.ExistsTahatorDocumentInRayvarzRobustAsync(
+            fiche.FicheNo.Trim(), isAmount, years, ct);
     }
 
     private static TahatorSendResult Fail(string ficheNo, bool dryRun, List<string> steps, string message) =>

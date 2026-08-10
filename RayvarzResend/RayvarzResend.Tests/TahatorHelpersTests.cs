@@ -344,7 +344,9 @@ public class TahatorHelpersTests
         Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorAmount, pair.AmountFiche!.IncomeAccountGroup);
         Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorIncome, pair.IncomeFiche!.IncomeAccountGroup);
         // SendAsync sends AmountFiche (157) before IncomeFiche (158) — VB Tahator1 then Tahator
-        var order = new[] { pair.AmountFiche, pair.IncomeFiche }.Select(f => f.IncomeAccountGroup).ToArray();
+        var order = new[] { pair.AmountFiche, pair.IncomeFiche }
+            .Select(f => f.IncomeAccountGroup ?? 0)
+            .ToArray();
         Assert.Equal(new[] { 157, 158 }, order);
     }
 
@@ -379,5 +381,26 @@ public class TahatorHelpersTests
         Assert.Contains("335000181", vb);
         Assert.Contains("PhasType = 7", vb);
         Assert.Contains("PhasType = 2", vb);
+    }
+
+    [Fact]
+    public void RayvarzYearResolver_includes_payment_and_current_years()
+    {
+        var years = RayvarzYearResolver.CollectCandidates("14040326", "14050326");
+        Assert.Contains(1404, years);
+        Assert.Contains(1405, years);
+        Assert.Contains(DateHelper.CurrentShamsiYear(), years);
+    }
+
+    [Fact]
+    public void ExistsInRayvarz_sql_has_year_fallback_and_tahator_doctyp_filter()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "Services", "FicheRepository.cs"));
+        var cs = File.ReadAllText(path);
+        Assert.Contains("ExistsTahatorDocumentInRayvarzAsync", cs);
+        Assert.Contains("RowDocNo = @f AND DocTyp IN (@d0, @d1)", cs);
+        Assert.Contains("ExistsTahatorDocumentInRayvarzRobustAsync", cs);
     }
 }

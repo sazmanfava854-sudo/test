@@ -51,6 +51,8 @@ public static class DateHelper
         return d.Length >= 4 && int.TryParse(d[..4], out var y) ? y : 0;
     }
 
+    public static int CurrentShamsiYear() => ExtractShamsiYear(CurrentShamsiRayvarzDate());
+
     /// <summary>تاریخ دیتابیس: اگر سال ۱۳xx–۱۴xx باشد همان تقویم شمسی ذخیره‌شده؛ وگرنه تبدیل میلادی→شمسی.</summary>
     public static string FromDatabaseDateValue(object value)
     {
@@ -64,6 +66,27 @@ public static class DateHelper
         }
 
         return ToRayvarzDate(value.ToString() ?? "");
+    }
+}
+
+/// <summary>سال‌های محتمل برای جستجو در incmdocsys — SOAP ممکن است سال متفاوت از PaymentDate ذخیره کند.</summary>
+public static class RayvarzYearResolver
+{
+    public static IReadOnlyList<int> CollectCandidates(params string?[] dateSources)
+    {
+        var years = new HashSet<int>();
+        foreach (var source in dateSources)
+        {
+            var year = DateHelper.ExtractShamsiYear(source ?? "");
+            if (year > 0)
+                years.Add(year);
+        }
+
+        var current = DateHelper.CurrentShamsiYear();
+        if (current > 0)
+            years.Add(current);
+
+        return years.OrderByDescending(y => y).ToList();
     }
 }
 
