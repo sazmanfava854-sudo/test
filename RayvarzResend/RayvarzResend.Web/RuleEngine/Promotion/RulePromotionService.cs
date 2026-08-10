@@ -325,7 +325,7 @@ public sealed class RulePromotionService
 
             var dryRun = await _goldenDryRun.RunAllWithEngineAsync(
                 _dynamic, candidate.CandidateId, snapshot.SnapshotId, compareExpectedRows: true,
-                allowLegacyFallback: false, ct);
+                allowLegacyFallback: false, validateFullSoap: false, ct);
 
             _logger.LogInformation(
                 "Candidate {Id}: golden result passed={Passed}/{Total} engine={Engine}",

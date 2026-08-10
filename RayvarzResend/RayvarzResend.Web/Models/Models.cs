@@ -210,6 +210,38 @@ public class SendResultDto
     public string? DocNotSentError { get; set; }
     public string? Warning { get; set; }
     public RayvarzTransportDiagnostics? Diagnostics { get; set; }
+    public RayvarzValidationResultDto? Validation { get; set; }
+}
+
+/// <summary>خروجی Preview — ساخت SOAP + اعتبارسنجی بدون POST.</summary>
+public class FichePreviewResultDto
+{
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string Xml { get; init; } = "";
+    public bool CanSend { get; init; }
+    public string? PayloadMode { get; init; }
+    public string? EngineName { get; init; }
+    public string? Warning { get; init; }
+    public RayvarzValidationResultDto Validation { get; init; } = new();
+}
+
+public class RayvarzValidationResultDto
+{
+    public bool CanSend { get; init; }
+    public IReadOnlyList<RayvarzValidationIssueDto> Issues { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
+    public IReadOnlyList<RayvarzValidationIssueDto> BlockingIssues { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
+    public IReadOnlyList<RayvarzValidationIssueDto> Warnings { get; init; } = Array.Empty<RayvarzValidationIssueDto>();
+}
+
+public class RayvarzValidationIssueDto
+{
+    public string Code { get; init; } = "";
+    public string Field { get; init; } = "";
+    public string Operation { get; init; } = "";
+    public string Severity { get; init; } = "";
+    public bool Blocking { get; init; }
+    public string Message { get; init; } = "";
 }
 
 /// <summary>جزئیات فنی ارسال/اتصال برای UI و لاگ (بدون ذخیره کل XML در لاگ فایل).</summary>
