@@ -187,12 +187,17 @@ public sealed class RayvarzSoapPayloadValidator
 
             Require(row.RefRowDocNo, RayvarzFieldRequirementCatalog.OpIncm, "RefRowDocNo",
                 "INCM_REFROWDOCNO_REQUIRED", "RefRowDocNo الزامی است");
-            RequireDate8(row.RefRowDate, RayvarzFieldRequirementCatalog.OpIncm, "RefRowDate",
-                "INCM_REFROWDATE_REQUIRED", "INCM_REFROWDATE_FORMAT");
+
+            var reqs = RayvarzFieldRequirementCatalog.ResolveIncmRowRequirements(incmNo, fiche);
+            if (reqs.RequiresRefRowDate)
+            {
+                RequireDate8(row.RefRowDate, RayvarzFieldRequirementCatalog.OpIncm, "RefRowDate",
+                    "INCM_REFROWDATE_REQUIRED", "INCM_REFROWDATE_FORMAT");
+            }
+
             Require(row.Reason, RayvarzFieldRequirementCatalog.OpIncm, "Reason",
                 "INCM_REASON_REQUIRED", "کد علت (Reason) الزامی است");
 
-            var reqs = RayvarzFieldRequirementCatalog.ResolveIncmRowRequirements(incmNo, fiche);
             if (reqs.RequiresCenter1 && ParseLong(row.Center1) <= 0)
                 Critical(RayvarzFieldRequirementCatalog.OpIncm, "Center1", "INCM_CENTER1_REQUIRED",
                     $"Center1 برای IncmNo={incmNo} الزامی است");
@@ -230,6 +235,12 @@ public sealed class RayvarzSoapPayloadValidator
         {
             if (row.ParseQty() is not { } qty || row.ParseVal() is not { } val)
                 continue;
+
+            var incmNo = ParseInt(row.IncmNo);
+            var reqs = RayvarzFieldRequirementCatalog.ResolveIncmRowRequirements(incmNo, fiche);
+            if (!reqs.RequiresQtyEqualsVal)
+                continue;
+
             if (Math.Abs(qty) != Math.Abs(val))
             {
                 Critical(RayvarzFieldRequirementCatalog.OpIncm, "Qty", "FIN_VAL_QTY_MISMATCH",

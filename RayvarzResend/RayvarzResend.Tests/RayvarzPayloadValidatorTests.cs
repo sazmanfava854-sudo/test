@@ -115,6 +115,55 @@ public class RayvarzPayloadValidatorTests
         Assert.Contains("<b:SourceId>RAYVARZ-RESEND</b:SourceId>", xml);
     }
 
+    [Fact]
+    public void Duty_nosazi_allows_qty_payable_while_val_is_split_per_row()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.DutyNosazi,
+            FicheNo = "0711040073029",
+            Payable = 65_583_000m,
+            BnkAcntNo = "7-1-1-0-0-0-0",
+            DocTyp = 1,
+            DocDsc = "اسناد نوسازی",
+            DocTypDsc = "عوارض سرا",
+            RayvarzDocDate = "14050321",
+            RayvarzActDate = "14050321",
+            RayvarzDueDate = "14050321",
+            ResolvedDistrictBranch = 207,
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 2003, Val = -6_352_929m, IncmRowDsc = "نوسازی" },
+                new IncmRowDto { IncmNo = 100002, Val = 7_009_133m, IncmRowDsc = "آتش نشانی" },
+                new IncmRowDto { IncmNo = 100003, Val = 59_285_010m, IncmRowDsc = "پسماند" },
+                new IncmRowDto { IncmNo = 206098003, Val = 5_641_786m, IncmRowDsc = "مالیات برارزش افزوده" }
+            }
+        };
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+                ["Rayvarz:SourceSystemId"] = "RAYVARZ-RESEND",
+                ["Rayvarz:TransactionIdMode"] = "nidFiche"
+            })
+            .Build();
+        var xml = new SoapBuilder(config).Build(fiche, 207, 200207009, "14050321", "14050321", "14050321");
+
+        Assert.Contains("<b:Qty>65583000</b:Qty>", xml);
+        Assert.Contains("<b:RefRowDate>14050321</b:RefRowDate>", xml);
+
+        var result = _validator.Validate(new RayvarzValidationInput
+        {
+            Fiche = fiche,
+            SoapXml = xml,
+            Branch = 207,
+            Fund = 200207009
+        });
+
+        Assert.True(result.CanSend, string.Join("; ", result.BlockingIssues.Select(i => i.Message)));
+    }
+
     private static FicheHeaderDto BuildValidIncomeFiche() => new()
     {
         Category = FicheCategory.Income,

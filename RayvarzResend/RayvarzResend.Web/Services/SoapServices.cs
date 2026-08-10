@@ -462,7 +462,7 @@ public class SoapBuilder
                     fiche.FicheNo,
                     null,
                     "0",
-                    null,
+                    dueDateRay,
                     string.IsNullOrWhiteSpace(r.IncmRowDsc) ? null : r.IncmRowDsc,
                     true);
             }
