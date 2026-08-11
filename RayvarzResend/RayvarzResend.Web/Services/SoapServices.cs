@@ -130,10 +130,10 @@ public class SoapBuilder
             isTahator ? TahatorRowBuilder.ActTypCode : _config["Rayvarz:ActTyp"],
             isTahator ? TahatorRowBuilder.ActTypCode : "3");
         var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category, isTahator);
-        // هر دو مسیر تهاتر: Bank از PaymentBranch (خالی→0)؛ CI_Bank فقط برای IncmNo/DocTyp
+        // تهاتر: PaymentBranch؛ درآمد/نوسازی: PaymentBank → PaymentBranch → 18 (مطابق incmdocsys)
         var bank = isTahator
             ? ResolveBankCode(fiche.PaymentBranch)
-            : ResolveBankCode(fiche.BankCode);
+            : ResolveBankCode(FirstNonEmpty(fiche.BankCode, fiche.PaymentBranch, "18"));
 
         var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, dueDateRay)
             .Select(c => BuildIncmRow(c, sourceSystemId)));
@@ -266,7 +266,7 @@ public class SoapBuilder
 
     private string ResolveDetailRefRowDocNo(string ficheNo)
     {
-        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow").Trim();
+        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "zero").Trim();
         if (mode.Equals("zero", StringComparison.OrdinalIgnoreCase)
             || mode.Equals("0", StringComparison.OrdinalIgnoreCase))
             return "0";
@@ -293,10 +293,8 @@ public class SoapBuilder
         if (!string.IsNullOrWhiteSpace(configured)
             && !configured.Equals("auto", StringComparison.OrdinalIgnoreCase))
             return configured!;
-        // نمونه اصلی تهاتر: IncmMkrTyp=1
-        if (isTahator)
-            return "1";
-        return category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? "1" : "0";
+        // incmdocsys + VB Member1388: IncmMkrTyp=1
+        return "1";
     }
 
     private (string env, string envNs, bool soap11) ResolveEnvelopeNs()
@@ -474,7 +472,7 @@ public class SoapBuilder
                 rowDue,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
-                r.Ref,
+                FirstNonEmpty(r.Ref, fiche.FicheNo),
                 r.Num,
                 incmRefRowDocNo,
                 rowDue,

@@ -1,0 +1,104 @@
+using Microsoft.Extensions.Configuration;
+using RayvarzResend.Web.Models;
+using RayvarzResend.Web.Services;
+using Xunit;
+
+namespace RayvarzResend.Tests;
+
+/// <summary>
+/// نمونه‌های واقعی ray.incmdocsys — عوارض بر مشاغل (IncmNo=1262) با Val=Qty.
+/// موارد Val≠Qty یا PhasTyp=4 در تست جداگانه مستند شده‌اند.
+/// </summary>
+public class IncmdocsysMeshaghelGoldensTests
+{
+    public static TheoryData<string, int, int, string, decimal, string, string> StandardSamples =>
+        new()
+        {
+            { "050933509456", 209, 200209008, "9-8-72-47-1-0-2", 133_729_000m, "9001910151966", "0013372932519" },
+            { "058033433527", 218, 200218011, "80-4-9-1-1-0-8", 211_041_000m, "9000022152362", "0021104132571" },
+            { "051133436812", 211, 200211007, "11-4-105-30-1-0-6", 70_768_000m, "9000057452164", "0007076832523" },
+            { "050333503502", 203, 200203013, "3-31-160-16-1-0-2", 390_876_000m, "9000084051368", "0039087632532" },
+            { "041033304271", 210, 200210020, "10-5-14-47-1-0-1", 116_819_000m, "9000693552063", "0011681932426" },
+            { "050833466808", 208, 200208010, "8-1-6-2-1-0-1", 666_227_000m, "9000124051862", "0066622732506" },
+            { "040833325741", 208, 200208010, "8-3-24-28-1-0-2", 619_175_000m, "9000596751868", "0061917532496" },
+            { "050833486273", 208, 200208010, "8-2-11-7-1-0-1", 2_400_244_000m, "9000176451869", "0240024432590" },
+            { "050833446542", 208, 200208010, "8-3-22-24-1-0-1", 987_973_000m, "9000080251869", "0098797332591" },
+            { "058033501915", 218, 200218011, "80-2-14-11-1-0-2", 67_531_000m, "9000162352361", "0006753132532" },
+        };
+
+    [Theory]
+    [MemberData(nameof(StandardSamples))]
+    public void Standard_meshaghel_soap_matches_incmdocsys_pattern(
+        string ficheNo,
+        int branch,
+        int fund,
+        string bnkAcntNo,
+        decimal payable,
+        string billId,
+        string paymentId)
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 162,
+            FicheNo = ficheNo,
+            Payable = payable,
+            PaymentBranch = "18",
+            BnkAcntNo = bnkAcntNo,
+            DocTyp = 3,
+            DocDsc = "اسناد شهرسازی",
+            BillId = billId,
+            PaymentId = paymentId,
+            ResolvedDistrictBranch = branch,
+            SuggestedFund = fund,
+            RayvarzDocDate = "14050422",
+            RayvarzActDate = "14050422",
+            RayvarzDueDate = "14050422",
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1262, Val = payable, IncmRowDsc = "عوارض بر مشاغل" }
+            }
+        };
+
+        var xml = BuildSoap(fiche, branch, fund);
+
+        Assert.Contains($"<branch>{branch}</branch>", xml);
+        Assert.Contains($"<b:Fund>{fund}</b:Fund>", xml);
+        Assert.Contains($"<b:BnkAcntNo>{bnkAcntNo}</b:BnkAcntNo>", xml);
+        Assert.Contains("<b:Bank>18</b:Bank>", xml);
+        Assert.Contains("<b:IncmMkrTyp>1</b:IncmMkrTyp>", xml);
+        Assert.Contains("<b:RefRowDocNo>0</b:RefRowDocNo>", xml);
+        Assert.Contains($"<b:Ref>{ficheNo}</b:Ref>", xml);
+        Assert.Contains("<b:IncmNo>1262</b:IncmNo>", xml);
+        Assert.Contains($"<b:RowDocNo>{ficheNo}</b:RowDocNo>", xml);
+        Assert.Contains($"<b:Ref2>{billId}</b:Ref2>", xml);
+        Assert.Contains($"<b:Ref3>{paymentId}</b:Ref3>", xml);
+        var qty = payable.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Contains($"<b:Qty>{qty}</b:Qty>", xml);
+        Assert.Contains($"<b:Val>{qty}</b:Val>", xml);
+    }
+
+    /// <summary>
+    /// incmdocsys: فیش‌های 0504080614001085 و 0502200614001037 — Val≠Qty و Center2 پر است.
+    /// resend فعلی Val=Qty می‌فرستد؛ این سناریو نیاز به منطق جدا دارد.
+    /// </summary>
+    [Fact]
+    public void Split_val_qty_samples_document_rayvarz_difference()
+    {
+        Assert.NotEqual(773_300_000m, 1_234_493_687m);
+        Assert.NotEqual(53_760_000m, 258_970_837m);
+    }
+
+    private static string BuildSoap(FicheHeaderDto fiche, int branch, int fund)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+                ["Rayvarz:SourceSystemId"] = "RAYVARZ-RESEND",
+                ["Rayvarz:RefRowDocNoInDetail"] = "zero"
+            })
+            .Build();
+        return new SoapBuilder(config).Build(fiche, branch, fund, "14050422", "14050422", "14050422");
+    }
+}
