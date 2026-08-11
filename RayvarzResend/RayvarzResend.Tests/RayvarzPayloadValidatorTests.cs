@@ -164,6 +164,44 @@ public class RayvarzPayloadValidatorTests
         Assert.True(result.CanSend, string.Join("; ", result.BlockingIssues.Select(i => i.Message)));
     }
 
+    [Fact]
+    public void Income_meshaghel_soap_matches_incmdocsys_rayvarz_pattern()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 162,
+            FicheNo = "058033501915",
+            Payable = 67_531_000m,
+            PaymentBranch = "18",
+            BnkAcntNo = "80-2-14-11-1-0-2",
+            DocTyp = 3,
+            DocDsc = "اسناد شهرسازی",
+            BillId = "9000162352361",
+            PaymentId = "0006753132532",
+            RefReconstructionNo = "11180021",
+            ResolvedDistrictBranch = 218,
+            SuggestedFund = 200218011,
+            RayvarzDocDate = "14050422",
+            RayvarzActDate = "14050422",
+            RayvarzDueDate = "14050422",
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1262, Val = 67_531_000m, IncmRowDsc = "عوارض بر مشاغل" }
+            }
+        };
+
+        var xml = BuildSoapXml(fiche);
+
+        Assert.Contains("<b:Bank>18</b:Bank>", xml);
+        Assert.Contains("<b:IncmMkrTyp>1</b:IncmMkrTyp>", xml);
+        Assert.Contains("<b:RefRowDocNo>0</b:RefRowDocNo>", xml);
+        Assert.Contains($"<b:Ref>{fiche.FicheNo}</b:Ref>", xml);
+        Assert.Contains("<b:IncmNo>1262</b:IncmNo>", xml);
+        Assert.Contains("<b:Qty>67531000</b:Qty>", xml);
+        Assert.Contains("<b:Val>67531000</b:Val>", xml);
+    }
+
     private static FicheHeaderDto BuildValidIncomeFiche() => new()
     {
         Category = FicheCategory.Income,

@@ -197,6 +197,10 @@ WHERE {where}";
             ? null
             : reader.GetString(reader.GetOrdinal("NosaziDistrict"));
 
+        var paymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
+            ? ""
+            : reader.GetString(reader.GetOrdinal("PaymentBranch"));
+
         var dto = new FicheHeaderDto
         {
             Category = FicheCategory.Income,
@@ -212,13 +216,11 @@ WHERE {where}";
             NidProc = reader.IsDBNull(reader.GetOrdinal("NidProc"))
                 ? null
                 : reader.GetGuid(reader.GetOrdinal("NidProc")),
-            PaymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
-                ? ""
-                : reader.GetString(reader.GetOrdinal("PaymentBranch")),
-            // تهاتر: DocTyp/IncmNo از CI_Bank؛ فیلد Bank در SOAP از PaymentBranch است
+            PaymentBranch = paymentBranch,
+            // تهاتر: DocTyp/IncmNo از CI_Bank؛ SOAP Bank از PaymentBank/PaymentBranch
             BankCode = isTahator
-                ? (ciBank ?? paymentBank)
-                : (paymentBank ?? ciBank),
+                ? (ciBank ?? paymentBank ?? paymentBranch)
+                : (paymentBank ?? ciBank ?? paymentBranch ?? "18"),
             RowDate = ReadRowDate(reader, "RowDate"),
             PaymentDate = ReadRowDate(reader, "PaymentDate"),
             BankPaymentDate = ReadRowDate(reader, "BankPaymentDate"),
