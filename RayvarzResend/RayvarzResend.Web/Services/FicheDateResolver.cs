@@ -14,7 +14,8 @@ public static class FicheDateResolver
             ? FirstRayvarzDate(paymentDate, bankPaymentDate)
             : FirstRayvarzDate(bankPaymentDate, paymentDate);
 
-    public static void ApplyFromIncomeColumns(
+    /// <summary>DocDate / ActDate / Due از PaymentDate و BankPaymentDate — ارسال تکی درآمد و نوسازی.</summary>
+    public static void ApplyFromPaymentColumns(
         FicheHeaderDto dto,
         int ficheStatus,
         string paymentDate,
@@ -26,17 +27,23 @@ public static class FicheDateResolver
         dto.RowDate = dto.RayvarzActDate;
     }
 
+    public static void ApplyFromIncomeColumns(
+        FicheHeaderDto dto,
+        int ficheStatus,
+        string paymentDate,
+        string bankPaymentDate) =>
+        ApplyFromPaymentColumns(dto, ficheStatus, paymentDate, bankPaymentDate);
+
     public static void ApplyFromDutyColumns(
         FicheHeaderDto dto,
+        int ficheStatus,
         string paymentDate,
         string bankPaymentDate,
         string printDate,
         string exportDate)
     {
-        dto.RayvarzDocDate = FirstRayvarzDate(printDate, exportDate, paymentDate, bankPaymentDate);
-        dto.RayvarzActDate = FirstRayvarzDate(bankPaymentDate, paymentDate, printDate, exportDate);
-        dto.RayvarzDueDate = FirstRayvarzDate(bankPaymentDate, paymentDate, printDate, exportDate);
-        dto.RowDate = dto.RayvarzActDate;
+        // ارسال تکی نوسازی/صنفی: PaymentDate و BankPaymentDate (مثل فیش جمعی و parity)
+        ApplyFromPaymentColumns(dto, ficheStatus, paymentDate, bankPaymentDate);
     }
 
     public static string ResolveForSoap(string? fromRequest, string? fromFiche) =>
