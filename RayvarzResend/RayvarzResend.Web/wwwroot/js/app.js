@@ -188,7 +188,7 @@ function buildMappingRows(f) {
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
     { field: 'DocDate', source: 'PaymentDate / BankPaymentDate از DB', value: docDate || '-' },
-    { field: 'ActDate / RowDate', source: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? 'امروز شمسی (nosazo.vb)' : 'وضعیت=1 → PaymentDate وگرنه BankPaymentDate', value: actDate || '-' },
+    { field: 'ActDate / RowDate', source: 'امروز شمسی (nosazo.vb / ارسال تکی)', value: actDate || '-' },
     { field: 'Due', source: 'BankPaymentDate با fallback به PaymentDate', value: dueDate || '-' },
     { field: 'شعبه (nosazo)', source: 'BillID/PaymentID → DistrickBranch', value: f.resolvedDistrictBranch ? `${f.resolvedDistrictBranch} (Fund پیشنهادی: ${f.suggestedFund || '-'})` : (f.dutyRegion || f.incomeRegion || '-') },
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },

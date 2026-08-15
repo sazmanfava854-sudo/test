@@ -31,8 +31,13 @@ public static class FicheDateResolver
         FicheHeaderDto dto,
         int ficheStatus,
         string paymentDate,
-        string bankPaymentDate) =>
+        string bankPaymentDate)
+    {
         ApplyFromPaymentColumns(dto, ficheStatus, paymentDate, bankPaymentDate);
+        var today = DateHelper.CurrentShamsiRayvarzDate();
+        dto.RayvarzActDate = today;
+        dto.RowDate = today;
+    }
 
     public static void ApplyFromDutyColumns(
         FicheHeaderDto dto,
