@@ -76,7 +76,8 @@ public class SoapBuilder
         var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
         var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
         var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category);
-        var bank = ResolveBankCode(fiche.BankCode);
+        // مطابق incmdocsys: PaymentBank → PaymentBranch → 18
+        var bank = ResolveBankCode(FirstNonEmpty(fiche.BankCode, fiche.PaymentBranch, "18"));
 
         var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, dueDateRay)
             .Select(c => BuildIncmRow(c, sourceSystemId)));
@@ -209,7 +210,7 @@ public class SoapBuilder
 
     private string ResolveDetailRefRowDocNo(string ficheNo)
     {
-        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow").Trim();
+        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "zero").Trim();
         if (mode.Equals("zero", StringComparison.OrdinalIgnoreCase)
             || mode.Equals("0", StringComparison.OrdinalIgnoreCase))
             return "0";
@@ -235,7 +236,8 @@ public class SoapBuilder
         if (!string.IsNullOrWhiteSpace(configured)
             && !configured.Equals("auto", StringComparison.OrdinalIgnoreCase))
             return configured!;
-        return category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? "1" : "0";
+        // incmdocsys + VB Member1388: برای همه انواع فیش IncmMkrTyp=1 ثبت می‌شود
+        return "1";
     }
 
     private (string env, string envNs, bool soap11) ResolveEnvelopeNs()
@@ -403,7 +405,7 @@ public class SoapBuilder
                 dueDateRay,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
-                null,
+                fiche.FicheNo,
                 null,
                 detailRefRow,
                 dueDateRay,
