@@ -64,7 +64,7 @@ function applyFicheDatesToForm(f) {
   $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
 }
 
-function getPayload(resetStatus) {
+function getPayload() {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
@@ -72,7 +72,7 @@ function getPayload(resetStatus) {
     docDate: $('docDate').value,
     actDate: $('actDate').value,
     dueDate: $('dueDate').value,
-    resetStatus: !!resetStatus
+    resetStatus: $('resetStatus')?.checked === true
   };
 }
 
@@ -373,7 +373,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(false))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -397,7 +397,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(true))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -408,7 +408,7 @@ function setupEventHandlers() {
     if (data.dryRun) {
       alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
     } else if (data.success && data.verifiedInRayvarz === false) {
-      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+      alert('هشدار: SOAP موفق بود ولی ثبت در incmdocsys تأیید نشد. پاسخ SOAP و DocNotSent را ببینید.');
     } else if (!data.success) {
       alert('ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz) {

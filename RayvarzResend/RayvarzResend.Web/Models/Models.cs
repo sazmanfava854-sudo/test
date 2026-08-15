@@ -100,7 +100,8 @@ public class SendFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
-    public bool ResetStatus { get; set; } = true;
+    /// <summary>ریست EumFicheStatus در Sara — فقط با درخواست صریح (پیش‌فرض خاموش).</summary>
+    public bool ResetStatus { get; set; } = false;
 }
 
 public class SendResultDto

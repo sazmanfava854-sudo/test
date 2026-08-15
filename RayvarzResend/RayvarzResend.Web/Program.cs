@@ -248,27 +248,23 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository rep
         catch (SqlException ex)
         {
             result.VerifiedInRayvarz = false;
-            result.Message = (result.Message ?? "") + $" | تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}";
-        }
-    }
-
-    if (!dryRun && !result.VerifiedInRayvarz)
-    {
-        try
-        {
-            result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
-        }
-        catch (SqlException ex)
-        {
-            result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+            result.Warning = CombineWarnings(result.Warning,
+                $"تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}");
         }
 
-        if (result.Success)
+        if (!result.VerifiedInRayvarz)
         {
-            result.Success = false;
-            result.Message = string.IsNullOrWhiteSpace(result.Message)
-                ? "SOAP موفق گزارش شد ولی فیش در incmdocsys ثبت نشد"
-                : result.Message + " — ولی فیش در incmdocsys ثبت نشده";
+            try
+            {
+                result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+            }
+            catch (SqlException ex)
+            {
+                result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+            }
+
+            result.Warning = CombineWarnings(result.Warning,
+                SendResultVerification.BuildUnverifiedWarning(result.Success, result.VerifiedInRayvarz, dryRun));
         }
     }
 
