@@ -64,7 +64,7 @@ function applyFicheDatesToForm(f) {
   $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
 }
 
-function getPayload(resetStatus) {
+function getPayload() {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
@@ -72,7 +72,7 @@ function getPayload(resetStatus) {
     docDate: $('docDate').value,
     actDate: $('actDate').value,
     dueDate: $('dueDate').value,
-    resetStatus: !!resetStatus
+    resetStatus: $('resetStatus')?.checked === true
   };
 }
 
@@ -180,16 +180,16 @@ function buildMappingRows(f) {
     { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
-    { field: 'RefRowDocNo (دیتیل)', source: 'نوسازی/صنفی: 0 | درآمد: از config', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? '0' : (config?.refRowDocNoInDetail === 'ficheNo' ? '(FicheNo)' : '1') },
+    { field: 'RefRowDocNo (دیتیل)', source: 'نوسازی/صنفی: 0 | درآمد: از config (پیش‌فرض 0)', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? '0' : (config?.refRowDocNoInDetail === 'ficheNo' ? '(FicheNo)' : (config?.refRowDocNoInDetail === 'headerDocRow' ? '1' : '0')) },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
     { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.CI_City', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
-    { field: 'DocDate', source: 'nosazo.vb: امروز شمسی (CurrentShamsiDateString)', value: docDate || '-' },
-    { field: 'ActDate / RowDate', source: 'وضعیت=1 → PaymentDate وگرنه BankPaymentDate', value: actDate || '-' },
-    { field: 'Due', source: 'nosazo.vb: همان امروز شمسی (Ref DUE)', value: dueDate || '-' },
+    { field: 'DocDate', source: 'PaymentDate / BankPaymentDate از DB', value: docDate || '-' },
+    { field: 'ActDate / RowDate', source: 'امروز شمسی (nosazo.vb / ارسال تکی)', value: actDate || '-' },
+    { field: 'Due', source: 'BankPaymentDate با fallback به PaymentDate', value: dueDate || '-' },
     { field: 'شعبه (nosazo)', source: 'BillID/PaymentID → DistrickBranch', value: f.resolvedDistrictBranch ? `${f.resolvedDistrictBranch} (Fund پیشنهادی: ${f.suggestedFund || '-'})` : (f.dutyRegion || f.incomeRegion || '-') },
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
@@ -373,7 +373,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(false))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -397,7 +397,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(true))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -408,7 +408,7 @@ function setupEventHandlers() {
     if (data.dryRun) {
       alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
     } else if (data.success && data.verifiedInRayvarz === false) {
-      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+      alert('هشدار: SOAP موفق بود ولی ثبت در incmdocsys تأیید نشد. پاسخ SOAP و DocNotSent را ببینید.');
     } else if (!data.success) {
       alert('ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz) {

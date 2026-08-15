@@ -56,6 +56,10 @@ public static class FundResolver
 {
     public static int Resolve(IConfiguration config, int branch, string bankCode)
     {
+        // nosazo.vb — bank-aware؛ FundMap فقط برای شعب ناشناخته
+        if (branch is >= 201 and <= 212 or 218)
+            return DutyDistrictBranchResolver.ResolveFund(branch, bankCode);
+
         var key = branch.ToString();
         if (config.GetSection("FundMap").Exists() && config[$"FundMap:{key}"] != null)
             return config.GetValue<int>($"FundMap:{key}");

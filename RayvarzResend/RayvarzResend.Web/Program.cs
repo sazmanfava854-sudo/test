@@ -41,7 +41,7 @@ app.MapGet("/api/config", (IConfiguration config) => new
     useHttp = config.GetValue("Rayvarz:UseHttp", true),
     soapEnvelopeStyle = RayvarzSoapHttp.ResolveEnvelopeStyle(config),
     soapVersion = RayvarzSoapHttp.SoapVersionLabel(RayvarzSoapHttp.ResolveSoapVersion(config)),
-    refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow",
+    refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "zero",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
@@ -185,8 +185,18 @@ app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBui
     return Results.Ok(new { xml = built.Xml, payloadMode = built.Mode.ToString(), warning = built.Warning, ruleMeta = built.RuleMeta });
 });
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
 {
+    // اعتبارسنجی سمت سرور — همان شرط‌هایی که UI چک می‌کند (دور زدن UI نباید ارسال نامعتبر بسازد)
+    if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
+        return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
+
+    if (req.Fiche.Payable <= 0)
+        return Results.BadRequest(new { error = "مبلغ قابل پرداخت صفر است — ارسال نشد" });
+
+    if (!req.Fiche.Rows.Any(r => r.Val != 0))
+        return Results.BadRequest(new { error = "ردیف IncmNo یافت نشد — ارسال نشد" });
+
     var fiche = req.Fiche;
     var incmdocsysYear = ResolveIncmdocsysYear(req);
 
@@ -199,7 +209,8 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     }
     catch (SqlException ex)
     {
-        if (config.GetValue<bool>("Rayvarz:RequireRayvarzDbForSend"))
+        // پیش‌فرض امن: بدون چک تکراری در Ray_CityHall ارسال نکن (فقط با false صریح ادامه می‌یابد)
+        if (config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
         {
             return Results.Json(new
             {
@@ -237,27 +248,23 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
         catch (SqlException ex)
         {
             result.VerifiedInRayvarz = false;
-            result.Message = (result.Message ?? "") + $" | تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}";
-        }
-    }
-
-    if (!dryRun && !result.VerifiedInRayvarz)
-    {
-        try
-        {
-            result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
-        }
-        catch (SqlException ex)
-        {
-            result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+            result.Warning = CombineWarnings(result.Warning,
+                $"تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}");
         }
 
-        if (result.Success)
+        if (!result.VerifiedInRayvarz)
         {
-            result.Success = false;
-            result.Message = string.IsNullOrWhiteSpace(result.Message)
-                ? "SOAP موفق گزارش شد ولی فیش در incmdocsys ثبت نشد"
-                : result.Message + " — ولی فیش در incmdocsys ثبت نشده";
+            try
+            {
+                result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+            }
+            catch (SqlException ex)
+            {
+                result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+            }
+
+            result.Warning = CombineWarnings(result.Warning,
+                SendResultVerification.BuildUnverifiedWarning(result.Success, result.VerifiedInRayvarz, dryRun));
         }
     }
 
