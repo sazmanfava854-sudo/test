@@ -283,6 +283,10 @@ input:focus, select:focus {
   padding: 14px 16px;
 }
 
+.stat-card-wide {
+  grid-column: 1 / -1;
+}
+
 .stat-label {
   display: block;
   font-size: 0.78rem;

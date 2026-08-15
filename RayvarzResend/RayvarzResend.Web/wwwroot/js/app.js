@@ -214,7 +214,16 @@ function renderMappingTable(f) {
 
 function renderFiche(f) {
   $('ficheSection').hidden = false;
-  const statusClass = f.existsInRayvarz ? 'status-err' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn');
+  const statusClass = f.existsInRayvarz
+    ? 'status-err'
+    : (f.warning ? 'status-warn' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn'));
+
+  const warningCard = f.warning
+    ? `<div class="stat-card stat-card-wide">
+      <span class="stat-label">هشدار</span>
+      <span class="stat-value"><span class="status-pill status-warn">${f.warning}</span></span>
+    </div>`
+    : '';
 
   $('ficheSummary').innerHTML = `
     <div class="stat-card">
@@ -242,6 +251,7 @@ function renderFiche(f) {
       <span class="stat-label">در رایورز</span>
       <span class="stat-value">${f.existsInRayvarz ? 'بله — تکراری' : 'خیر'}</span>
     </div>
+    ${warningCard}
   `;
 
   renderMappingTable(f);
@@ -350,6 +360,9 @@ function setupEventHandlers() {
     applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
     renderFiche(data);
+    if (data.warning) {
+      console.warn('Fiche load warning:', data.warning);
+    }
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
     updateSendButton(data);

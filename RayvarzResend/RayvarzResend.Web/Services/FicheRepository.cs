@@ -216,12 +216,8 @@ WHERE {where}";
 
         if (!isSenfi)
         {
-            var nick = await TryLoadNosaziNickNameAsync(nidFiche, ct);
-            if (!string.IsNullOrWhiteSpace(nick))
-            {
-                dto.BnkAcntNo = nick;
-                dto.BnkAcntNoSource = "کد نوسازی — GetNosaziNickName (Duty_FicheSub.NidFK → Base_NosaziCode)";
-            }
+            var nickResult = await TryLoadNosaziNickNameAsync(nidFiche, ct);
+            NosaziNickNameLogic.ApplyLoadResult(dto, nickResult.Nick, nickResult.LoadError);
         }
 
         if (isSenfi)
@@ -273,7 +269,7 @@ WHERE NidFiche = @nid";
         return DutyNosaziLogic.BuildIncmRows(amounts, isSenfi, exportType);
     }
 
-    private async Task<string?> TryLoadNosaziNickNameAsync(Guid nidFiche, CancellationToken ct)
+    private async Task<(string? Nick, string? LoadError)> TryLoadNosaziNickNameAsync(Guid nidFiche, CancellationToken ct)
     {
         const string sql = @"
 SELECT TOP 1
@@ -295,11 +291,12 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
             cmd.Parameters.AddWithValue("@nid", nidFiche);
             var result = await cmd.ExecuteScalarAsync(ct);
             var s = result?.ToString()?.Trim();
-            return string.IsNullOrWhiteSpace(s) || s == "-------0" ? null : s;
+            var nick = string.IsNullOrWhiteSpace(s) || s == "-------0" ? null : s;
+            return (nick, null);
         }
-        catch (SqlException)
+        catch (SqlException ex)
         {
-            return null;
+            return (null, NosaziNickNameLogic.FormatSqlFailureWarning(ex.Message));
         }
     }
 

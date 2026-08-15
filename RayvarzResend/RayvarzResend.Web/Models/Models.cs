@@ -58,6 +58,8 @@ public class FicheHeaderDto
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
     public string StatusMessage { get; set; } = "";
+    /// <summary>هشدار بارگذاری (مثلاً خطای SQL در GetNosaziNickName) — ارسال ممکن است ادامه یابد.</summary>
+    public string? Warning { get; set; }
     /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
     public List<IncomeOddmentDto> Oddments { get; set; } = new();
     /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>
