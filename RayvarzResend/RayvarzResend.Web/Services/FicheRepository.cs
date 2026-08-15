@@ -5,6 +5,13 @@ namespace RayvarzResend.Web.Services;
 
 public class FicheRepository
 {
+    private const string NosaziNickSql = """
+        CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+        CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+        CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
+        ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
+        """;
+
     private readonly string _saraCs;
     private readonly string _rayCs;
 
@@ -29,23 +36,22 @@ public class FicheRepository
 
         var sql = $@"
 SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
-       ISNULL(CAST(f.PaymentBranch AS nvarchar(20)), '18') AS PaymentBranch,
+       i.NidProc,
+       ISNULL(f.Brokers, 0) AS Brokers,
+       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBranch AS nvarchar(20)))), '') AS PaymentBranch,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS BankCode,
+       NULLIF(LTRIM(RTRIM(CAST(f.Deposit AS nvarchar(50)))), '') AS Deposit,
+       NULLIF(LTRIM(RTRIM(CAST(f.DepositID AS nvarchar(50)))), '') AS DepositID,
        COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
        f.PaymentDate,
        f.BankPaymentDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        ISNULL(
-         NULLIF(LTRIM(RTRIM(
-           CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
-           CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
-           CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-           CAST(b.Apartment AS varchar)
-         )), '-'),
+         NULLIF(LTRIM(RTRIM({NosaziNickSql})), '-'),
          ''
        ) AS BnkAcntNo,
-       NULLIF(LTRIM(RTRIM(CAST(b.CI_City AS nvarchar(20)))), '') AS IncomeRegion
+       NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS IncomeRegion
 FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
 LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
@@ -61,35 +67,71 @@ WHERE {where}";
         if (!await reader.ReadAsync(ct)) return null;
 
         var group = ReadInt32(reader, "CI_IncomeAccountGroup");
-        var docTyp = group == 150 ? 11 : 3;
+        var isTahatorAmount = group == TahatorRowBuilder.IncomeAccountGroupTahatorAmount;
+        var isTahatorIncome = group == TahatorRowBuilder.IncomeAccountGroupTahatorIncome;
+        var docTyp = group == 150
+            ? 11
+            : isTahatorAmount
+                ? 14
+                : isTahatorIncome
+                    ? 18
+                    : 3;
+        var paymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
+            ? "18"
+            : reader.GetString(reader.GetOrdinal("PaymentBranch"));
 
         var dto = new FicheHeaderDto
         {
             Category = FicheCategory.Income,
             FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")),
+            BillIdRaw = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
+            PaymentIdRaw = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
             BillId = reader.GetString(reader.GetOrdinal("BillID")),
             PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")),
             Payable = ReadDecimal(reader, "Payable"),
+            Brokers = ReadDecimal(reader, "Brokers"),
             NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
             NidIncome = reader.GetGuid(reader.GetOrdinal("NidIncome")),
-            PaymentBranch = reader.GetString(reader.GetOrdinal("PaymentBranch")),
-            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? null : reader.GetString(reader.GetOrdinal("BankCode")),
+            NidProc = reader.IsDBNull(reader.GetOrdinal("NidProc"))
+                ? null
+                : reader.GetGuid(reader.GetOrdinal("NidProc")),
+            PaymentBranch = paymentBranch,
+            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? paymentBranch : reader.GetString(reader.GetOrdinal("BankCode")),
+            Deposit = ReadNullableInt64(reader, "Deposit"),
+            DepositId = ReadNullableInt64(reader, "DepositID"),
             RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
-            BnkAcntNoSource = "کد نوسازی — از Base_NosaziCode (۷ بخش، مثل نوسازی)",
+            BnkAcntNoSource = "کد نوسازی — GetNosaziNickName (منطقه-حوزه-بلوک-ملک-ساختمان-آپارتمان-واحد)",
             IncomeRegion = reader.IsDBNull(reader.GetOrdinal("IncomeRegion")) ? null : reader.GetString(reader.GetOrdinal("IncomeRegion")),
             DocTyp = docTyp,
-            DocDsc = "اسناد شهرسازی"
+            DocDsc = isTahatorAmount
+                ? "اسناد تهاتر مبلغ"
+                : isTahatorIncome
+                    ? "اسناد تهاتر درامد"
+                    : "اسناد شهرسازی"
         };
 
-        dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
-        // Income_Calculation = مبلغ ناخالص؛ Payable پس از تخفیف — قبل از Oddment اسکیل کن (مثل incmdocsys)
-        IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
-        await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, ct);
-        IncomeOddmentLogic.ApplyToRows(dto.Rows, dto.Oddments, dto.NidIncome);
+        var districtBranch = DutyDistrictBranchResolver.ResolveBranch(dto.BillIdRaw, dto.PaymentIdRaw);
+        if (districtBranch > 0)
+        {
+            dto.ResolvedDistrictBranch = districtBranch;
+            if (!isTahatorAmount && !isTahatorIncome)
+                dto.SuggestedFund = DutyDistrictBranchResolver.ResolveFund(districtBranch, dto.BankCode ?? "18");
+        }
+
+        if (isTahatorAmount)
+            TahatorRowBuilder.ApplyTahatorAmountRows(dto);
+        else if (isTahatorIncome)
+            TahatorRowBuilder.ApplyTahatorIncomeRows(dto);
+        else
+        {
+            dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+            await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, LoadIncomeRowsAsync, ct);
+            IncomeMember1388RowBuilder.Apply(dto);
+        }
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
             dto.CurrentStatus,
@@ -357,6 +399,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    private static long? ReadNullableInt64(SqlDataReader reader, string column)
+    {
+        var ord = reader.GetOrdinal(column);
+        if (reader.IsDBNull(ord)) return null;
+        var text = reader.GetString(ord).Trim();
+        return long.TryParse(text, out var value) ? value : null;
     }
 
     private static int ReadInt32(SqlDataReader reader, string column)

@@ -34,6 +34,8 @@ public class FicheHeaderDto
     public decimal Payable { get; set; }
     public Guid NidFiche { get; set; }
     public Guid? NidIncome { get; set; }
+    /// <summary>پرونده درآمد — برای BedeHi و فیش قبلی همان NidProc.</summary>
+    public Guid? NidProc { get; set; }
     public string BnkAcntNo { get; set; } = "";
     public string BnkAcntNoSource { get; set; } = "";
     public string? DutyRegion { get; set; }
@@ -54,6 +56,22 @@ public class FicheHeaderDto
     public string DocDsc { get; set; } = "";
     public string? DocTypDsc { get; set; }
     public int? IncomeAccountGroup { get; set; }
+    /// <summary>Income_Fiche.Deposit — Center1 / Num در Member 1388.</summary>
+    public long? Deposit { get; set; }
+    /// <summary>Income_Fiche.DepositID — Ref ردیف.</summary>
+    public long? DepositId { get; set; }
+    /// <summary>Income_Fiche.CreditorPapers — Center وقتی Bank=2.</summary>
+    public long? CreditorPapers { get; set; }
+    /// <summary>Income_Fiche.CheckNo — Center3 تهاتر.</summary>
+    public string? CheckNo { get; set; }
+    /// <summary>Center پیشنهادی Member 1388.</summary>
+    public long? Center { get; set; }
+    /// <summary>کارمزد کارگزار — BedeHi: Payable-Brokers.</summary>
+    public decimal Brokers { get; set; }
+    /// <summary>بدهی قبلی محاسبه‌شده یا از DB.</summary>
+    public decimal? PriorBedeHiAmount { get; set; }
+    /// <summary>فیش درآمد قبلی همان پرونده — ورودی BedeHi.</summary>
+    public PriorIncomeFicheDto? PriorIncomeFiche { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
@@ -67,11 +85,30 @@ public class FicheHeaderDto
     public List<IncmRowDto> Rows { get; set; } = new();
 }
 
+/// <summary>فیش درآمد قبلی — VB M_AllFiche برای BedeHi.</summary>
+public class PriorIncomeFicheDto
+{
+    public Guid NidIncome { get; set; }
+    public string FicheNo { get; set; } = "";
+    public decimal Payable { get; set; }
+    public decimal Brokers { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string BankPaymentDate { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public int? FicheStatus { get; set; }
+    public List<IncmRowDto> CalculationRows { get; set; } = new();
+}
+
 public class IncmRowDto
 {
     public int IncmNo { get; set; }
     public string IncmRowDsc { get; set; } = "";
     public decimal Val { get; set; }
+    public long? Center1 { get; set; }
+    public long? Center2 { get; set; }
+    public long? Center3 { get; set; }
+    public string? Ref { get; set; }
+    public string? Num { get; set; }
 }
 
 /// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>

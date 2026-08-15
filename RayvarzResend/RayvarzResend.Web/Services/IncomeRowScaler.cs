@@ -3,8 +3,7 @@ using RayvarzResend.Web.Models;
 namespace RayvarzResend.Web.Services;
 
 /// <summary>
-/// هم‌تراز با SoapBuilder.NormalizeRows برای Income:
-/// جمع خام Income_Calculation (پس از حذف کدهای متا مثل 100202) را به Payable اسکیل می‌کند.
+/// سازگاری با مسیر قدیمی — منطق واقعی در <see cref="IncomeMember1388RowBuilder"/>.
 /// </summary>
 public static class IncomeRowScaler
 {
@@ -14,15 +13,32 @@ public static class IncomeRowScaler
 
         var sum = rows.Sum(r => r.Val);
         if (sum == payable || sum == 0) return;
-
-        // برگشت از سپرده: جمع عمداً منفی است (VB iNcOMEBackSeprdeh)
         if (sum == -payable) return;
 
-        var factor = payable / sum;
-        foreach (var r in rows)
-            r.Val = Math.Round(r.Val * factor, 0);
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 150,
+            Payable = payable,
+            Rows = rows.Select(Clone).ToList()
+        };
 
-        var diff = payable - rows.Sum(r => r.Val);
-        rows[0].Val += diff;
+        IncomeMember1388RowBuilder.Apply(fiche);
+
+        rows.Clear();
+        foreach (var row in fiche.Rows)
+            rows.Add(row);
     }
+
+    private static IncmRowDto Clone(IncmRowDto source) => new()
+    {
+        IncmNo = source.IncmNo,
+        Val = source.Val,
+        IncmRowDsc = source.IncmRowDsc,
+        Center1 = source.Center1,
+        Center2 = source.Center2,
+        Center3 = source.Center3,
+        Ref = source.Ref,
+        Num = source.Num
+    };
 }
