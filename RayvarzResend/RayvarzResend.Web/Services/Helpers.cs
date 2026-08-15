@@ -83,6 +83,14 @@ public static class DateHelper
         return ToRayvarzDate(value.ToString() ?? "");
     }
 
+    public static string ToShamsiSlashDate(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+        if (input.Contains('/')) return input.Trim();
+        var d = ToRayvarzDate(input);
+        return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();
+    }
+
     private static string FormatShamsiYyyyMmDd(int year, int month, int day)
     {
         if (year is < MinShamsiYear or > MaxShamsiYear) return "";

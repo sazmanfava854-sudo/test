@@ -500,12 +500,25 @@ public class SoapBuilder
             return rows;
 
         var sum = rows.Sum(r => r.Val);
-        if (sum != fiche.Payable && sum != 0)
+        if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, sum) && sum != 0)
         {
-            var factor = fiche.Payable / sum;
-            foreach (var r in rows) r.Val = Math.Round(r.Val * factor, 0);
-            var diff = fiche.Payable - rows.Sum(r => r.Val);
-            rows[0].Val += diff;
+            if (fiche.IncomeAccountGroup is null or 0)
+                fiche.IncomeAccountGroup = 150;
+
+            fiche.Rows = rows;
+            IncomeMember1388RowBuilder.Apply(fiche);
+            rows = fiche.Rows.Where(r => r.Val != 0).ToList();
+            sum = rows.Sum(r => r.Val);
+        }
+
+        if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, sum))
+        {
+            var target = fiche.IncomeAccountGroup == 151
+                ? -Math.Abs(fiche.Payable)
+                : TahatorRowBuilder.IsTahatorAmountFiche(fiche)
+                    ? -Math.Abs(fiche.Payable)
+                    : fiche.Payable;
+            IncomeMember1388RowBuilder.ReconcileSoapRows(rows, target);
         }
 
         return rows;
