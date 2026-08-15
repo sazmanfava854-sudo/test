@@ -58,6 +58,10 @@ public class FicheHeaderDto
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
     public string StatusMessage { get; set; } = "";
+    /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
+    public List<IncomeOddmentDto> Oddments { get; set; } = new();
+    /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>
+    public List<DutyOddmentDto> DutyOddments { get; set; } = new();
     public List<IncmRowDto> Rows { get; set; } = new();
 }
 
@@ -66,6 +70,26 @@ public class IncmRowDto
     public int IncmNo { get; set; }
     public string IncmRowDsc { get; set; } = "";
     public decimal Val { get; set; }
+}
+
+/// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>
+public class IncomeOddmentDto
+{
+    public int IncmNo { get; set; }
+    public decimal Value { get; set; }
+    public int OddmentType { get; set; }
+}
+
+/// <summary>رندمان dbo.Duty_OddmentAccount — از NidFK مرتبط با Duty_FicheSub.</summary>
+public class DutyOddmentDto
+{
+    public int DutyFormula { get; set; }
+    /// <summary>معادل CI_DutyFormulaFiche — از CI_DutyOddmentFor در DB.</summary>
+    public int DutyFormulaFiche { get; set; }
+    public decimal Price { get; set; }
+    public int OddmentType { get; set; }
+    public string? FicheNo { get; set; }
+    public int? DutyYear { get; set; }
 }
 
 public class SendFicheRequest

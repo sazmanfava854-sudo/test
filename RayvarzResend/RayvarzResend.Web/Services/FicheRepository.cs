@@ -86,6 +86,8 @@ WHERE {where}";
         };
 
         dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+        await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, ct);
+        IncomeOddmentLogic.ApplyToRows(dto.Rows, dto.Oddments, dto.NidIncome);
         FicheDateResolver.ApplyFromIncomeColumns(
             dto,
             dto.CurrentStatus,
@@ -226,12 +228,22 @@ WHERE {where}";
             dto.BnkAcntNoSource = "کد ثابت صنفی — Rayvarz (7-14-55-1-1-0-1)";
         }
 
-        dto.Rows = await LoadDutyRowsAsync(dto.NidFiche, dto.Payable, isSenfi, exportType, ct);
+        await DutyFicheSupplementLoader.EnrichAsync(dto, _saraCs, dutyType, ct);
+
+        dto.Rows = await LoadDutyRowsAsync(
+            dto.NidFiche, dto.Payable, isSenfi, exportType, dto.DutyOddments, dto.FicheNo, ct);
         DutyNosaziLogic.ApplyRayvarzDates(dto, dutyStatus, paymentDateRay, bankPaymentDateRay);
         return dto;
     }
 
-    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(Guid nidFiche, decimal payable, bool isSenfi, int exportType, CancellationToken ct)
+    private async Task<List<IncmRowDto>> LoadDutyRowsAsync(
+        Guid nidFiche,
+        decimal payable,
+        bool isSenfi,
+        int exportType,
+        IReadOnlyList<DutyOddmentDto> dutyOddments,
+        string ficheNo,
+        CancellationToken ct)
     {
         const string sql = @"
 SELECT CI_DutyFormula, CI_DutyFormulaFiche, Price
@@ -252,6 +264,8 @@ WHERE NidFiche = @nid";
                 ReadDecimal(reader, "Price")
             ));
         }
+
+        DutyOddmentLogic.ApplyToSubs(subs, dutyOddments, ficheNo);
 
         var amounts = DutyNosaziLogic.CalculateSubAmounts(subs, payable);
         return DutyNosaziLogic.BuildIncmRows(amounts, isSenfi, exportType);
