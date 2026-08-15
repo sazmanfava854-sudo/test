@@ -58,6 +58,33 @@ function formatShamsiInput(yyyymmdd) {
   return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
 }
 
+/** جمع Val ردیف‌های بارگذاری‌شده از API (مقادیر ارسالی، نه خام Income_Calculation). */
+function sumRowVals(rows) {
+  return (rows || []).reduce((a, r) => a + Number(r.val), 0);
+}
+
+function formatValMappingDetail(f) {
+  const rows = f.rows || [];
+  const sum = sumRowVals(rows);
+  const payable = Number(f.payable);
+  const parts = rows.map((r) => Number(r.val).toLocaleString()).join(' + ');
+  const matched = Math.abs(sum - payable) < 0.5;
+  const matchNote = matched
+    ? '✓ جمع = Payable'
+    : `⚠ اختلاف ${Math.abs(sum - payable).toLocaleString()} ریال`;
+  const incomeNote = f.category === 'Income'
+    ? ' | مقادیر سرور (اسکیل + Oddment)'
+    : '';
+  return `${parts} = ${sum.toLocaleString()} | Payable: ${payable.toLocaleString()} | ${matchNote}${incomeNote}`;
+}
+
+function valMappingSource(f) {
+  if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') {
+    return 'مقادیر ارسالی — نوسازی: Payable بین ردیف‌ها توزیع شده';
+  }
+  return 'مقادیر ارسالی از API — Income_Calculation اسکیل‌شده به Payable (+ Oddment)';
+}
+
 function applyFicheDatesToForm(f) {
   $('docDate').value = formatShamsiInput(f.rayvarzDocDate);
   $('actDate').value = formatShamsiInput(f.rayvarzActDate);
@@ -194,8 +221,8 @@ function buildMappingRows(f) {
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
     { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
-    { field: 'Qty (دیتیل)', source: 'نوسازی/صنفی: PayablePrice کل فیش (در هر ردیف یکسان) | درآمد: Val همان ردیف', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? Number(f.payable).toLocaleString() : (f.rows || []).map(r => Number(r.val).toLocaleString()).join(' / ') },
-    { field: 'Val (دیتیل)', source: 'جمع Val باید = Payable؛ نوسازی = Payable − سایر ردیف‌ها', value: (() => { const sum = (f.rows || []).reduce((a, r) => a + Number(r.val), 0); return `${(f.rows || []).map(r => Number(r.val).toLocaleString()).join(' + ')} = ${sum.toLocaleString()} (Payable: ${Number(f.payable).toLocaleString()})`; })() },
+    { field: 'Qty (دیتیل)', source: 'نوسازی/صنفی: PayablePrice کل فیش (در هر ردیف یکسان) | درآمد: Val همان ردیف (ارسالی)', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? Number(f.payable).toLocaleString() : (f.rows || []).map(r => Number(r.val).toLocaleString()).join(' / ') },
+    { field: 'Val (دیتیل)', source: valMappingSource(f), value: formatValMappingDetail(f) },
     { field: 'Bank', source: 'ConfirmBankCode — فقط اگر پرداخت شده', value: f.bankCode || '(خالی — NULL)' },
     { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '(NULL)' }
   ];
@@ -263,6 +290,16 @@ function renderFiche(f) {
     tr.innerHTML = `<td>${i + 1}</td><td>${r.incmNo}</td><td>${r.incmRowDsc}</td><td>${Number(r.val).toLocaleString()}</td>`;
     tbody.appendChild(tr);
   });
+
+  const tfoot = $('rowsTable').querySelector('tfoot') || document.createElement('tfoot');
+  if (!$('rowsTable').querySelector('tfoot')) $('rowsTable').appendChild(tfoot);
+  const rowSum = sumRowVals(f.rows);
+  const payable = Number(f.payable);
+  const sumOk = Math.abs(rowSum - payable) < 0.5;
+  tfoot.innerHTML = `<tr class="rows-sum-row ${sumOk ? 'rows-sum-ok' : 'rows-sum-warn'}">
+    <td colspan="3">جمع Val (ارسالی)</td>
+    <td>${rowSum.toLocaleString()} ${sumOk ? '= Payable' : `(Payable: ${payable.toLocaleString()})`}</td>
+  </tr>`;
 }
 
 async function init() {

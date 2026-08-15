@@ -426,6 +426,22 @@ tbody tr:last-child td {
   border-bottom: none;
 }
 
+tfoot .rows-sum-row td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+tfoot .rows-sum-ok td {
+  background: rgba(25, 135, 84, 0.08);
+  color: #146c43;
+}
+
+tfoot .rows-sum-warn td {
+  background: rgba(255, 193, 7, 0.15);
+  color: #856404;
+}
+
 .code-block {
   background: #0f172a;
   color: #e2e8f0;
