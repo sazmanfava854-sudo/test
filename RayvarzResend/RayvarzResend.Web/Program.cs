@@ -209,7 +209,8 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository rep
     }
     catch (SqlException ex)
     {
-        if (config.GetValue<bool>("Rayvarz:RequireRayvarzDbForSend"))
+        // پیش‌فرض امن: بدون چک تکراری در Ray_CityHall ارسال نکن (فقط با false صریح ادامه می‌یابد)
+        if (config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
         {
             return Results.Json(new
             {
