@@ -3,15 +3,25 @@ using RayvarzResend.Web.Models;
 namespace RayvarzResend.Web.Services;
 
 /// <summary>تاریخ‌های عملیاتی هر فیش برای DocDate / ActDate / Due — از ستون‌های Sara8M03، نه appsettings.</summary>
-internal static class FicheDateResolver
+public static class FicheDateResolver
 {
+    /// <summary>
+    /// تاریخ مؤثر از PaymentDate / BankPaymentDate (همان منبع فیلتر فیش جمعی):
+    /// وضعیت ۱ → PaymentDate؛ غیر آن → BankPaymentDate — با fallback به ستون دیگر.
+    /// </summary>
+    public static string ResolvePaymentDateByStatus(int ficheStatus, string paymentDate, string bankPaymentDate) =>
+        ficheStatus == 1
+            ? FirstRayvarzDate(paymentDate, bankPaymentDate)
+            : FirstRayvarzDate(bankPaymentDate, paymentDate);
+
     public static void ApplyFromIncomeColumns(
         FicheHeaderDto dto,
+        int ficheStatus,
         string paymentDate,
         string bankPaymentDate)
     {
         dto.RayvarzDocDate = FirstRayvarzDate(paymentDate, bankPaymentDate);
-        dto.RayvarzActDate = FirstRayvarzDate(bankPaymentDate, paymentDate);
+        dto.RayvarzActDate = ResolvePaymentDateByStatus(ficheStatus, paymentDate, bankPaymentDate);
         dto.RayvarzDueDate = FirstRayvarzDate(bankPaymentDate, paymentDate);
         dto.RowDate = dto.RayvarzActDate;
     }
