@@ -14,12 +14,44 @@ public static class IncomeExcludedCodes
 
 public static class DateHelper
 {
+    private const int MinShamsiYear = 1300;
+    private const int MaxShamsiYear = 1500;
+
     public static string ToRayvarzDate(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return "";
-        var digits = new string(input.Where(char.IsDigit).ToArray());
-        if (digits.Length >= 8) return digits[..8];
-        return digits.PadLeft(8, '0');
+
+        var trimmed = input.Trim();
+        if (trimmed.Contains('/') || trimmed.Contains('-'))
+        {
+            var parts = trimmed.Split(['/', '-'], StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3
+                && int.TryParse(parts[0], out var y)
+                && int.TryParse(parts[1], out var m)
+                && int.TryParse(parts[2], out var d))
+            {
+                return FormatShamsiYyyyMmDd(y, m, d);
+            }
+        }
+
+        var digits = new string(trimmed.Where(char.IsDigit).ToArray());
+        if (digits.Length == 0) return "";
+
+        if (digits.Length >= 8)
+        {
+            var candidate = digits[..8];
+            return IsValidShamsiYyyyMmDd(candidate) ? candidate : "";
+        }
+
+        // 7 رقم بدون صفر اول سال — مثل 4050505 → 14050505 (نه PadLeft → 04050505)
+        if (digits.Length == 7 && digits[0] is '3' or '4')
+        {
+            var withLeadingOne = "1" + digits;
+            if (IsValidShamsiYyyyMmDd(withLeadingOne))
+                return withLeadingOne;
+        }
+
+        return "";
     }
 
     public static string CurrentShamsiRayvarzDate()
@@ -49,6 +81,23 @@ public static class DateHelper
         }
 
         return ToRayvarzDate(value.ToString() ?? "");
+    }
+
+    private static string FormatShamsiYyyyMmDd(int year, int month, int day)
+    {
+        if (year is < MinShamsiYear or > MaxShamsiYear) return "";
+        if (month is < 1 or > 12) return "";
+        if (day is < 1 or > 31) return "";
+        return $"{year:0000}{month:00}{day:00}";
+    }
+
+    private static bool IsValidShamsiYyyyMmDd(string yyyyMmDd)
+    {
+        if (yyyyMmDd.Length != 8) return false;
+        if (!int.TryParse(yyyyMmDd[..4], out var year)) return false;
+        if (!int.TryParse(yyyyMmDd.Substring(4, 2), out var month)) return false;
+        if (!int.TryParse(yyyyMmDd.Substring(6, 2), out var day)) return false;
+        return FormatShamsiYyyyMmDd(year, month, day) == yyyyMmDd;
     }
 }
 

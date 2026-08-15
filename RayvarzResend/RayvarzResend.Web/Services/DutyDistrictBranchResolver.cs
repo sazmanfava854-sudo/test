@@ -79,8 +79,11 @@ public static class DutyDistrictBranchResolver
   /// <summary>مقایسه تاریخ شمسی با فرمت yyyy/MM/dd یا yyyyMMdd.</summary>
     private static int ShamsiCompare(string a, string b)
     {
-        static string Norm(string s) => new string(s.Where(char.IsDigit).ToArray()).PadLeft(8, '0')[..8];
-        return string.CompareOrdinal(Norm(a), Norm(b));
+        var na = DateHelper.ToRayvarzDate(a);
+        var nb = DateHelper.ToRayvarzDate(b);
+        if (na.Length < 8 || nb.Length < 8)
+            return string.Compare(a, b, StringComparison.Ordinal);
+        return string.Compare(na, nb, StringComparison.Ordinal);
     }
 
     /// <summary>Fund از RefFund — nosazo.vb ۴۵۷–۵۱۸ (BankCode=1 شاخه جدا).</summary>
