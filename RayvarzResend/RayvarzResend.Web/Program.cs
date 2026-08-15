@@ -185,8 +185,18 @@ app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBui
     return Results.Ok(new { xml = built.Xml, payloadMode = built.Mode.ToString(), warning = built.Warning, ruleMeta = built.RuleMeta });
 });
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
 {
+    // اعتبارسنجی سمت سرور — همان شرط‌هایی که UI چک می‌کند (دور زدن UI نباید ارسال نامعتبر بسازد)
+    if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
+        return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
+
+    if (req.Fiche.Payable <= 0)
+        return Results.BadRequest(new { error = "مبلغ قابل پرداخت صفر است — ارسال نشد" });
+
+    if (!req.Fiche.Rows.Any(r => r.Val != 0))
+        return Results.BadRequest(new { error = "ردیف IncmNo یافت نشد — ارسال نشد" });
+
     var fiche = req.Fiche;
     var incmdocsysYear = ResolveIncmdocsysYear(req);
 
