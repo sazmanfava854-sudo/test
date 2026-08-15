@@ -86,6 +86,8 @@ WHERE {where}";
         };
 
         dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
+        // Income_Calculation = مبلغ ناخالص؛ Payable پس از تخفیف — قبل از Oddment اسکیل کن (مثل incmdocsys)
+        IncomeRowScaler.ScaleToPayable(dto.Rows, dto.Payable);
         await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, ct);
         IncomeOddmentLogic.ApplyToRows(dto.Rows, dto.Oddments, dto.NidIncome);
         FicheDateResolver.ApplyFromIncomeColumns(
