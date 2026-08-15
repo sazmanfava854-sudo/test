@@ -236,7 +236,7 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository rep
     var xml = built.Xml;
     var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
     var result = await client.SendAsync(xml, dryRun, ct);
-    result.Warning = CombineWarnings(sendWarning, built.Warning);
+    result.Warning = CombineWarnings(fiche.Warning, CombineWarnings(sendWarning, built.Warning));
 
     if (!dryRun && result.Success)
     {
