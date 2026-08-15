@@ -494,7 +494,7 @@ public class SoapBuilder
     {
         var rows = fiche.Rows.Where(r => r.Val != 0).ToList();
         if (rows.Count == 0)
-            rows.Add(new IncmRowDto { IncmNo = 0, Val = fiche.Payable, IncmRowDsc = "کل" });
+            throw new InvalidOperationException("ردیف IncmNo یافت نشد");
 
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
             return rows;
