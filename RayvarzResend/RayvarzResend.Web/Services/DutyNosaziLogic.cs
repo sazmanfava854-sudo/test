@@ -65,7 +65,7 @@ public static class DutyNosaziLogic
         FicheDateResolver.ResolvePaymentDateByStatus(eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay);
 
     public static void ApplyRayvarzDates(FicheHeaderDto dto, int eumDutyFicheStatus, string paymentDateRay, string bankPaymentDateRay) =>
-        FicheDateResolver.ApplyFromPaymentColumns(dto, eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay);
+        FicheDateResolver.ApplyFromDutyColumns(dto, eumDutyFicheStatus, paymentDateRay, bankPaymentDateRay, "", "");
 
     public static string NormalizeMergedId(string? raw)
     {

@@ -42,8 +42,11 @@ public static class FicheDateResolver
         string printDate,
         string exportDate)
     {
-        // ارسال تکی نوسازی/صنفی: PaymentDate و BankPaymentDate (مثل فیش جمعی و parity)
+        // DocDate/Due از DB؛ ActDate/RowDate = امروز شمسی (nosazo.vb)
         ApplyFromPaymentColumns(dto, ficheStatus, paymentDate, bankPaymentDate);
+        var today = DateHelper.CurrentShamsiRayvarzDate();
+        dto.RayvarzActDate = today;
+        dto.RowDate = today;
     }
 
     public static string ResolveForSoap(string? fromRequest, string? fromFiche) =>
