@@ -450,6 +450,13 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void TahatorSendPolicy_rayvarz_check_failure_does_not_imply_needs_send()
+    {
+        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, rayvarzCheckFailed: true));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, rayvarzCheckFailed: false));
+    }
+
+    [Fact]
     public void SoapBuilder_tahator_header_uses_fiche_no_detail_refrowdocno_is_int_row_ref()
     {
         var config = new ConfigurationBuilder()
