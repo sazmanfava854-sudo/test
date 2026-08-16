@@ -82,6 +82,7 @@ public sealed class TahatorResendService
 
             var inHeader = await ExistsInAccountingDocHeaderAsync(no, ct);
             var inRayvarz = false;
+            var rayvarzCheckFailed = false;
             try
             {
                 inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, reqDates: null, ct);
@@ -89,11 +90,12 @@ public sealed class TahatorResendService
             catch (SqlException ex)
             {
                 inRayvarz = false;
+                rayvarzCheckFailed = true;
                 rayvarzCheckWarnings.Add($"incmdocsys {no}: {ex.Message}");
             }
 
-            var notSent = !inRayvarz ? await TryGetDocNotSentAsync(no, ct) : null;
-            var needs = TahatorSendPolicy.NeedsSend(inRayvarz);
+            var notSent = !inRayvarz && !rayvarzCheckFailed ? await TryGetDocNotSentAsync(no, ct) : null;
+            var needs = TahatorSendPolicy.NeedsSend(inRayvarz, rayvarzCheckFailed);
             anyNeedsSend |= needs;
             allInHeader &= inHeader;
             allInRayvarz &= inRayvarz;
