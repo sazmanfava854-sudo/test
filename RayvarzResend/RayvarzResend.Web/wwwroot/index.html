@@ -107,6 +107,19 @@
             <tbody></tbody>
           </table>
         </div>
+        <div class="unsent-pagination" id="unsentPagination" hidden>
+          <button id="btnUnsentPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
+          <span id="unsentPageLabel" class="unsent-page-label"></span>
+          <button id="btnUnsentNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
+          <label class="unsent-page-size">
+            <span>در هر صفحه</span>
+            <select id="unsentPageSize">
+              <option value="25">۲۵</option>
+              <option value="50" selected>۵۰</option>
+              <option value="100">۱۰۰</option>
+            </select>
+          </label>
+        </div>
       </div>
       <pre id="unsentResultBox" class="code-block" hidden></pre>
     </section>

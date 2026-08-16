@@ -1,6 +1,14 @@
 let currentFiche = null;
 let config = null;
 let unsentItems = [];
+const selectedUnsentFicheNos = new Set();
+const unsentSearchState = {
+  page: 1,
+  pageSize: 50,
+  totalCount: 0,
+  totalPages: 0,
+  filters: null
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -188,9 +196,54 @@ function initDatePickers() {
 }
 
 function getSelectedUnsentFicheNos() {
-  return Array.from(document.querySelectorAll('.unsent-row-check:checked'))
-    .map((el) => el.dataset.ficheNo)
-    .filter(Boolean);
+  return Array.from(selectedUnsentFicheNos);
+}
+
+function getUnsentSearchFilters() {
+  const fromDate = ($('unsentFromDate')?.value || '').trim();
+  const toDate = ($('unsentToDate')?.value || '').trim();
+  return {
+    ficheKind: $('unsentFicheKind').value,
+    ficheNo: ($('unsentFicheNo')?.value || '').trim(),
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+    billId: ($('unsentBillId')?.value || '').trim(),
+    paymentId: ($('unsentPaymentId')?.value || '').trim(),
+    district: branchIdToDistrict($('unsentDistrict')?.value)
+  };
+}
+
+function validateUnsentSearchFilters(filters) {
+  if ((filters.fromDate && !filters.toDate) || (!filters.fromDate && filters.toDate)) {
+    return 'هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید';
+  }
+  if (!filters.ficheNo && !filters.billId && !filters.paymentId && !filters.district && !filters.fromDate) {
+    return 'حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید';
+  }
+  return null;
+}
+
+function updateUnsentPaginationUi() {
+  const bar = $('unsentPagination');
+  const label = $('unsentPageLabel');
+  const prevBtn = $('btnUnsentPrevPage');
+  const nextBtn = $('btnUnsentNextPage');
+  if (!bar || !label || !prevBtn || !nextBtn) return;
+
+  const { page, totalPages, totalCount } = unsentSearchState;
+  const hasResults = totalCount > 0;
+  bar.hidden = !hasResults;
+
+  if (!hasResults) {
+    label.textContent = '';
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+
+  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${totalPages.toLocaleString('fa-IR')} — ${totalCount.toLocaleString('fa-IR')} مورد`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
 }
 
 function updateUnsentSendButton() {
@@ -205,8 +258,13 @@ function updateUnsentSendButton() {
     : 'ارسال انتخاب‌شده‌ها';
 }
 
-function renderUnsentTable(items) {
+function renderUnsentTable(items, meta = {}) {
   unsentItems = items || [];
+  if (meta.page != null) unsentSearchState.page = meta.page;
+  if (meta.pageSize != null) unsentSearchState.pageSize = meta.pageSize;
+  if (meta.totalCount != null) unsentSearchState.totalCount = meta.totalCount;
+  if (meta.totalPages != null) unsentSearchState.totalPages = meta.totalPages;
+
   const section = $('unsentResultsSection');
   const tbody = $('unsentTable')?.querySelector('tbody');
   const countLabel = $('unsentCountLabel');
@@ -216,16 +274,23 @@ function renderUnsentTable(items) {
   if (!unsentItems.length) {
     section.hidden = false;
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
-    if (countLabel) countLabel.textContent = '۰ مورد';
+    if (countLabel) {
+      countLabel.textContent = unsentSearchState.totalCount > 0
+        ? `۰ مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
+        : '۰ مورد';
+    }
     if (selectAll) selectAll.checked = false;
+    updateUnsentPaginationUi();
     updateUnsentSendButton();
     return;
   }
 
   section.hidden = false;
-  tbody.innerHTML = unsentItems.map((item) => `
+  tbody.innerHTML = unsentItems.map((item) => {
+    const checked = selectedUnsentFicheNos.has(item.ficheNo) ? ' checked' : '';
+    return `
     <tr>
-      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}" /></td>
+      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${item.bnkAcntNo || '-'}</td>
       <td>${item.billId || '-'}</td>
@@ -235,20 +300,102 @@ function renderUnsentTable(items) {
       <td>${item.ficheNo}</td>
       <td>${Number(item.payable || 0).toLocaleString()}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
-  if (countLabel) countLabel.textContent = `${unsentItems.length.toLocaleString('fa-IR')} مورد`;
-  if (selectAll) selectAll.checked = false;
+  const selectedOnPage = unsentItems.filter((item) => selectedUnsentFicheNos.has(item.ficheNo)).length;
+  if (countLabel) {
+    const selectedTotal = selectedUnsentFicheNos.size;
+    const pageInfo = `${unsentItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+    countLabel.textContent = selectedTotal > 0
+      ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+      : pageInfo;
+  }
+  if (selectAll) {
+    selectAll.checked = unsentItems.length > 0 && selectedOnPage === unsentItems.length;
+  }
 
   document.querySelectorAll('.unsent-row-check').forEach((cb) => {
     cb.addEventListener('change', () => {
+      const ficheNo = cb.dataset.ficheNo;
+      if (!ficheNo) return;
+      if (cb.checked) selectedUnsentFicheNos.add(ficheNo);
+      else selectedUnsentFicheNos.delete(ficheNo);
+
       const all = document.querySelectorAll('.unsent-row-check');
       const checked = document.querySelectorAll('.unsent-row-check:checked');
       if (selectAll) selectAll.checked = all.length > 0 && checked.length === all.length;
       updateUnsentSendButton();
+      const countLabelEl = $('unsentCountLabel');
+      if (countLabelEl && unsentSearchState.totalCount > 0) {
+        const selectedTotal = selectedUnsentFicheNos.size;
+        const pageInfo = `${unsentItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+        countLabelEl.textContent = selectedTotal > 0
+          ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+          : pageInfo;
+      }
     });
   });
+  updateUnsentPaginationUi();
   updateUnsentSendButton();
+}
+
+async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
+  const filters = getUnsentSearchFilters();
+  const validationError = validateUnsentSearchFilters(filters);
+  if (validationError) {
+    alert(validationError);
+    return false;
+  }
+
+  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 50;
+  unsentSearchState.pageSize = pageSize;
+  unsentSearchState.filters = filters;
+  if (clearSelection) selectedUnsentFicheNos.clear();
+
+  const btn = $('btnUnsentSearch');
+  const prevBtn = $('btnUnsentPrevPage');
+  const nextBtn = $('btnUnsentNextPage');
+  if (btn) btn.disabled = true;
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+  const prevLabel = btn?.textContent;
+  if (btn) btn.textContent = 'در حال جستجو…';
+  $('unsentResultBox').hidden = true;
+
+  try {
+    const res = await fetch('/api/unsent/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...filters,
+        page,
+        pageSize
+      })
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+    const totalCount = data.totalCount ?? data.count ?? 0;
+    const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
+    renderUnsentTable(data.items || [], {
+      page: data.page ?? page,
+      pageSize: data.pageSize ?? pageSize,
+      totalCount,
+      totalPages
+    });
+    return true;
+  } catch (e) {
+    alert(e.message);
+    renderUnsentTable([], { page: 1, pageSize, totalCount: 0, totalPages: 0 });
+    return false;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'جستجو';
+    }
+    updateUnsentPaginationUi();
+  }
 }
 
 function formatShamsiInput(yyyymmdd) {
@@ -666,61 +813,46 @@ function setupEventHandlers() {
   const selectAll = $('unsentSelectAll');
   if (selectAll) {
     selectAll.addEventListener('change', () => {
+      unsentItems.forEach((item) => {
+        if (selectAll.checked) selectedUnsentFicheNos.add(item.ficheNo);
+        else selectedUnsentFicheNos.delete(item.ficheNo);
+      });
       document.querySelectorAll('.unsent-row-check').forEach((cb) => {
         cb.checked = selectAll.checked;
       });
       updateUnsentSendButton();
+      const countLabelEl = $('unsentCountLabel');
+      if (countLabelEl && unsentSearchState.totalCount > 0) {
+        const selectedTotal = selectedUnsentFicheNos.size;
+        const pageInfo = `${unsentItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+        countLabelEl.textContent = selectedTotal > 0
+          ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+          : pageInfo;
+      }
     });
   }
 
   bindClick('btnUnsentSearch', async () => {
-    const fromDate = ($('unsentFromDate')?.value || '').trim();
-    const toDate = ($('unsentToDate')?.value || '').trim();
-    const ficheNo = ($('unsentFicheNo')?.value || '').trim();
-    const billId = ($('unsentBillId')?.value || '').trim();
-    const paymentId = ($('unsentPaymentId')?.value || '').trim();
-    const district = branchIdToDistrict($('unsentDistrict')?.value);
-
-    if ((fromDate && !toDate) || (!fromDate && toDate)) {
-      return alert('هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید');
-    }
-    if (!ficheNo && !billId && !paymentId && !district && !fromDate) {
-      return alert('حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید');
-    }
-
-    const btn = $('btnUnsentSearch');
-    btn.disabled = true;
-    const prevLabel = btn.textContent;
-    btn.textContent = 'در حال جستجو…';
-    $('unsentResultBox').hidden = true;
-    try {
-      const res = await fetch('/api/unsent/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind').value,
-          ficheNo,
-          fromDate: fromDate || null,
-          toDate: toDate || null,
-          billId,
-          paymentId,
-          district
-        })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      renderUnsentTable(data.items || []);
-      if (data.truncated) {
-        alert(`بیش از ${data.count} مورد یافت شد — فقط ${data.count} مورد اول نمایش داده شد. فیلترها را محدودتر کنید.`);
-      }
-    } catch (e) {
-      alert(e.message);
-      renderUnsentTable([]);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = prevLabel;
-    }
+    await fetchUnsentResults(1, { clearSelection: true });
   });
+
+  bindClick('btnUnsentPrevPage', async () => {
+    if (unsentSearchState.page <= 1) return;
+    await fetchUnsentResults(unsentSearchState.page - 1);
+  });
+
+  bindClick('btnUnsentNextPage', async () => {
+    if (unsentSearchState.page >= unsentSearchState.totalPages) return;
+    await fetchUnsentResults(unsentSearchState.page + 1);
+  });
+
+  const pageSizeSel = $('unsentPageSize');
+  if (pageSizeSel) {
+    pageSizeSel.addEventListener('change', async () => {
+      if (!unsentSearchState.filters) return;
+      await fetchUnsentResults(1);
+    });
+  }
 
   bindClick('btnUnsentPlan', async () => {
     const selected = getSelectedUnsentFicheNos();
@@ -807,7 +939,10 @@ function setupEventHandlers() {
       if (data.dryRun) alert('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
       else alert(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
 
-      $('btnUnsentSearch').click();
+      selectedUnsentFicheNos.clear();
+      if (unsentSearchState.filters) {
+        await fetchUnsentResults(unsentSearchState.page);
+      }
     } catch (e) {
       box.textContent = e.message;
       alert(e.message);

@@ -611,7 +611,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
     public async Task<UnsentFicheSearchResult> SearchUnsentIncomeAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
     {
-        var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var pageSize = req.NormalizedPageSize;
+        var offset = req.Offset;
         var hasDateRange = req.HasDateRange;
         DateTime? fromDt = null;
         DateTime? toExclusive = null;
@@ -630,14 +631,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var dateClause = hasDateRange ? IncomeUnsentDateClause : "";
         var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
 
-        var sql = hasDistrict
+        var fromWhere = hasDistrict
             ? $"""
-              SELECT TOP (@max)
-                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
-                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
-                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
-                     NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
-                     '' AS BnkAcntNo
               FROM dbo.Income_Fiche f WITH (NOLOCK)
               INNER JOIN dbo.Income i WITH (NOLOCK) ON i.NidIncome = f.NidIncome
               INNER JOIN dbo.Sh_RequestInfo r WITH (NOLOCK) ON r.NidProc = i.NidProc
@@ -650,14 +645,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
                 AND CAST(b.District AS nvarchar(20)) = @district
-              ORDER BY f.BankPaymentDate DESC, f.PaymentDate DESC, f.FicheNo DESC
               """
             : $"""
-              SELECT TOP (@max)
-                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
-                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
-                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
-                     '' AS District, '' AS BnkAcntNo
               FROM dbo.Income_Fiche f WITH (NOLOCK)
               {IncomeUnsentNotInHeaderJoin}
               WHERE h.NidFiche IS NULL
@@ -666,22 +655,52 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
-              ORDER BY f.BankPaymentDate DESC, f.PaymentDate DESC, f.FicheNo DESC
               """;
 
-        var items = await ExecuteUnsentSearchAsync(sql, max, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
+        var selectList = hasDistrict
+            ? """
+              SELECT f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
+                     '' AS BnkAcntNo
+              """
+            : """
+              SELECT f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     '' AS District, '' AS BnkAcntNo
+              """;
+
+        var sql = $"""
+            {selectList}
+            {fromWhere}
+            ORDER BY f.BankPaymentDate DESC, f.PaymentDate DESC, f.FicheNo DESC
+            OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+
+        var countSql = $"SELECT COUNT(*) {fromWhere}";
+
+        var totalCount = await ExecuteUnsentCountAsync(countSql, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
+        var items = await ExecuteUnsentSearchAsync(sql, offset, pageSize, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
+        var page = req.NormalizedPage;
+        var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 0;
         return new UnsentFicheSearchResult
         {
             FicheKind = UnsentFicheKind.Income,
             Count = items.Count,
-            Truncated = items.Count >= max,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            Truncated = page < totalPages,
             Items = items
         };
     }
 
     public async Task<UnsentFicheSearchResult> SearchUnsentDutyAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
     {
-        var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var pageSize = req.NormalizedPageSize;
+        var offset = req.Offset;
         var hasDateRange = req.HasDateRange;
         DateTime? fromDt = null;
         DateTime? toExclusive = null;
@@ -700,13 +719,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var dateClause = hasDateRange ? DutyUnsentDateClause : "";
         var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
 
-        var sql = hasDistrict
+        var fromWhere = hasDistrict
             ? $"""
-              SELECT TOP (@max)
-                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
-                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
-                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
-                     '' AS BnkAcntNo
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               {DutyUnsentNotInHeaderJoin}
               WHERE h.NidFiche IS NULL
@@ -716,13 +730,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
                 AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district
-              ORDER BY d.BankPaymentDate DESC, d.PaymentDate DESC, d.FicheNo DESC
               """
             : $"""
-              SELECT TOP (@max)
-                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
-                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
-                     '' AS District, '' AS BnkAcntNo
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               {DutyUnsentNotInHeaderJoin}
               WHERE h.NidFiche IS NULL
@@ -731,32 +740,65 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
-              ORDER BY d.BankPaymentDate DESC, d.PaymentDate DESC, d.FicheNo DESC
               """;
 
-        var items = await ExecuteUnsentSearchAsync(sql, max, fromDt, toExclusive, req, ct, isDuty: true, hasDateRange: hasDateRange);
+        var selectList = hasDistrict
+            ? """
+              SELECT d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
+                     '' AS BnkAcntNo
+              """
+            : """
+              SELECT d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     '' AS District, '' AS BnkAcntNo
+              """;
+
+        var sql = $"""
+            {selectList}
+            {fromWhere}
+            ORDER BY d.BankPaymentDate DESC, d.PaymentDate DESC, d.FicheNo DESC
+            OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+
+        var countSql = $"SELECT COUNT(*) {fromWhere}";
+
+        var totalCount = await ExecuteUnsentCountAsync(countSql, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
+        var items = await ExecuteUnsentSearchAsync(sql, offset, pageSize, fromDt, toExclusive, req, ct, isDuty: true, hasDateRange: hasDateRange);
+        var page = req.NormalizedPage;
+        var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 0;
         return new UnsentFicheSearchResult
         {
             FicheKind = UnsentFicheKind.Duty,
             Count = items.Count,
-            Truncated = items.Count >= max,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            Truncated = page < totalPages,
             Items = items
         };
     }
 
-    private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
-        string sql, int max, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, CancellationToken ct,
-        bool isDuty = false, bool hasDateRange = false)
+    private async Task<int> ExecuteUnsentCountAsync(
+        string sql, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, CancellationToken ct,
+        bool hasDateRange = false)
     {
-        var items = new List<UnsentFicheListItem>();
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
+        BindUnsentSearchParameters(cmd, fromDt, toExclusive, req, hasDateRange);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is int i ? i : Convert.ToInt32(result);
+    }
+
+    private static void BindUnsentSearchParameters(
+        SqlCommand cmd, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, bool hasDateRange)
+    {
         var ficheNo = (req.FicheNo ?? "").Trim();
         var billId = (req.BillId ?? "").Trim();
         var paymentId = (req.PaymentId ?? "").Trim();
 
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
-        cmd.Parameters.AddWithValue("@max", max);
         if (hasDateRange)
         {
             cmd.Parameters.AddWithValue("@fromDt", fromDt!.Value);
@@ -769,6 +811,20 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : billId + "%");
         cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : paymentId + "%");
         cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
+    }
+
+    private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
+        string sql, int offset, int pageSize, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, CancellationToken ct,
+        bool isDuty = false, bool hasDateRange = false)
+    {
+        var items = new List<UnsentFicheListItem>();
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
+        cmd.Parameters.AddWithValue("@offset", offset);
+        cmd.Parameters.AddWithValue("@pageSize", pageSize);
+        BindUnsentSearchParameters(cmd, fromDt, toExclusive, req, hasDateRange);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
