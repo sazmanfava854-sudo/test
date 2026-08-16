@@ -215,10 +215,10 @@ function getUnsentSearchFilters() {
 
 function validateUnsentSearchFilters(filters) {
   if ((filters.fromDate && !filters.toDate) || (!filters.fromDate && filters.toDate)) {
-    return 'هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید';
+    return 'هر دو تاریخ از و تا را وارد کنید';
   }
-  if (!filters.ficheNo && !filters.billId && !filters.paymentId && !filters.district && !filters.fromDate) {
-    return 'حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید';
+  if (!filters.fromDate || !filters.toDate) {
+    return 'بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است';
   }
   return null;
 }

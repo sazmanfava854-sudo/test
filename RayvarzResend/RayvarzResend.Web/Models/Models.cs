@@ -254,7 +254,7 @@ public class UnsentFicheSearchRequest
     public bool HasPartialDateRange =>
         !string.IsNullOrWhiteSpace(FromDate) != !string.IsNullOrWhiteSpace(ToDate);
 
-    /// <summary>حداقل یک فیلتر برای جلوگیری از اسکن کل جدول.</summary>
+    /// <summary>حداقل یک فیلتر (تاریخ الزامی است).</summary>
     public bool HasAnyFilter =>
         !string.IsNullOrWhiteSpace(FicheNo) ||
         !string.IsNullOrWhiteSpace(BillId) ||
