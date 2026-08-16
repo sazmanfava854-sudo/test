@@ -690,6 +690,8 @@ function setupEventHandlers() {
 
     const btn = $('btnUnsentSearch');
     btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = 'در حال جستجو…';
     $('unsentResultBox').hidden = true;
     try {
       const res = await fetch('/api/unsent/search', {
@@ -716,6 +718,7 @@ function setupEventHandlers() {
       renderUnsentTable([]);
     } finally {
       btn.disabled = false;
+      btn.textContent = prevLabel;
     }
   });
 

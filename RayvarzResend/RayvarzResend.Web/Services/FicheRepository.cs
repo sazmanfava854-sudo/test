@@ -589,28 +589,44 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
     private const string IncomeUnsentDateClause = """
         AND (
-              (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
-               AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
-              OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
-                  AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+              (f.PaymentDate IS NOT NULL AND f.PaymentDate >= @fromDt AND f.PaymentDate < @toExclusive)
+              OR (f.BankPaymentDate IS NOT NULL AND f.BankPaymentDate >= @fromDt AND f.BankPaymentDate < @toExclusive)
             )
         """;
 
     private const string DutyUnsentDateClause = """
         AND (
-              (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
-               AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
-              OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
-                  AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+              (d.PaymentDate IS NOT NULL AND d.PaymentDate >= @fromDt AND d.PaymentDate < @toExclusive)
+              OR (d.BankPaymentDate IS NOT NULL AND d.BankPaymentDate >= @fromDt AND d.BankPaymentDate < @toExclusive)
             )
+        """;
+
+    private const string IncomeUnsentNotInHeaderJoin = """
+        LEFT JOIN dbo.Accounting_DocHeader h WITH (NOLOCK) ON h.NidFiche = f.NidFiche
+        """;
+
+    private const string DutyUnsentNotInHeaderJoin = """
+        LEFT JOIN dbo.Accounting_DocHeader h WITH (NOLOCK) ON h.NidFiche = d.NidFiche
         """;
 
     public async Task<UnsentFicheSearchResult> SearchUnsentIncomeAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
     {
         var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
         var hasDateRange = req.HasDateRange;
-        var from = hasDateRange ? DateHelper.ToShamsiSlashDate(req.FromDate) : "";
-        var to = hasDateRange ? DateHelper.ToShamsiSlashDate(req.ToDate) : "";
+        DateTime? fromDt = null;
+        DateTime? toExclusive = null;
+        if (hasDateRange)
+        {
+            fromDt = DateHelper.ToSqlDateTimeFromRayvarz(req.FromDate);
+            toExclusive = DateHelper.ToSqlDateTimeEndExclusiveFromRayvarz(req.ToDate);
+            if (fromDt is null || toExclusive is null)
+                throw new ArgumentException("بازه تاریخ نامعتبر است");
+            if (toExclusive <= fromDt)
+                throw new ArgumentException("تاریخ پایان باید بعد از تاریخ شروع باشد");
+            if ((toExclusive.Value - fromDt.Value).TotalDays > 366)
+                throw new ArgumentException("بازه تاریخ حداکثر یک سال مجاز است — فیلتر را محدودتر کنید");
+        }
+
         var dateClause = hasDateRange ? IncomeUnsentDateClause : "";
         var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
 
@@ -626,16 +642,15 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               INNER JOIN dbo.Income i WITH (NOLOCK) ON i.NidIncome = f.NidIncome
               INNER JOIN dbo.Sh_RequestInfo r WITH (NOLOCK) ON r.NidProc = i.NidProc
               INNER JOIN dbo.Base_NosaziCode b WITH (NOLOCK) ON b.NidNosaziCode = r.NidNosaziCode
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = f.NidFiche)
+              {IncomeUnsentNotInHeaderJoin}
+              WHERE h.NidFiche IS NULL
                 AND f.EumFicheStatus <> 4
                 {dateClause}
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
                 AND CAST(b.District AS nvarchar(20)) = @district
-              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              ORDER BY f.BankPaymentDate DESC, f.PaymentDate DESC, f.FicheNo DESC
               """
             : $"""
               SELECT TOP (@max)
@@ -644,18 +659,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      f.CI_IncomeAccountGroup AS IncomeAccountGroup,
                      '' AS District, '' AS BnkAcntNo
               FROM dbo.Income_Fiche f WITH (NOLOCK)
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = f.NidFiche)
+              {IncomeUnsentNotInHeaderJoin}
+              WHERE h.NidFiche IS NULL
                 AND f.EumFicheStatus <> 4
                 {dateClause}
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
-              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              ORDER BY f.BankPaymentDate DESC, f.PaymentDate DESC, f.FicheNo DESC
               """;
 
-        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, hasDateRange: hasDateRange);
+        var items = await ExecuteUnsentSearchAsync(sql, max, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
         return new UnsentFicheSearchResult
         {
             FicheKind = UnsentFicheKind.Income,
@@ -669,8 +683,20 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     {
         var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
         var hasDateRange = req.HasDateRange;
-        var from = hasDateRange ? DateHelper.ToShamsiSlashDate(req.FromDate) : "";
-        var to = hasDateRange ? DateHelper.ToShamsiSlashDate(req.ToDate) : "";
+        DateTime? fromDt = null;
+        DateTime? toExclusive = null;
+        if (hasDateRange)
+        {
+            fromDt = DateHelper.ToSqlDateTimeFromRayvarz(req.FromDate);
+            toExclusive = DateHelper.ToSqlDateTimeEndExclusiveFromRayvarz(req.ToDate);
+            if (fromDt is null || toExclusive is null)
+                throw new ArgumentException("بازه تاریخ نامعتبر است");
+            if (toExclusive <= fromDt)
+                throw new ArgumentException("تاریخ پایان باید بعد از تاریخ شروع باشد");
+            if ((toExclusive.Value - fromDt.Value).TotalDays > 366)
+                throw new ArgumentException("بازه تاریخ حداکثر یک سال مجاز است — فیلتر را محدودتر کنید");
+        }
+
         var dateClause = hasDateRange ? DutyUnsentDateClause : "";
         var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
 
@@ -682,16 +708,15 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
                      '' AS BnkAcntNo
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = d.NidFiche)
+              {DutyUnsentNotInHeaderJoin}
+              WHERE h.NidFiche IS NULL
                 AND d.EumDutyFicheStatus <> 2
                 {dateClause}
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
                 AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district
-              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
+              ORDER BY d.BankPaymentDate DESC, d.PaymentDate DESC, d.FicheNo DESC
               """
             : $"""
               SELECT TOP (@max)
@@ -699,18 +724,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
                      '' AS District, '' AS BnkAcntNo
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = d.NidFiche)
+              {DutyUnsentNotInHeaderJoin}
+              WHERE h.NidFiche IS NULL
                 AND d.EumDutyFicheStatus <> 2
                 {dateClause}
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
-              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
+              ORDER BY d.BankPaymentDate DESC, d.PaymentDate DESC, d.FicheNo DESC
               """;
 
-        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, isDuty: true, hasDateRange: hasDateRange);
+        var items = await ExecuteUnsentSearchAsync(sql, max, fromDt, toExclusive, req, ct, isDuty: true, hasDateRange: hasDateRange);
         return new UnsentFicheSearchResult
         {
             FicheKind = UnsentFicheKind.Duty,
@@ -721,7 +745,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     }
 
     private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
-        string sql, int max, string from, string to, UnsentFicheSearchRequest req, CancellationToken ct,
+        string sql, int max, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, CancellationToken ct,
         bool isDuty = false, bool hasDateRange = false)
     {
         var items = new List<UnsentFicheListItem>();
@@ -735,15 +759,15 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@max", max);
         if (hasDateRange)
         {
-            cmd.Parameters.AddWithValue("@from", from);
-            cmd.Parameters.AddWithValue("@to", to);
+            cmd.Parameters.AddWithValue("@fromDt", fromDt!.Value);
+            cmd.Parameters.AddWithValue("@toExclusive", toExclusive!.Value);
         }
         cmd.Parameters.AddWithValue("@ficheNo", ficheNo);
         cmd.Parameters.AddWithValue("@billId", billId);
         cmd.Parameters.AddWithValue("@paymentId", paymentId);
-        cmd.Parameters.AddWithValue("@ficheNoPat", string.IsNullOrEmpty(ficheNo) ? "%" : $"%{ficheNo}%");
-        cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : $"%{billId}%");
-        cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : $"%{paymentId}%");
+        cmd.Parameters.AddWithValue("@ficheNoPat", string.IsNullOrEmpty(ficheNo) ? "%" : ficheNo + "%");
+        cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : billId + "%");
+        cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : paymentId + "%");
         cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);

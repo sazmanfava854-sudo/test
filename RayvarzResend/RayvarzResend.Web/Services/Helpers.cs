@@ -100,6 +100,31 @@ public static class DateHelper
         return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();
     }
 
+    /// <summary>تبدیل تاریخ شمسی به DateTime با اجزای شمسی (مطابق ذخیره datetime در Sara).</summary>
+    public static DateTime? ToSqlDateTimeFromRayvarz(string? input)
+    {
+        var d = ToRayvarzDate(input ?? "");
+        if (d.Length < 8) return null;
+        if (!int.TryParse(d[..4], out var y)) return null;
+        if (!int.TryParse(d.Substring(4, 2), out var m)) return null;
+        if (!int.TryParse(d.Substring(6, 2), out var day)) return null;
+        try
+        {
+            return new DateTime(y, m, day);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>پایان بازه — روز بعد برای مقایسه {@code &lt;}.</summary>
+    public static DateTime? ToSqlDateTimeEndExclusiveFromRayvarz(string? input)
+    {
+        var dt = ToSqlDateTimeFromRayvarz(input);
+        return dt?.AddDays(1);
+    }
+
     private static string FormatShamsiYyyyMmDd(int year, int month, int day)
     {
         if (year is < MinShamsiYear or > MaxShamsiYear) return "";

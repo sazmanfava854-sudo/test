@@ -58,4 +58,17 @@ public class DateHelperTests
         var dt = new DateTime(1404, 5, 5);
         Assert.Equal("14040505", DateHelper.FromDatabaseDateValue(dt));
     }
+
+    [Theory]
+    [InlineData("1404/05/05", 1404, 5, 5)]
+    [InlineData("14040505", 1404, 5, 5)]
+    public void ToSqlDateTimeFromRayvarz_parses_shamsi_components(string input, int y, int m, int d)
+    {
+        var dt = DateHelper.ToSqlDateTimeFromRayvarz(input);
+        Assert.NotNull(dt);
+        Assert.Equal(y, dt!.Value.Year);
+        Assert.Equal(m, dt.Value.Month);
+        Assert.Equal(d, dt.Value.Day);
+        Assert.Equal(dt.Value.AddDays(1), DateHelper.ToSqlDateTimeEndExclusiveFromRayvarz(input));
+    }
 }
