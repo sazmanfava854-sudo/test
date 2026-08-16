@@ -589,15 +589,19 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
     private const string IncomeUnsentDateClause = """
         AND (
-              (f.PaymentDate IS NOT NULL AND f.PaymentDate >= @fromDt AND f.PaymentDate < @toExclusive)
-              OR (f.BankPaymentDate IS NOT NULL AND f.BankPaymentDate >= @fromDt AND f.BankPaymentDate < @toExclusive)
+              (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
+               AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
+              OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
+                  AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
             )
         """;
 
     private const string DutyUnsentDateClause = """
         AND (
-              (d.PaymentDate IS NOT NULL AND d.PaymentDate >= @fromDt AND d.PaymentDate < @toExclusive)
-              OR (d.BankPaymentDate IS NOT NULL AND d.BankPaymentDate >= @fromDt AND d.BankPaymentDate < @toExclusive)
+              (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
+               AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
+              OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
+                  AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
             )
         """;
 
@@ -614,17 +618,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var pageSize = req.NormalizedPageSize;
         var offset = req.Offset;
         var hasDateRange = req.HasDateRange;
-        DateTime? fromDt = null;
-        DateTime? toExclusive = null;
+        string? fromSlash = null;
+        string? toSlash = null;
         if (hasDateRange)
         {
-            fromDt = DateHelper.ToSqlDateTimeFromRayvarz(req.FromDate);
-            toExclusive = DateHelper.ToSqlDateTimeEndExclusiveFromRayvarz(req.ToDate);
-            if (fromDt is null || toExclusive is null)
+            fromSlash = DateHelper.ToShamsiSlashDate(req.FromDate);
+            toSlash = DateHelper.ToShamsiSlashDate(req.ToDate);
+            if (fromSlash.Length < 10 || toSlash.Length < 10)
                 throw new ArgumentException("بازه تاریخ نامعتبر است");
-            if (toExclusive <= fromDt)
+            if (DateHelper.CompareShamsiRayvarz(req.FromDate, req.ToDate) > 0)
                 throw new ArgumentException("تاریخ پایان باید بعد از تاریخ شروع باشد");
-            if ((toExclusive.Value - fromDt.Value).TotalDays > 366)
+            if (!DateHelper.TryGetShamsiRangeDaySpan(req.FromDate, req.ToDate, out var span) || span > 366)
                 throw new ArgumentException("بازه تاریخ حداکثر یک سال مجاز است — فیلتر را محدودتر کنید");
         }
 
@@ -681,8 +685,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
         var countSql = $"SELECT COUNT(*) {fromWhere}";
 
-        var totalCount = await ExecuteUnsentCountAsync(countSql, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
-        var items = await ExecuteUnsentSearchAsync(sql, offset, pageSize, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
+        var totalCount = await ExecuteUnsentCountAsync(countSql, fromSlash, toSlash, req, ct, hasDateRange: hasDateRange);
+        var items = await ExecuteUnsentSearchAsync(sql, offset, pageSize, fromSlash, toSlash, req, ct, hasDateRange: hasDateRange);
         var page = req.NormalizedPage;
         var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 0;
         return new UnsentFicheSearchResult
@@ -702,17 +706,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var pageSize = req.NormalizedPageSize;
         var offset = req.Offset;
         var hasDateRange = req.HasDateRange;
-        DateTime? fromDt = null;
-        DateTime? toExclusive = null;
+        string? fromSlash = null;
+        string? toSlash = null;
         if (hasDateRange)
         {
-            fromDt = DateHelper.ToSqlDateTimeFromRayvarz(req.FromDate);
-            toExclusive = DateHelper.ToSqlDateTimeEndExclusiveFromRayvarz(req.ToDate);
-            if (fromDt is null || toExclusive is null)
+            fromSlash = DateHelper.ToShamsiSlashDate(req.FromDate);
+            toSlash = DateHelper.ToShamsiSlashDate(req.ToDate);
+            if (fromSlash.Length < 10 || toSlash.Length < 10)
                 throw new ArgumentException("بازه تاریخ نامعتبر است");
-            if (toExclusive <= fromDt)
+            if (DateHelper.CompareShamsiRayvarz(req.FromDate, req.ToDate) > 0)
                 throw new ArgumentException("تاریخ پایان باید بعد از تاریخ شروع باشد");
-            if ((toExclusive.Value - fromDt.Value).TotalDays > 366)
+            if (!DateHelper.TryGetShamsiRangeDaySpan(req.FromDate, req.ToDate, out var span) || span > 366)
                 throw new ArgumentException("بازه تاریخ حداکثر یک سال مجاز است — فیلتر را محدودتر کنید");
         }
 
@@ -764,8 +768,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
         var countSql = $"SELECT COUNT(*) {fromWhere}";
 
-        var totalCount = await ExecuteUnsentCountAsync(countSql, fromDt, toExclusive, req, ct, hasDateRange: hasDateRange);
-        var items = await ExecuteUnsentSearchAsync(sql, offset, pageSize, fromDt, toExclusive, req, ct, isDuty: true, hasDateRange: hasDateRange);
+        var totalCount = await ExecuteUnsentCountAsync(countSql, fromSlash, toSlash, req, ct, hasDateRange: hasDateRange);
+        var items = await ExecuteUnsentSearchAsync(sql, offset, pageSize, fromSlash, toSlash, req, ct, isDuty: true, hasDateRange: hasDateRange);
         var page = req.NormalizedPage;
         var totalPages = pageSize > 0 ? (int)Math.Ceiling((double)totalCount / pageSize) : 0;
         return new UnsentFicheSearchResult
@@ -781,19 +785,19 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     }
 
     private async Task<int> ExecuteUnsentCountAsync(
-        string sql, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, CancellationToken ct,
+        string sql, string? fromSlash, string? toSlash, UnsentFicheSearchRequest req, CancellationToken ct,
         bool hasDateRange = false)
     {
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
-        BindUnsentSearchParameters(cmd, fromDt, toExclusive, req, hasDateRange);
+        BindUnsentSearchParameters(cmd, fromSlash, toSlash, req, hasDateRange);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is int i ? i : Convert.ToInt32(result);
     }
 
     private static void BindUnsentSearchParameters(
-        SqlCommand cmd, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, bool hasDateRange)
+        SqlCommand cmd, string? fromSlash, string? toSlash, UnsentFicheSearchRequest req, bool hasDateRange)
     {
         var ficheNo = (req.FicheNo ?? "").Trim();
         var billId = (req.BillId ?? "").Trim();
@@ -801,8 +805,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
         if (hasDateRange)
         {
-            cmd.Parameters.AddWithValue("@fromDt", fromDt!.Value);
-            cmd.Parameters.AddWithValue("@toExclusive", toExclusive!.Value);
+            cmd.Parameters.AddWithValue("@from", fromSlash!);
+            cmd.Parameters.AddWithValue("@to", toSlash!);
         }
         cmd.Parameters.AddWithValue("@ficheNo", ficheNo);
         cmd.Parameters.AddWithValue("@billId", billId);
@@ -814,7 +818,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     }
 
     private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
-        string sql, int offset, int pageSize, DateTime? fromDt, DateTime? toExclusive, UnsentFicheSearchRequest req, CancellationToken ct,
+        string sql, int offset, int pageSize, string? fromSlash, string? toSlash, UnsentFicheSearchRequest req, CancellationToken ct,
         bool isDuty = false, bool hasDateRange = false)
     {
         var items = new List<UnsentFicheListItem>();
@@ -824,7 +828,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
         cmd.Parameters.AddWithValue("@offset", offset);
         cmd.Parameters.AddWithValue("@pageSize", pageSize);
-        BindUnsentSearchParameters(cmd, fromDt, toExclusive, req, hasDateRange);
+        BindUnsentSearchParameters(cmd, fromSlash, toSlash, req, hasDateRange);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
