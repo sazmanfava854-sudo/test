@@ -12,6 +12,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<FicheSendService>();
+builder.Services.AddSingleton<UnsentFicheService>();
 builder.Services.AddSingleton<TahatorSnapshotStore>();
 builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
@@ -52,8 +54,8 @@ app.MapGet("/api/config", (IConfiguration config) => new
     sourceSystemId = config["Rayvarz:SourceSystemId"],
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
-    uiVersion = "3",
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, ruleEngineBridgeStub = true },
+    uiVersion = "4",
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -131,9 +133,38 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
 
     try
     {
-        var fiche = await repo.LoadAsync(req.IdentifierType, req.IdentifierValue.Trim(), ct);
+        var value = req.IdentifierValue.Trim();
+        FicheHeaderDto? fiche;
+        IdentifierType usedType;
+
+        if (req.FicheKind is { } kind)
+        {
+            (fiche, usedType) = await repo.LoadByKindWithAutoDetectAsync(kind, value, ct);
+        }
+        else
+        {
+            usedType = IdentifierDetector.Detect(value);
+            fiche = await repo.LoadAsync(usedType, value, ct);
+            if (fiche == null)
+            {
+                var alt = usedType == IdentifierType.FicheNo
+                    ? IdentifierType.BillPaymentKey
+                    : IdentifierType.FicheNo;
+                fiche = await repo.LoadAsync(alt, value, ct);
+                if (fiche != null) usedType = alt;
+            }
+        }
+
         if (fiche == null)
-            return Results.NotFound(new { error = "فیش در Income_Fiche یا Duty_Fiche یافت نشد" });
+        {
+            var table = req.FicheKind == UnsentFicheKind.Duty ? "Duty_Fiche" : req.FicheKind == UnsentFicheKind.Income ? "Income_Fiche" : "Income_Fiche یا Duty_Fiche";
+            return Results.NotFound(new
+            {
+                error = $"فیش در {table} یافت نشد",
+                detectedIdentifierType = usedType.ToString(),
+                detectedIdentifierLabel = IdentifierDetector.Describe(usedType)
+            });
+        }
 
         try
         {
@@ -282,119 +313,78 @@ app.MapPost("/api/tahator/restore", async (TahatorFicheRequest? req, TahatorRese
     }
 });
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, CancellationToken ct) =>
 {
-    // اعتبارسنجی سمت سرور — همان شرط‌هایی که UI چک می‌کند (دور زدن UI نباید ارسال نامعتبر بسازد)
     if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
         return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
 
-    var blockReason = FicheSendService.ValidateSendable(req.Fiche);
-    if (blockReason != null)
-        return Results.BadRequest(new { error = blockReason });
-
-    if (req.Fiche.Payable <= 0)
-        return Results.BadRequest(new { error = "مبلغ قابل پرداخت صفر است — ارسال نشد" });
-
-    if (!req.Fiche.Rows.Any(r => r.Val != 0))
-        return Results.BadRequest(new { error = "ردیف IncmNo یافت نشد — ارسال نشد" });
-
-    var fiche = req.Fiche;
-    var incmdocsysYear = ResolveIncmdocsysYear(req);
-
-    bool existsInRayvarz;
-    string? sendWarning = null;
     try
     {
-        existsInRayvarz = fiche.ExistsInRayvarz
-            || await repo.ExistsInRayvarzAsync(fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
+        return Results.Ok(await send.SendAsync(req, ct));
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
     }
     catch (SqlException ex)
     {
-        // پیش‌فرض امن: بدون چک تکراری در Ray_CityHall ارسال نکن (فقط با false صریح ادامه می‌یابد)
-        if (config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
+        return Results.Json(new
         {
-            return Results.Json(new
-            {
-                error = $"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}",
-                hint = ConnectionHint("Rayvarz", config.GetConnectionString("Rayvarz") ?? "", ex)
-            }, statusCode: 503);
-        }
-
-        existsInRayvarz = fiche.ExistsInRayvarz;
-        sendWarning = $"چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت: {ex.Message}";
+            error = ex.Message,
+            hint = ConnectionHint("Rayvarz", "", ex)
+        }, statusCode: 503);
     }
-
-    if (existsInRayvarz)
-        return Results.BadRequest(new { error = "فیش در رایورز موجود است — ارسال نشد" });
-
-    if (req.ResetStatus)
+    catch (Exception ex)
     {
-        try { await repo.ResetStatusAsync(fiche, ct); }
-        catch (Exception ex) { return Results.Problem($"خطا در ریست وضعیت: {ex.Message}"); }
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-
-    var built = await payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
-    var xml = built.Xml;
-    var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
-    var result = await client.SendAsync(xml, dryRun, ct);
-    result.Warning = CombineWarnings(fiche.Warning, CombineWarnings(sendWarning, built.Warning));
-
-    if (!dryRun && result.Success)
-    {
-        try
-        {
-            result.VerifiedInRayvarz = await repo.ExistsInRayvarzAsync(
-                fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
-        }
-        catch (SqlException ex)
-        {
-            result.VerifiedInRayvarz = false;
-            result.Warning = CombineWarnings(result.Warning,
-                $"تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}");
-        }
-
-        if (!result.VerifiedInRayvarz)
-        {
-            try
-            {
-                result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
-            }
-            catch (SqlException ex)
-            {
-                result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
-            }
-
-            result.Warning = CombineWarnings(result.Warning,
-                SendResultVerification.BuildUnverifiedWarning(result.Success, result.VerifiedInRayvarz, dryRun));
-        }
-    }
-
-    return Results.Ok(result);
 });
 
-static int ResolveIncmdocsysYear(SendFicheRequest req)
+app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
 {
-    foreach (var d in new[] { req.DocDate, req.ActDate, req.DueDate })
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست جستجو خالی است" });
+    if (req.HasPartialDateRange)
+        return Results.BadRequest(new { error = "هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید" });
+    if (!req.HasAnyFilter)
+        return Results.BadRequest(new { error = "حداقل یک فیلتر (تاریخ، فیش، قبض، پرداخت، منطقه) لازم است" });
+    try
     {
-        var y = DateHelper.ExtractShamsiYear(d);
-        if (y > 0) return y;
+        return Results.Ok(await unsent.SearchAsync(req, ct));
     }
-
-    foreach (var d in new[] { req.Fiche.RayvarzDocDate, req.Fiche.RayvarzActDate, req.Fiche.RayvarzDueDate })
+    catch (Exception ex)
     {
-        var y = DateHelper.ExtractShamsiYear(d);
-        if (y > 0) return y;
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
+});
 
-    return 0;
-}
-
-static string? CombineWarnings(string? a, string? b)
+app.MapPost("/api/unsent/plan-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(a)) return b;
-    if (string.IsNullOrWhiteSpace(b)) return a;
-    return a + " | " + b;
-}
+    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+        return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
+    try
+    {
+        return Results.Ok(await unsent.PlanBatchAsync(req, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapPost("/api/unsent/send-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
+{
+    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+        return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
+    try
+    {
+        return Results.Ok(await unsent.SendBatchAsync(req, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
 
 static string? ConnectionHint(string name, string cs, Exception ex)
 {

@@ -18,6 +18,8 @@ public class LoadFicheRequest
 {
     public IdentifierType IdentifierType { get; set; }
     public string IdentifierValue { get; set; } = "";
+    /// <summary>درآمد یا نوسازی/صنفی — جدول جستجو را محدود می‌کند.</summary>
+    public UnsentFicheKind? FicheKind { get; set; }
     public int Branch { get; set; }
     public string DocDate { get; set; } = ""; // 1405/03/23 or 14050323
 }
@@ -205,6 +207,113 @@ public class AppConfig
     public string? SourceSystemId { get; set; }
     public bool DryRun { get; set; }
     public int SendDelayMs { get; set; } = 2000;
+}
+
+public enum UnsentFicheKind
+{
+    /// <summary>شهرسازی — Income_Fiche</summary>
+    Income,
+    /// <summary>نوسازی و صنفی — Duty_Fiche</summary>
+    Duty
+}
+
+/// <summary>جستجوی فیش‌های تاییدشده که در Accounting_DocHeader نیستند.</summary>
+public class UnsentFicheSearchRequest
+{
+    public UnsentFicheKind FicheKind { get; set; } = UnsentFicheKind.Income;
+    public string? FicheNo { get; set; }
+    public string? FromDate { get; set; }
+    public string? ToDate { get; set; }
+    public string? BillId { get; set; }
+    public string? PaymentId { get; set; }
+    /// <summary>منطقه (۱–۱۲ یا ۲۱۸)</summary>
+    public string? District { get; set; }
+    public int MaxResults { get; set; } = 500;
+
+    public bool HasDateRange =>
+        !string.IsNullOrWhiteSpace(FromDate) && !string.IsNullOrWhiteSpace(ToDate);
+
+    public bool HasPartialDateRange =>
+        !string.IsNullOrWhiteSpace(FromDate) != !string.IsNullOrWhiteSpace(ToDate);
+
+    /// <summary>حداقل یک فیلتر برای جلوگیری از اسکن کل جدول.</summary>
+    public bool HasAnyFilter =>
+        !string.IsNullOrWhiteSpace(FicheNo) ||
+        !string.IsNullOrWhiteSpace(BillId) ||
+        !string.IsNullOrWhiteSpace(PaymentId) ||
+        !string.IsNullOrWhiteSpace(District) ||
+        HasDateRange;
+}
+
+public class UnsentFicheListItem
+{
+    public string FicheNo { get; set; } = "";
+    public Guid NidFiche { get; set; }
+    public string BnkAcntNo { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public string PaymentDate { get; set; } = "";
+    public string BankPaymentDate { get; set; } = "";
+    public decimal Payable { get; set; }
+    public int Status { get; set; }
+    public string? District { get; set; }
+    public string? DocNotSentError { get; set; }
+    public int? IncomeAccountGroup { get; set; }
+    public bool IsTahator { get; set; }
+    public string SubKindLabel { get; set; } = "";
+}
+
+public class UnsentBatchPlanItem
+{
+    public string FicheNo { get; set; } = "";
+    public string SendPath { get; set; } = "";
+    public string Detail { get; set; } = "";
+    public bool CanSend { get; set; }
+    public string? BlockReason { get; set; }
+    public string? TahatorPairFicheNo { get; set; }
+}
+
+public class UnsentBatchPlanResult
+{
+    public int Total { get; set; }
+    public List<UnsentBatchPlanItem> Items { get; set; } = new();
+}
+
+public class UnsentFicheSearchResult
+{
+    public UnsentFicheKind FicheKind { get; set; }
+    public int Count { get; set; }
+    public bool Truncated { get; set; }
+    public List<UnsentFicheListItem> Items { get; set; } = new();
+}
+
+public class UnsentBatchSendRequest
+{
+    public UnsentFicheKind FicheKind { get; set; } = UnsentFicheKind.Income;
+    public List<string> FicheNos { get; set; } = new();
+    public bool ResetStatus { get; set; } = true;
+}
+
+public class UnsentBatchSendItemResult
+{
+    public string FicheNo { get; set; } = "";
+    public string SendPath { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public string Message { get; set; } = "";
+    public string? SkipReason { get; set; }
+    public bool VerifiedInRayvarz { get; set; }
+    public string? DocNotSentError { get; set; }
+}
+
+public class UnsentBatchSendResult
+{
+    public int Total { get; set; }
+    public int Succeeded { get; set; }
+    public int Skipped { get; set; }
+    public int Failed { get; set; }
+    public bool DryRun { get; set; }
+    public List<UnsentBatchSendItemResult> Results { get; set; } = new();
 }
 
 /// <summary>نگه‌داشت فیلدهای Income_Fiche قبل از تریگر تهاتر (وضعیت ۲) — پایدار در RayvarzRuleEngine.</summary>
