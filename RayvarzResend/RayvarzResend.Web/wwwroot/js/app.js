@@ -313,9 +313,10 @@ async function init() {
   }
   const badge = $('configBadge');
   const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
+  const ver = config.releaseVersion ? `v${config.releaseVersion} | ` : '';
   badge.textContent = config.dryRun
-    ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
-    : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
+    ? `${ver}${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
+    : `${ver}⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
   if (!config.dryRun) {
     badge.style.background = 'rgba(220, 53, 69, 0.35)';
   }

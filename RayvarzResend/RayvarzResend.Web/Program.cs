@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using RayvarzResend.Web;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.Services;
@@ -37,6 +38,8 @@ app.UseStaticFiles();
 
 app.MapGet("/api/config", (IConfiguration config) => new
 {
+    releaseVersion = ReleaseInfo.Number,
+    releaseLabel = ReleaseInfo.Label,
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrl"]),
     serviceUrlMsb = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrlMsb"] ?? ""),
