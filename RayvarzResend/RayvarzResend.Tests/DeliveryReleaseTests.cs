@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v21_final_delivery()
+    public void ReleaseInfo_is_v22_final_delivery()
     {
-        Assert.Equal(21, ReleaseInfo.Number);
-        Assert.Equal("rayvarz-resend-v21", ReleaseInfo.Tag);
+        Assert.Equal(22, ReleaseInfo.Number);
+        Assert.Equal("rayvarz-resend-v22", ReleaseInfo.Tag);
     }
 
     [Fact]
@@ -22,15 +22,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v21_doc_lists_critical_fixes()
+    public void DELIVERY_v22_doc_lists_noncritical_fixes()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v21.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v22.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("نسخه ۲۱", doc);
-        Assert.Contains("PairAborted", doc);
-        Assert.Contains("171 تست", doc);
+        Assert.Contains("نسخه ۲۲", doc);
+        Assert.Contains("canSend", doc);
+        Assert.Contains("178 تست", doc);
     }
 
     [Fact]
