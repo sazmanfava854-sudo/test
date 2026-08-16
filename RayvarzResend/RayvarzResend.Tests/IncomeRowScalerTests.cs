@@ -8,6 +8,19 @@ namespace RayvarzResend.Tests;
 public class IncomeRowScalerTests
 {
     [Fact]
+    public void ScaleToPayable_matches_g5_gross_pattern_and_sums_to_payable()
+    {
+        var rows = IncomeCalculationIncmdocsysTests.G5_GrossIncomeCalculation
+            .Select(r => new IncmRowDto { IncmNo = r.IncmNo, Val = r.Val })
+            .ToList();
+
+        IncomeRowScaler.ScaleToPayable(rows, IncomeCalculationIncmdocsysTests.G5_Payable);
+
+        Assert.Equal(IncomeCalculationIncmdocsysTests.G5_Payable, rows.Sum(r => r.Val));
+        Assert.All(rows, r => Assert.True(r.Val > 0));
+    }
+
+    [Fact]
     public void ScaleToPayable_matches_member1388_and_sums_to_payable()
     {
         var rows = new List<IncmRowDto>
