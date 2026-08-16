@@ -6,11 +6,11 @@ namespace RayvarzResend.Web.Services;
 public static class FicheDateResolver
 {
     /// <summary>
-    /// تاریخ مؤثر از PaymentDate / BankPaymentDate (همان منبع فیلتر فیش جمعی):
-    /// وضعیت ۱ → PaymentDate؛ غیر آن → BankPaymentDate — با fallback به ستون دیگر.
+    /// تاریخ مؤثر از PaymentDate / BankPaymentDate — مطابق VB Member 1388:
+    /// وضعیت ۳ → PaymentDate؛ غیر آن → BankPaymentDate — با fallback به ستون دیگر.
     /// </summary>
     public static string ResolvePaymentDateByStatus(int ficheStatus, string paymentDate, string bankPaymentDate) =>
-        ficheStatus == 1
+        ficheStatus == 3
             ? FirstRayvarzDate(paymentDate, bankPaymentDate)
             : FirstRayvarzDate(bankPaymentDate, paymentDate);
 
@@ -31,12 +31,14 @@ public static class FicheDateResolver
         FicheHeaderDto dto,
         int ficheStatus,
         string paymentDate,
-        string bankPaymentDate)
+        string bankPaymentDate,
+        bool tahatorFiche = false)
     {
         ApplyFromPaymentColumns(dto, ficheStatus, paymentDate, bankPaymentDate);
         var today = DateHelper.CurrentShamsiRayvarzDate();
         dto.RayvarzActDate = today;
-        dto.RowDate = today;
+        var paymentRowDate = ResolvePaymentDateByStatus(ficheStatus, paymentDate, bankPaymentDate);
+        dto.RowDate = tahatorFiche && paymentRowDate.Length >= 8 ? paymentRowDate : today;
     }
 
     public static void ApplyFromDutyColumns(

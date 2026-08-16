@@ -1,15 +1,16 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه تحویل: ۲۱** — همه باگ‌های ۱–۲۰ + ۴ رفع بحرانی v21.
+**نسخه تحویل: ۲۲** — همه باگ‌های ۱–۲۰ + رفع‌های بحرانی v21 + غیربحرانی v22.
 
 | دریافت | آدرس |
 |--------|------|
-| Zip نسخه ۲۱ | `RayvarzResend-21.zip` (ریشه مخزن) |
-| v21 جزئیات | [`DELIVERY-v21.md`](DELIVERY-v21.md) |
+| Zip نسخه ۲۲ | `RayvarzResend-22.zip` (ریشه مخزن) |
+| v22 جزئیات | [`DELIVERY-v22.md`](DELIVERY-v22.md) |
+| v21 بحرانی | [`DELIVERY-v21.md`](DELIVERY-v21.md) |
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: هدر فرم یا `GET /api/config` → `releaseVersion: 21`
+پس از `dotnet run`: هدر فرم یا `GET /api/config` → `releaseVersion: 22`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

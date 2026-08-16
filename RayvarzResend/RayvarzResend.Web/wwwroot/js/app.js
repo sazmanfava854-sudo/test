@@ -149,6 +149,11 @@ function updateSendButton(f) {
     btn.title = 'ابتدا فیش را دریافت کنید';
     return;
   }
+  if (f.canSend === false) {
+    btn.disabled = true;
+    btn.title = f.blockReason || 'ارسال مجاز نیست';
+    return;
+  }
   if (f.existsInRayvarz) {
     btn.disabled = true;
     btn.title = 'فیش در رایورز تکراری است';
@@ -401,7 +406,6 @@ function setupEventHandlers() {
     if (data.warning) {
       console.warn('Fiche load warning:', data.warning);
     }
-    const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
     updateSendButton(data);
     $('resultSection').hidden = true;

@@ -76,7 +76,7 @@ app.MapGet("/api/config", (IConfiguration config) => new
         new { id = 206, name = "منطقه 6", fund = 200206006 },
         new { id = 207, name = "منطقه 7", fund = 200207009 },
         new { id = 208, name = "منطقه 8", fund = 200208010 },
-        new { id = 209, name = "منطقه 9", fund = 200209004 },
+        new { id = 209, name = "منطقه 9", fund = 200209008 },
         new { id = 210, name = "منطقه 10", fund = 200210020 },
         new { id = 211, name = "منطقه 11", fund = 200211007 },
         new { id = 212, name = "منطقه 12", fund = 212210016 },

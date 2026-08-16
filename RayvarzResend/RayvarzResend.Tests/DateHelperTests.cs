@@ -6,6 +6,14 @@ namespace RayvarzResend.Tests;
 public class DateHelperTests
 {
     [Theory]
+    [InlineData("۱۴۰۴/۰۵/۰۵", "14040505")]
+    [InlineData("۱۴۰۴۰۵۰۵", "14040505")]
+    public void ToRayvarzDate_parses_persian_digits(string input, string expected)
+    {
+        Assert.Equal(expected, DateHelper.ToRayvarzDate(input));
+    }
+
+    [Theory]
     [InlineData("1404/05/05", "14040505")]
     [InlineData("1404/5/5", "14040505")]
     [InlineData("1404-05-05", "14040505")]

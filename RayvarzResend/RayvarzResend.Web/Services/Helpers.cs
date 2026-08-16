@@ -21,7 +21,7 @@ public static class DateHelper
     {
         if (string.IsNullOrWhiteSpace(input)) return "";
 
-        var trimmed = input.Trim();
+        var trimmed = NumericHelper.NormalizeDigits(input.Trim());
         if (trimmed.Contains('/') || trimmed.Contains('-'))
         {
             var parts = trimmed.Split(['/', '-'], StringSplitOptions.RemoveEmptyEntries);
@@ -154,16 +154,25 @@ public static class NumericHelper
         if (string.IsNullOrWhiteSpace(s)) return null;
 
         s = NormalizeDigits(s);
+        if (s.Contains('.') || s.Contains(','))
+        {
+            var dec = s.Replace(',', '.');
+            if (decimal.TryParse(dec, System.Globalization.NumberStyles.Number,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsedDec))
+                return (long)parsedDec;
+            return null;
+        }
+
         s = new string(s.Where(c => char.IsDigit(c) || c == '-').ToArray());
         if (string.IsNullOrWhiteSpace(s)) return null;
 
         return long.TryParse(s, System.Globalization.NumberStyles.Integer,
-            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
+            System.Globalization.CultureInfo.InvariantCulture, out var parsedLong)
+            ? parsedLong
             : null;
     }
 
-    private static string NormalizeDigits(string input)
+    public static string NormalizeDigits(string input)
     {
         var chars = input.ToCharArray();
         for (var i = 0; i < chars.Length; i++)

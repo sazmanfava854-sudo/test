@@ -69,6 +69,7 @@ public sealed class TahatorResendService
         var anyNeedsSend = false;
         var allInHeader = true;
         var allInRayvarz = true;
+        var rayvarzCheckWarnings = new List<string>();
         IncomeFicheTahatorSnapshot? inputSnapshot = null;
         IncomeFicheTahatorSnapshot? pendingStored = null;
 
@@ -85,9 +86,10 @@ public sealed class TahatorResendService
             {
                 inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, reqDates: null, ct);
             }
-            catch (SqlException)
+            catch (SqlException ex)
             {
-                // optional
+                inRayvarz = false;
+                rayvarzCheckWarnings.Add($"incmdocsys {no}: {ex.Message}");
             }
 
             var notSent = !inRayvarz ? await TryGetDocNotSentAsync(no, ct) : null;
@@ -142,6 +144,11 @@ public sealed class TahatorResendService
                     : "وضعیت جفت تهاتر نامشخص.";
         if (pendingStored != null)
             msg += $" | Snapshot Pending: Id={pendingStored.SnapshotId} — POST /api/tahator/restore";
+        var warning = rayvarzCheckWarnings.Count > 0
+            ? string.Join(" | ", rayvarzCheckWarnings)
+            : null;
+        if (!string.IsNullOrWhiteSpace(warning))
+            msg += $" | ⚠ {warning}";
 
         return new TahatorCheckResult
         {
@@ -156,6 +163,7 @@ public sealed class TahatorResendService
             PairMembers = members,
             DocNotSentError = members.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.DocNotSentError))?.DocNotSentError,
             NeedsSend = anyNeedsSend,
+            Warning = warning,
             Message = msg
         };
     }
