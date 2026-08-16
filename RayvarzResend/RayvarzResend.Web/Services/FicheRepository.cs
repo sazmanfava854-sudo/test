@@ -160,7 +160,7 @@ WHERE {where}";
         var ciBank = reader.IsDBNull(reader.GetOrdinal("CiBank")) ? null : reader.GetString(reader.GetOrdinal("CiBank"));
         var paymentBank = reader.IsDBNull(reader.GetOrdinal("PaymentBank")) ? null : reader.GetString(reader.GetOrdinal("PaymentBank"));
         var paymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
-            ? "18"
+            ? null
             : reader.GetString(reader.GetOrdinal("PaymentBranch"));
 
         var dto = new FicheHeaderDto
@@ -178,10 +178,10 @@ WHERE {where}";
             NidProc = reader.IsDBNull(reader.GetOrdinal("NidProc"))
                 ? null
                 : reader.GetGuid(reader.GetOrdinal("NidProc")),
-            PaymentBranch = paymentBranch,
+            PaymentBranch = paymentBranch ?? (isTahator ? "" : "18"),
             BankCode = isTahator
                 ? (ciBank ?? paymentBank ?? paymentBranch)
-                : (paymentBank ?? ciBank ?? paymentBranch),
+                : (paymentBank ?? ciBank ?? paymentBranch ?? "18"),
             Deposit = ReadNullableInt64(reader, "Deposit"),
             DepositId = ReadNullableInt64(reader, "DepositID"),
             CreditorPapers = ReadNullableInt64(reader, "CreditorPapers"),
@@ -223,7 +223,8 @@ WHERE {where}";
             dto,
             dto.CurrentStatus,
             ReadRowDate(reader, "PaymentDate"),
-            ReadRowDate(reader, "BankPaymentDate"));
+            ReadRowDate(reader, "BankPaymentDate"),
+            tahatorFiche: isTahator);
         return dto;
     }
 
@@ -402,10 +403,9 @@ WHERE NidFiche = @nid";
     {
         const string sql = @"
 SELECT TOP 1
-  CAST(b.CI_City AS varchar) + '-' + CAST(b.District AS varchar) + '-' +
-  CAST(b.Region AS varchar) + '-' + CAST(b.Block AS varchar) + '-' +
-  CAST(b.House AS varchar) + '-' + CAST(b.Building AS varchar) + '-' +
-  CAST(b.Apartment AS varchar) + '-' +
+  CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+  CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+  CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
   ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0') AS Nick
 FROM dbo.Duty_FicheSub fs
 INNER JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = fs.NidFK

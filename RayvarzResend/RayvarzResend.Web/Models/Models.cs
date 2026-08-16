@@ -273,6 +273,7 @@ public class TahatorCheckResult
     public bool ExistsInRayvarz { get; set; }
     public bool NeedsSend { get; set; }
     public string Message { get; set; } = "";
+    public string? Warning { get; set; }
     public string? DocNotSentError { get; set; }
     public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
     public IncomeFicheTahatorSnapshot? PendingStoredSnapshot { get; set; }

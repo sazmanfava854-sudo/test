@@ -217,7 +217,7 @@ public static class TahatorRowBuilder
     /// </summary>
     public static void ApplyTahatorAmountRows(FicheHeaderDto fiche)
     {
-        if (fiche.IncomeAccountGroup <= 0)
+        if (fiche.IncomeAccountGroup is null or <= 0)
             fiche.IncomeAccountGroup = IncomeAccountGroupTahatorAmount;
 
         ApplyTahatorDocTyp(fiche);
