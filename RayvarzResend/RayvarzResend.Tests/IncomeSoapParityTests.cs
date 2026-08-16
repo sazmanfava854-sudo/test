@@ -187,6 +187,20 @@ public class IncomeSoapParityTests
         Assert.DoesNotContain("<b:IncmNo>0</b:IncmNo>", xml);
     }
 
+    [Fact]
+    public void Soap_includes_resend_marker_sourceId_when_config_empty()
+    {
+        var fiche = MakeIncomeFiche("058033501915", 218, 200218011, "80-2-14-11-1-0-2",
+            67_531_000m, "9000162352361", "0006753132532");
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+            ["Rayvarz:ServiceUrl"] = "http://example.local/svc"
+        }).Build();
+        var xml = new SoapBuilder(config).Build(fiche, 218, 200218011, null, null, null);
+        Assert.Contains($"<b:SourceId>{SoapBuilder.DefaultSourceSystemId}</b:SourceId>", xml);
+    }
+
     private static FicheHeaderDto MakeIncomeFiche(
         string ficheNo, int branch, int fund, string bnkAcntNo,
         decimal payable, string billId, string paymentId) =>

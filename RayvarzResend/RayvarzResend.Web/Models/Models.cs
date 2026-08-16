@@ -228,7 +228,25 @@ public class UnsentFicheSearchRequest
     public string? PaymentId { get; set; }
     /// <summary>منطقه (۱–۱۲ یا ۲۱۸)</summary>
     public string? District { get; set; }
-    public int MaxResults { get; set; } = 500;
+    /// <summary>شماره صفحه (۱-based)</summary>
+    public int Page { get; set; } = 1;
+    /// <summary>تعداد ردیف در هر صفحه (پیش‌فرض ۵۰، حداکثر ۱۰۰)</summary>
+    public int PageSize { get; set; } = 50;
+    /// <summary>سازگاری با API قدیمی — اگر PageSize تنظیم نشده باشد استفاده می‌شود.</summary>
+    public int MaxResults { get; set; }
+
+    public int NormalizedPage => Page < 1 ? 1 : Page;
+
+    public int NormalizedPageSize
+    {
+        get
+        {
+            var size = PageSize > 0 ? PageSize : MaxResults > 0 ? MaxResults : 50;
+            return Math.Clamp(size, 1, 100);
+        }
+    }
+
+    public int Offset => (NormalizedPage - 1) * NormalizedPageSize;
 
     public bool HasDateRange =>
         !string.IsNullOrWhiteSpace(FromDate) && !string.IsNullOrWhiteSpace(ToDate);
@@ -236,7 +254,7 @@ public class UnsentFicheSearchRequest
     public bool HasPartialDateRange =>
         !string.IsNullOrWhiteSpace(FromDate) != !string.IsNullOrWhiteSpace(ToDate);
 
-    /// <summary>حداقل یک فیلتر برای جلوگیری از اسکن کل جدول.</summary>
+    /// <summary>حداقل یک فیلتر (تاریخ الزامی است).</summary>
     public bool HasAnyFilter =>
         !string.IsNullOrWhiteSpace(FicheNo) ||
         !string.IsNullOrWhiteSpace(BillId) ||
@@ -282,7 +300,14 @@ public class UnsentBatchPlanResult
 public class UnsentFicheSearchResult
 {
     public UnsentFicheKind FicheKind { get; set; }
+    /// <summary>تعداد ردیف‌های همین صفحه</summary>
     public int Count { get; set; }
+    /// <summary>تعداد کل ردیف‌های منطبق با فیلتر</summary>
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
+    /// <summary>صفحات بیشتری وجود دارد (سازگاری با API قدیمی)</summary>
     public bool Truncated { get; set; }
     public List<UnsentFicheListItem> Items { get; set; } = new();
 }
