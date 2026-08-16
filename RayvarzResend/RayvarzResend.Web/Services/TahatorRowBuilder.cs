@@ -47,6 +47,21 @@ public static class TahatorRowBuilder
     /// <summary>نمونه اصلی: ActTyp = 1 (هر دو مسیر)</summary>
     public const string ActTypCode = "1";
 
+    /// <summary>Branch ارسال تهاتر — ۱۵۷→۱۰۲؛ ۱۵۸→منطقه (۲۰۱–۲۱۲)؛ بدون fallback خاموش به مرکز.</summary>
+    public static int ResolveSendBranch(FicheHeaderDto fiche, int requestBranch)
+    {
+        if (requestBranch > 0) return requestBranch;
+        if (IsTahatorIncomeFiche(fiche))
+        {
+            if (fiche.ResolvedDistrictBranch is > 0)
+                return fiche.ResolvedDistrictBranch.Value;
+            throw new InvalidOperationException(
+                $"منطقه تهاتر درآمدی (۱۵۸) برای فیش {fiche.FicheNo} مشخص نیست — BnkAcntNo یا ResolvedDistrictBranch خالی است.");
+        }
+
+        return DefaultRayvarzBranch;
+    }
+
     public static string ResolvePhasTypCode(FicheHeaderDto fiche) =>
         IsTahatorIncomeFiche(fiche) ? PhasTypCodeIncome : PhasTypCodeAmount;
 

@@ -3,10 +3,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.20.0</Version>
-    <AssemblyVersion>1.20.0.0</AssemblyVersion>
-    <FileVersion>1.20.0.0</FileVersion>
-    <InformationalVersion>rayvarz-resend-v20</InformationalVersion>
+    <Version>1.21.0</Version>
+    <AssemblyVersion>1.21.0.0</AssemblyVersion>
+    <FileVersion>1.21.0.0</FileVersion>
+    <InformationalVersion>rayvarz-resend-v21</InformationalVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
