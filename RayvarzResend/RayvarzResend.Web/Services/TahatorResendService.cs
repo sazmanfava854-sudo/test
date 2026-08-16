@@ -101,7 +101,7 @@ public sealed class TahatorResendService
                 FicheNo = no,
                 IncomeAccountGroup = fiche.IncomeAccountGroup ?? 0,
                 DocTyp = fiche.DocTyp,
-                Branch = ResolveBranch(fiche, 0),
+                Branch = TahatorRowBuilder.ResolveSendBranch(fiche, 0),
                 Fund = fiche.SuggestedFund ?? (TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
                     ? TahatorRowBuilder.ResolveTahatorIncomeFund(fiche.ResolvedDistrictBranch ?? 0)
                     : TahatorRowBuilder.ResolveTahatorFund(fiche.ResolvedDistrictBranch ?? 0)),
@@ -222,7 +222,7 @@ public sealed class TahatorResendService
                         FicheNo = no,
                         IncomeAccountGroup = fiche.IncomeAccountGroup ?? 0,
                         DocTyp = fiche.DocTyp,
-                        Branch = ResolveBranch(fiche, req.Branch),
+                        Branch = TahatorRowBuilder.ResolveSendBranch(fiche, req.Branch),
                         Fund = ResolveFund(fiche, req.Fund),
                         Success = inHeader || inRayvarz,
                         Skipped = true,
@@ -327,7 +327,7 @@ public sealed class TahatorResendService
             {
                 var (fiche, _, _) = snapshots[i];
                 var no = fiche.FicheNo.Trim();
-                var branch = ResolveBranch(fiche, req.Branch);
+                var branch = TahatorRowBuilder.ResolveSendBranch(fiche, req.Branch);
                 var fund = ResolveFund(fiche, req.Fund);
                 steps.Add($"5) SOAP {fiche.IncomeAccountGroup} FicheNo={no} Branch={branch} Fund={fund}");
 
@@ -393,6 +393,34 @@ public sealed class TahatorResendService
                     PreviewXml = built.Xml,
                     DocNotSentError = notSent
                 });
+
+                if (!dryRun && !oneOk)
+                {
+                    steps.Add($"⚠ ارسال متوقف شد — {no} ناموفق؛ فیش‌های بعدی جفت ارسال نمی‌شوند.");
+                    for (var j = i + 1; j < snapshots.Count; j++)
+                    {
+                        var aborted = snapshots[j].Fiche;
+                        var abortedNo = aborted.FicheNo.Trim();
+                        ficheResults.Add(new TahatorFicheSendDetail
+                        {
+                            FicheNo = abortedNo,
+                            IncomeAccountGroup = aborted.IncomeAccountGroup ?? 0,
+                            DocTyp = aborted.DocTyp,
+                            Branch = aborted.ResolvedDistrictBranch is > 0
+                            ? aborted.ResolvedDistrictBranch.Value
+                            : TahatorRowBuilder.IsTahatorAmountFiche(aborted)
+                                ? TahatorRowBuilder.DefaultRayvarzBranch
+                                : 0,
+                            Fund = ResolveFund(aborted, req.Fund),
+                            Success = false,
+                            Skipped = true,
+                            SkipReason = "PairAborted",
+                            SoapMessage = $"به‌دلیل شکست ارسال {no} ارسال نشد"
+                        });
+                    }
+
+                    break;
+                }
             }
 
             if (!dryRun)
@@ -667,17 +695,6 @@ WHERE FicheNo = @f";
     {
         var p = cmd.Parameters.Add(name, System.Data.SqlDbType.NVarChar, 30);
         p.Value = string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
-    }
-
-    private static int ResolveBranch(FicheHeaderDto fiche, int requestBranch)
-    {
-        if (requestBranch > 0) return requestBranch;
-        // درآمدی تهاتر (۱۵۸): ارسال به منطقه — Branch = DistrickBranch
-        if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
-            && fiche.ResolvedDistrictBranch is > 0)
-            return fiche.ResolvedDistrictBranch.Value;
-        // مبلغ تهاتر (۱۵۷): ارسال به مرکز — Branch = ۱۰۲
-        return TahatorRowBuilder.DefaultRayvarzBranch;
     }
 
     private static string FirstDateOrToday(string? fromReq, string todayRayvarz)

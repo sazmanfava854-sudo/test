@@ -44,12 +44,12 @@ public class SoapBuilder
         var isTahatorIncome = TahatorRowBuilder.IsTahatorIncomeFiche(fiche);
         var isTahator = isTahatorAmount || isTahatorIncome;
 
-        // تهاتر: تاریخ‌های درخواست (امروز) اولویت دارند — مثل قبل از Member1388
+        // غیرتهاتر: تاریخ درخواست (فرم) بر تاریخ بارگذاری‌شده از DB اولویت دارد
         if (!isTahator)
         {
-            docDate = FirstNonEmpty(fiche.RayvarzDocDate, docDate);
-            actDate = FirstNonEmpty(fiche.RayvarzActDate, fiche.RowDate, actDate);
-            dueDate = FirstNonEmpty(fiche.RayvarzDueDate, dueDate);
+            docDate = FirstNonEmpty(docDate, fiche.RayvarzDocDate);
+            actDate = FirstNonEmpty(actDate, fiche.RayvarzActDate, fiche.RowDate);
+            dueDate = FirstNonEmpty(dueDate, fiche.RayvarzDueDate);
         }
 
         var docDateRay = FicheDateResolver.ResolveForSoap(docDate, fiche.RayvarzDocDate);
@@ -91,7 +91,7 @@ public class SoapBuilder
 
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
-        if (fiche.SuggestedFund is > 0 && (!isTahator || fund <= 0))
+        if (fund <= 0 && fiche.SuggestedFund is > 0)
             fund = fiche.SuggestedFund.Value;
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
