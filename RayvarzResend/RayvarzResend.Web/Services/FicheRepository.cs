@@ -28,6 +28,83 @@ public class FicheRepository
         return await TryLoadDutyAsync(type, value, ct);
     }
 
+    /// <summary>
+    /// جفت تهاتر: دو ردیف Income_Fiche با همان NidIncome — گروه ۱۵۷ (Tahator1) و ۱۵۸ (Tahator).
+    /// </summary>
+    public async Task<TahatorPairInfo?> ResolveTahatorPairAsync(string ficheNo, CancellationToken ct = default)
+    {
+        ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo);
+        var seed = await LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
+        if (seed?.NidIncome is not { } nid || nid == Guid.Empty)
+            return null;
+        if (!TahatorRowBuilder.IsTahatorFiche(seed))
+            return null;
+
+        const string sql = @"
+SELECT FicheNo, CI_IncomeAccountGroup, EumFicheStatus, NidExportation, Payable
+FROM dbo.Income_Fiche
+WHERE NidIncome = @nid
+  AND CI_IncomeAccountGroup IN (@g157, @g158)";
+
+        var candidates = new List<TahatorPairResolver.Candidate>();
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nid);
+        cmd.Parameters.AddWithValue("@g157", TahatorRowBuilder.IncomeAccountGroupTahatorAmount);
+        cmd.Parameters.AddWithValue("@g158", TahatorRowBuilder.IncomeAccountGroupTahatorIncome);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var exportOrd = reader.GetOrdinal("NidExportation");
+            candidates.Add(new TahatorPairResolver.Candidate(
+                reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
+                ReadInt32(reader, "CI_IncomeAccountGroup"),
+                ReadInt32(reader, "EumFicheStatus"),
+                reader.IsDBNull(exportOrd) ? Guid.Empty : reader.GetGuid(exportOrd),
+                ReadDecimal(reader, "Payable")));
+        }
+
+        var seedRow = candidates.FirstOrDefault(c =>
+            string.Equals(c.FicheNo, ficheNo, StringComparison.Ordinal));
+        if (seedRow == null)
+            return null;
+
+        var resolved = TahatorPairResolver.Resolve(
+            candidates,
+            ficheNo,
+            seed.IncomeAccountGroup ?? seedRow.IncomeAccountGroup,
+            seedRow.NidExportation,
+            seedRow.Payable);
+        if (resolved == null)
+            return null;
+
+        var amountNo = resolved.Value.AmountFicheNo;
+        var incomeNo = resolved.Value.IncomeFicheNo;
+
+        var amountFiche = string.Equals(amountNo, ficheNo, StringComparison.Ordinal)
+            && TahatorRowBuilder.IsTahatorAmountFiche(seed)
+            ? seed
+            : await LoadAsync(IdentifierType.FicheNo, amountNo, ct);
+        var incomeFiche = string.Equals(incomeNo, ficheNo, StringComparison.Ordinal)
+            && TahatorRowBuilder.IsTahatorIncomeFiche(seed)
+            ? seed
+            : await LoadAsync(IdentifierType.FicheNo, incomeNo, ct);
+
+        if (amountFiche == null || incomeFiche == null)
+            return null;
+
+        return new TahatorPairInfo
+        {
+            NidIncome = nid,
+            AmountFicheNo = amountFiche.FicheNo.Trim(),
+            IncomeFicheNo = incomeFiche.FicheNo.Trim(),
+            AmountFiche = amountFiche,
+            IncomeFiche = incomeFiche
+        };
+    }
+
     private async Task<FicheHeaderDto?> TryLoadIncomeAsync(IdentifierType type, string value, CancellationToken ct)
     {
         var where = type == IdentifierType.FicheNo
@@ -39,9 +116,12 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        i.NidProc,
        ISNULL(f.Brokers, 0) AS Brokers,
        NULLIF(LTRIM(RTRIM(CAST(f.PaymentBranch AS nvarchar(20)))), '') AS PaymentBranch,
-       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS BankCode,
+       NULLIF(LTRIM(RTRIM(CAST(f.CI_Bank AS nvarchar(20)))), '') AS CiBank,
+       NULLIF(LTRIM(RTRIM(CAST(f.PaymentBank AS nvarchar(20)))), '') AS PaymentBank,
        NULLIF(LTRIM(RTRIM(CAST(f.Deposit AS nvarchar(50)))), '') AS Deposit,
        NULLIF(LTRIM(RTRIM(CAST(f.DepositID AS nvarchar(50)))), '') AS DepositID,
+       NULLIF(LTRIM(RTRIM(CAST(f.CreditorPapers AS nvarchar(50)))), '') AS CreditorPapers,
+       CAST(f.CheckNo AS nvarchar(20)) AS CheckNo,
        COALESCE(f.BankPaymentDate, f.PaymentDate) AS RowDate,
        f.PaymentDate,
        f.BankPaymentDate,
@@ -69,6 +149,7 @@ WHERE {where}";
         var group = ReadInt32(reader, "CI_IncomeAccountGroup");
         var isTahatorAmount = group == TahatorRowBuilder.IncomeAccountGroupTahatorAmount;
         var isTahatorIncome = group == TahatorRowBuilder.IncomeAccountGroupTahatorIncome;
+        var isTahator = isTahatorAmount || isTahatorIncome;
         var docTyp = group == 150
             ? 11
             : isTahatorAmount
@@ -76,6 +157,8 @@ WHERE {where}";
                 : isTahatorIncome
                     ? 18
                     : 3;
+        var ciBank = reader.IsDBNull(reader.GetOrdinal("CiBank")) ? null : reader.GetString(reader.GetOrdinal("CiBank"));
+        var paymentBank = reader.IsDBNull(reader.GetOrdinal("PaymentBank")) ? null : reader.GetString(reader.GetOrdinal("PaymentBank"));
         var paymentBranch = reader.IsDBNull(reader.GetOrdinal("PaymentBranch"))
             ? "18"
             : reader.GetString(reader.GetOrdinal("PaymentBranch"));
@@ -96,9 +179,13 @@ WHERE {where}";
                 ? null
                 : reader.GetGuid(reader.GetOrdinal("NidProc")),
             PaymentBranch = paymentBranch,
-            BankCode = reader.IsDBNull(reader.GetOrdinal("BankCode")) ? paymentBranch : reader.GetString(reader.GetOrdinal("BankCode")),
+            BankCode = isTahator
+                ? (ciBank ?? paymentBank ?? paymentBranch)
+                : (paymentBank ?? ciBank ?? paymentBranch),
             Deposit = ReadNullableInt64(reader, "Deposit"),
             DepositId = ReadNullableInt64(reader, "DepositID"),
+            CreditorPapers = ReadNullableInt64(reader, "CreditorPapers"),
+            CheckNo = reader.IsDBNull(reader.GetOrdinal("CheckNo")) ? null : reader.GetString(reader.GetOrdinal("CheckNo")),
             RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
             IncomeAccountGroup = group,
@@ -344,15 +431,74 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
 
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)
     {
-        var sql = shamsiYear is > 0
-            ? """
-              SELECT TOP 1 1 FROM ray.incmdocsys
-              WHERE yr = @yr AND (Ref = @f OR RowDocNo = @f)
-              """
-            : """
-              SELECT TOP 1 1 FROM ray.incmdocsys
-              WHERE Ref = @f OR RowDocNo = @f
-              """;
+        ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo.Trim());
+        if (await QueryExistsInRayvarzAsync(ficheNo, shamsiYear, docTypFilter: null, ct))
+            return true;
+
+        if (shamsiYear is > 0)
+            return await QueryExistsInRayvarzAsync(ficheNo, shamsiYear: null, docTypFilter: null, ct);
+
+        return false;
+    }
+
+    /// <summary>تهاتر: RowDocNo + DocTyp ۱۴|۱۵ (مبلغ) یا ۱۷|۱۸ (درآمد) — نه Ref عمومی.</summary>
+    public async Task<bool> ExistsTahatorDocumentInRayvarzAsync(
+        string ficheNo,
+        bool isAmountPath,
+        int? shamsiYear = null,
+        CancellationToken ct = default)
+    {
+        ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo.Trim());
+        var docTypes = isAmountPath ? new[] { 14, 15 } : new[] { 17, 18 };
+        if (await QueryExistsInRayvarzAsync(ficheNo, shamsiYear, docTypes, ct))
+            return true;
+
+        if (shamsiYear is > 0)
+            return await QueryExistsInRayvarzAsync(ficheNo, shamsiYear: null, docTypes, ct);
+
+        return false;
+    }
+
+    public async Task<bool> ExistsTahatorDocumentInRayvarzRobustAsync(
+        string ficheNo,
+        bool isAmountPath,
+        IEnumerable<int> yearCandidates,
+        CancellationToken ct = default)
+    {
+        foreach (var year in yearCandidates.Distinct().Where(y => y > 0))
+        {
+            if (await ExistsTahatorDocumentInRayvarzAsync(ficheNo, isAmountPath, year, ct))
+                return true;
+        }
+
+        return await ExistsTahatorDocumentInRayvarzAsync(ficheNo, isAmountPath, shamsiYear: null, ct);
+    }
+
+    private async Task<bool> QueryExistsInRayvarzAsync(
+        string ficheNo,
+        int? shamsiYear,
+        int[]? docTypFilter,
+        CancellationToken ct)
+    {
+        var sql = docTypFilter is { Length: > 0 }
+            ? shamsiYear is > 0
+                ? """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE yr = @yr AND RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  """
+                : """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  """
+            : shamsiYear is > 0
+                ? """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE yr = @yr AND (Ref = @f OR RowDocNo = @f)
+                  """
+                : """
+                  SELECT TOP 1 1 FROM ray.incmdocsys
+                  WHERE Ref = @f OR RowDocNo = @f
+                  """;
 
         await using var conn = new SqlConnection(_rayCs);
         await conn.OpenAsync(ct);
@@ -360,6 +506,12 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         if (shamsiYear is > 0)
             cmd.Parameters.AddWithValue("@yr", shamsiYear.Value);
+        if (docTypFilter is { Length: > 0 })
+        {
+            cmd.Parameters.AddWithValue("@d0", docTypFilter[0]);
+            cmd.Parameters.AddWithValue("@d1", docTypFilter[1]);
+        }
+
         var result = await cmd.ExecuteScalarAsync(ct);
         return result != null;
     }
