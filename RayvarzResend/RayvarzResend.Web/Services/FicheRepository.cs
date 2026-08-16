@@ -28,6 +28,29 @@ public class FicheRepository
         return await TryLoadDutyAsync(type, value, ct);
     }
 
+    public async Task<FicheHeaderDto?> LoadByKindAsync(
+        UnsentFicheKind kind, IdentifierType type, string value, CancellationToken ct = default) =>
+        kind == UnsentFicheKind.Duty
+            ? await TryLoadDutyAsync(type, value, ct)
+            : await TryLoadIncomeAsync(type, value, ct);
+
+    /// <summary>نوع شناسه را حدس می‌زند؛ در صورت عدم یافتن نوع دیگر را امتحان می‌کند.</summary>
+    public async Task<(FicheHeaderDto? Fiche, IdentifierType UsedType)> LoadByKindWithAutoDetectAsync(
+        UnsentFicheKind kind, string rawValue, CancellationToken ct = default)
+    {
+        var value = rawValue.Trim();
+        var primary = IdentifierDetector.Detect(value);
+        var fiche = await LoadByKindAsync(kind, primary, value, ct);
+        if (fiche != null)
+            return (fiche, primary);
+
+        var alternate = primary == IdentifierType.FicheNo
+            ? IdentifierType.BillPaymentKey
+            : IdentifierType.FicheNo;
+        fiche = await LoadByKindAsync(kind, alternate, value, ct);
+        return (fiche, fiche != null ? alternate : primary);
+    }
+
     /// <summary>
     /// جفت تهاتر: دو ردیف Income_Fiche با همان NidIncome — گروه ۱۵۷ (Tahator1) و ۱۵۸ (Tahator).
     /// </summary>
@@ -551,6 +574,207 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@f", ficheNo);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    public async Task<bool> ExistsInAccountingDocHeaderAsync(string ficheNo, CancellationToken ct = default)
+    {
+        const string sql = @"SELECT TOP 1 1 FROM dbo.Accounting_DocHeader WHERE FicheNo = @f";
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo.Trim());
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result != null;
+    }
+
+    private const string IncomeUnsentDateClause = """
+        AND (
+              (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from
+               AND NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') <= @to)
+              OR (NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') >= @from
+                  AND NULLIF(LTRIM(RTRIM(CAST(f.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+            )
+        """;
+
+    private const string DutyUnsentDateClause = """
+        AND (
+              (NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') >= @from
+               AND NULLIF(LTRIM(RTRIM(CAST(d.PaymentDate AS nvarchar(20)))), '') <= @to)
+              OR (NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') >= @from
+                  AND NULLIF(LTRIM(RTRIM(CAST(d.BankPaymentDate AS nvarchar(20)))), '') <= @to)
+            )
+        """;
+
+    public async Task<UnsentFicheSearchResult> SearchUnsentIncomeAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    {
+        var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var hasDateRange = req.HasDateRange;
+        var from = hasDateRange ? DateHelper.ToShamsiSlashDate(req.FromDate) : "";
+        var to = hasDateRange ? DateHelper.ToShamsiSlashDate(req.ToDate) : "";
+        var dateClause = hasDateRange ? IncomeUnsentDateClause : "";
+        var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
+
+        var sql = hasDistrict
+            ? $"""
+              SELECT TOP (@max)
+                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
+                     '' AS BnkAcntNo
+              FROM dbo.Income_Fiche f WITH (NOLOCK)
+              INNER JOIN dbo.Income i WITH (NOLOCK) ON i.NidIncome = f.NidIncome
+              INNER JOIN dbo.Sh_RequestInfo r WITH (NOLOCK) ON r.NidProc = i.NidProc
+              INNER JOIN dbo.Base_NosaziCode b WITH (NOLOCK) ON b.NidNosaziCode = r.NidNosaziCode
+              WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                    WHERE h.NidFiche = f.NidFiche)
+                AND f.EumFicheStatus <> 4
+                {dateClause}
+                AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
+                AND (@billId = '' OR f.BillID LIKE @billIdPat)
+                AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
+                AND CAST(b.District AS nvarchar(20)) = @district
+              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              """
+            : $"""
+              SELECT TOP (@max)
+                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     '' AS District, '' AS BnkAcntNo
+              FROM dbo.Income_Fiche f WITH (NOLOCK)
+              WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                    WHERE h.NidFiche = f.NidFiche)
+                AND f.EumFicheStatus <> 4
+                {dateClause}
+                AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
+                AND (@billId = '' OR f.BillID LIKE @billIdPat)
+                AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
+              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              """;
+
+        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, hasDateRange: hasDateRange);
+        return new UnsentFicheSearchResult
+        {
+            FicheKind = UnsentFicheKind.Income,
+            Count = items.Count,
+            Truncated = items.Count >= max,
+            Items = items
+        };
+    }
+
+    public async Task<UnsentFicheSearchResult> SearchUnsentDutyAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    {
+        var max = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var hasDateRange = req.HasDateRange;
+        var from = hasDateRange ? DateHelper.ToShamsiSlashDate(req.FromDate) : "";
+        var to = hasDateRange ? DateHelper.ToShamsiSlashDate(req.ToDate) : "";
+        var dateClause = hasDateRange ? DutyUnsentDateClause : "";
+        var hasDistrict = !string.IsNullOrWhiteSpace(req.District);
+
+        var sql = hasDistrict
+            ? $"""
+              SELECT TOP (@max)
+                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
+                     '' AS BnkAcntNo
+              FROM dbo.Duty_Fiche d WITH (NOLOCK)
+              WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                    WHERE h.NidFiche = d.NidFiche)
+                AND d.EumDutyFicheStatus <> 2
+                {dateClause}
+                AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
+                AND (@billId = '' OR d.BillID LIKE @billIdPat)
+                AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
+                AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district
+              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
+              """
+            : $"""
+              SELECT TOP (@max)
+                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     '' AS District, '' AS BnkAcntNo
+              FROM dbo.Duty_Fiche d WITH (NOLOCK)
+              WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                    WHERE h.NidFiche = d.NidFiche)
+                AND d.EumDutyFicheStatus <> 2
+                {dateClause}
+                AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
+                AND (@billId = '' OR d.BillID LIKE @billIdPat)
+                AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
+              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
+              """;
+
+        var items = await ExecuteUnsentSearchAsync(sql, max, from, to, req, ct, isDuty: true, hasDateRange: hasDateRange);
+        return new UnsentFicheSearchResult
+        {
+            FicheKind = UnsentFicheKind.Duty,
+            Count = items.Count,
+            Truncated = items.Count >= max,
+            Items = items
+        };
+    }
+
+    private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
+        string sql, int max, string from, string to, UnsentFicheSearchRequest req, CancellationToken ct,
+        bool isDuty = false, bool hasDateRange = false)
+    {
+        var items = new List<UnsentFicheListItem>();
+        var ficheNo = (req.FicheNo ?? "").Trim();
+        var billId = (req.BillId ?? "").Trim();
+        var paymentId = (req.PaymentId ?? "").Trim();
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
+        cmd.Parameters.AddWithValue("@max", max);
+        if (hasDateRange)
+        {
+            cmd.Parameters.AddWithValue("@from", from);
+            cmd.Parameters.AddWithValue("@to", to);
+        }
+        cmd.Parameters.AddWithValue("@ficheNo", ficheNo);
+        cmd.Parameters.AddWithValue("@billId", billId);
+        cmd.Parameters.AddWithValue("@paymentId", paymentId);
+        cmd.Parameters.AddWithValue("@ficheNoPat", string.IsNullOrEmpty(ficheNo) ? "%" : $"%{ficheNo}%");
+        cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : $"%{billId}%");
+        cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : $"%{paymentId}%");
+        cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var group = isDuty ? 0 : ReadInt32(reader, "IncomeAccountGroup");
+            var isTahator = !isDuty && group is TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+                or TahatorRowBuilder.IncomeAccountGroupTahatorIncome;
+            items.Add(new UnsentFicheListItem
+            {
+                FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
+                NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
+                BillId = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
+                PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
+                Payable = ReadDecimal(reader, "Payable"),
+                PaymentDate = ReadRowDate(reader, "PaymentDate"),
+                BankPaymentDate = ReadRowDate(reader, "BankPaymentDate"),
+                Status = ReadInt32(reader, "EumFicheStatus"),
+                District = reader.IsDBNull(reader.GetOrdinal("District"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("District")).Trim(),
+                BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo"))
+                    ? ""
+                    : reader.GetString(reader.GetOrdinal("BnkAcntNo")).Trim(),
+                IncomeAccountGroup = isDuty ? null : group,
+                IsTahator = isTahator,
+                SubKindLabel = isDuty ? "نوسازی/صنفی" : isTahator ? "تهاتر" : "درآمدی"
+            });
+        }
+
+        return items;
     }
 
     private static long? ReadNullableInt64(SqlDataReader reader, string column)
