@@ -34,6 +34,8 @@ public class FicheHeaderDto
     public decimal Payable { get; set; }
     public Guid NidFiche { get; set; }
     public Guid? NidIncome { get; set; }
+    /// <summary>پرونده درآمد — برای BedeHi و فیش قبلی همان NidProc.</summary>
+    public Guid? NidProc { get; set; }
     public string BnkAcntNo { get; set; } = "";
     public string BnkAcntNoSource { get; set; } = "";
     public string? DutyRegion { get; set; }
@@ -54,11 +56,51 @@ public class FicheHeaderDto
     public string DocDsc { get; set; } = "";
     public string? DocTypDsc { get; set; }
     public int? IncomeAccountGroup { get; set; }
+    /// <summary>Income_Fiche.Deposit — Center1 / Num در Member 1388.</summary>
+    public long? Deposit { get; set; }
+    /// <summary>Income_Fiche.DepositID — Ref ردیف.</summary>
+    public long? DepositId { get; set; }
+    /// <summary>Income_Fiche.CreditorPapers — Center وقتی Bank=2.</summary>
+    public long? CreditorPapers { get; set; }
+    /// <summary>Income_Fiche.CheckNo — Center3 تهاتر.</summary>
+    public string? CheckNo { get; set; }
+    /// <summary>Center پیشنهادی Member 1388.</summary>
+    public long? Center { get; set; }
+    /// <summary>کارمزد کارگزار — BedeHi: Payable-Brokers.</summary>
+    public decimal Brokers { get; set; }
+    /// <summary>بدهی قبلی محاسبه‌شده یا از DB.</summary>
+    public decimal? PriorBedeHiAmount { get; set; }
+    /// <summary>فیش درآمد قبلی همان پرونده — ورودی BedeHi.</summary>
+    public PriorIncomeFicheDto? PriorIncomeFiche { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
+    /// <summary>آیا فیش از نظر اعتبارسنجی قابل ارسال است.</summary>
+    public bool CanSend { get; set; }
+    /// <summary>دلیل عدم ارسال — برای نمایش در UI.</summary>
+    public string? BlockReason { get; set; }
     public string StatusMessage { get; set; } = "";
+    /// <summary>هشدار بارگذاری (مثلاً خطای SQL در GetNosaziNickName) — ارسال ممکن است ادامه یابد.</summary>
+    public string? Warning { get; set; }
+    /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
+    public List<IncomeOddmentDto> Oddments { get; set; } = new();
+    /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>
+    public List<DutyOddmentDto> DutyOddments { get; set; } = new();
     public List<IncmRowDto> Rows { get; set; } = new();
+}
+
+/// <summary>فیش درآمد قبلی — VB M_AllFiche برای BedeHi.</summary>
+public class PriorIncomeFicheDto
+{
+    public Guid NidIncome { get; set; }
+    public string FicheNo { get; set; } = "";
+    public decimal Payable { get; set; }
+    public decimal Brokers { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string BankPaymentDate { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public int? FicheStatus { get; set; }
+    public List<IncmRowDto> CalculationRows { get; set; } = new();
 }
 
 public class IncmRowDto
@@ -66,6 +108,31 @@ public class IncmRowDto
     public int IncmNo { get; set; }
     public string IncmRowDsc { get; set; } = "";
     public decimal Val { get; set; }
+    public long? Center1 { get; set; }
+    public long? Center2 { get; set; }
+    public long? Center3 { get; set; }
+    public string? Ref { get; set; }
+    public string? Num { get; set; }
+}
+
+/// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>
+public class IncomeOddmentDto
+{
+    public int IncmNo { get; set; }
+    public decimal Value { get; set; }
+    public int OddmentType { get; set; }
+}
+
+/// <summary>رندمان dbo.Duty_OddmentAccount — از NidFK مرتبط با Duty_FicheSub.</summary>
+public class DutyOddmentDto
+{
+    public int DutyFormula { get; set; }
+    /// <summary>معادل CI_DutyFormulaFiche — از CI_DutyOddmentFor در DB.</summary>
+    public int DutyFormulaFiche { get; set; }
+    public decimal Price { get; set; }
+    public int OddmentType { get; set; }
+    public string? FicheNo { get; set; }
+    public int? DutyYear { get; set; }
 }
 
 public class SendFicheRequest
@@ -76,7 +143,8 @@ public class SendFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
-    public bool ResetStatus { get; set; } = true;
+    /// <summary>ریست EumFicheStatus در Sara — فقط با درخواست صریح (پیش‌فرض خاموش).</summary>
+    public bool ResetStatus { get; set; } = false;
 }
 
 public class SendResultDto
@@ -137,4 +205,124 @@ public class AppConfig
     public string? SourceSystemId { get; set; }
     public bool DryRun { get; set; }
     public int SendDelayMs { get; set; } = 2000;
+}
+
+/// <summary>نگه‌داشت فیلدهای Income_Fiche قبل از تریگر تهاتر (وضعیت ۲) — پایدار در RayvarzRuleEngine.</summary>
+public class IncomeFicheTahatorSnapshot
+{
+    public long SnapshotId { get; set; }
+    public string FicheNo { get; set; } = "";
+    public int EumFicheStatus { get; set; }
+    public string? ExportPermanentDate { get; set; }
+    public string? PaymentBreakDate { get; set; }
+    public string? PaymentDate { get; set; }
+    public string? UserConfirmDate { get; set; }
+    public string? UsernameUserConfirm { get; set; }
+    public Guid? NidUserUserConfirm { get; set; }
+    public string? TriggerDate { get; set; }
+    public string? PersistStatus { get; set; }
+    public DateTime? CreatedAtUtc { get; set; }
+}
+
+public class TahatorFicheRequest
+{
+    public string FicheNo { get; set; } = "";
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public string DocDate { get; set; } = "";
+    public string ActDate { get; set; } = "";
+    public string DueDate { get; set; } = "";
+    /// <summary>اگر فیش در رایورز باشد هم ادامه بده (برای تست مرحله وضعیت ۲).</summary>
+    public bool Force { get; set; }
+    /// <summary>
+    /// فقط مرحله نگه‌داشت + UPDATE وضعیت ۲ (تاریخ روز) — بدون SOAP و بدون بازگردانی.
+    /// بعد از SELECT در Sara، با POST /api/tahator/restore بازگردانید.
+    /// </summary>
+    public bool HoldAfterStatus2 { get; set; }
+}
+
+/// <summary>جفت تهاتر — گروه ۱۵۷ (مبلغ/مرکز) + ۱۵۸ (درآمد/منطقه) با همان NidIncome.</summary>
+public class TahatorPairInfo
+{
+    public Guid NidIncome { get; set; }
+    public string AmountFicheNo { get; set; } = "";
+    public string IncomeFicheNo { get; set; } = "";
+    public FicheHeaderDto? AmountFiche { get; set; }
+    public FicheHeaderDto? IncomeFiche { get; set; }
+}
+
+/// <summary>وضعیت هر فیش جفت در check/send.</summary>
+public class TahatorPairMemberStatus
+{
+    public string FicheNo { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public int DocTyp { get; set; }
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public bool ExistsInAccountingDocHeader { get; set; }
+    public bool ExistsInRayvarz { get; set; }
+    public bool NeedsSend { get; set; }
+    public string? DocNotSentError { get; set; }
+}
+
+public class TahatorCheckResult
+{
+    public string FicheNo { get; set; } = "";
+    public bool ExistsInAccountingDocHeader { get; set; }
+    public bool ExistsInIncomeFiche { get; set; }
+    public bool ExistsInRayvarz { get; set; }
+    public bool NeedsSend { get; set; }
+    public string Message { get; set; } = "";
+    public string? DocNotSentError { get; set; }
+    public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+    public IncomeFicheTahatorSnapshot? PendingStoredSnapshot { get; set; }
+    public FicheHeaderDto? Fiche { get; set; }
+    public TahatorPairInfo? Pair { get; set; }
+    public List<TahatorPairMemberStatus> PairMembers { get; set; } = new();
+}
+
+public class TahatorFicheSendDetail
+{
+    public string FicheNo { get; set; } = "";
+    public int IncomeAccountGroup { get; set; }
+    public int DocTyp { get; set; }
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public string? SkipReason { get; set; }
+    public bool ExistsInAccountingDocHeaderAfter { get; set; }
+    public bool ExistsInRayvarz { get; set; }
+    public string? SoapMessage { get; set; }
+    public string? PursuitDocNo { get; set; }
+    public string? PreviewXml { get; set; }
+    public string? DocNotSentError { get; set; }
+}
+
+public class TahatorSendResult
+{
+    public bool Success { get; set; }
+    public bool Skipped { get; set; }
+    public bool DryRun { get; set; }
+    public string FicheNo { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string? SkipReason { get; set; }
+    public bool ExistsInAccountingDocHeaderBefore { get; set; }
+    public bool ExistsInAccountingDocHeaderAfter { get; set; }
+    public bool ExistsInRayvarz { get; set; }
+    public string? TriggerDate { get; set; }
+    public long? SnapshotId { get; set; }
+    public string? DocNotSentError { get; set; }
+    public IncomeFicheTahatorSnapshot? Snapshot { get; set; }
+    public string? EngineName { get; set; }
+    public int DocTyp { get; set; }
+    public int Branch { get; set; }
+    public int Fund { get; set; }
+    public string? PreviewXml { get; set; }
+    public string? SoapResponse { get; set; }
+    public string? PursuitDocNo { get; set; }
+    public string? SoapMessage { get; set; }
+    public List<string> Steps { get; set; } = new();
+    public TahatorPairInfo? Pair { get; set; }
+    public List<TahatorFicheSendDetail> FicheResults { get; set; } = new();
 }

@@ -40,6 +40,18 @@ public class SoapBuilder
 
     public string Build(FicheHeaderDto fiche, int branch, int fund, string? docDate, string? actDate, string? dueDate)
     {
+        var isTahatorAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
+        var isTahatorIncome = TahatorRowBuilder.IsTahatorIncomeFiche(fiche);
+        var isTahator = isTahatorAmount || isTahatorIncome;
+
+        // تهاتر: تاریخ‌های درخواست (امروز) اولویت دارند — مثل قبل از Member1388
+        if (!isTahator)
+        {
+            docDate = FirstNonEmpty(fiche.RayvarzDocDate, docDate);
+            actDate = FirstNonEmpty(fiche.RayvarzActDate, fiche.RowDate, actDate);
+            dueDate = FirstNonEmpty(fiche.RayvarzDueDate, dueDate);
+        }
+
         var docDateRay = FicheDateResolver.ResolveForSoap(docDate, fiche.RayvarzDocDate);
         var actDateRay = FicheDateResolver.ResolveForSoap(actDate, fiche.RayvarzActDate);
         var dueDateRay = FicheDateResolver.ResolveForSoap(dueDate, fiche.RayvarzDueDate);
@@ -58,25 +70,62 @@ public class SoapBuilder
             if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
                 fund = DutyDistrictBranchResolver.ResolveFund(dist, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
         }
+        else if (isTahatorAmount)
+        {
+            if (fund <= 0 && fiche.SuggestedFund is > 0)
+                fund = fiche.SuggestedFund.Value;
+            if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
+                fund = TahatorRowBuilder.ResolveTahatorFund(dist);
+            if (branch <= 0)
+                branch = TahatorRowBuilder.DefaultRayvarzBranch;
+        }
+        else if (isTahatorIncome)
+        {
+            if (branch <= 0 && fiche.ResolvedDistrictBranch is > 0)
+                branch = fiche.ResolvedDistrictBranch.Value;
+            if (fund <= 0 && fiche.SuggestedFund is > 0)
+                fund = fiche.SuggestedFund.Value;
+            if (fund <= 0 && fiche.ResolvedDistrictBranch is int dist && dist > 0)
+                fund = TahatorRowBuilder.ResolveTahatorIncomeFund(dist);
+        }
 
         if (fund <= 0)
             fund = FundResolver.Resolve(_config, branch, fiche.BankCode ?? fiche.PaymentBranch ?? "18");
+        if (fiche.SuggestedFund is > 0 && (!isTahator || fund <= 0))
+            fund = fiche.SuggestedFund.Value;
 
         var sourceSystemId = _config["Rayvarz:SourceSystemId"];
         var transactionId = ResolveTransactionId(fiche);
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
         var headerActDate = actDateRay;
-        var headerRowDate = actDateRay;
+        var headerRowDate = !string.IsNullOrWhiteSpace(fiche.RowDate)
+            ? FicheDateResolver.ResolveForSoap(fiche.RowDate, actDateRay)
+            : actDateRay;
+        var headerRowDocNo = isTahator
+            ? fiche.FicheNo
+            : fiche.FicheNo;
         var docTypDsc = ResolveDocTypDsc(fiche);
 
         const int docRow = 1;
         var rows = NormalizeRows(fiche);
-        var phasTyp = ResolveSoapDataContractEnum(_config["Rayvarz:PhasTyp"], "7", PhasTypCodeToWireName);
-        var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
-        var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
-        var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category);
-        var bank = ResolveBankCode(fiche.BankCode);
+        var tahatorPhas = isTahator ? TahatorRowBuilder.ResolvePhasTypCode(fiche) : null;
+        var tahatorVchr = isTahator ? TahatorRowBuilder.ResolveVchrTypCode(fiche) : null;
+        var phasTyp = ResolveSoapDataContractEnum(
+            tahatorPhas ?? _config["Rayvarz:PhasTyp"],
+            tahatorPhas ?? "7",
+            PhasTypCodeToWireName);
+        var vchrTyp = ResolveSoapDataContractEnum(
+            tahatorVchr ?? _config["Rayvarz:VchrTyp"],
+            tahatorVchr ?? "0",
+            VchrTypCodeToWireName);
+        var actTyp = ResolveSoapActTyp(
+            isTahator ? TahatorRowBuilder.ActTypCode : _config["Rayvarz:ActTyp"],
+            isTahator ? TahatorRowBuilder.ActTypCode : "3");
+        var incmMkrTyp = ResolveIncmMkrTyp(fiche.Category, isTahator);
+        var bank = isTahator
+            ? ResolveBankCode(fiche.PaymentBranch)
+            : ResolveBankCode(FirstNonEmpty(fiche.BankCode, fiche.PaymentBranch, "18"));
 
         var incmItems = string.Join("\n", BuildIncmContexts(fiche, rows, dueDateRay)
             .Select(c => BuildIncmRow(c, sourceSystemId)));
@@ -104,7 +153,7 @@ public class SoapBuilder
                 <b:BnkAcntNo>{Escape(fiche.BnkAcntNo)}</b:BnkAcntNo>
                 <b:BnkAcntOwnr i:nil=""true""/>
                 <b:BnkBrnch i:nil=""true""/>
-                <b:Center>0</b:Center>
+                <b:Center>{fiche.Center ?? 0}</b:Center>
                 {customerXml}
                 {customerNationalCodeXml}
                 <b:DocRow>{docRow}</b:DocRow>
@@ -117,7 +166,7 @@ public class SoapBuilder
                 {documentItemRefs}
                 {refRecon}
                 <b:RowDate>{headerRowDate}</b:RowDate>
-                <b:RowDocNo>{Escape(fiche.FicheNo)}</b:RowDocNo>
+                <b:RowDocNo>{Escape(headerRowDocNo)}</b:RowDocNo>
                 <b:VchrTyp>{vchrTyp}</b:VchrTyp>
               </b:DocumentItem>
             </b:Items>
@@ -209,7 +258,7 @@ public class SoapBuilder
 
     private string ResolveDetailRefRowDocNo(string ficheNo)
     {
-        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow").Trim();
+        var mode = (_config["Rayvarz:RefRowDocNoInDetail"] ?? "zero").Trim();
         if (mode.Equals("zero", StringComparison.OrdinalIgnoreCase)
             || mode.Equals("0", StringComparison.OrdinalIgnoreCase))
             return "0";
@@ -225,17 +274,21 @@ public class SoapBuilder
             FicheCategory.DutyNosazi => "عوارض سرا",
             FicheCategory.DutySenfi => "صنفی",
             FicheCategory.Income when fiche.DocTyp == 3 => "بهای هوشمندسازی خدمات شهری",
-            FicheCategory.Income when fiche.DocTyp == 14 => "تهاتر مبلغ",
-            _ => fiche.DocTypDsc ?? ""
+            FicheCategory.Income when fiche.DocTyp is 14 or 15 => "تهاتر مبلغ",
+            FicheCategory.Income when fiche.DocTyp is 17 or 18 => "عوارض تهاتر درامد",
+            _ => fiche.DocTypDsc ?? fiche.DocDsc ?? ""
         };
 
-    private string ResolveIncmMkrTyp(FicheCategory category)
+    private string ResolveIncmMkrTyp(FicheCategory category, bool isTahator = false)
     {
         var configured = _config["Rayvarz:IncmMkrTyp"];
         if (!string.IsNullOrWhiteSpace(configured)
             && !configured.Equals("auto", StringComparison.OrdinalIgnoreCase))
             return configured!;
-        return category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? "1" : "0";
+        if (isTahator)
+            return "1";
+        // incmdocsys + VB Member1388: برای همه انواع فیش IncmMkrTyp=1 ثبت می‌شود
+        return "1";
     }
 
     private (string env, string envNs, bool soap11) ResolveEnvelopeNs()
@@ -373,7 +426,11 @@ public class SoapBuilder
         string dueDateRay)
     {
         var isDuty = fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi;
+        var isTahator = TahatorRowBuilder.IsTahatorFiche(fiche);
         var detailRefRow = ResolveDetailRefRowDocNo(fiche.FicheNo);
+        var incmRefRowDocNo = isTahator
+            ? detailRefRow
+            : detailRefRow;
         var dutyQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
 
         return rows.Select((r, i) =>
@@ -396,18 +453,23 @@ public class SoapBuilder
                     true);
             }
 
+            var incmRef = TahatorRowBuilder.IsTahatorFiche(fiche)
+                ? r.Ref
+                : FirstNonEmpty(r.Ref, fiche.FicheNo);
+            var incmNum = TahatorRowBuilder.IsTahatorFiche(fiche) ? r.Num : null;
+
             return new IncmContext(
                 r,
                 incmRow,
-                FormatRayvarzMoney(r.Val),
+                FormatRayvarzMoney(Math.Abs(r.Val)),
                 dueDateRay,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
-                null,
-                null,
-                detailRefRow,
+                incmRef,
+                incmNum,
+                incmRefRowDocNo,
                 dueDateRay,
-                null,
+                TahatorRowBuilder.IsTahatorFiche(fiche) ? r.IncmRowDsc : null,
                 false);
         }).ToList();
     }
@@ -453,11 +515,15 @@ public class SoapBuilder
             ? "<b:RefRowDate i:nil=\"true\"/>"
             : $"<b:RefRowDate>{ctx.RefRowDate}</b:RefRowDate>";
 
+        var center1 = ctx.Row.Center1 ?? 0;
+        var center2 = ctx.Row.Center2 ?? 0;
+        var center3 = ctx.Row.Center3 ?? 0;
+
         return $@"
               <b:DocumentItemIncm>
-                <b:Center1>0</b:Center1>
-                <b:Center2>0</b:Center2>
-                <b:Center3>0</b:Center3>
+                <b:Center1>{center1}</b:Center1>
+                <b:Center2>{center2}</b:Center2>
+                <b:Center3>{center3}</b:Center3>
                 <b:Crncy i:nil=""true""/>
                 <b:CrncyDate i:nil=""true""/>
                 <b:CrncyPrice>0</b:CrncyPrice>
@@ -492,18 +558,35 @@ public class SoapBuilder
     {
         var rows = fiche.Rows.Where(r => r.Val != 0).ToList();
         if (rows.Count == 0)
-            rows.Add(new IncmRowDto { IncmNo = 0, Val = fiche.Payable, IncmRowDsc = "کل" });
+            throw new InvalidOperationException("ردیف IncmNo یافت نشد");
 
         if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
             return rows;
 
+        // تهاتر مبلغ (۱۴/۱۵ Val منفی) یا درآمدی (۱۷/۱۸ Val مثبت) — اسکیل نکن
+        if (TahatorRowBuilder.IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15 or 17 or 18)
+            return rows;
+
         var sum = rows.Sum(r => r.Val);
-        if (sum != fiche.Payable && sum != 0)
+        if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, sum) && sum != 0)
         {
-            var factor = fiche.Payable / sum;
-            foreach (var r in rows) r.Val = Math.Round(r.Val * factor, 0);
-            var diff = fiche.Payable - rows.Sum(r => r.Val);
-            rows[0].Val += diff;
+            if (fiche.IncomeAccountGroup is null or 0)
+                fiche.IncomeAccountGroup = 150;
+
+            fiche.Rows = rows;
+            IncomeMember1388RowBuilder.Apply(fiche);
+            rows = fiche.Rows.Where(r => r.Val != 0).ToList();
+            sum = rows.Sum(r => r.Val);
+        }
+
+        if (!TahatorRowBuilder.RowSumMatchesPayable(fiche, sum))
+        {
+            var target = fiche.IncomeAccountGroup == 151
+                ? -Math.Abs(fiche.Payable)
+                : TahatorRowBuilder.IsTahatorAmountFiche(fiche)
+                    ? -Math.Abs(fiche.Payable)
+                    : fiche.Payable;
+            IncomeMember1388RowBuilder.ReconcileSoapRows(rows, target);
         }
 
         return rows;

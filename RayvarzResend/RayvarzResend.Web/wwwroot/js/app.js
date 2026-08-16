@@ -58,13 +58,40 @@ function formatShamsiInput(yyyymmdd) {
   return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
 }
 
+/** جمع Val ردیف‌های بارگذاری‌شده از API (مقادیر ارسالی، نه خام Income_Calculation). */
+function sumRowVals(rows) {
+  return (rows || []).reduce((a, r) => a + Number(r.val), 0);
+}
+
+function formatValMappingDetail(f) {
+  const rows = f.rows || [];
+  const sum = sumRowVals(rows);
+  const payable = Number(f.payable);
+  const parts = rows.map((r) => Number(r.val).toLocaleString()).join(' + ');
+  const matched = Math.abs(sum - payable) < 0.5;
+  const matchNote = matched
+    ? '✓ جمع = Payable'
+    : `⚠ اختلاف ${Math.abs(sum - payable).toLocaleString()} ریال`;
+  const incomeNote = f.category === 'Income'
+    ? ' | مقادیر سرور (اسکیل + Oddment)'
+    : '';
+  return `${parts} = ${sum.toLocaleString()} | Payable: ${payable.toLocaleString()} | ${matchNote}${incomeNote}`;
+}
+
+function valMappingSource(f) {
+  if (f.category === 'DutyNosazi' || f.category === 'DutySenfi') {
+    return 'مقادیر ارسالی — نوسازی: Payable بین ردیف‌ها توزیع شده';
+  }
+  return 'مقادیر ارسالی از API — Income_Calculation اسکیل‌شده به Payable (+ Oddment)';
+}
+
 function applyFicheDatesToForm(f) {
   $('docDate').value = formatShamsiInput(f.rayvarzDocDate);
   $('actDate').value = formatShamsiInput(f.rayvarzActDate);
   $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
 }
 
-function getPayload(resetStatus) {
+function getPayload() {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
@@ -72,7 +99,7 @@ function getPayload(resetStatus) {
     docDate: $('docDate').value,
     actDate: $('actDate').value,
     dueDate: $('dueDate').value,
-    resetStatus: !!resetStatus
+    resetStatus: $('resetStatus')?.checked === true
   };
 }
 
@@ -180,22 +207,22 @@ function buildMappingRows(f) {
     { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
     { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
     { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
-    { field: 'RefRowDocNo (دیتیل)', source: 'نوسازی/صنفی: 0 | درآمد: از config', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? '0' : (config?.refRowDocNoInDetail === 'ficheNo' ? '(FicheNo)' : '1') },
+    { field: 'RefRowDocNo (دیتیل)', source: 'نوسازی/صنفی: 0 | درآمد: از config (پیش‌فرض 0)', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? '0' : (config?.refRowDocNoInDetail === 'ficheNo' ? '(FicheNo)' : (config?.refRowDocNoInDetail === 'headerDocRow' ? '1' : '0')) },
     { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
     { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
     { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
     { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.CI_City', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
     { field: 'Fund', source: 'انتخاب منطقه', value: fund },
     { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
-    { field: 'DocDate', source: 'nosazo.vb: امروز شمسی (CurrentShamsiDateString)', value: docDate || '-' },
-    { field: 'ActDate / RowDate', source: 'وضعیت=1 → PaymentDate وگرنه BankPaymentDate', value: actDate || '-' },
-    { field: 'Due', source: 'nosazo.vb: همان امروز شمسی (Ref DUE)', value: dueDate || '-' },
+    { field: 'DocDate', source: 'PaymentDate / BankPaymentDate از DB', value: docDate || '-' },
+    { field: 'ActDate / RowDate', source: 'امروز شمسی (nosazo.vb / ارسال تکی)', value: actDate || '-' },
+    { field: 'Due', source: 'BankPaymentDate با fallback به PaymentDate', value: dueDate || '-' },
     { field: 'شعبه (nosazo)', source: 'BillID/PaymentID → DistrickBranch', value: f.resolvedDistrictBranch ? `${f.resolvedDistrictBranch} (Fund پیشنهادی: ${f.suggestedFund || '-'})` : (f.dutyRegion || f.incomeRegion || '-') },
     { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
     { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
     { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
-    { field: 'Qty (دیتیل)', source: 'نوسازی/صنفی: PayablePrice کل فیش (در هر ردیف یکسان) | درآمد: Val همان ردیف', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? Number(f.payable).toLocaleString() : (f.rows || []).map(r => Number(r.val).toLocaleString()).join(' / ') },
-    { field: 'Val (دیتیل)', source: 'جمع Val باید = Payable؛ نوسازی = Payable − سایر ردیف‌ها', value: (() => { const sum = (f.rows || []).reduce((a, r) => a + Number(r.val), 0); return `${(f.rows || []).map(r => Number(r.val).toLocaleString()).join(' + ')} = ${sum.toLocaleString()} (Payable: ${Number(f.payable).toLocaleString()})`; })() },
+    { field: 'Qty (دیتیل)', source: 'نوسازی/صنفی: PayablePrice کل فیش (در هر ردیف یکسان) | درآمد: Val همان ردیف (ارسالی)', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? Number(f.payable).toLocaleString() : (f.rows || []).map(r => Number(r.val).toLocaleString()).join(' / ') },
+    { field: 'Val (دیتیل)', source: valMappingSource(f), value: formatValMappingDetail(f) },
     { field: 'Bank', source: 'ConfirmBankCode — فقط اگر پرداخت شده', value: f.bankCode || '(خالی — NULL)' },
     { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '(NULL)' }
   ];
@@ -214,7 +241,16 @@ function renderMappingTable(f) {
 
 function renderFiche(f) {
   $('ficheSection').hidden = false;
-  const statusClass = f.existsInRayvarz ? 'status-err' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn');
+  const statusClass = f.existsInRayvarz
+    ? 'status-err'
+    : (f.warning ? 'status-warn' : (f.statusMessage === 'آماده ارسال' ? 'status-ok' : 'status-warn'));
+
+  const warningCard = f.warning
+    ? `<div class="stat-card stat-card-wide">
+      <span class="stat-label">هشدار</span>
+      <span class="stat-value"><span class="status-pill status-warn">${f.warning}</span></span>
+    </div>`
+    : '';
 
   $('ficheSummary').innerHTML = `
     <div class="stat-card">
@@ -242,6 +278,7 @@ function renderFiche(f) {
       <span class="stat-label">در رایورز</span>
       <span class="stat-value">${f.existsInRayvarz ? 'بله — تکراری' : 'خیر'}</span>
     </div>
+    ${warningCard}
   `;
 
   renderMappingTable(f);
@@ -253,6 +290,16 @@ function renderFiche(f) {
     tr.innerHTML = `<td>${i + 1}</td><td>${r.incmNo}</td><td>${r.incmRowDsc}</td><td>${Number(r.val).toLocaleString()}</td>`;
     tbody.appendChild(tr);
   });
+
+  const tfoot = $('rowsTable').querySelector('tfoot') || document.createElement('tfoot');
+  if (!$('rowsTable').querySelector('tfoot')) $('rowsTable').appendChild(tfoot);
+  const rowSum = sumRowVals(f.rows);
+  const payable = Number(f.payable);
+  const sumOk = Math.abs(rowSum - payable) < 0.5;
+  tfoot.innerHTML = `<tr class="rows-sum-row ${sumOk ? 'rows-sum-ok' : 'rows-sum-warn'}">
+    <td colspan="3">جمع Val (ارسالی)</td>
+    <td>${rowSum.toLocaleString()} ${sumOk ? '= Payable' : `(Payable: ${payable.toLocaleString()})`}</td>
+  </tr>`;
 }
 
 async function init() {
@@ -266,9 +313,10 @@ async function init() {
   }
   const badge = $('configBadge');
   const envLabel = 'رایورز ITC (safa_shahrsazi_v2)';
+  const ver = config.releaseVersion ? `v${config.releaseVersion} | ` : '';
   badge.textContent = config.dryRun
-    ? `${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
-    : `⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
+    ? `${ver}${envLabel} | DryRun فعال — POST نمی‌زند | ${config.serviceUrl}`
+    : `${ver}⚠ ${envLabel} | ارسال واقعی | ${config.serviceUrl}`;
   if (!config.dryRun) {
     badge.style.background = 'rgba(220, 53, 69, 0.35)';
   }
@@ -350,6 +398,9 @@ function setupEventHandlers() {
     applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
     renderFiche(data);
+    if (data.warning) {
+      console.warn('Fiche load warning:', data.warning);
+    }
     const canSend = !data.existsInRayvarz && data.payable > 0 && data.rows?.length > 0;
     $('btnPreview').disabled = false;
     updateSendButton(data);
@@ -373,7 +424,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(false))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -397,7 +448,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(true))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -408,7 +459,7 @@ function setupEventHandlers() {
     if (data.dryRun) {
       alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
     } else if (data.success && data.verifiedInRayvarz === false) {
-      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+      alert('هشدار: SOAP موفق بود ولی ثبت در incmdocsys تأیید نشد. پاسخ SOAP و DocNotSent را ببینید.');
     } else if (!data.success) {
       alert('ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz) {

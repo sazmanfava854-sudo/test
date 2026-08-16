@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using RayvarzResend.Web;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.Services;
@@ -11,9 +12,12 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<TahatorSnapshotStore>();
+builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
+builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 
 var app = builder.Build();
@@ -34,6 +38,8 @@ app.UseStaticFiles();
 
 app.MapGet("/api/config", (IConfiguration config) => new
 {
+    releaseVersion = ReleaseInfo.Number,
+    releaseLabel = ReleaseInfo.Label,
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrl"]),
     serviceUrlMsb = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrlMsb"] ?? ""),
@@ -41,13 +47,26 @@ app.MapGet("/api/config", (IConfiguration config) => new
     useHttp = config.GetValue("Rayvarz:UseHttp", true),
     soapEnvelopeStyle = RayvarzSoapHttp.ResolveEnvelopeStyle(config),
     soapVersion = RayvarzSoapHttp.SoapVersionLabel(RayvarzSoapHttp.ResolveSoapVersion(config)),
-    refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "headerDocRow",
+    refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "zero",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
     sourceSystemId = config["Rayvarz:SourceSystemId"],
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "3",
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, ruleEngineBridgeStub = true },
+    tahator = new
+    {
+        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
+        pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
+    },
+    ruleEngine = new
+    {
+        payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+        useLocalBridgeStub = config.GetValue("RuleEngine:UseLocalBridgeStub", false),
+        saraBridgeUrl = config["RuleEngine:SaraBridgeUrl"],
+        nidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
+    },
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
@@ -124,19 +143,15 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
         catch (Exception rayEx)
         {
             fiche.ExistsInRayvarz = false;
-            fiche.StatusMessage = $"فیش بارگذاری شد — اتصال رایورز ناموفق: {rayEx.Message}";
+            FicheSendService.ApplySendStatus(fiche);
+            var rayWarn = $"بررسی تکراری رایورز ناموفق: {rayEx.Message}";
+            fiche.StatusMessage = fiche.CanSend
+                ? $"آماده ارسال — {rayWarn}"
+                : $"{fiche.BlockReason} ({rayWarn})";
             return Results.Ok(fiche);
         }
 
-        if (fiche.ExistsInRayvarz)
-            fiche.StatusMessage = "تکراری — در رایورز موجود است";
-        else if (fiche.Payable <= 0)
-            fiche.StatusMessage = "مبلغ قابل پرداخت صفر است";
-        else if (fiche.Rows.Count == 0)
-            fiche.StatusMessage = "ردیف IncmNo یافت نشد";
-        else
-            fiche.StatusMessage = "آماده ارسال";
-
+        FicheSendService.ApplySendStatus(fiche);
         return Results.Ok(fiche);
     }
     catch (Exception ex)
@@ -179,14 +194,110 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
     }
 });
 
+app.MapGet("/api/rule/bridge/health", (IConfiguration config) => Results.Ok(new
+{
+    ok = true,
+    mode = "LocalStub",
+    contract = "POST /api/rule/bridge/build-save-document",
+    payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+    useLocalBridgeStub = config.GetValue("RuleEngine:UseLocalBridgeStub", false),
+    note = "Stub محلی — خروجی LegacyCSharp؛ Sara واقعی هنوز لازم است برای VB Member 1388."
+}));
+
+app.MapPost("/api/rule/bridge/build-save-document", async (
+    SaraBridgeBuildRequest? req,
+    SaraBridgeStubService stub,
+    CancellationToken ct) =>
+{
+    if (req == null)
+        return Results.BadRequest(new SaraBridgeBuildResponse { Error = "بدنه درخواست خالی است." });
+    try
+    {
+        var result = await stub.BuildAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.Json(result, statusCode: 404);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new SaraBridgeBuildResponse { Error = ex.Message }, statusCode: 500);
+    }
+});
+
 app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
 {
+    var blockReason = FicheSendService.ValidateSendable(req.Fiche);
+    if (blockReason != null)
+        return Results.BadRequest(new { error = blockReason });
+
     var built = await payload.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
     return Results.Ok(new { xml = built.Xml, payloadMode = built.Mode.ToString(), warning = built.Warning, ruleMeta = built.RuleMeta });
 });
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
 {
+    if (string.IsNullOrWhiteSpace(req?.FicheNo))
+        return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
+    try
+    {
+        return Results.Ok(await tahator.CheckAsync(req.FicheNo, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.FicheNo))
+        return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
+    try
+    {
+        return Results.Ok(await tahator.SendAsync(req, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message, steps = Array.Empty<string>() }, statusCode: 500);
+    }
+});
+
+app.MapGet("/api/tahator/pending", async (TahatorResendService tahator, CancellationToken ct) =>
+{
+    var items = await tahator.ListPendingAsync(ct);
+    return Results.Ok(new { count = items.Count, items });
+});
+
+app.MapPost("/api/tahator/restore", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.FicheNo))
+        return Results.BadRequest(new { error = "FicheNo برای بازگردانی الزامی است." });
+    try
+    {
+        return Results.Ok(await tahator.RestorePendingAsync(req.FicheNo, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheRepository repo, RayvarzPayloadBuilder payload, RayvarzClient client, IConfiguration config, CancellationToken ct) =>
+{
+    // اعتبارسنجی سمت سرور — همان شرط‌هایی که UI چک می‌کند (دور زدن UI نباید ارسال نامعتبر بسازد)
+    if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
+        return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
+
+    var blockReason = FicheSendService.ValidateSendable(req.Fiche);
+    if (blockReason != null)
+        return Results.BadRequest(new { error = blockReason });
+
+    if (req.Fiche.Payable <= 0)
+        return Results.BadRequest(new { error = "مبلغ قابل پرداخت صفر است — ارسال نشد" });
+
+    if (!req.Fiche.Rows.Any(r => r.Val != 0))
+        return Results.BadRequest(new { error = "ردیف IncmNo یافت نشد — ارسال نشد" });
+
     var fiche = req.Fiche;
     var incmdocsysYear = ResolveIncmdocsysYear(req);
 
@@ -199,7 +310,8 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     }
     catch (SqlException ex)
     {
-        if (config.GetValue<bool>("Rayvarz:RequireRayvarzDbForSend"))
+        // پیش‌فرض امن: بدون چک تکراری در Ray_CityHall ارسال نکن (فقط با false صریح ادامه می‌یابد)
+        if (config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
         {
             return Results.Json(new
             {
@@ -225,7 +337,7 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
     var xml = built.Xml;
     var dryRun = config.GetValue<bool>("Rayvarz:DryRun");
     var result = await client.SendAsync(xml, dryRun, ct);
-    result.Warning = CombineWarnings(sendWarning, built.Warning);
+    result.Warning = CombineWarnings(fiche.Warning, CombineWarnings(sendWarning, built.Warning));
 
     if (!dryRun && result.Success)
     {
@@ -237,27 +349,23 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest req, FicheRepository repo
         catch (SqlException ex)
         {
             result.VerifiedInRayvarz = false;
-            result.Message = (result.Message ?? "") + $" | تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}";
-        }
-    }
-
-    if (!dryRun && !result.VerifiedInRayvarz)
-    {
-        try
-        {
-            result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
-        }
-        catch (SqlException ex)
-        {
-            result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+            result.Warning = CombineWarnings(result.Warning,
+                $"تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}");
         }
 
-        if (result.Success)
+        if (!result.VerifiedInRayvarz)
         {
-            result.Success = false;
-            result.Message = string.IsNullOrWhiteSpace(result.Message)
-                ? "SOAP موفق گزارش شد ولی فیش در incmdocsys ثبت نشد"
-                : result.Message + " — ولی فیش در incmdocsys ثبت نشده";
+            try
+            {
+                result.DocNotSentError = await repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+            }
+            catch (SqlException ex)
+            {
+                result.DocNotSentError = $"Accounting_DocNotSent (Sara): {ex.Message}";
+            }
+
+            result.Warning = CombineWarnings(result.Warning,
+                SendResultVerification.BuildUnverifiedWarning(result.Success, result.VerifiedInRayvarz, dryRun));
         }
     }
 

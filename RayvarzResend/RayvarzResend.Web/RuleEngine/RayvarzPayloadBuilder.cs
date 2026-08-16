@@ -39,17 +39,20 @@ public sealed class RayvarzPayloadBuilder
     private readonly SoapBuilder _soap;
     private readonly MemberRuleRepository _rules;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly SaraBridgeStubService? _localStub;
 
     public RayvarzPayloadBuilder(
         IConfiguration config,
         SoapBuilder soap,
         MemberRuleRepository rules,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        SaraBridgeStubService? localStub = null)
     {
         _config = config;
         _soap = soap;
         _rules = rules;
         _httpClientFactory = httpClientFactory;
+        _localStub = localStub;
     }
 
     public RayvarzPayloadSourceMode ResolveMode()
@@ -94,7 +97,7 @@ public sealed class RayvarzPayloadBuilder
             {
                 try
                 {
-                    var xml = await CallSaraBridgeAsync(bridgeUrl, fiche, nidMember, ct);
+                    var xml = await CallSaraBridgeAsync(bridgeUrl, fiche, branch, fund, docDate, actDate, dueDate, nidMember, ct);
                     return new RayvarzPayloadBuildResult
                     {
                         Xml = xml,
@@ -109,8 +112,47 @@ public sealed class RayvarzPayloadBuilder
                 }
             }
 
+            if (_config.GetValue("RuleEngine:UseLocalBridgeStub", false) && _localStub != null)
+            {
+                try
+                {
+                    var stubResult = _localStub.BuildFromFiche(fiche, new SaraBridgeBuildRequest
+                    {
+                        NidMember = nidMember,
+                        NidFiche = fiche.NidFiche,
+                        FicheNo = fiche.FicheNo,
+                        Category = fiche.Category.ToString(),
+                        Branch = branch,
+                        Fund = fund,
+                        DocDate = docDate,
+                        ActDate = actDate,
+                        DueDate = dueDate
+                    });
+
+                    if (!string.IsNullOrWhiteSpace(stubResult.SoapXml))
+                    {
+                        return new RayvarzPayloadBuildResult
+                        {
+                            Xml = stubResult.SoapXml,
+                            Mode = RayvarzPayloadSourceMode.RuleEngineBridge,
+                            RuleMeta = meta,
+                            Warning = stubResult.Warning
+                        };
+                    }
+
+                    return LegacyWithWarning(fiche, branch, fund, docDate, actDate, dueDate, meta,
+                        stubResult.Error ?? "LocalBridgeStub بدون SoapXml برگشت.");
+                }
+                catch (Exception ex)
+                {
+                    return LegacyWithWarning(fiche, branch, fund, docDate, actDate, dueDate, meta,
+                        $"LocalBridgeStub خطا داد — fallback به C#: {ex.Message}");
+                }
+            }
+
             return LegacyWithWarning(fiche, branch, fund, docDate, actDate, dueDate, meta,
                 "RuleEngineBridge فعال است ولی RuleEngine:SaraBridgeUrl تنظیم نشده. " +
+                "برای تست محلی RuleEngine:UseLocalBridgeStub=true بگذارید. " +
                 "XmlBody همان VB داخل ClsFunction است و در این پروژه اجرا نمی‌شود؛ " +
                 "روی سرور شهرسازی API بسازید که Run() را صدا بزند و XML برگرداند. " +
                 (loadError != null ? $"بارگذاری Member: {loadError}" : $"Member بارگذاری شد (منبع: {record?.Source ?? "—"})."));
@@ -155,29 +197,37 @@ public sealed class RayvarzPayloadBuilder
         };
     }
 
-    private async Task<string> CallSaraBridgeAsync(string bridgeUrl, FicheHeaderDto fiche, int nidMember, CancellationToken ct)
+    private async Task<string> CallSaraBridgeAsync(
+        string bridgeUrl,
+        FicheHeaderDto fiche,
+        int branch,
+        int fund,
+        string? docDate,
+        string? actDate,
+        string? dueDate,
+        int nidMember,
+        CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient("SaraBridge");
-        var payload = new
+        var payload = new SaraBridgeBuildRequest
         {
-            nidMember,
-            nidFiche = fiche.NidFiche,
-            ficheNo = fiche.FicheNo,
-            category = fiche.Category.ToString()
+            NidMember = nidMember,
+            NidFiche = fiche.NidFiche,
+            FicheNo = fiche.FicheNo,
+            Category = fiche.Category.ToString(),
+            Branch = branch,
+            Fund = fund,
+            DocDate = docDate,
+            ActDate = actDate,
+            DueDate = dueDate
         };
 
         using var response = await client.PostAsJsonAsync(bridgeUrl.TrimEnd('/') + "/rayvarz/build-save-document", payload, ct);
         response.EnsureSuccessStatusCode();
-        var doc = await response.Content.ReadFromJsonAsync<BridgeSoapResponse>(cancellationToken: ct)
+        var doc = await response.Content.ReadFromJsonAsync<SaraBridgeBuildResponse>(cancellationToken: ct)
                   ?? throw new InvalidOperationException("پاسخ SaraBridge خالی است.");
         if (string.IsNullOrWhiteSpace(doc.SoapXml))
             throw new InvalidOperationException(doc.Error ?? "SoapXml در پاسخ نیست.");
         return doc.SoapXml;
-    }
-
-    private sealed class BridgeSoapResponse
-    {
-        public string? SoapXml { get; set; }
-        public string? Error { get; set; }
     }
 }

@@ -34,3 +34,9 @@ git checkout rayvarz-resend-baseline-v16
 - بدون خواندن `DbRuleEngein.dbo.Member`
 
 برای معمازی جدید (Rule Engine) روی شاخه `rayvarz-resend` ادامه دهید؛ این baseline دست‌نخورده می‌ماند.
+
+## فازبندی توسعه
+
+جدول فازها و ترتیب کار: [`docs/RULE-ENGINE-PHASES.md`](docs/RULE-ENGINE-PHASES.md)
+
+تا پایان فاز ۴، `Rayvarz:PayloadSource` = `LegacyCSharp` (همان این baseline).
