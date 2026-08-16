@@ -16,6 +16,7 @@ builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
+builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 
 var app = builder.Build();
@@ -49,12 +50,19 @@ app.MapGet("/api/config", (IConfiguration config) => new
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "3",
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, ruleEngineBridgeStub = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
         pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
         pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
+    },
+    ruleEngine = new
+    {
+        payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+        useLocalBridgeStub = config.GetValue("RuleEngine:UseLocalBridgeStub", false),
+        saraBridgeUrl = config["RuleEngine:SaraBridgeUrl"],
+        nidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     },
     branches = new[] {
         new { id = 201, name = "منطقه 1", fund = 200201012 },
@@ -180,6 +188,36 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
     catch (Exception ex)
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapGet("/api/rule/bridge/health", (IConfiguration config) => Results.Ok(new
+{
+    ok = true,
+    mode = "LocalStub",
+    contract = "POST /api/rule/bridge/build-save-document",
+    payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+    useLocalBridgeStub = config.GetValue("RuleEngine:UseLocalBridgeStub", false),
+    note = "Stub محلی — خروجی LegacyCSharp؛ Sara واقعی هنوز لازم است برای VB Member 1388."
+}));
+
+app.MapPost("/api/rule/bridge/build-save-document", async (
+    SaraBridgeBuildRequest? req,
+    SaraBridgeStubService stub,
+    CancellationToken ct) =>
+{
+    if (req == null)
+        return Results.BadRequest(new SaraBridgeBuildResponse { Error = "بدنه درخواست خالی است." });
+    try
+    {
+        var result = await stub.BuildAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.Json(result, statusCode: 404);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new SaraBridgeBuildResponse { Error = ex.Message }, statusCode: 500);
     }
 });
 
