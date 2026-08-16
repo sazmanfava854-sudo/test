@@ -67,6 +67,7 @@
 
 - **`LocalXmlPath`**: برای تست بدون DB (همان export شما).
 - بدون Bridge و با `RuleEngineBridge`: پیش‌نمایش با **هشدار** و fallback به C#.
+- با `RuleEngine:UseLocalBridgeStub=true`: stub محلی در همین اپ (`POST /api/rule/bridge/build-save-document`) — برای تست بدون Sara.
 
 ## API جدید
 

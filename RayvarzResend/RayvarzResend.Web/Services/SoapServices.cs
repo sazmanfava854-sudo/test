@@ -287,7 +287,8 @@ public class SoapBuilder
             return configured!;
         if (isTahator)
             return "1";
-        return category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? "1" : "0";
+        // incmdocsys + VB Member1388: برای همه انواع فیش IncmMkrTyp=1 ثبت می‌شود
+        return "1";
     }
 
     private (string env, string envNs, bool soap11) ResolveEnvelopeNs()
@@ -452,6 +453,11 @@ public class SoapBuilder
                     true);
             }
 
+            var incmRef = TahatorRowBuilder.IsTahatorFiche(fiche)
+                ? r.Ref
+                : FirstNonEmpty(r.Ref, fiche.FicheNo);
+            var incmNum = TahatorRowBuilder.IsTahatorFiche(fiche) ? r.Num : null;
+
             return new IncmContext(
                 r,
                 incmRow,
@@ -459,8 +465,8 @@ public class SoapBuilder
                 dueDateRay,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,
-                r.Ref,
-                r.Num,
+                incmRef,
+                incmNum,
                 incmRefRowDocNo,
                 dueDateRay,
                 TahatorRowBuilder.IsTahatorFiche(fiche) ? r.IncmRowDsc : null,
