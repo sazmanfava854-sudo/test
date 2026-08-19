@@ -70,7 +70,7 @@ function getUserDistrict() {
 }
 
 function applyRegionalUserRestrictions() {
-  if (hasUnrestrictedFicheAccess()) {
+  if (isAdminUser()) {
     fillBranchSelect($('branch'));
     $('branch')?.removeAttribute('disabled');
     $('fund')?.removeAttribute('disabled');
@@ -84,7 +84,7 @@ function applyRegionalUserRestrictions() {
   if (branchId) {
     $('branch').value = branchId;
     $('branch').disabled = true;
-    syncFundFromBranch();
+    if (branchId !== 102) syncFundFromBranch();
     $('fund').disabled = true;
   }
 }
@@ -498,10 +498,6 @@ function isAdminUser() {
 
 function isCenterUser() {
   return !isAdminUser() && getUserDistrict() === '102';
-}
-
-function hasUnrestrictedFicheAccess() {
-  return isAdminUser() || isCenterUser();
 }
 
 function applyAuthUi() {

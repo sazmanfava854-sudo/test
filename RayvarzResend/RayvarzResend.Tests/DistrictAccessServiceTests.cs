@@ -46,12 +46,19 @@ public class DistrictAccessServiceTests
     }
 
     [Fact]
-    public void CanAccessFiche_center_user_all_regions_allowed()
+    public void CanAccessFiche_center_user_tahator157_allowed()
     {
         var user = RegionalUser("102");
-        Assert.True(DistrictAccessService.CanAccessFiche(user, new FicheHeaderDto { ResolvedDistrictBranch = 202 }));
-        Assert.True(DistrictAccessService.CanAccessFiche(user, new FicheHeaderDto { IncomeAccountGroup = TahatorRowBuilder.IncomeAccountGroupTahatorAmount }));
-        Assert.True(DistrictAccessService.CanAccessFiche(user, new FicheHeaderDto { IncomeRegion = "11" }));
+        var fiche = new FicheHeaderDto { IncomeAccountGroup = TahatorRowBuilder.IncomeAccountGroupTahatorAmount };
+        Assert.True(DistrictAccessService.CanAccessFiche(user, fiche));
+    }
+
+    [Fact]
+    public void CanAccessFiche_center_user_regional_fiche_denied()
+    {
+        var user = RegionalUser("102");
+        var fiche = new FicheHeaderDto { ResolvedDistrictBranch = 202 };
+        Assert.False(DistrictAccessService.CanAccessFiche(user, fiche));
     }
 
     [Fact]
