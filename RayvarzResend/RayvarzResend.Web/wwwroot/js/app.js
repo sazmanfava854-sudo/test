@@ -40,7 +40,7 @@ function branchIdToDistrict(branchId) {
 }
 
 /** پر کردن کمبو منطقه/شعبه از config.branches — مشترک بین ارسال تکی و دسته‌ای */
-function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه مناطق' } = {}) {
+function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه مناطق', restrictToDistrict = null } = {}) {
   if (!selectEl || !config?.branches) return;
   selectEl.innerHTML = '';
   if (includeAll) {
@@ -49,12 +49,37 @@ function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه م�
     all.textContent = allLabel;
     selectEl.appendChild(all);
   }
+  const restrict = restrictToDistrict ? String(restrictToDistrict) : '';
   config.branches.forEach((b) => {
+    if (restrict && branchIdToDistrict(String(b.id)) !== restrict) return;
     const opt = document.createElement('option');
     opt.value = b.id;
     opt.textContent = b.name;
     selectEl.appendChild(opt);
   });
+}
+
+function getUserDistrict() {
+  const d = currentUser?.district;
+  return d == null || d === '' ? '' : String(d);
+}
+
+function applyRegionalUserRestrictions() {
+  if (isAdminUser()) {
+    $('branch')?.removeAttribute('disabled');
+    $('fund')?.removeAttribute('disabled');
+    return;
+  }
+
+  const district = getUserDistrict();
+  fillBranchSelect($('branch'), { restrictToDistrict: district || '__none__' });
+  const branchId = district ? branchFromRegion(district) : null;
+  if (branchId) {
+    $('branch').value = branchId;
+    $('branch').disabled = true;
+    syncFundFromBranch();
+    $('fund').disabled = true;
+  }
 }
 
 function applyBranchFromFiche(f) {
@@ -102,26 +127,34 @@ function setupMainTabs() {
   const panels = {
     unsent: $('tabUnsent'),
     single: $('tabSingle'),
-    users: $('tabUsers'),
-    hegani: $('tabHegani')
+    users: $('tabUsers')
   };
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const key = tab.dataset.tab;
+      if (tab.hidden) return;
       if (tab.classList.contains('admin-only') && !isAdminUser()) return;
-      tabs.forEach((t) => {
-        const active = t === tab;
-        t.classList.toggle('active', active);
-        t.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      Object.entries(panels).forEach(([name, panel]) => {
-        if (!panel) return;
-        const show = name === key;
-        panel.hidden = !show;
-        panel.classList.toggle('active', show);
-      });
+      activateMainTab(key, tabs, panels);
     });
+  });
+}
+
+function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
+  unsent: $('tabUnsent'),
+  single: $('tabSingle'),
+  users: $('tabUsers')
+}) {
+  tabs.forEach((t) => {
+    const active = t.dataset.tab === key && !t.hidden;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  Object.entries(panels).forEach(([name, panel]) => {
+    if (!panel) return;
+    const show = name === key;
+    panel.hidden = !show;
+    panel.classList.toggle('active', show);
   });
 }
 
@@ -459,22 +492,21 @@ function isAdminUser() {
 function applyAuthUi() {
   const admin = isAdminUser();
   document.querySelectorAll('.admin-only').forEach((el) => {
-    if (el.classList.contains('main-tab') || el.tagName === 'BUTTON') {
-      el.hidden = !admin;
-    } else if (el.classList.contains('tab-panel')) {
-      if (!admin) el.hidden = true;
-    } else {
-      el.hidden = !admin;
-    }
+    el.hidden = !admin;
   });
 
   const heroUser = $('heroUser');
   if (heroUser && currentUser) {
     heroUser.hidden = false;
     $('userDisplayName').textContent = currentUser.displayName || currentUser.username;
-    $('userRoleBadge').textContent = admin ? 'ادمین' : 'کاربر';
+    const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
+    $('userRoleBadge').textContent = admin
+      ? 'ادمین'
+      : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
     $('userRoleBadge').className = `user-badge ${admin ? 'badge-admin' : 'badge-user'}`;
   }
+
+  activateMainTab(admin ? 'unsent' : 'single');
 }
 
 async function ensureAuthenticated() {
@@ -531,6 +563,9 @@ async function createUserFromForm() {
   if (!payload.username || !payload.password || !payload.firstName || !payload.lastName || !payload.nationalId) {
     return alert('نام کاربری، رمز، نام، نام خانوادگی و کد ملی الزامی است');
   }
+  if (!payload.isAdmin && !payload.district) {
+    return alert('برای کاربر منطقه‌ای، انتخاب منطقه الزامی است');
+  }
   const box = $('usersResultBox');
   try {
     const res = await apiFetch('/api/admin/users', {
@@ -553,13 +588,6 @@ async function createUserFromForm() {
     }
     alert(e.message);
   }
-}
-
-function showHeganiResult(text) {
-  const box = $('heganiResultBox');
-  if (!box) return;
-  box.hidden = false;
-  box.textContent = text;
 }
 
 function formatDiagnostics(d) {
@@ -758,6 +786,7 @@ async function init() {
   fillBranchSelect(branchSel);
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
   fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
+  applyRegionalUserRestrictions();
   config.branches.forEach(b => {
     const optFund = document.createElement('option');
     optFund.value = b.fund;
@@ -1096,65 +1125,6 @@ function setupAuthAndAdminHandlers() {
 
   bindClick('btnCreateUser', createUserFromForm);
   bindClick('btnRefreshUsers', loadUsersTable);
-
-  bindClick('btnHeganiDbTest', async () => {
-    try {
-      const res = await apiFetch('/api/db-test');
-      const data = await parseJsonResponse(res);
-      showHeganiResult(JSON.stringify(data, null, 2));
-    } catch (e) {
-      showHeganiResult(e.message);
-    }
-  });
-
-  bindClick('btnHeganiRayvarzPing', async () => {
-    try {
-      const res = await apiFetch('/api/rayvarz-ping');
-      const data = await parseJsonResponse(res);
-      showHeganiResult(JSON.stringify(data, null, 2));
-    } catch (e) {
-      showHeganiResult(e.message);
-    }
-  });
-
-  bindClick('btnHeganiRuleMeta', async () => {
-    const memberId = parseInt($('heganiMemberId')?.value || '1388', 10);
-    try {
-      const res = await apiFetch(`/api/rule/member/${memberId}/meta`);
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showHeganiResult(JSON.stringify(data, null, 2));
-    } catch (e) {
-      showHeganiResult(e.message);
-    }
-  });
-
-  bindClick('btnHeganiTahatorCheck', async () => {
-    const ficheNo = ($('heganiTahatorFicheNo')?.value || '').trim();
-    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید');
-    try {
-      const res = await apiFetch('/api/tahator/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ficheNo })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showHeganiResult(formatTahatorCheck(data));
-    } catch (e) {
-      showHeganiResult(e.message);
-    }
-  });
-
-  bindClick('btnHeganiTahatorPending', async () => {
-    try {
-      const res = await apiFetch('/api/tahator/pending');
-      const data = await parseJsonResponse(res);
-      showHeganiResult(JSON.stringify(data, null, 2));
-    } catch (e) {
-      showHeganiResult(e.message);
-    }
-  });
 }
 
 function showTahatorSendResult(data) {

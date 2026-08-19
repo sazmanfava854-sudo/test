@@ -159,6 +159,8 @@ public sealed class AppUserRepository
             throw new ArgumentException("نام کاربری حداقل ۳ کاراکتر باشد");
         if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
             throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
+        if (!req.IsAdmin && string.IsNullOrWhiteSpace(req.District))
+            throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه الزامی است");
 
         var user = new AppUserRecord
         {

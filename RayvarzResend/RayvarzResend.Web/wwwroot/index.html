@@ -32,13 +32,12 @@
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش های جمعی</button>
+      <button type="button" class="main-tab active admin-only" data-tab="unsent" role="tab" aria-selected="true" hidden>فیش های جمعی</button>
       <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
       <button type="button" class="main-tab admin-only" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
-      <button type="button" class="main-tab admin-only" data-tab="hegani" role="tab" aria-selected="false" hidden>فرم هگانی</button>
     </nav>
 
-    <div id="tabUnsent" class="tab-panel active" role="tabpanel">
+    <div id="tabUnsent" class="tab-panel active admin-only" role="tabpanel" hidden>
     <section class="card unsent-card card-enter">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📤</span>
@@ -134,7 +133,7 @@
     </section>
     </div>
 
-    <div id="tabSingle" class="tab-panel" role="tabpanel" hidden>
+    <div id="tabSingle" class="tab-panel active" role="tabpanel">
     <section class="card card-enter">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📋</span>
@@ -240,21 +239,26 @@
           <span class="card-icon" aria-hidden="true">👤</span>
           <h2>ایجاد کاربر جدید</h2>
         </div>
+        <p class="field-hint form-intro">
+          <strong>نام کاربری</strong> شناسه ورود به سیستم است (مثلاً <code>ahmad.rezaei</code>).
+          <strong>نام</strong> و <strong>نام خانوادگی</strong> نام واقعی فرد برای نمایش در سامانه هستند و با نام کاربری فرق دارند.
+        </p>
         <div class="form-grid unsent-form-grid">
           <label class="field field-required">
-            <span class="field-label">نام کاربری</span>
-            <input id="newUserUsername" type="text" autocomplete="off" />
+            <span class="field-label">نام کاربری (ورود)</span>
+            <input id="newUserUsername" type="text" autocomplete="off" placeholder="شناسه ورود — لاتین" />
+            <span class="field-hint">برای لاگین استفاده می‌شود، نه نام نمایشی</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
             <input id="newUserPassword" type="password" autocomplete="new-password" />
           </label>
           <label class="field field-required">
-            <span class="field-label">نام</span>
+            <span class="field-label">نام (نمایشی)</span>
             <input id="newUserFirstName" type="text" autocomplete="off" />
           </label>
           <label class="field field-required">
-            <span class="field-label">نام خانوادگی</span>
+            <span class="field-label">نام خانوادگی (نمایشی)</span>
             <input id="newUserLastName" type="text" autocomplete="off" />
           </label>
           <label class="field field-required">
@@ -301,36 +305,8 @@
         <pre id="usersResultBox" class="code-block" hidden></pre>
       </section>
     </div>
-
-    <div id="tabHegani" class="tab-panel admin-only" role="tabpanel" hidden>
-      <section class="card card-enter">
-        <div class="card-head">
-          <span class="card-icon" aria-hidden="true">🛠</span>
-          <h2>فرم هگانی — ابزارهای مدیریتی</h2>
-        </div>
-        <p class="field-hint">این بخش فقط برای ادمین — تست اتصال، Rule Engine و تهاتر.</p>
-        <div class="form-grid unsent-form-grid">
-          <label class="field">
-            <span class="field-label">شماره فیش تهاتر</span>
-            <input id="heganiTahatorFicheNo" type="text" placeholder="FicheNo" autocomplete="off" />
-          </label>
-          <label class="field">
-            <span class="field-label">Member Rule (NidMember)</span>
-            <input id="heganiMemberId" type="number" value="1388" />
-          </label>
-        </div>
-        <div class="actions hegani-actions">
-          <button id="btnHeganiDbTest" class="btn secondary" type="button">تست اتصال DB</button>
-          <button id="btnHeganiRayvarzPing" class="btn secondary" type="button">Ping رایورز</button>
-          <button id="btnHeganiRuleMeta" class="btn secondary" type="button">متای Rule Engine</button>
-          <button id="btnHeganiTahatorCheck" class="btn secondary" type="button">بررسی تهاتر</button>
-          <button id="btnHeganiTahatorPending" class="btn secondary" type="button">لیست Snapshot تهاتر</button>
-        </div>
-        <pre id="heganiResultBox" class="code-block" hidden></pre>
-      </section>
-    </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/app.js?v=27"></script>
 </body>
 </html>

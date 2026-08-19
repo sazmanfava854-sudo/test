@@ -262,7 +262,7 @@ app.MapGet("/api/rayvarz-post-test", async (RayvarzClient client, CancellationTo
 app.MapGet("/api/rayvarz-post-minimal-save", async (RayvarzClient client, CancellationToken ct) =>
     Results.Ok(await client.PostMinimalSaveDocumentAsync(ct))).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, CancellationToken ct) =>
+app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, HttpContext http, CancellationToken ct) =>
 {
     if (req == null || string.IsNullOrWhiteSpace(req.IdentifierValue))
         return Results.BadRequest(new { error = "شناسه فیش خالی است" });
@@ -301,6 +301,10 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
                 detectedIdentifierLabel = IdentifierDetector.Describe(usedType)
             });
         }
+
+        var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, fiche);
+        if (districtDenied != null)
+            return Results.Json(new { error = districtDenied }, statusCode: 403);
 
         try
         {
@@ -391,8 +395,12 @@ app.MapPost("/api/rule/bridge/build-save-document", async (
     }
 }).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
+app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, HttpContext http, CancellationToken ct) =>
 {
+    var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, req.Fiche);
+    if (districtDenied != null)
+        return Results.Json(new { error = districtDenied }, statusCode: 403);
+
     var blockReason = FicheSendService.ValidateSendable(req.Fiche);
     if (blockReason != null)
         return Results.BadRequest(new { error = blockReason });
@@ -415,12 +423,20 @@ app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResend
     }
 }).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, CancellationToken ct) =>
+app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, HttpContext http, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(req?.FicheNo))
         return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
     try
     {
+        var loaded = await repo.LoadAsync(IdentifierType.FicheNo, req.FicheNo.Trim(), ct);
+        if (loaded != null)
+        {
+            var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, loaded);
+            if (districtDenied != null)
+                return Results.Json(new { error = districtDenied }, statusCode: 403);
+        }
+
         return Results.Ok(await tahator.SendAsync(req, ct));
     }
     catch (Exception ex)
@@ -449,10 +465,14 @@ app.MapPost("/api/tahator/restore", async (TahatorFicheRequest? req, TahatorRese
     }
 }).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, HttpContext http, CancellationToken ct) =>
 {
     if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
         return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
+
+    var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, req.Fiche);
+    if (districtDenied != null)
+        return Results.Json(new { error = districtDenied }, statusCode: 403);
 
     try
     {
@@ -494,7 +514,7 @@ app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFi
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-}).RequireAuthorization(authenticated);
+}).RequireAuthorization(adminOnly);
 
 app.MapPost("/api/unsent/plan-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
 {
@@ -522,7 +542,7 @@ app.MapPost("/api/unsent/send-batch", async (UnsentBatchSendRequest? req, Unsent
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-}).RequireAuthorization(authenticated);
+}).RequireAuthorization(adminOnly);
 
 static string? ConnectionHint(string name, string cs, Exception ex)
 {

@@ -794,7 +794,15 @@ tbody tr:last-child td {
   padding-top: 28px;
 }
 
-.hegani-actions {
-  flex-wrap: wrap;
+.form-intro {
+  margin: 0 0 16px;
+  line-height: 1.7;
+}
+
+.form-intro code {
+  font-size: 0.85em;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
