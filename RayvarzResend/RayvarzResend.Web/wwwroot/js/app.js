@@ -1,5 +1,6 @@
 let currentFiche = null;
 let config = null;
+let currentUser = null;
 let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
 const unsentSearchState = {
@@ -100,12 +101,15 @@ function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
     unsent: $('tabUnsent'),
-    single: $('tabSingle')
+    single: $('tabSingle'),
+    users: $('tabUsers'),
+    hegani: $('tabHegani')
   };
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const key = tab.dataset.tab;
+      if (tab.classList.contains('admin-only') && !isAdminUser()) return;
       tabs.forEach((t) => {
         const active = t === tab;
         t.classList.toggle('active', active);
@@ -364,7 +368,7 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
   $('unsentResultBox').hidden = true;
 
   try {
-    const res = await fetch('/api/unsent/search', {
+    const res = await apiFetch('/api/unsent/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -433,6 +437,129 @@ async function parseJsonResponse(res) {
   } catch {
     throw new Error(`پاسخ نامعتبر از سرور (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }
+}
+
+function redirectToLogin() {
+  window.location.href = '/login.html';
+}
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, { credentials: 'include', ...options });
+  if (res.status === 401) {
+    redirectToLogin();
+    throw new Error('نشست منقضی شده — دوباره وارد شوید');
+  }
+  return res;
+}
+
+function isAdminUser() {
+  return !!currentUser?.isAdmin;
+}
+
+function applyAuthUi() {
+  const admin = isAdminUser();
+  document.querySelectorAll('.admin-only').forEach((el) => {
+    if (el.classList.contains('main-tab') || el.tagName === 'BUTTON') {
+      el.hidden = !admin;
+    } else if (el.classList.contains('tab-panel')) {
+      if (!admin) el.hidden = true;
+    } else {
+      el.hidden = !admin;
+    }
+  });
+
+  const heroUser = $('heroUser');
+  if (heroUser && currentUser) {
+    heroUser.hidden = false;
+    $('userDisplayName').textContent = currentUser.displayName || currentUser.username;
+    $('userRoleBadge').textContent = admin ? 'ادمین' : 'کاربر';
+    $('userRoleBadge').className = `user-badge ${admin ? 'badge-admin' : 'badge-user'}`;
+  }
+}
+
+async function ensureAuthenticated() {
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
+  if (!res.ok) {
+    redirectToLogin();
+    return false;
+  }
+  currentUser = await res.json();
+  applyAuthUi();
+  return true;
+}
+
+function districtLabelFromValue(value) {
+  if (!value) return '—';
+  const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
+  return branch ? branch.name : value;
+}
+
+async function loadUsersTable() {
+  if (!isAdminUser()) return;
+  const res = await apiFetch('/api/admin/users');
+  const data = await parseJsonResponse(res);
+  const tbody = $('usersTable')?.querySelector('tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  (data.items || []).forEach((u) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.username}</td>
+      <td>${u.firstName || '—'}</td>
+      <td>${u.lastName || '—'}</td>
+      <td>${u.nationalId || '—'}</td>
+      <td>${u.position || '—'}</td>
+      <td>${districtLabelFromValue(u.district)}</td>
+      <td>${u.isAdmin ? 'ادمین' : 'کاربر'}</td>
+      <td>${u.isActive ? 'فعال' : 'غیرفعال'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function createUserFromForm() {
+  const payload = {
+    username: ($('newUserUsername')?.value || '').trim(),
+    password: $('newUserPassword')?.value || '',
+    firstName: ($('newUserFirstName')?.value || '').trim(),
+    lastName: ($('newUserLastName')?.value || '').trim(),
+    nationalId: ($('newUserNationalId')?.value || '').trim(),
+    position: ($('newUserPosition')?.value || '').trim(),
+    district: branchIdToDistrict($('newUserDistrict')?.value || ''),
+    isAdmin: !!$('newUserIsAdmin')?.checked
+  };
+  if (!payload.username || !payload.password || !payload.firstName || !payload.lastName || !payload.nationalId) {
+    return alert('نام کاربری، رمز، نام، نام خانوادگی و کد ملی الزامی است');
+  }
+  const box = $('usersResultBox');
+  try {
+    const res = await apiFetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    if (box) {
+      box.hidden = false;
+      box.textContent = `کاربر ${data.user?.username || payload.username} با موفقیت ثبت شد.`;
+    }
+    $('newUserPassword').value = '';
+    await loadUsersTable();
+  } catch (e) {
+    if (box) {
+      box.hidden = false;
+      box.textContent = e.message;
+    }
+    alert(e.message);
+  }
+}
+
+function showHeganiResult(text) {
+  const box = $('heganiResultBox');
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = text;
 }
 
 function formatDiagnostics(d) {
@@ -615,8 +742,11 @@ function renderFiche(f) {
 }
 
 async function init() {
+  const authed = await ensureAuthenticated();
+  if (!authed) return;
+
   try {
-    const res = await fetch('/api/config');
+    const res = await apiFetch('/api/config');
     config = await parseJsonResponse(res);
   } catch (e) {
     alert(e.message);
@@ -627,6 +757,7 @@ async function init() {
   const fundSel = $('fund');
   fillBranchSelect(branchSel);
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
+  fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
   config.branches.forEach(b => {
     const optFund = document.createElement('option');
     optFund.value = b.fund;
@@ -644,6 +775,7 @@ async function init() {
   setupMainTabs();
   initDatePickers();
   window.addEventListener('load', initDatePickers);
+  if (isAdminUser()) await loadUsersTable();
 }
 
 function bindClick(id, handler) {
@@ -670,7 +802,7 @@ function setupEventHandlers() {
 
   $('btnLoad').disabled = true;
   try {
-    const res = await fetch('/api/fiche/load', {
+    const res = await apiFetch('/api/fiche/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -715,7 +847,7 @@ function setupEventHandlers() {
   }
   $('btnPreview').disabled = true;
   try {
-    const res = await fetch('/api/fiche/preview', {
+    const res = await apiFetch('/api/fiche/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getPayload(false))
@@ -746,7 +878,7 @@ function setupEventHandlers() {
     if (!confirm(warn)) return;
     $('btnSend').disabled = true;
     try {
-      const res = await fetch('/api/tahator/send', {
+      const res = await apiFetch('/api/tahator/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ficheNo: currentFiche.ficheNo, branch: 0, fund: 0 })
@@ -776,7 +908,7 @@ function setupEventHandlers() {
 
   $('btnSend').disabled = true;
   try {
-    const res = await fetch('/api/fiche/send', {
+    const res = await apiFetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getPayload(true))
@@ -865,7 +997,7 @@ function setupEventHandlers() {
     box.textContent = 'در حال بررسی مسیر ارسال هر فیش…';
 
     try {
-      const res = await fetch('/api/unsent/plan-batch', {
+      const res = await apiFetch('/api/unsent/plan-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -913,7 +1045,7 @@ function setupEventHandlers() {
     box.textContent = `در حال ارسال ${selected.length} فیش…\n\nصبر کنید…`;
 
     try {
-      const res = await fetch('/api/unsent/send-batch', {
+      const res = await apiFetch('/api/unsent/send-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -948,6 +1080,79 @@ function setupEventHandlers() {
       alert(e.message);
     } finally {
       updateUnsentSendButton();
+    }
+  });
+}
+
+function setupAuthAndAdminHandlers() {
+  bindClick('btnLogout', async () => {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    redirectToLogin();
+  });
+
+  bindClick('btnCreateUser', createUserFromForm);
+  bindClick('btnRefreshUsers', loadUsersTable);
+
+  bindClick('btnHeganiDbTest', async () => {
+    try {
+      const res = await apiFetch('/api/db-test');
+      const data = await parseJsonResponse(res);
+      showHeganiResult(JSON.stringify(data, null, 2));
+    } catch (e) {
+      showHeganiResult(e.message);
+    }
+  });
+
+  bindClick('btnHeganiRayvarzPing', async () => {
+    try {
+      const res = await apiFetch('/api/rayvarz-ping');
+      const data = await parseJsonResponse(res);
+      showHeganiResult(JSON.stringify(data, null, 2));
+    } catch (e) {
+      showHeganiResult(e.message);
+    }
+  });
+
+  bindClick('btnHeganiRuleMeta', async () => {
+    const memberId = parseInt($('heganiMemberId')?.value || '1388', 10);
+    try {
+      const res = await apiFetch(`/api/rule/member/${memberId}/meta`);
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      showHeganiResult(JSON.stringify(data, null, 2));
+    } catch (e) {
+      showHeganiResult(e.message);
+    }
+  });
+
+  bindClick('btnHeganiTahatorCheck', async () => {
+    const ficheNo = ($('heganiTahatorFicheNo')?.value || '').trim();
+    if (!ficheNo) return alert('شماره فیش تهاتر را وارد کنید');
+    try {
+      const res = await apiFetch('/api/tahator/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ficheNo })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      showHeganiResult(formatTahatorCheck(data));
+    } catch (e) {
+      showHeganiResult(e.message);
+    }
+  });
+
+  bindClick('btnHeganiTahatorPending', async () => {
+    try {
+      const res = await apiFetch('/api/tahator/pending');
+      const data = await parseJsonResponse(res);
+      showHeganiResult(JSON.stringify(data, null, 2));
+    } catch (e) {
+      showHeganiResult(e.message);
     }
   });
 }
@@ -1007,4 +1212,5 @@ function formatTahatorSend(d) {
 }
 
 setupEventHandlers();
+setupAuthAndAdminHandlers();
 init();

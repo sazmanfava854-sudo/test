@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=19" />
+  <link rel="stylesheet" href="css/style.css?v=20" />
 </head>
 <body>
   <div class="page-bg" aria-hidden="true"></div>
@@ -21,12 +21,21 @@
             <h1>ارسال مجدد فیش به رایورز</h1>
           </div>
         </div>
+        <div class="hero-user" id="heroUser" hidden>
+          <div class="user-meta">
+            <span id="userDisplayName" class="user-name"></span>
+            <span id="userRoleBadge" class="user-badge"></span>
+          </div>
+          <button id="btnLogout" class="btn secondary btn-sm" type="button">خروج</button>
+        </div>
       </div>
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش های جمعی</button>
       <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
+      <button type="button" class="main-tab admin-only" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
+      <button type="button" class="main-tab admin-only" data-tab="hegani" role="tab" aria-selected="false" hidden>فرم هگانی</button>
     </nav>
 
     <div id="tabUnsent" class="tab-panel active" role="tabpanel">
@@ -78,7 +87,7 @@
       </div>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentPlan" class="btn secondary" type="button" disabled>بررسی مسیر ارسال</button>
+        <button id="btnUnsentPlan" class="btn secondary admin-only" type="button" disabled hidden>بررسی مسیر ارسال</button>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
@@ -177,7 +186,7 @@
         </div>
         <div class="actions">
           <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
-          <button id="btnPreview" class="btn secondary" type="button" disabled>پیش‌نمایش XML</button>
+          <button id="btnPreview" class="btn secondary admin-only" type="button" disabled hidden>پیش‌نمایش XML</button>
           <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
         </div>
       </div>
@@ -224,8 +233,104 @@
       <pre id="xmlBox" class="code-block"></pre>
     </section>
     </div>
+
+    <div id="tabUsers" class="tab-panel admin-only" role="tabpanel" hidden>
+      <section class="card card-enter">
+        <div class="card-head">
+          <span class="card-icon" aria-hidden="true">👤</span>
+          <h2>ایجاد کاربر جدید</h2>
+        </div>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">نام کاربری</span>
+            <input id="newUserUsername" type="text" autocomplete="off" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">رمز عبور</span>
+            <input id="newUserPassword" type="password" autocomplete="new-password" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">نام</span>
+            <input id="newUserFirstName" type="text" autocomplete="off" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">نام خانوادگی</span>
+            <input id="newUserLastName" type="text" autocomplete="off" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">کد ملی</span>
+            <input id="newUserNationalId" type="text" inputmode="numeric" maxlength="10" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">سمت</span>
+            <input id="newUserPosition" type="text" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">منطقه</span>
+            <select id="newUserDistrict"></select>
+          </label>
+          <label class="field check-field">
+            <input id="newUserIsAdmin" type="checkbox" />
+            <span>دسترسی ادمین</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnCreateUser" class="btn primary" type="button">ثبت کاربر</button>
+          <button id="btnRefreshUsers" class="btn secondary" type="button">بروزرسانی لیست</button>
+        </div>
+        <div class="subsection">
+          <h3>کاربران ثبت‌شده</h3>
+          <div class="table-wrap">
+            <table id="usersTable">
+              <thead>
+                <tr>
+                  <th>نام کاربری</th>
+                  <th>نام</th>
+                  <th>نام خانوادگی</th>
+                  <th>کد ملی</th>
+                  <th>سمت</th>
+                  <th>منطقه</th>
+                  <th>نقش</th>
+                  <th>وضعیت</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <pre id="usersResultBox" class="code-block" hidden></pre>
+      </section>
+    </div>
+
+    <div id="tabHegani" class="tab-panel admin-only" role="tabpanel" hidden>
+      <section class="card card-enter">
+        <div class="card-head">
+          <span class="card-icon" aria-hidden="true">🛠</span>
+          <h2>فرم هگانی — ابزارهای مدیریتی</h2>
+        </div>
+        <p class="field-hint">این بخش فقط برای ادمین — تست اتصال، Rule Engine و تهاتر.</p>
+        <div class="form-grid unsent-form-grid">
+          <label class="field">
+            <span class="field-label">شماره فیش تهاتر</span>
+            <input id="heganiTahatorFicheNo" type="text" placeholder="FicheNo" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">Member Rule (NidMember)</span>
+            <input id="heganiMemberId" type="number" value="1388" />
+          </label>
+        </div>
+        <div class="actions hegani-actions">
+          <button id="btnHeganiDbTest" class="btn secondary" type="button">تست اتصال DB</button>
+          <button id="btnHeganiRayvarzPing" class="btn secondary" type="button">Ping رایورز</button>
+          <button id="btnHeganiRuleMeta" class="btn secondary" type="button">متای Rule Engine</button>
+          <button id="btnHeganiTahatorCheck" class="btn secondary" type="button">بررسی تهاتر</button>
+          <button id="btnHeganiTahatorPending" class="btn secondary" type="button">لیست Snapshot تهاتر</button>
+        </div>
+        <pre id="heganiResultBox" class="code-block" hidden></pre>
+      </section>
+    </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=25"></script>
+  <script src="js/app.js?v=26"></script>
 </body>
 </html>
