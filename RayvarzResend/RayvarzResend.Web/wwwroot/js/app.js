@@ -70,9 +70,11 @@ function getUserDistrict() {
 }
 
 function applyRegionalUserRestrictions() {
-  if (isAdminUser()) {
+  if (hasUnrestrictedFicheAccess()) {
+    fillBranchSelect($('branch'));
     $('branch')?.removeAttribute('disabled');
     $('fund')?.removeAttribute('disabled');
+    syncFundFromBranch();
     return;
   }
 
@@ -82,7 +84,7 @@ function applyRegionalUserRestrictions() {
   if (branchId) {
     $('branch').value = branchId;
     $('branch').disabled = true;
-    if (branchId !== 102) syncFundFromBranch();
+    syncFundFromBranch();
     $('fund').disabled = true;
   }
 }
@@ -494,6 +496,14 @@ function isAdminUser() {
   return !!currentUser?.isAdmin;
 }
 
+function isCenterUser() {
+  return !isAdminUser() && getUserDistrict() === '102';
+}
+
+function hasUnrestrictedFicheAccess() {
+  return isAdminUser() || isCenterUser();
+}
+
 function applyAuthUi() {
   const admin = isAdminUser();
   document.querySelectorAll('.admin-only').forEach((el) => {
@@ -507,7 +517,9 @@ function applyAuthUi() {
     const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
     $('userRoleBadge').textContent = admin
       ? 'ادمین'
-      : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
+      : isCenterUser()
+        ? 'کاربر — شعبه مرکز'
+        : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
     $('userRoleBadge').className = `user-badge ${admin ? 'badge-admin' : 'badge-user'}`;
   }
 

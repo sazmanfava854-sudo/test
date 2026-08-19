@@ -58,6 +58,10 @@ public static class DistrictAccessService
         return null;
     }
 
+    public static bool IsCenterUser(ClaimsPrincipal? user) =>
+        !AppAuthService.IsAdmin(user)
+        && NormalizeDistrict(GetUserDistrict(user)) == CenterDistrictCode;
+
     public static bool CanAccessFiche(ClaimsPrincipal? user, FicheHeaderDto fiche)
     {
         if (AppAuthService.IsAdmin(user))
@@ -67,8 +71,9 @@ public static class DistrictAccessService
         if (string.IsNullOrEmpty(userDistrict))
             return false;
 
+        // کاربر شعبه مرکز: دسترسی به فیش همه مناطق (ارسال تکی)
         if (userDistrict == CenterDistrictCode)
-            return IsCenterFiche(fiche);
+            return true;
 
         var ficheDistrict = ResolveFicheDistrict(fiche);
         if (string.IsNullOrEmpty(ficheDistrict))
@@ -109,9 +114,6 @@ public static class DistrictAccessService
 
         if (string.IsNullOrEmpty(ficheDistrict))
             return "منطقه فیش مشخص نیست — ارسال مجاز نیست";
-
-        if (userDistrict == CenterDistrictCode)
-            return "این فیش مربوط به شعبه مرکز (تهاتر مبلغ / Branch=102) نیست";
 
         return $"این فیش متعلق به منطقه {ficheDistrict} است و برای کاربر منطقه {userDistrict} قابل ارسال نیست";
     }
