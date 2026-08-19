@@ -206,6 +206,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         nidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     },
     branches = new[] {
+        new { id = 102, name = "شعبه مرکز", fund = 0 },
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
         new { id = 203, name = "منطقه 3", fund = 200203013 },

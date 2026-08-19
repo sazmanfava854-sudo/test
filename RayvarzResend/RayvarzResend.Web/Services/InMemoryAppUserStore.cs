@@ -13,13 +13,10 @@ public sealed class InMemoryAppUserStore
 
     public AppUserRecord Add(CreateAppUserRequest req)
     {
-        var username = (req.Username ?? "").Trim();
-        if (username.Length < 3)
-            throw new ArgumentException("نام کاربری حداقل ۳ کاراکتر باشد");
-        if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
-            throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
+        AppUserInputNormalizer.ValidateAndApply(req);
+        var username = req.Username!;
         if (_byUsername.ContainsKey(username))
-            throw new InvalidOperationException("نام کاربری تکراری است");
+            throw new InvalidOperationException("کاربر با این کد ملی قبلاً ثبت شده است");
 
         var user = new AppUserRecord
         {

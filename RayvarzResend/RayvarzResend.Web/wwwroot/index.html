@@ -240,38 +240,36 @@
           <h2>ایجاد کاربر جدید</h2>
         </div>
         <p class="field-hint form-intro">
-          <strong>نام کاربری</strong> شناسه ورود به سیستم است (مثلاً <code>ahmad.rezaei</code>).
-          <strong>نام</strong> و <strong>نام خانوادگی</strong> نام واقعی فرد برای نمایش در سامانه هستند و با نام کاربری فرق دارند.
+          کاربر با <strong>کد ملی</strong> وارد می‌شود — فیلد جداگانهٔ نام کاربری لازم نیست.
+          ابتدا نام و نام خانوادگی را وارد کنید، سپس کد ملی و رمز عبور.
+          <strong>شعبه مرکز</strong> در رایورز با شماره <strong>۱۰۲</strong> مشخص است (ارسال تهاتر مبلغ / گروه ۱۵۷).
         </p>
         <div class="form-grid unsent-form-grid">
           <label class="field field-required">
-            <span class="field-label">نام کاربری (ورود)</span>
-            <input id="newUserUsername" type="text" autocomplete="off" placeholder="شناسه ورود — لاتین" />
-            <span class="field-hint">برای لاگین استفاده می‌شود، نه نام نمایشی</span>
+            <span class="field-label">نام</span>
+            <input id="newUserFirstName" type="text" autocomplete="off" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">نام خانوادگی</span>
+            <input id="newUserLastName" type="text" autocomplete="off" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">کد ملی (ورود به سیستم)</span>
+            <input id="newUserNationalId" type="text" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="۱۰ رقم" />
+            <span class="field-hint">همان کد ملی برای لاگین استفاده می‌شود</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
             <input id="newUserPassword" type="password" autocomplete="new-password" />
-          </label>
-          <label class="field field-required">
-            <span class="field-label">نام (نمایشی)</span>
-            <input id="newUserFirstName" type="text" autocomplete="off" />
-          </label>
-          <label class="field field-required">
-            <span class="field-label">نام خانوادگی (نمایشی)</span>
-            <input id="newUserLastName" type="text" autocomplete="off" />
-          </label>
-          <label class="field field-required">
-            <span class="field-label">کد ملی</span>
-            <input id="newUserNationalId" type="text" inputmode="numeric" maxlength="10" autocomplete="off" />
           </label>
           <label class="field">
             <span class="field-label">سمت</span>
             <input id="newUserPosition" type="text" autocomplete="off" />
           </label>
           <label class="field">
-            <span class="field-label">منطقه</span>
+            <span class="field-label">منطقه / شعبه</span>
             <select id="newUserDistrict"></select>
+            <span class="field-hint">مناطق ۱–۱۲ و ثامن، یا شعبه مرکز (۱۰۲)</span>
           </label>
           <label class="field check-field">
             <input id="newUserIsAdmin" type="checkbox" />
@@ -288,10 +286,9 @@
             <table id="usersTable">
               <thead>
                 <tr>
-                  <th>نام کاربری</th>
+                  <th>کد ملی (ورود)</th>
                   <th>نام</th>
                   <th>نام خانوادگی</th>
-                  <th>کد ملی</th>
                   <th>سمت</th>
                   <th>منطقه</th>
                   <th>نقش</th>
@@ -307,6 +304,6 @@
     </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=27"></script>
+  <script src="js/app.js?v=28"></script>
 </body>
 </html>

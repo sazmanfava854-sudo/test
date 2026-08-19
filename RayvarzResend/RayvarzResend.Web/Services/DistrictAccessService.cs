@@ -6,6 +6,9 @@ namespace RayvarzResend.Web.Services;
 /// <summary>محدودیت دسترسی کاربر منطقه‌ای به فیش‌های همان منطقه.</summary>
 public static class DistrictAccessService
 {
+    /// <summary>شعبه مرکز رایورز — تهاتر مبلغ (گروه ۱۵۷) به Branch=102 ارسال می‌شود.</summary>
+    public const string CenterDistrictCode = "102";
+    public const int CenterBranchId = 102;
     public static string? GetUserDistrict(ClaimsPrincipal? user) =>
         user?.FindFirst(AuthClaimTypes.District)?.Value;
 
@@ -24,6 +27,8 @@ public static class DistrictAccessService
             return "218";
         if (n is >= 1 and <= 12)
             return n.ToString();
+        if (n == 102)
+            return CenterDistrictCode;
         return v;
     }
 
@@ -32,6 +37,8 @@ public static class DistrictAccessService
         var d = NormalizeDistrict(district);
         if (string.IsNullOrEmpty(d))
             return null;
+        if (d == CenterDistrictCode)
+            return CenterBranchId;
         if (d == "218")
             return 218;
         if (int.TryParse(d, out var n) && n is >= 1 and <= 12)
@@ -60,11 +67,31 @@ public static class DistrictAccessService
         if (string.IsNullOrEmpty(userDistrict))
             return false;
 
+        if (userDistrict == CenterDistrictCode)
+            return IsCenterFiche(fiche);
+
         var ficheDistrict = ResolveFicheDistrict(fiche);
         if (string.IsNullOrEmpty(ficheDistrict))
             return false;
 
         return userDistrict == ficheDistrict;
+    }
+
+    /// <summary>فیش مربوط به شعبه مرکز: تهاتر مبلغ (۱۵۷) یا Branch=102.</summary>
+    public static bool IsCenterFiche(FicheHeaderDto fiche) =>
+        fiche.IncomeAccountGroup == TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+        || fiche.ResolvedDistrictBranch == CenterBranchId;
+
+    public static string DistrictDisplayLabel(string? district)
+    {
+        var d = NormalizeDistrict(district);
+        return d switch
+        {
+            CenterDistrictCode => "شعبه مرکز (۱۰۲)",
+            "218" => "منطقه ثامن",
+            _ when int.TryParse(d, out var n) && n is >= 1 and <= 12 => $"منطقه {n}",
+            _ => string.IsNullOrEmpty(d) ? "—" : d
+        };
     }
 
     public static string? GetAccessDeniedMessage(ClaimsPrincipal? user, FicheHeaderDto fiche)
@@ -82,6 +109,9 @@ public static class DistrictAccessService
 
         if (string.IsNullOrEmpty(ficheDistrict))
             return "منطقه فیش مشخص نیست — ارسال مجاز نیست";
+
+        if (userDistrict == CenterDistrictCode)
+            return "این فیش مربوط به شعبه مرکز (تهاتر مبلغ / Branch=102) نیست";
 
         return $"این فیش متعلق به منطقه {ficheDistrict} است و برای کاربر منطقه {userDistrict} قابل ارسال نیست";
     }

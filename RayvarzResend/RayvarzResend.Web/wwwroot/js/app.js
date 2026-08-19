@@ -23,6 +23,7 @@ const categoryLabels = {
 function branchFromRegion(regionStr) {
   const r = parseInt(regionStr, 10);
   if (Number.isNaN(r)) return null;
+  if (r === 102) return 102;
   if (r === 218 || r === 80) return 218;
   if (r >= 1 && r <= 12) return 200 + r;
   if (r >= 201 && r <= 212) return r;
@@ -33,6 +34,7 @@ function branchFromRegion(regionStr) {
 function branchIdToDistrict(branchId) {
   const id = parseInt(branchId, 10);
   if (!id) return '';
+  if (id === 102) return '102';
   if (id === 218) return '218';
   if (id >= 201 && id <= 212) return String(id - 200);
   if (id >= 1 && id <= 12) return String(id);
@@ -51,7 +53,10 @@ function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه م�
   }
   const restrict = restrictToDistrict ? String(restrictToDistrict) : '';
   config.branches.forEach((b) => {
-    if (restrict && branchIdToDistrict(String(b.id)) !== restrict) return;
+    if (restrict) {
+      const dist = branchIdToDistrict(String(b.id));
+      if (dist !== restrict) return;
+    }
     const opt = document.createElement('option');
     opt.value = b.id;
     opt.textContent = b.name;
@@ -77,7 +82,7 @@ function applyRegionalUserRestrictions() {
   if (branchId) {
     $('branch').value = branchId;
     $('branch').disabled = true;
-    syncFundFromBranch();
+    if (branchId !== 102) syncFundFromBranch();
     $('fund').disabled = true;
   }
 }
@@ -522,6 +527,7 @@ async function ensureAuthenticated() {
 
 function districtLabelFromValue(value) {
   if (!value) return '—';
+  if (String(value) === '102') return 'شعبه مرکز (۱۰۲)';
   const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
   return branch ? branch.name : value;
 }
@@ -536,10 +542,9 @@ async function loadUsersTable() {
   (data.items || []).forEach((u) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${u.username}</td>
+      <td>${u.nationalId || u.username}</td>
       <td>${u.firstName || '—'}</td>
       <td>${u.lastName || '—'}</td>
-      <td>${u.nationalId || '—'}</td>
       <td>${u.position || '—'}</td>
       <td>${districtLabelFromValue(u.district)}</td>
       <td>${u.isAdmin ? 'ادمین' : 'کاربر'}</td>
@@ -550,21 +555,25 @@ async function loadUsersTable() {
 }
 
 async function createUserFromForm() {
+  const nationalId = ($('newUserNationalId')?.value || '').trim();
   const payload = {
-    username: ($('newUserUsername')?.value || '').trim(),
+    username: nationalId,
     password: $('newUserPassword')?.value || '',
     firstName: ($('newUserFirstName')?.value || '').trim(),
     lastName: ($('newUserLastName')?.value || '').trim(),
-    nationalId: ($('newUserNationalId')?.value || '').trim(),
+    nationalId,
     position: ($('newUserPosition')?.value || '').trim(),
     district: branchIdToDistrict($('newUserDistrict')?.value || ''),
     isAdmin: !!$('newUserIsAdmin')?.checked
   };
-  if (!payload.username || !payload.password || !payload.firstName || !payload.lastName || !payload.nationalId) {
-    return alert('نام کاربری، رمز، نام، نام خانوادگی و کد ملی الزامی است');
+  if (!payload.firstName || !payload.lastName || !payload.nationalId || !payload.password) {
+    return alert('نام، نام خانوادگی، کد ملی و رمز عبور الزامی است');
+  }
+  if (payload.nationalId.length !== 10 || !/^\d+$/.test(payload.nationalId)) {
+    return alert('کد ملی باید ۱۰ رقم باشد');
   }
   if (!payload.isAdmin && !payload.district) {
-    return alert('برای کاربر منطقه‌ای، انتخاب منطقه الزامی است');
+    return alert('برای کاربر منطقه‌ای، انتخاب منطقه یا شعبه مرکز الزامی است');
   }
   const box = $('usersResultBox');
   try {
@@ -577,9 +586,10 @@ async function createUserFromForm() {
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
     if (box) {
       box.hidden = false;
-      box.textContent = `کاربر ${data.user?.username || payload.username} با موفقیت ثبت شد.`;
+      box.textContent = `کاربر ${data.user?.nationalId || data.user?.username || nationalId} با موفقیت ثبت شد.`;
     }
     $('newUserPassword').value = '';
+    $('newUserNationalId').value = '';
     await loadUsersTable();
   } catch (e) {
     if (box) {

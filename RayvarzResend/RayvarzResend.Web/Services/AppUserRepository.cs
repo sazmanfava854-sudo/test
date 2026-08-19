@@ -154,24 +154,19 @@ public sealed class AppUserRepository
             return _memory.Add(req);
 
         await EnsureSchemaAsync(ct);
-        var username = (req.Username ?? "").Trim();
-        if (username.Length < 3)
-            throw new ArgumentException("نام کاربری حداقل ۳ کاراکتر باشد");
-        if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
-            throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
-        if (!req.IsAdmin && string.IsNullOrWhiteSpace(req.District))
-            throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه الزامی است");
+        AppUserInputNormalizer.ValidateAndApply(req);
+        var username = req.Username!;
 
         var user = new AppUserRecord
         {
             Id = Guid.NewGuid(),
             Username = username,
             PasswordHash = PasswordHasherUtil.Hash(req.Password!),
-            FirstName = (req.FirstName ?? "").Trim(),
-            LastName = (req.LastName ?? "").Trim(),
-            NationalId = (req.NationalId ?? "").Trim(),
-            Position = (req.Position ?? "").Trim(),
-            District = (req.District ?? "").Trim(),
+            FirstName = req.FirstName,
+            LastName = req.LastName,
+            NationalId = req.NationalId,
+            Position = req.Position,
+            District = req.District,
             IsAdmin = req.IsAdmin,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
@@ -202,7 +197,7 @@ public sealed class AppUserRepository
         }
         catch (SqlException ex) when (ex.Number is 2627 or 2601)
         {
-            throw new InvalidOperationException("نام کاربری تکراری است");
+            throw new InvalidOperationException("کاربر با این کد ملی قبلاً ثبت شده است");
         }
 
         return user;

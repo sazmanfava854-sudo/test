@@ -17,11 +17,11 @@
         <span class="card-icon" aria-hidden="true">🔐</span>
         <h1>ورود به Rayvarz Resend</h1>
       </div>
-      <p class="login-subtitle">برای دسترسی به سامانه ارسال مجدد فیش، وارد شوید.</p>
+      <p class="login-subtitle">ورود با کد ملی و رمز عبور — ادمین می‌تواند با نام کاربری <code>admin</code> وارد شود.</p>
       <form id="loginForm" class="login-form">
         <label class="field field-required">
-          <span class="field-label">نام کاربری</span>
-          <input id="loginUsername" type="text" autocomplete="username" required />
+          <span class="field-label">کد ملی</span>
+          <input id="loginUsername" type="text" inputmode="numeric" maxlength="10" autocomplete="username" required placeholder="۱۰ رقم" />
         </label>
         <label class="field field-required">
           <span class="field-label">رمز عبور</span>
@@ -34,6 +34,6 @@
       </form>
     </section>
   </div>
-  <script src="js/login.js?v=1"></script>
+  <script src="js/login.js?v=2"></script>
 </body>
 </html>

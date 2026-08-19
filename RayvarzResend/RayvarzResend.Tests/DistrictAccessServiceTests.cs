@@ -12,6 +12,7 @@ public class DistrictAccessServiceTests
     [InlineData("202", "2")]
     [InlineData("218", "218")]
     [InlineData("80", "218")]
+    [InlineData("102", "102")]
     public void NormalizeDistrict_maps_branch_and_region_codes(string input, string expected) =>
         Assert.Equal(expected, DistrictAccessService.NormalizeDistrict(input));
 
@@ -41,6 +42,22 @@ public class DistrictAccessServiceTests
     {
         var user = RegionalUser("2");
         var fiche = new FicheHeaderDto { IncomeRegion = "3" };
+        Assert.False(DistrictAccessService.CanAccessFiche(user, fiche));
+    }
+
+    [Fact]
+    public void CanAccessFiche_center_user_tahator157_allowed()
+    {
+        var user = RegionalUser("102");
+        var fiche = new FicheHeaderDto { IncomeAccountGroup = TahatorRowBuilder.IncomeAccountGroupTahatorAmount };
+        Assert.True(DistrictAccessService.CanAccessFiche(user, fiche));
+    }
+
+    [Fact]
+    public void CanAccessFiche_center_user_regional_fiche_denied()
+    {
+        var user = RegionalUser("102");
+        var fiche = new FicheHeaderDto { ResolvedDistrictBranch = 202 };
         Assert.False(DistrictAccessService.CanAccessFiche(user, fiche));
     }
 
