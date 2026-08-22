@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web;
 using RayvarzResend.Web.Models;
@@ -19,10 +20,14 @@ builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
+// Required for /api/fiche/preview — do not remove
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 
 var app = builder.Build();
+
+// Fail fast if critical DI is missing (avoids Kestrel "payload UNKNOWN" at first request)
+app.Services.GetRequiredService<RayvarzPayloadBuilder>();
 
 app.UseExceptionHandler(handler =>
 {
@@ -255,13 +260,16 @@ app.MapPost("/api/rule/bridge/build-save-document", async (
     }
 });
 
-app.MapPost("/api/fiche/preview", async (SendFicheRequest req, RayvarzPayloadBuilder payload, CancellationToken ct) =>
+app.MapPost("/api/fiche/preview", async (
+    [FromBody] SendFicheRequest req,
+    [FromServices] RayvarzPayloadBuilder payloadBuilder,
+    CancellationToken ct) =>
 {
     var blockReason = FicheSendService.ValidateSendable(req.Fiche);
     if (blockReason != null)
         return Results.BadRequest(new { error = blockReason });
 
-    var built = await payload.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
+    var built = await payloadBuilder.BuildAsync(req.Fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
     return Results.Ok(new { xml = built.Xml, payloadMode = built.Mode.ToString(), warning = built.Warning, ruleMeta = built.RuleMeta });
 });
 
