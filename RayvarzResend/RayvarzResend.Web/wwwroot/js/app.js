@@ -264,15 +264,14 @@ function applyFicheDatesToForm(f) {
   $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
 }
 
-function getPayload(resetStatus) {
+function getPayload() {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
     fund: parseInt($('fund').value),
     docDate: $('docDate').value,
     actDate: $('actDate').value,
-    dueDate: $('dueDate').value,
-    resetStatus: !!resetStatus
+    dueDate: $('dueDate').value
   };
 }
 
@@ -571,7 +570,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(false))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -632,7 +631,7 @@ function setupEventHandlers() {
     const res = await fetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(true))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
@@ -735,8 +734,7 @@ function setupEventHandlers() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ficheKind: $('unsentFicheKind').value,
-          ficheNos: selected,
-          resetStatus: true
+          ficheNos: selected
         })
       });
       const data = await parseJsonResponse(res);
@@ -783,8 +781,7 @@ function setupEventHandlers() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ficheKind: kind,
-          ficheNos: selected,
-          resetStatus: true
+          ficheNos: selected
         })
       });
       const data = await parseJsonResponse(res);
@@ -831,14 +828,11 @@ function formatTahatorCheck(d) {
     pairLines.length ? ['--- وضعیت هر فیش ---', ...pairLines].join('\n') : '',
     `NeedsSend (حداقل یکی از جفت): ${d.needsSend}`,
     f ? `فیش ورودی — Payable: ${Number(f.payable || 0).toLocaleString()}` : '',
-    d.pendingStoredSnapshot
-      ? `Snapshot Pending: Id=${d.pendingStoredSnapshot.snapshotId}`
-      : 'Snapshot Pending: —',
     d.docNotSentError ? `DocNotSent: ${d.docNotSentError}` : 'DocNotSent: —',
     `پیام: ${d.message || ''}`,
     snap ? [
       '',
-      '--- Snapshot فعلی (فیش ورودی) ---',
+      '--- وضعیت فعلی Income_Fiche (فیش ورودی) ---',
       `EumFicheStatus: ${snap.eumFicheStatus}`,
       `ExportPermanentDate: ${snap.exportPermanentDate || ''}`,
       `PaymentBreakDate: ${snap.paymentBreakDate || ''}`,
@@ -860,7 +854,7 @@ function formatTahatorSend(d) {
     d.skipReason ? `SkipReason: ${d.skipReason}` : '',
     `DryRun: ${d.dryRun}`,
     resultLines.length ? ['--- هر فیش ---', ...resultLines].join('\n') : '',
-    d.triggerDate ? `تاریخ تریگر: ${d.triggerDate}` : '',
+    d.triggerDate ? `تاریخ SOAP: ${d.triggerDate}` : null,
     `پیام: ${d.message || ''}`,
     '',
     '--- مراحل ---',
