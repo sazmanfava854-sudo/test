@@ -176,12 +176,6 @@ const installmentLookupLabels = {
   TrackingNo: 'کد پیگیری (TrackingNo)'
 };
 
-function detectInstallmentLookupKind(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (!digits) return null;
-  return digits.length >= 10 ? 'TrackingNo' : 'NoDocument';
-}
-
 function getInstallmentPayload() {
   const raw = ($('installmentValues')?.value || '').replace(/\D/g, '');
   return {
