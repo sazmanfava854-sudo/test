@@ -19,7 +19,7 @@ builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
-builder.Services.AddSingleton<RayvarzPayloadBuilder>();
+builder.Services.AddSingleton<InstallmentCheckService>();
 
 var app = builder.Build();
 
@@ -54,7 +54,7 @@ app.MapGet("/api/config", (IConfiguration config) => new
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "4",
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, installmentCheck = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -358,6 +358,48 @@ app.MapPost("/api/unsent/send-batch", async (UnsentBatchSendRequest? req, Unsent
     try
     {
         return Results.Ok(await unsent.SendBatchAsync(req, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapPost("/api/installment/preview", async (InstallmentCheckRequest? req, InstallmentCheckService installment, CancellationToken ct) =>
+{
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await installment.PreviewAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+});
+
+app.MapPost("/api/installment/update", async (InstallmentCheckRequest? req, InstallmentCheckService installment, CancellationToken ct) =>
+{
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await installment.UpdateAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
     }
     catch (Exception ex)
     {

@@ -92,7 +92,8 @@ function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
     unsent: $('tabUnsent'),
-    single: $('tabSingle')
+    single: $('tabSingle'),
+    installment: $('tabInstallment')
   };
 
   tabs.forEach((tab) => {
@@ -111,6 +112,76 @@ function setupMainTabs() {
       });
     });
   });
+}
+
+function getInstallmentPayload() {
+  const lookupKind = $('installmentLookupKind')?.value || 'NoDocument';
+  return {
+    lookupKind,
+    valuesText: ($('installmentValues')?.value || '').trim(),
+    performedByUser: ($('installmentPerformedBy')?.value || '').trim(),
+    applyEndState: lookupKind === 'TrackingNo' && $('installmentApplyEndState')?.checked
+  };
+}
+
+function syncInstallmentEndStateVisibility() {
+  const kind = $('installmentLookupKind')?.value || 'NoDocument';
+  const wrap = $('installmentEndStateWrap');
+  if (!wrap) return;
+  const show = kind === 'TrackingNo';
+  wrap.hidden = !show;
+  if (!show && $('installmentApplyEndState')) {
+    $('installmentApplyEndState').checked = false;
+  }
+}
+
+function renderInstallmentPreview(data) {
+  const section = $('installmentPreviewSection');
+  const tbody = $('installmentPreviewTable')?.querySelector('tbody');
+  const summary = $('installmentPreviewSummary');
+  const updateBtn = $('btnInstallmentUpdate');
+  if (!section || !tbody) return;
+
+  const items = data.items || [];
+  section.hidden = false;
+  if (summary) {
+    summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | شناسه بدون نتیجه: ${data.notFoundCount || 0}`;
+  }
+  tbody.innerHTML = '';
+  items.forEach((row) => {
+    const tr = document.createElement('tr');
+    if (!row.found) tr.classList.add('row-not-found');
+    const endCurrent = `${row.endStateDesc || '-'} / ${row.endStateCode || '-'}`;
+    const endProposed = row.found
+      ? `${row.proposedEndStateDesc || '-'} / ${row.proposedEndStateCode || '-'}`
+      : '—';
+    tr.innerHTML = `
+      <td>${row.lookupValue || ''}</td>
+      <td>${row.noDocument || '-'}</td>
+      <td>${row.trackingNo || '-'}</td>
+      <td>${row.ci_InstallmentStatus ?? row.cI_InstallmentStatus ?? '-'}</td>
+      <td>${endCurrent}</td>
+      <td class="col-comments">${row.comments || '-'}</td>
+      <td class="col-comments">${row.proposedComments || '-'}</td>
+      <td>${row.proposedCI_InstallmentStatus ?? row.proposedCI_InstallmentStatus ?? '28'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  if (updateBtn) updateBtn.disabled = !(data.foundCount > 0);
+}
+
+function formatInstallmentUpdateResult(data) {
+  const lines = (data.results || []).map((r) =>
+    `${r.lookupValue}: ${r.success ? 'OK' : 'FAIL'} (${r.rowsAffected || 0} ردیف) — ${r.message || ''}`
+  );
+  return [
+    '=== نتیجه UPDATE Installment_List ===',
+    `نوع شناسه: ${data.lookupKind}`,
+    `ApplyEndState: ${data.applyEndState}`,
+    `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
+    '',
+    ...lines
+  ].join('\n');
 }
 
 function getSingleFicheKind() {
@@ -492,6 +563,8 @@ async function init() {
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('identifierValue')?.addEventListener('input', updateIdentifierHint);
+  $('installmentLookupKind')?.addEventListener('change', syncInstallmentEndStateVisibility);
+  syncInstallmentEndStateVisibility();
   syncFundFromBranch();
   setupMainTabs();
   initDatePickers();
@@ -807,6 +880,69 @@ function setupEventHandlers() {
       alert(e.message);
     } finally {
       updateUnsentSendButton();
+    }
+  });
+
+  bindClick('btnInstallmentPreview', async () => {
+    const payload = getInstallmentPayload();
+    if (!payload.valuesText) return alert('حداقل یک شناسه وارد کنید');
+
+    const btn = $('btnInstallmentPreview');
+    const box = $('installmentResultBox');
+    btn.disabled = true;
+    if (box) box.hidden = true;
+    try {
+      const res = await fetch('/api/installment/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      renderInstallmentPreview(data);
+    } catch (e) {
+      alert(e.message);
+      $('installmentPreviewSection').hidden = true;
+      if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  bindClick('btnInstallmentUpdate', async () => {
+    const payload = getInstallmentPayload();
+    if (!payload.valuesText) return alert('حداقل یک شناسه وارد کنید');
+
+    const endNote = payload.lookupKind === 'NoDocument'
+      ? 'EndStateDesc=عودت و EndStateCode=17 همیشه اعمال می‌شود.'
+      : payload.applyEndState
+        ? 'EndStateDesc/EndStateCode اعمال می‌شود.'
+        : 'فقط Comments و CI_InstallmentStatus=28 — بدون تغییر EndState.';
+    if (!confirm(`UPDATE روی Installment_List در Sara؟\n${endNote}\n\nادامه؟`)) return;
+
+    const btn = $('btnInstallmentUpdate');
+    const box = $('installmentResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال اعمال UPDATE…';
+    }
+    try {
+      const res = await fetch('/api/installment/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) box.textContent = formatInstallmentUpdateResult(data);
+      alert(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+      $('btnInstallmentPreview').click();
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 }

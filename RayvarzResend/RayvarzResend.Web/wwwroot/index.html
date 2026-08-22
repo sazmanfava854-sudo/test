@@ -27,6 +27,7 @@
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">فیش های جمعی</button>
       <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
+      <button type="button" class="main-tab" data-tab="installment" role="tab" aria-selected="false">چک خزانه (تقسیط)</button>
     </nav>
 
     <div id="tabUnsent" class="tab-panel active" role="tabpanel">
@@ -211,8 +212,70 @@
       <pre id="xmlBox" class="code-block"></pre>
     </section>
     </div>
+
+    <div id="tabInstallment" class="tab-panel" role="tabpanel" hidden>
+    <section class="card card-enter installment-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">🏦</span>
+        <h2>تغییر وضعیت چک به خزانه</h2>
+      </div>
+      <p class="field-hint installment-note">این بخش مستقیماً روی <code>dbo.Installment_List</code> در Sara کار می‌کند و ارتباطی به ارسال رایورز ندارد.</p>
+      <div class="form-grid unsent-form-grid">
+        <label class="field field-required">
+          <span class="field-label">نوع شناسه</span>
+          <select id="installmentLookupKind">
+            <option value="NoDocument">شماره سند (NoDocument)</option>
+            <option value="TrackingNo">کد پیگیری (TrackingNo)</option>
+          </select>
+        </label>
+        <label class="field field-required">
+          <span class="field-label">کاربر انجام‌دهنده</span>
+          <input id="installmentPerformedBy" type="text" placeholder="نام کاربر — در Comments ثبت می‌شود" autocomplete="off" />
+        </label>
+        <label class="field field-required installment-values-field">
+          <span class="field-label">شناسه‌ها</span>
+          <textarea id="installmentValues" rows="5" placeholder="هر خط یک شماره — یا با کاما: 388749, 515987"></textarea>
+        </label>
+        <label class="field installment-endstate-field" id="installmentEndStateWrap" hidden>
+          <span class="field-label">عودت (اختیاری)</span>
+          <label class="check-all-label">
+            <input id="installmentApplyEndState" type="checkbox" />
+            <span>اعمال EndStateDesc=عودت و EndStateCode=17</span>
+          </label>
+          <span class="field-hint">در حالت TrackingNo فقط در صورت انتخاب این گزینه اعمال می‌شود.</span>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnInstallmentPreview" class="btn secondary" type="button">پیش‌نمایش</button>
+        <button id="btnInstallmentUpdate" class="btn danger" type="button" disabled>اعمال UPDATE</button>
+      </div>
+      <div class="subsection" id="installmentPreviewSection" hidden>
+        <div class="unsent-toolbar">
+          <span id="installmentPreviewSummary" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="installmentPreviewTable">
+            <thead>
+              <tr>
+                <th>شناسه</th>
+                <th>NoDocument</th>
+                <th>TrackingNo</th>
+                <th>وضعیت فعلی</th>
+                <th>EndState</th>
+                <th>Comments فعلی</th>
+                <th>Comments پیشنهادی</th>
+                <th>وضعیت پیشنهادی</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <pre id="installmentResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=24"></script>
+  <script src="js/app.js?v=25"></script>
 </body>
 </html>

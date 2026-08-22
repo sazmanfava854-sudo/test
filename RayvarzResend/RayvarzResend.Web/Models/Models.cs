@@ -401,6 +401,74 @@ public class TahatorFicheSendDetail
     public string? DocNotSentError { get; set; }
 }
 
+public enum InstallmentLookupKind
+{
+    /// <summary>جستجو/آپدیت با NoDocument</summary>
+    NoDocument,
+    /// <summary>جستجو/آپدیت با TrackingNo — EndState اختیاری</summary>
+    TrackingNo
+}
+
+/// <summary>تب تغییر وضعیت چک به خزانه — dbo.Installment_List (بدون رایورز).</summary>
+public class InstallmentCheckRequest
+{
+    public InstallmentLookupKind LookupKind { get; set; } = InstallmentLookupKind.NoDocument;
+    /// <summary>لیست شماره‌ها — در UI به‌صورت متن چندخطی/با کاما.</summary>
+    public string ValuesText { get; set; } = "";
+    /// <summary>نام کاربر انجام‌دهنده — در Comments.</summary>
+    public string PerformedByUser { get; set; } = "";
+    /// <summary>فقط برای TrackingNo — اعمال EndStateDesc/EndStateCode عودت.</summary>
+    public bool ApplyEndState { get; set; }
+}
+
+public class InstallmentCheckPreviewItem
+{
+    public string LookupValue { get; set; } = "";
+    public bool Found { get; set; }
+    public long? NidInstallmentList { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public string CI_InstallmentStatus { get; set; } = "";
+    public string EndStateDesc { get; set; } = "";
+    public string EndStateCode { get; set; } = "";
+    public string Comments { get; set; } = "";
+    public string ProposedComments { get; set; } = "";
+    public string ProposedCI_InstallmentStatus { get; set; } = "";
+    public string ProposedEndStateDesc { get; set; } = "";
+    public string ProposedEndStateCode { get; set; } = "";
+}
+
+public class InstallmentCheckPreviewResult
+{
+    public InstallmentLookupKind LookupKind { get; set; }
+    public bool ApplyEndState { get; set; }
+    public int FoundCount { get; set; }
+    public int NotFoundCount { get; set; }
+    public string? Error { get; set; }
+    public List<InstallmentCheckPreviewItem> Items { get; set; } = new();
+}
+
+public class InstallmentCheckUpdateItemResult
+{
+    public string LookupValue { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Found { get; set; }
+    public int RowsAffected { get; set; }
+    public string? Message { get; set; }
+}
+
+public class InstallmentCheckUpdateResult
+{
+    public InstallmentLookupKind LookupKind { get; set; }
+    public bool ApplyEndState { get; set; }
+    public int Total { get; set; }
+    public int Updated { get; set; }
+    public int NotFound { get; set; }
+    public int Failed { get; set; }
+    public string? Error { get; set; }
+    public List<InstallmentCheckUpdateItemResult> Results { get; set; } = new();
+}
+
 public class TahatorSendResult
 {
     public bool Success { get; set; }
