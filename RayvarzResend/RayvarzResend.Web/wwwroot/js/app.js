@@ -176,11 +176,123 @@ const installmentLookupLabels = {
   TrackingNo: 'کد پیگیری (TrackingNo)'
 };
 
+let installmentMode = 'single';
+let installmentExcelRows = [];
+
+function setInstallmentMode(mode) {
+  installmentMode = mode === 'excel' ? 'excel' : 'single';
+  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+    const active = btn.dataset.installmentMode === installmentMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  const singlePanel = $('installmentSinglePanel');
+  const excelPanel = $('installmentExcelPanel');
+  if (singlePanel) singlePanel.hidden = installmentMode !== 'single';
+  if (excelPanel) excelPanel.hidden = installmentMode !== 'excel';
+
+  const headerSingle = $('installmentPreviewHeaderSingle');
+  const headerExcel = $('installmentPreviewHeaderExcel');
+  if (headerSingle) headerSingle.hidden = installmentMode === 'excel';
+  if (headerExcel) headerExcel.hidden = installmentMode !== 'excel';
+
+  $('installmentPreviewSection').hidden = true;
+  if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
+}
+
+function normalizeExcelHeader(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function mapExcelHeaderIndex(headers) {
+  const map = {};
+  headers.forEach((h, idx) => {
+    const key = normalizeExcelHeader(h);
+    if (key === 'nodocument') map.noDocument = idx;
+    if (key === 'trackingno') map.trackingNo = idx;
+    if (key === 'paymentcost') map.paymentCost = idx;
+    if (key === 'paymentdate') map.paymentDate = idx;
+  });
+  return map;
+}
+
+function parseInstallmentExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX === 'undefined') {
+      reject(new Error('کتابخانه خواندن اکسل بارگذاری نشد'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          reject(new Error('برگه‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+        if (!rows.length) {
+          reject(new Error('فایل اکسل خالی است'));
+          return;
+        }
+
+        const headerRow = rows[0].map((c) => String(c || '').trim());
+        const col = mapExcelHeaderIndex(headerRow);
+        const required = ['noDocument', 'trackingNo', 'paymentCost', 'paymentDate'];
+        const missing = required.filter((k) => col[k] == null);
+        if (missing.length) {
+          reject(new Error('ستون‌های الزامی یافت نشد: NoDocument, trackingno, PaymentCost, PaymentDate'));
+          return;
+        }
+
+        const parsed = [];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i] || [];
+          const item = {
+            noDocument: String(row[col.noDocument] ?? '').trim(),
+            trackingNo: String(row[col.trackingNo] ?? '').trim(),
+            paymentCost: String(row[col.paymentCost] ?? '').trim(),
+            paymentDate: String(row[col.paymentDate] ?? '').trim()
+          };
+          if (!item.noDocument && !item.trackingNo && !item.paymentCost && !item.paymentDate) continue;
+          parsed.push(item);
+        }
+
+        if (!parsed.length) {
+          reject(new Error('هیچ ردیف داده‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        resolve(parsed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 function getInstallmentPayload() {
+  const base = {
+    applyEndState: !!$('installmentApplyEndState')?.checked
+  };
+  if (installmentMode === 'excel') {
+    return {
+      ...base,
+      excelRows: installmentExcelRows.map((r) => ({
+        noDocument: r.noDocument || '',
+        trackingNo: r.trackingNo || '',
+        paymentCost: r.paymentCost || '',
+        paymentDate: r.paymentDate || ''
+      }))
+    };
+  }
   const raw = ($('installmentValues')?.value || '').replace(/\D/g, '');
   return {
-    valuesText: raw,
-    applyEndState: !!$('installmentApplyEndState')?.checked
+    ...base,
+    valuesText: raw
   };
 }
 
@@ -189,37 +301,79 @@ function syncInstallmentDryRunUi() {
   if (updateBtn && !updateBtn.disabled) updateBtn.textContent = 'اعمال';
 }
 
+function formatInstallmentCost(value) {
+  if (value == null || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isNaN(n)) return n.toLocaleString('en-US');
+  return String(value);
+}
+
 function renderInstallmentPreview(data) {
   const section = $('installmentPreviewSection');
   const tbody = $('installmentPreviewTable')?.querySelector('tbody');
   const summary = $('installmentPreviewSummary');
   const updateBtn = $('btnInstallmentUpdate');
+  const headerSingle = $('installmentPreviewHeaderSingle');
+  const headerExcel = $('installmentPreviewHeaderExcel');
   if (!section || !tbody) return;
+
+  const excelMode = !!data.excelMode || installmentMode === 'excel';
+  if (headerSingle) headerSingle.hidden = excelMode;
+  if (headerExcel) headerExcel.hidden = !excelMode;
 
   const items = data.items || [];
   section.hidden = false;
   if (summary) {
-    summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | شناسه بدون نتیجه: ${data.notFoundCount || 0}`;
+    if (excelMode) {
+      summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | بدون نتیجه: ${data.notFoundCount || 0} | تطابق کامل: ${data.matchedCount || 0} | عدم تطابق: ${data.mismatchCount || 0}`;
+    } else {
+      summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | شناسه بدون نتیجه: ${data.notFoundCount || 0}`;
+    }
   }
   tbody.innerHTML = '';
   items.forEach((row) => {
     const tr = document.createElement('tr');
     if (!row.found) tr.classList.add('row-not-found');
+    else if (excelMode && row.found && row.dataMatches === false) tr.classList.add('row-mismatch');
     const kind = row.detectedLookupKind || '';
     const endCurrent = `${row.endStateDesc || '-'} / ${row.endStateCode || '-'}`;
-    tr.innerHTML = `
-      <td>${row.lookupValue || ''}</td>
-      <td>${installmentLookupLabels[kind] || kind || '—'}</td>
-      <td>${row.noDocument || '-'}</td>
-      <td>${row.trackingNo || '-'}</td>
-      <td>${row.ci_InstallmentStatus ?? row.cI_InstallmentStatus ?? '-'}</td>
-      <td>${endCurrent}</td>
-      <td class="col-comments">${row.proposedComments || '-'}</td>
-    `;
+
+    if (excelMode) {
+      const status = !row.found
+        ? (row.validationMessage || 'یافت نشد')
+        : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
+      tr.innerHTML = `
+        <td>${row.rowIndex || '-'}</td>
+        <td>${installmentLookupLabels[kind] || kind || '—'}</td>
+        <td>${row.excelNoDocument || '-'}</td>
+        <td>${row.excelTrackingNo || '-'}</td>
+        <td>${formatInstallmentCost(row.excelPaymentCost)}</td>
+        <td>${row.excelPaymentDate || '-'}</td>
+        <td>${row.noDocument || '-'}</td>
+        <td>${row.trackingNo || '-'}</td>
+        <td>${formatInstallmentCost(row.paymentCost)}</td>
+        <td>${row.paymentDate || '-'}</td>
+        <td>${status}</td>
+        <td class="col-comments">${row.proposedComments || '-'}</td>
+      `;
+    } else {
+      tr.innerHTML = `
+        <td>${row.lookupValue || ''}</td>
+        <td>${installmentLookupLabels[kind] || kind || '—'}</td>
+        <td>${row.noDocument || '-'}</td>
+        <td>${row.trackingNo || '-'}</td>
+        <td>${row.ci_InstallmentStatus ?? row.cI_InstallmentStatus ?? '-'}</td>
+        <td>${endCurrent}</td>
+        <td class="col-comments">${row.proposedComments || '-'}</td>
+      `;
+    }
     tbody.appendChild(tr);
   });
   if (updateBtn) {
-    updateBtn.disabled = !(data.foundCount > 0);
+    const canUpdate = excelMode
+      ? (data.matchedCount > 0)
+      : (data.foundCount > 0);
+    updateBtn.disabled = !canUpdate;
     updateBtn.textContent = 'اعمال';
   }
 }
@@ -230,13 +384,15 @@ function formatInstallmentUpdateResult(data) {
     const kind = installmentLookupLabels[r.detectedLookupKind] || r.detectedLookupKind || '';
     return `${r.lookupValue} [${kind}]: ${r.success ? 'OK' : 'FAIL'} (${count} ردیف) — ${r.message || ''}`;
   });
+  const modeLine = data.excelMode ? 'حالت: اکسل' : 'حالت: تکی';
   return [
     '=== نتیجه UPDATE Installment_List ===',
+    modeLine,
     `DryRun: ${data.dryRun}`,
     `ApplyEndState (TrackingNo): ${data.applyEndState}`,
     data.dryRun
-      ? `شبیه‌سازی — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
-      : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد | بدون نتیجه: ${data.notFound}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`
+      : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`,
     '',
     ...lines
   ].join('\n');
@@ -898,6 +1054,37 @@ async function init() {
       installmentInput.value = installmentInput.value.replace(/\D/g, '');
     });
   }
+
+  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+    btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
+  });
+  setInstallmentMode('single');
+
+  const excelInput = $('installmentExcelFile');
+  if (excelInput) {
+    excelInput.addEventListener('change', async () => {
+      const status = $('installmentExcelStatus');
+      const file = excelInput.files?.[0];
+      installmentExcelRows = [];
+      $('installmentPreviewSection').hidden = true;
+      if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
+      if (!file) {
+        if (status) status.textContent = 'فایلی انتخاب نشده';
+        return;
+      }
+      if (status) status.textContent = 'در حال خواندن فایل…';
+      try {
+        installmentExcelRows = await parseInstallmentExcelFile(file);
+        if (status) {
+          status.textContent = `${file.name} — ${installmentExcelRows.length.toLocaleString('fa-IR')} ردیف خوانده شد`;
+        }
+      } catch (e) {
+        if (status) status.textContent = e.message;
+        excelInput.value = '';
+        alert(e.message);
+      }
+    });
+  }
   syncFundFromBranch();
   setupMainTabs();
   initDatePickers();
@@ -1211,7 +1398,11 @@ function setupEventHandlers() {
 
   bindClick('btnInstallmentPreview', async () => {
     const payload = getInstallmentPayload();
-    if (!payload.valuesText) return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+    if (installmentMode === 'excel') {
+      if (!payload.excelRows?.length) return alert('فایل اکسل را انتخاب کنید');
+    } else if (!payload.valuesText) {
+      return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+    }
 
     const btn = $('btnInstallmentPreview');
     const box = $('installmentResultBox');
@@ -1237,7 +1428,11 @@ function setupEventHandlers() {
 
   bindClick('btnInstallmentUpdate', async () => {
     const payload = getInstallmentPayload();
-    if (!payload.valuesText) return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+    if (installmentMode === 'excel') {
+      if (!payload.excelRows?.length) return alert('فایل اکسل را انتخاب کنید');
+    } else if (!payload.valuesText) {
+      return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+    }
 
     const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
     const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';

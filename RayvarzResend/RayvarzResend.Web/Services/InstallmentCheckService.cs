@@ -26,8 +26,12 @@ public class InstallmentCheckService
         var parsed = ParseRequest(req);
         var result = new InstallmentCheckPreviewResult
         {
+            ExcelMode = parsed.IsExcelMode,
             ApplyEndState = parsed.ApplyEndStateRequested
         };
+
+        if (parsed.IsExcelMode)
+            return await PreviewExcelAsync(req, parsed, result, ct);
 
         if (parsed.Values.Count == 0)
         {
@@ -61,32 +65,13 @@ public class InstallmentCheckService
             foundKeys.Add(value);
             foreach (var row in rows)
             {
-                result.Items.Add(new InstallmentCheckPreviewItem
-                {
-                    LookupValue = value,
-                    DetectedLookupKind = kind,
-                    Found = true,
-                    NoDocument = row.NoDocument,
-                    TrackingNo = row.TrackingNo,
-                    CI_InstallmentStatus = row.CI_InstallmentStatus,
-                    EndStateDesc = row.EndStateDesc,
-                    EndStateCode = row.EndStateCode,
-                    Comments = row.Comments,
-                    ProposedComments = InstallmentCheckHelper.BuildNewComments(
-                        parsed.PerformedByUser, row.Comments),
-                    ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus,
-                    ProposedEndStateDesc = willApplyEndState
-                        ? InstallmentCheckHelper.EndStateDescOdooat
-                        : row.EndStateDesc,
-                    ProposedEndStateCode = willApplyEndState
-                        ? InstallmentCheckHelper.EndStateCodeOdooat
-                        : row.EndStateCode
-                });
+                result.Items.Add(MapPreviewItem(value, kind, row, parsed.PerformedByUser, willApplyEndState));
             }
         }
 
         result.FoundCount = result.Items.Count(i => i.Found);
         result.NotFoundCount = parsed.Values.Count - foundKeys.Count;
+        result.MatchedCount = result.Items.Count(i => i.Found);
         return result;
     }
 
@@ -98,9 +83,13 @@ public class InstallmentCheckService
         var dryRun = IsDryRun;
         var result = new InstallmentCheckUpdateResult
         {
+            ExcelMode = parsed.IsExcelMode,
             ApplyEndState = parsed.ApplyEndStateRequested,
             DryRun = dryRun
         };
+
+        if (parsed.IsExcelMode)
+            return await UpdateExcelAsync(req, parsed, result, ct);
 
         if (parsed.Values.Count == 0)
         {
@@ -161,6 +150,239 @@ public class InstallmentCheckService
         return result;
     }
 
+    private async Task<InstallmentCheckPreviewResult> PreviewExcelAsync(
+        InstallmentCheckRequest req,
+        ParsedInstallmentRequest parsed,
+        InstallmentCheckPreviewResult result,
+        CancellationToken ct)
+    {
+        if (parsed.ExcelRows.Count == 0)
+        {
+            result.Error = "فایل اکسل خالی است یا ردیفی خوانده نشد";
+            return result;
+        }
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+
+        for (var i = 0; i < parsed.ExcelRows.Count; i++)
+        {
+            var excelRow = parsed.ExcelRows[i];
+            var (kind, lookupValue, lookupError) = InstallmentExcelMatcher.ResolveLookup(excelRow);
+            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
+
+            var item = new InstallmentCheckPreviewItem
+            {
+                RowIndex = i + 1,
+                LookupValue = lookupValue,
+                DetectedLookupKind = kind,
+                ExcelNoDocument = InstallmentExcelMatcher.NormalizeCell(excelRow.NoDocument),
+                ExcelTrackingNo = InstallmentExcelMatcher.NormalizeCell(excelRow.TrackingNo),
+                ExcelPaymentCost = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentCost),
+                ExcelPaymentDate = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentDate)
+            };
+
+            if (!string.IsNullOrEmpty(lookupError))
+            {
+                item.ValidationMessage = lookupError;
+                result.Items.Add(item);
+                continue;
+            }
+
+            var rows = await LoadRowsAsync(conn, kind, lookupValue, ct);
+            if (rows.Count == 0)
+            {
+                item.ValidationMessage = "در دیتابیس یافت نشد";
+                result.Items.Add(item);
+                continue;
+            }
+
+            if (rows.Count > 1)
+            {
+                item.Found = true;
+                item.ValidationMessage = $"بیش از یک ردیف ({rows.Count}) در دیتابیس یافت شد";
+                result.Items.Add(item);
+                continue;
+            }
+
+            var dbRow = rows[0];
+            item.Found = true;
+            item.NoDocument = dbRow.NoDocument;
+            item.TrackingNo = dbRow.TrackingNo;
+            item.PaymentCost = FormatCost(dbRow.PaymentCost);
+            item.PaymentDate = dbRow.PaymentDate;
+            item.CI_InstallmentStatus = dbRow.CI_InstallmentStatus;
+            item.EndStateDesc = dbRow.EndStateDesc;
+            item.EndStateCode = dbRow.EndStateCode;
+            item.Comments = dbRow.Comments;
+            item.ProposedComments = InstallmentCheckHelper.BuildNewComments(parsed.PerformedByUser, dbRow.Comments);
+            item.ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus;
+            item.ProposedEndStateDesc = willApplyEndState
+                ? InstallmentCheckHelper.EndStateDescOdooat
+                : dbRow.EndStateDesc;
+            item.ProposedEndStateCode = willApplyEndState
+                ? InstallmentCheckHelper.EndStateCodeOdooat
+                : dbRow.EndStateCode;
+
+            var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow);
+            if (mismatch == null)
+            {
+                item.DataMatches = true;
+            }
+            else
+            {
+                item.DataMatches = false;
+                item.ValidationMessage = mismatch;
+            }
+
+            result.Items.Add(item);
+        }
+
+        result.FoundCount = result.Items.Count(i => i.Found);
+        result.NotFoundCount = result.Items.Count(i => !i.Found);
+        result.MatchedCount = result.Items.Count(i => i.Found && i.DataMatches);
+        result.MismatchCount = result.Items.Count(i => i.Found && !i.DataMatches);
+        return result;
+    }
+
+    private async Task<InstallmentCheckUpdateResult> UpdateExcelAsync(
+        InstallmentCheckRequest req,
+        ParsedInstallmentRequest parsed,
+        InstallmentCheckUpdateResult result,
+        CancellationToken ct)
+    {
+        var preview = await PreviewExcelAsync(req, parsed, new InstallmentCheckPreviewResult
+        {
+            ExcelMode = true,
+            ApplyEndState = parsed.ApplyEndStateRequested
+        }, ct);
+
+        if (!string.IsNullOrWhiteSpace(preview.Error))
+        {
+            result.Error = preview.Error;
+            return result;
+        }
+
+        var eligible = preview.Items
+            .Where(i => i.Found && i.DataMatches)
+            .ToList();
+
+        if (eligible.Count == 0)
+        {
+            result.Error = "هیچ ردیف معتبری برای اعمال یافت نشد — ابتدا پیش‌نمایش را بررسی کنید";
+            return result;
+        }
+
+        if (result.DryRun)
+        {
+            foreach (var row in eligible)
+            {
+                var item = new InstallmentCheckUpdateItemResult
+                {
+                    LookupValue = row.LookupValue,
+                    DetectedLookupKind = row.DetectedLookupKind,
+                    Found = true,
+                    Success = true,
+                    WouldUpdate = 1,
+                    Message = $"DryRun — ردیف {row.RowIndex} UPDATE نمی‌شود (Installment:DryRun=true)"
+                };
+                AppendUpdateItemResult(result, item);
+            }
+
+            foreach (var row in preview.Items.Where(i => !i.Found))
+            {
+                var item = new InstallmentCheckUpdateItemResult
+                {
+                    LookupValue = row.LookupValue,
+                    DetectedLookupKind = row.DetectedLookupKind,
+                    Found = false,
+                    Success = false,
+                    Message = $"ردیف {row.RowIndex}: {row.ValidationMessage ?? "یافت نشد"}"
+                };
+                AppendUpdateItemResult(result, item);
+            }
+
+            foreach (var row in preview.Items.Where(i => i.Found && !i.DataMatches))
+            {
+                result.SkippedMismatch++;
+                var item = new InstallmentCheckUpdateItemResult
+                {
+                    LookupValue = row.LookupValue,
+                    DetectedLookupKind = row.DetectedLookupKind,
+                    Found = true,
+                    Success = false,
+                    Message = $"ردیف {row.RowIndex}: {row.ValidationMessage ?? "عدم تطابق با دیتابیس"}"
+                };
+                AppendUpdateItemResult(result, item);
+            }
+
+            return result;
+        }
+
+        var commentPrefix = InstallmentCheckHelper.BuildCommentPrefix(parsed.PerformedByUser);
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+
+        foreach (var row in eligible)
+        {
+            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(
+                row.DetectedLookupKind, parsed.ApplyEndStateRequested);
+            var item = new InstallmentCheckUpdateItemResult
+            {
+                LookupValue = row.LookupValue,
+                DetectedLookupKind = row.DetectedLookupKind
+            };
+
+            try
+            {
+                var sql = BuildUpdateSql(row.DetectedLookupKind, willApplyEndState);
+                await using var cmd = new SqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@prefix", commentPrefix);
+                cmd.Parameters.AddWithValue("@status", InstallmentCheckHelper.TreasuryStatus);
+                cmd.Parameters.AddWithValue("@v", row.LookupValue);
+                if (willApplyEndState)
+                {
+                    cmd.Parameters.AddWithValue("@endDesc", InstallmentCheckHelper.EndStateDescOdooat);
+                    cmd.Parameters.AddWithValue("@endCode", InstallmentCheckHelper.EndStateCodeOdooat);
+                }
+
+                var affected = await cmd.ExecuteNonQueryAsync(ct);
+                item.RowsAffected = affected;
+                item.Found = affected > 0;
+                item.Success = affected > 0;
+                item.Message = affected > 0
+                    ? $"ردیف {row.RowIndex}: {affected} ردیف به‌روز شد"
+                    : $"ردیف {row.RowIndex}: یافت نشد";
+            }
+            catch (Exception ex)
+            {
+                item.Success = false;
+                item.Message = $"ردیف {row.RowIndex}: {ex.Message}";
+            }
+
+            AppendUpdateItemResult(result, item);
+        }
+
+        foreach (var row in preview.Items.Where(i => !i.Found || !i.DataMatches))
+        {
+            if (row.Found && !row.DataMatches)
+                result.SkippedMismatch++;
+
+            var item = new InstallmentCheckUpdateItemResult
+            {
+                LookupValue = row.LookupValue,
+                DetectedLookupKind = row.DetectedLookupKind,
+                Found = row.Found,
+                Success = false,
+                Message = $"ردیف {row.RowIndex}: {row.ValidationMessage ?? (row.Found ? "عدم تطابق" : "یافت نشد")}"
+            };
+            AppendUpdateItemResult(result, item);
+        }
+
+        return result;
+    }
+
     private async Task<InstallmentCheckUpdateResult> SimulateUpdateAsync(
         InstallmentCheckRequest req,
         ParsedInstallmentRequest parsed,
@@ -209,10 +431,54 @@ public class InstallmentCheckService
         return result;
     }
 
-    private static ParsedInstallmentRequest ParseRequest(InstallmentCheckRequest req) => new(
-        InstallmentCheckHelper.ParseIdentifierList(req.ValuesText),
-        (req.PerformedByUser ?? "").Trim(),
-        req.ApplyEndState);
+    private static InstallmentCheckPreviewItem MapPreviewItem(
+        string lookupValue,
+        InstallmentLookupKind kind,
+        InstallmentRowSnapshot row,
+        string performedByUser,
+        bool willApplyEndState) => new()
+    {
+        LookupValue = lookupValue,
+        DetectedLookupKind = kind,
+        Found = true,
+        DataMatches = true,
+        NoDocument = row.NoDocument,
+        TrackingNo = row.TrackingNo,
+        PaymentCost = FormatCost(row.PaymentCost),
+        PaymentDate = row.PaymentDate,
+        CI_InstallmentStatus = row.CI_InstallmentStatus,
+        EndStateDesc = row.EndStateDesc,
+        EndStateCode = row.EndStateCode,
+        Comments = row.Comments,
+        ProposedComments = InstallmentCheckHelper.BuildNewComments(performedByUser, row.Comments),
+        ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus,
+        ProposedEndStateDesc = willApplyEndState
+            ? InstallmentCheckHelper.EndStateDescOdooat
+            : row.EndStateDesc,
+        ProposedEndStateCode = willApplyEndState
+            ? InstallmentCheckHelper.EndStateCodeOdooat
+            : row.EndStateCode
+    };
+
+    private static ParsedInstallmentRequest ParseRequest(InstallmentCheckRequest req)
+    {
+        var excelRows = (req.ExcelRows ?? new List<InstallmentExcelRowInput>())
+            .Where(r => !IsExcelRowEmpty(r))
+            .ToList();
+
+        return new ParsedInstallmentRequest(
+            InstallmentCheckHelper.ParseIdentifierList(req.ValuesText),
+            (req.PerformedByUser ?? "").Trim(),
+            req.ApplyEndState,
+            excelRows.Count > 0,
+            excelRows);
+    }
+
+    private static bool IsExcelRowEmpty(InstallmentExcelRowInput row) =>
+        string.IsNullOrWhiteSpace(row.NoDocument)
+        && string.IsNullOrWhiteSpace(row.TrackingNo)
+        && string.IsNullOrWhiteSpace(row.PaymentCost)
+        && string.IsNullOrWhiteSpace(row.PaymentDate);
 
     private static void AppendUpdateItemResult(InstallmentCheckUpdateResult result, InstallmentCheckUpdateItemResult item)
     {
@@ -245,7 +511,7 @@ public class InstallmentCheckService
             """;
     }
 
-    private static async Task<List<InstallmentRow>> LoadRowsAsync(
+    private static async Task<List<InstallmentRowSnapshot>> LoadRowsAsync(
         SqlConnection conn,
         InstallmentLookupKind kind,
         string value,
@@ -254,21 +520,25 @@ public class InstallmentCheckService
         var column = kind == InstallmentLookupKind.NoDocument ? "NoDocument" : "TrackingNo";
         var sql = $@"
 SELECT NoDocument, TrackingNo,
+       PaymentCost,
+       CAST(PaymentDate AS varchar(20)) AS PaymentDate,
        CAST(CI_InstallmentStatus AS varchar(20)) AS CI_InstallmentStatus,
        EndStateDesc, EndStateCode, Comments
 FROM dbo.Installment_List
 WHERE {column} = @v";
 
-        var rows = new List<InstallmentRow>();
+        var rows = new List<InstallmentRowSnapshot>();
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@v", value);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            rows.Add(new InstallmentRow
+            rows.Add(new InstallmentRowSnapshot
             {
                 NoDocument = reader["NoDocument"]?.ToString() ?? "",
                 TrackingNo = reader["TrackingNo"]?.ToString() ?? "",
+                PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
+                PaymentDate = reader["PaymentDate"]?.ToString() ?? "",
                 CI_InstallmentStatus = reader["CI_InstallmentStatus"]?.ToString() ?? "",
                 EndStateDesc = reader["EndStateDesc"]?.ToString() ?? "",
                 EndStateCode = reader["EndStateCode"]?.ToString() ?? "",
@@ -278,18 +548,13 @@ WHERE {column} = @v";
         return rows;
     }
 
-    private sealed class InstallmentRow
-    {
-        public string NoDocument { get; set; } = "";
-        public string TrackingNo { get; set; } = "";
-        public string CI_InstallmentStatus { get; set; } = "";
-        public string EndStateDesc { get; set; } = "";
-        public string EndStateCode { get; set; } = "";
-        public string Comments { get; set; } = "";
-    }
-
-    private sealed record ParsedInstallmentRequest(
-        List<string> Values,
-        string PerformedByUser,
-        bool ApplyEndStateRequested);
+    private static string FormatCost(decimal? cost) =>
+        cost?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "";
 }
+
+internal sealed record ParsedInstallmentRequest(
+    List<string> Values,
+    string PerformedByUser,
+    bool ApplyEndStateRequested,
+    bool IsExcelMode,
+    List<InstallmentExcelRowInput> ExcelRows);

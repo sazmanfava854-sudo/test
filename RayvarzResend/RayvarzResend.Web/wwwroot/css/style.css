@@ -855,3 +855,43 @@ tbody tr:last-child td {
   color: var(--danger);
 }
 
+#installmentPreviewTable tr.row-mismatch td {
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.installment-mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.installment-mode-tab {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.installment-mode-tab.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.installment-excel-status {
+  display: block;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.installment-excel-field input[type="file"] {
+  width: 100%;
+  padding: 8px 0;
+}
+

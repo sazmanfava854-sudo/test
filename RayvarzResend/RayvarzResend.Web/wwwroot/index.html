@@ -240,11 +240,32 @@
         <span class="card-icon" aria-hidden="true">🏦</span>
         <h2>تغییر وضعیت چک به خزانه</h2>
       </div>
+      <div class="installment-mode-tabs" role="tablist">
+        <button type="button" class="installment-mode-tab active" data-installment-mode="single" role="tab" aria-selected="true">تکی</button>
+        <button type="button" class="installment-mode-tab" data-installment-mode="excel" role="tab" aria-selected="false">اکسل</button>
+      </div>
+      <div id="installmentSinglePanel" class="installment-mode-panel">
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required installment-values-field">
+            <span class="field-label">شماره سند / کد پیگیری</span>
+            <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+          </label>
+        </div>
+      </div>
+      <div id="installmentExcelPanel" class="installment-mode-panel" hidden>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required installment-excel-field">
+            <span class="field-label">فایل اکسل (.xlsx)</span>
+            <input id="installmentExcelFile" type="file" accept=".xlsx,.xls" />
+            <span class="field-hint">ستون‌ها: NoDocument، trackingno، PaymentCost، PaymentDate</span>
+          </label>
+          <div class="field">
+            <span class="field-label">وضعیت فایل</span>
+            <span id="installmentExcelStatus" class="installment-excel-status">فایلی انتخاب نشده</span>
+          </div>
+        </div>
+      </div>
       <div class="form-grid unsent-form-grid">
-        <label class="field field-required installment-values-field">
-          <span class="field-label">شماره سند / کد پیگیری</span>
-          <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
-        </label>
         <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
           <input id="installmentApplyEndState" type="checkbox" />
           <span>عودت</span>
@@ -261,13 +282,27 @@
         <div class="table-wrap">
           <table id="installmentPreviewTable">
             <thead>
-              <tr>
+              <tr id="installmentPreviewHeaderSingle">
                 <th>شناسه</th>
                 <th>تشخیص</th>
                 <th>NoDocument</th>
                 <th>TrackingNo</th>
                 <th>وضعیت فعلی</th>
                 <th>EndState</th>
+                <th>Comments پیشنهادی</th>
+              </tr>
+              <tr id="installmentPreviewHeaderExcel" hidden>
+                <th>ردیف</th>
+                <th>تشخیص</th>
+                <th>NoDocument (اکسل)</th>
+                <th>trackingno (اکسل)</th>
+                <th>PaymentCost (اکسل)</th>
+                <th>PaymentDate (اکسل)</th>
+                <th>NoDocument (DB)</th>
+                <th>trackingno (DB)</th>
+                <th>PaymentCost (DB)</th>
+                <th>PaymentDate (DB)</th>
+                <th>وضعیت</th>
                 <th>Comments پیشنهادی</th>
               </tr>
             </thead>
@@ -351,6 +386,7 @@
     </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=30"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="js/app.js?v=31"></script>
 </body>
 </html>

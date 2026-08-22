@@ -409,11 +409,22 @@ public enum InstallmentLookupKind
     TrackingNo
 }
 
+/// <summary>ردیف اکسل — ستون‌های NoDocument, trackingno, PaymentCost, PaymentDate.</summary>
+public class InstallmentExcelRowInput
+{
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public string PaymentCost { get; set; } = "";
+    public string PaymentDate { get; set; } = "";
+}
+
 /// <summary>تب تغییر وضعیت چک به خزانه — dbo.Installment_List (بدون رایورز).</summary>
 public class InstallmentCheckRequest
 {
     /// <summary>لیست شماره‌ها — در UI به‌صورت متن چندخطی/با کاما. نوع (NoDocument/TrackingNo) خودکار تشخیص داده می‌شود.</summary>
     public string ValuesText { get; set; } = "";
+    /// <summary>ردیف‌های اکسل — وقتی پر باشد حالت دسته‌ای فعال می‌شود.</summary>
+    public List<InstallmentExcelRowInput>? ExcelRows { get; set; }
     /// <summary>از لاگین — در API پر می‌شود.</summary>
     public string PerformedByUser { get; set; } = "";
     /// <summary>فقط وقتی TrackingNo تشخیص داده شود — اعمال EndStateDesc/EndStateCode عودت.</summary>
@@ -422,12 +433,21 @@ public class InstallmentCheckRequest
 
 public class InstallmentCheckPreviewItem
 {
+    public int RowIndex { get; set; }
     public string LookupValue { get; set; } = "";
     public InstallmentLookupKind DetectedLookupKind { get; set; }
     public bool Found { get; set; }
+    public bool DataMatches { get; set; }
+    public string? ValidationMessage { get; set; }
     public long? NidInstallmentList { get; set; }
     public string NoDocument { get; set; } = "";
     public string TrackingNo { get; set; } = "";
+    public string? PaymentCost { get; set; }
+    public string? PaymentDate { get; set; }
+    public string? ExcelNoDocument { get; set; }
+    public string? ExcelTrackingNo { get; set; }
+    public string? ExcelPaymentCost { get; set; }
+    public string? ExcelPaymentDate { get; set; }
     public string CI_InstallmentStatus { get; set; } = "";
     public string EndStateDesc { get; set; } = "";
     public string EndStateCode { get; set; } = "";
@@ -440,9 +460,12 @@ public class InstallmentCheckPreviewItem
 
 public class InstallmentCheckPreviewResult
 {
+    public bool ExcelMode { get; set; }
     public bool ApplyEndState { get; set; }
     public int FoundCount { get; set; }
     public int NotFoundCount { get; set; }
+    public int MatchedCount { get; set; }
+    public int MismatchCount { get; set; }
     public string? Error { get; set; }
     public List<InstallmentCheckPreviewItem> Items { get; set; } = new();
 }
@@ -461,6 +484,7 @@ public class InstallmentCheckUpdateItemResult
 
 public class InstallmentCheckUpdateResult
 {
+    public bool ExcelMode { get; set; }
     public bool ApplyEndState { get; set; }
     public bool DryRun { get; set; }
     public int Total { get; set; }
@@ -469,6 +493,7 @@ public class InstallmentCheckUpdateResult
     public int WouldUpdate { get; set; }
     public int NotFound { get; set; }
     public int Failed { get; set; }
+    public int SkippedMismatch { get; set; }
     public string? Error { get; set; }
     public List<InstallmentCheckUpdateItemResult> Results { get; set; } = new();
 }
