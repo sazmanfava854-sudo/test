@@ -135,6 +135,16 @@ function syncInstallmentEndStateVisibility() {
   }
 }
 
+function syncInstallmentDryRunUi() {
+  const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
+  const notice = $('installmentDryRunNotice');
+  const updateBtn = $('btnInstallmentUpdate');
+  if (notice) notice.hidden = !dry;
+  if (updateBtn && !updateBtn.disabled) {
+    updateBtn.textContent = dry ? 'شبیه‌سازی UPDATE (DryRun)' : 'اعمال UPDATE';
+  }
+}
+
 function renderInstallmentPreview(data) {
   const section = $('installmentPreviewSection');
   const tbody = $('installmentPreviewTable')?.querySelector('tbody');
@@ -167,18 +177,26 @@ function renderInstallmentPreview(data) {
     `;
     tbody.appendChild(tr);
   });
-  if (updateBtn) updateBtn.disabled = !(data.foundCount > 0);
+  if (updateBtn) {
+    updateBtn.disabled = !(data.foundCount > 0);
+    const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
+    updateBtn.textContent = dry ? 'شبیه‌سازی UPDATE (DryRun)' : 'اعمال UPDATE';
+  }
 }
 
 function formatInstallmentUpdateResult(data) {
-  const lines = (data.results || []).map((r) =>
-    `${r.lookupValue}: ${r.success ? 'OK' : 'FAIL'} (${r.rowsAffected || 0} ردیف) — ${r.message || ''}`
-  );
+  const lines = (data.results || []).map((r) => {
+    const count = data.dryRun ? (r.wouldUpdate || 0) : (r.rowsAffected || 0);
+    return `${r.lookupValue}: ${r.success ? 'OK' : 'FAIL'} (${count} ردیف) — ${r.message || ''}`;
+  });
   return [
     '=== نتیجه UPDATE Installment_List ===',
+    `DryRun: ${data.dryRun}`,
     `نوع شناسه: ${data.lookupKind}`,
     `ApplyEndState: ${data.applyEndState}`,
-    `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
+    data.dryRun
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
+      : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
     '',
     ...lines
   ].join('\n');
@@ -541,6 +559,7 @@ async function init() {
   try {
     const res = await fetch('/api/config');
     config = await parseJsonResponse(res);
+    syncInstallmentDryRunUi();
   } catch (e) {
     alert(e.message);
     return;
@@ -565,6 +584,7 @@ async function init() {
   $('identifierValue')?.addEventListener('input', updateIdentifierHint);
   $('installmentLookupKind')?.addEventListener('change', syncInstallmentEndStateVisibility);
   syncInstallmentEndStateVisibility();
+  syncInstallmentDryRunUi();
   syncFundFromBranch();
   setupMainTabs();
   initDatePickers();
@@ -918,7 +938,11 @@ function setupEventHandlers() {
       : payload.applyEndState
         ? 'EndStateDesc/EndStateCode اعمال می‌شود.'
         : 'فقط Comments و CI_InstallmentStatus=28 — بدون تغییر EndState.';
-    if (!confirm(`UPDATE روی Installment_List در Sara؟\n${endNote}\n\nادامه؟`)) return;
+    const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
+    const dryNote = dry
+      ? 'DryRun فعال — UPDATE واقعی روی Sara اجرا نمی‌شود (فقط شبیه‌سازی).'
+      : 'UPDATE واقعی روی Sara اجرا می‌شود.';
+    if (!confirm(`${dryNote}\n${endNote}\n\nادامه؟`)) return;
 
     const btn = $('btnInstallmentUpdate');
     const box = $('installmentResultBox');
@@ -936,7 +960,11 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       if (box) box.textContent = formatInstallmentUpdateResult(data);
-      alert(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+      if (data.dryRun) {
+        alert(`DryRun — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد؛ روی سرور تغییری اعمال نشد.`);
+      } else {
+        alert(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+      }
       $('btnInstallmentPreview').click();
     } catch (e) {
       if (box) box.textContent = e.message;

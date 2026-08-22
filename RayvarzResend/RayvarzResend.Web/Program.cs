@@ -67,6 +67,13 @@ app.MapGet("/api/config", (IConfiguration config) => new
         pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
         pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
     },
+    installment = new
+    {
+        dryRun = config.GetValue<bool?>("Installment:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Installment_List"
+    },
     ruleEngine = new
     {
         payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",

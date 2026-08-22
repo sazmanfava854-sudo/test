@@ -454,6 +454,8 @@ public class InstallmentCheckUpdateItemResult
     public bool Success { get; set; }
     public bool Found { get; set; }
     public int RowsAffected { get; set; }
+    /// <summary>در DryRun — تعداد ردیف‌هایی که UPDATE می‌شدند.</summary>
+    public int WouldUpdate { get; set; }
     public string? Message { get; set; }
 }
 
@@ -461,8 +463,11 @@ public class InstallmentCheckUpdateResult
 {
     public InstallmentLookupKind LookupKind { get; set; }
     public bool ApplyEndState { get; set; }
+    public bool DryRun { get; set; }
     public int Total { get; set; }
     public int Updated { get; set; }
+    /// <summary>در DryRun — جمع ردیف‌هایی که UPDATE می‌شدند.</summary>
+    public int WouldUpdate { get; set; }
     public int NotFound { get; set; }
     public int Failed { get; set; }
     public string? Error { get; set; }

@@ -5,13 +5,20 @@ namespace RayvarzResend.Web.Services;
 
 public class InstallmentCheckService
 {
+    private readonly IConfiguration _config;
     private readonly string _saraCs;
 
     public InstallmentCheckService(IConfiguration config)
     {
+        _config = config;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara not set");
     }
+
+    /// <summary>مثل Tahator — از Installment:DryRun یا ارث از Rayvarz:DryRun.</summary>
+    public bool IsDryRun =>
+        _config.GetValue<bool?>("Installment:DryRun")
+        ?? _config.GetValue("Rayvarz:DryRun", true);
 
     public async Task<InstallmentCheckPreviewResult> PreviewAsync(
         InstallmentCheckRequest req,
@@ -84,10 +91,12 @@ public class InstallmentCheckService
         CancellationToken ct = default)
     {
         var lookup = NormalizeRequest(req);
+        var dryRun = IsDryRun;
         var result = new InstallmentCheckUpdateResult
         {
             LookupKind = lookup.LookupKind,
-            ApplyEndState = lookup.WillApplyEndState
+            ApplyEndState = lookup.WillApplyEndState,
+            DryRun = dryRun
         };
 
         if (lookup.Values.Count == 0)
@@ -95,6 +104,9 @@ public class InstallmentCheckService
             result.Error = "حداقل یک شماره سند یا کد پیگیری وارد کنید";
             return result;
         }
+
+        if (dryRun)
+            return await SimulateUpdateAsync(req, lookup, result, ct);
 
         var commentPrefix = InstallmentCheckHelper.BuildCommentPrefix(lookup.PerformedByUser);
 
@@ -136,14 +148,68 @@ public class InstallmentCheckService
                 item.Message = ex.Message;
             }
 
-            result.Results.Add(item);
-            result.Total++;
-            if (item.Success) result.Updated += item.RowsAffected;
-            else if (!item.Found) result.NotFound++;
-            else result.Failed++;
+            AppendUpdateItemResult(result, item);
         }
 
         return result;
+    }
+
+    private async Task<InstallmentCheckUpdateResult> SimulateUpdateAsync(
+        InstallmentCheckRequest req,
+        InstallmentLookupContext lookup,
+        InstallmentCheckUpdateResult result,
+        CancellationToken ct)
+    {
+        var preview = await PreviewAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(preview.Error))
+        {
+            result.Error = preview.Error;
+            return result;
+        }
+
+        foreach (var value in lookup.Values)
+        {
+            var matches = preview.Items
+                .Where(i => i.Found && string.Equals(i.LookupValue, value, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var item = new InstallmentCheckUpdateItemResult { LookupValue = value };
+            if (matches.Count == 0)
+            {
+                item.Found = false;
+                item.Success = false;
+                item.Message = "DryRun — ردیفی یافت نشد؛ UPDATE روی Sara اجرا نشد";
+            }
+            else
+            {
+                item.Found = true;
+                item.Success = true;
+                item.WouldUpdate = matches.Count;
+                item.Message =
+                    $"DryRun — {matches.Count} ردیف UPDATE نمی‌شود (Installment:DryRun=true؛ همان ConnectionStrings:Sara)";
+            }
+
+            AppendUpdateItemResult(result, item);
+        }
+
+        return result;
+    }
+
+    private static void AppendUpdateItemResult(InstallmentCheckUpdateResult result, InstallmentCheckUpdateItemResult item)
+    {
+        result.Results.Add(item);
+        result.Total++;
+        if (result.DryRun)
+        {
+            if (item.WouldUpdate > 0) result.WouldUpdate += item.WouldUpdate;
+            if (!item.Found) result.NotFound++;
+            else if (!item.Success) result.Failed++;
+            return;
+        }
+
+        if (item.Success) result.Updated += item.RowsAffected;
+        else if (!item.Found) result.NotFound++;
+        else result.Failed++;
     }
 
     private static InstallmentLookupContext NormalizeRequest(InstallmentCheckRequest req)

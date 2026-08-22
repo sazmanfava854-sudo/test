@@ -12,5 +12,8 @@
     "DryRun": true,
     "AllowInvalidSsl": false,
     "ProxyUrl": ""
+  },
+  "Installment": {
+    "DryRun": true
   }
 }

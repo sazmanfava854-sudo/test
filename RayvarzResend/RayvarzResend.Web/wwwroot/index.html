@@ -219,7 +219,8 @@
         <span class="card-icon" aria-hidden="true">🏦</span>
         <h2>تغییر وضعیت چک به خزانه</h2>
       </div>
-      <p class="field-hint installment-note">این بخش مستقیماً روی <code>dbo.Installment_List</code> در Sara کار می‌کند و ارتباطی به ارسال رایورز ندارد.</p>
+      <p class="field-hint installment-note">اتصال: همان <code>ConnectionStrings:Sara</code> (Sara8M03) — مثل بقیه Rayvarz Resend. UPDATE فقط وقتی <code>Installment:DryRun=false</code> روی سرور اجرا می‌شود.</p>
+      <p id="installmentDryRunNotice" class="installment-dryrun-notice" hidden>DryRun فعال — پیش‌نمایش از Sara خوانده می‌شود؛ UPDATE روی سرور اجرا نمی‌شود.</p>
       <div class="form-grid unsent-form-grid">
         <label class="field field-required">
           <span class="field-label">نوع شناسه</span>
