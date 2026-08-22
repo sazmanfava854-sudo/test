@@ -96,4 +96,6 @@ public sealed class InstallmentRowSnapshot
   public string EndStateDesc { get; set; } = "";
   public string EndStateCode { get; set; } = "";
   public string Comments { get; set; } = "";
+  public string NidWorkItem { get; set; } = "";
+  public string NosaziCode { get; set; } = "";
 }

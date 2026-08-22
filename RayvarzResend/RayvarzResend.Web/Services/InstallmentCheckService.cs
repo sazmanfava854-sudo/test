@@ -188,7 +188,7 @@ public class InstallmentCheckService
                 continue;
             }
 
-            var rows = await LoadRowsAsync(conn, kind, lookupValue, ct);
+            var rows = await LoadRowsForExcelAsync(conn, kind, lookupValue, ct);
             if (rows.Count == 0)
             {
                 item.ValidationMessage = "در دیتابیس یافت نشد";
@@ -210,6 +210,8 @@ public class InstallmentCheckService
             item.TrackingNo = dbRow.TrackingNo;
             item.PaymentCost = FormatCost(dbRow.PaymentCost);
             item.PaymentDate = dbRow.PaymentDate;
+            item.NidWorkItem = dbRow.NidWorkItem;
+            item.NosaziCode = dbRow.NosaziCode;
             item.CI_InstallmentStatus = dbRow.CI_InstallmentStatus;
             item.EndStateDesc = dbRow.EndStateDesc;
             item.EndStateCode = dbRow.EndStateCode;
@@ -509,6 +511,52 @@ public class InstallmentCheckService
             """;
     }
 
+    private static async Task<List<InstallmentRowSnapshot>> LoadRowsForExcelAsync(
+        SqlConnection conn,
+        InstallmentLookupKind kind,
+        string value,
+        CancellationToken ct)
+    {
+        var column = kind == InstallmentLookupKind.NoDocument ? "NoDocument" : "TrackingNo";
+        var sql = InstallmentListQuery.BuildExcelLookupSql(column);
+
+        var rows = new List<InstallmentRowSnapshot>();
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@v", value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(MapExcelInstallmentRow(reader));
+        }
+        return rows;
+    }
+
+    private static InstallmentRowSnapshot MapSimpleInstallmentRow(SqlDataReader reader) => new()
+    {
+        NoDocument = reader["NoDocument"]?.ToString() ?? "",
+        TrackingNo = reader["TrackingNo"]?.ToString() ?? "",
+        PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
+        PaymentDate = reader["PaymentDate"]?.ToString() ?? "",
+        CI_InstallmentStatus = reader["CI_InstallmentStatus"]?.ToString() ?? "",
+        EndStateDesc = reader["EndStateDesc"]?.ToString() ?? "",
+        EndStateCode = reader["EndStateCode"]?.ToString() ?? "",
+        Comments = reader["Comments"]?.ToString() ?? ""
+    };
+
+    private static InstallmentRowSnapshot MapExcelInstallmentRow(SqlDataReader reader) => new()
+    {
+        NoDocument = reader["NoDocument"]?.ToString() ?? "",
+        TrackingNo = reader["trackingno"]?.ToString() ?? reader["TrackingNo"]?.ToString() ?? "",
+        PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
+        PaymentDate = reader["PaymentDate"]?.ToString() ?? "",
+        NidWorkItem = reader["nidworkitem"]?.ToString() ?? reader["NidWorkItem"]?.ToString() ?? "",
+        NosaziCode = reader["NosaziCode"]?.ToString() ?? "",
+        CI_InstallmentStatus = reader["CI_InstallmentStatus"]?.ToString() ?? "",
+        EndStateDesc = reader["EndStateDesc"]?.ToString() ?? "",
+        EndStateCode = reader["EndStateCode"]?.ToString() ?? "",
+        Comments = reader["Comments"]?.ToString() ?? ""
+    };
+
     private static async Task<List<InstallmentRowSnapshot>> LoadRowsAsync(
         SqlConnection conn,
         InstallmentLookupKind kind,
@@ -531,17 +579,7 @@ WHERE {column} = @v";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            rows.Add(new InstallmentRowSnapshot
-            {
-                NoDocument = reader["NoDocument"]?.ToString() ?? "",
-                TrackingNo = reader["TrackingNo"]?.ToString() ?? "",
-                PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
-                PaymentDate = reader["PaymentDate"]?.ToString() ?? "",
-                CI_InstallmentStatus = reader["CI_InstallmentStatus"]?.ToString() ?? "",
-                EndStateDesc = reader["EndStateDesc"]?.ToString() ?? "",
-                EndStateCode = reader["EndStateCode"]?.ToString() ?? "",
-                Comments = reader["Comments"]?.ToString() ?? ""
-            });
+            rows.Add(MapSimpleInstallmentRow(reader));
         }
         return rows;
     }

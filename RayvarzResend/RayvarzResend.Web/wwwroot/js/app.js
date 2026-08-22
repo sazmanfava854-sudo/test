@@ -361,13 +361,12 @@ function renderInstallmentPreview(data) {
       tr.innerHTML = `
         <td>${row.rowIndex || '-'}</td>
         <td>${installmentLookupLabels[kind] || kind || '—'}</td>
-        <td>${row.excelIdentifier || '-'}</td>
-        <td>${formatInstallmentCost(row.excelPaymentCost)}</td>
-        <td>${row.excelPaymentDate || '-'}</td>
         <td>${row.noDocument || '-'}</td>
         <td>${row.trackingNo || '-'}</td>
         <td>${formatInstallmentCost(row.paymentCost)}</td>
         <td>${row.paymentDate || '-'}</td>
+        <td>${row.nidWorkItem || '-'}</td>
+        <td>${row.nosaziCode || '-'}</td>
         <td>${status}</td>
         <td class="col-comments">${row.proposedComments || '-'}</td>
       `;

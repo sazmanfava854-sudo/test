@@ -447,6 +447,8 @@ public class InstallmentCheckPreviewItem
     public string? ExcelIdentifier { get; set; }
     public string? ExcelPaymentCost { get; set; }
     public string? ExcelPaymentDate { get; set; }
+    public string? NidWorkItem { get; set; }
+    public string? NosaziCode { get; set; }
     public string CI_InstallmentStatus { get; set; } = "";
     public string EndStateDesc { get; set; } = "";
     public string EndStateCode { get; set; } = "";
