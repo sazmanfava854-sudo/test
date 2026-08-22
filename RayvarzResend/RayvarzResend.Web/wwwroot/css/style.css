@@ -82,51 +82,9 @@ body {
   box-shadow: 0 8px 20px rgba(29, 78, 216, 0.22);
 }
 
-.installment-note {
-  margin: 0 0 12px;
-  color: var(--text-muted);
-  font-size: 0.88rem;
+.tab-panel[hidden] {
+  display: none !important;
 }
-
-.installment-dryrun-notice {
-  margin: 0 0 12px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: rgba(234, 179, 8, 0.12);
-  border: 1px solid rgba(234, 179, 8, 0.35);
-  color: #92400e;
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-
-  margin: 0 0 12px;
-  color: var(--text-muted);
-  font-size: 0.88rem;
-}
-
-.installment-values-field textarea {
-  width: 100%;
-  min-height: 110px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  font-family: inherit;
-  font-size: 0.9rem;
-  resize: vertical;
-}
-
-.col-comments {
-  max-width: 220px;
-  white-space: normal;
-  word-break: break-word;
-  font-size: 0.82rem;
-}
-
-#installmentPreviewTable tr.row-not-found td {
-  background: rgba(220, 38, 38, 0.06);
-  color: var(--danger);
-}
-
 
 .field-required .field-label {
   color: var(--danger);
@@ -240,6 +198,48 @@ jdp-container {
   font-size: 0.82rem;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.unsent-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.unsent-page-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 180px;
+  text-align: center;
+}
+
+.btn-page {
+  min-width: 72px;
+  padding: 8px 14px;
+}
+
+.unsent-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.unsent-page-size select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
 }
 
 th.col-check, td.col-check {
@@ -719,3 +719,130 @@ tbody tr:last-child td {
   border: 1px solid #334155;
   font-family: ui-monospace, Consolas, monospace;
 }
+
+.hero-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.user-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.badge-admin {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.badge-user {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+.login-page .login-container {
+  max-width: 460px;
+  padding-top: 12vh;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.login-subtitle {
+  margin: 0 0 18px;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.login-form .actions {
+  margin-top: 8px;
+}
+
+.login-error {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 28px;
+}
+
+.form-intro {
+  margin: 0 0 16px;
+  line-height: 1.7;
+}
+
+.form-intro code {
+  font-size: 0.85em;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.installment-note {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.installment-dryrun-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #92400e;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.installment-values-field textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.col-comments {
+  max-width: 220px;
+  white-space: normal;
+  word-break: break-word;
+  font-size: 0.82rem;
+}
+
+#installmentPreviewTable tr.row-not-found td {
+  background: rgba(220, 38, 38, 0.06);
+  color: var(--danger);
+}
+

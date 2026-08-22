@@ -412,18 +412,18 @@ public enum InstallmentLookupKind
 /// <summary>تب تغییر وضعیت چک به خزانه — dbo.Installment_List (بدون رایورز).</summary>
 public class InstallmentCheckRequest
 {
-    public InstallmentLookupKind LookupKind { get; set; } = InstallmentLookupKind.NoDocument;
-    /// <summary>لیست شماره‌ها — در UI به‌صورت متن چندخطی/با کاما.</summary>
+    /// <summary>لیست شماره‌ها — در UI به‌صورت متن چندخطی/با کاما. نوع (NoDocument/TrackingNo) خودکار تشخیص داده می‌شود.</summary>
     public string ValuesText { get; set; } = "";
-    /// <summary>نام کاربر انجام‌دهنده — در Comments.</summary>
+    /// <summary>از لاگین — در API پر می‌شود.</summary>
     public string PerformedByUser { get; set; } = "";
-    /// <summary>فقط برای TrackingNo — اعمال EndStateDesc/EndStateCode عودت.</summary>
+    /// <summary>فقط وقتی TrackingNo تشخیص داده شود — اعمال EndStateDesc/EndStateCode عودت.</summary>
     public bool ApplyEndState { get; set; }
 }
 
 public class InstallmentCheckPreviewItem
 {
     public string LookupValue { get; set; } = "";
+    public InstallmentLookupKind DetectedLookupKind { get; set; }
     public bool Found { get; set; }
     public long? NidInstallmentList { get; set; }
     public string NoDocument { get; set; } = "";
@@ -440,7 +440,6 @@ public class InstallmentCheckPreviewItem
 
 public class InstallmentCheckPreviewResult
 {
-    public InstallmentLookupKind LookupKind { get; set; }
     public bool ApplyEndState { get; set; }
     public int FoundCount { get; set; }
     public int NotFoundCount { get; set; }
@@ -451,6 +450,7 @@ public class InstallmentCheckPreviewResult
 public class InstallmentCheckUpdateItemResult
 {
     public string LookupValue { get; set; } = "";
+    public InstallmentLookupKind DetectedLookupKind { get; set; }
     public bool Success { get; set; }
     public bool Found { get; set; }
     public int RowsAffected { get; set; }
@@ -461,7 +461,6 @@ public class InstallmentCheckUpdateItemResult
 
 public class InstallmentCheckUpdateResult
 {
-    public InstallmentLookupKind LookupKind { get; set; }
     public bool ApplyEndState { get; set; }
     public bool DryRun { get; set; }
     public int Total { get; set; }

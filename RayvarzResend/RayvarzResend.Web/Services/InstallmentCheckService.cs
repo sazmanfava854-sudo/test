@@ -15,7 +15,6 @@ public class InstallmentCheckService
             ?? throw new InvalidOperationException("ConnectionStrings:Sara not set");
     }
 
-    /// <summary>مثل Tahator — از Installment:DryRun یا ارث از Rayvarz:DryRun.</summary>
     public bool IsDryRun =>
         _config.GetValue<bool?>("Installment:DryRun")
         ?? _config.GetValue("Rayvarz:DryRun", true);
@@ -24,14 +23,13 @@ public class InstallmentCheckService
         InstallmentCheckRequest req,
         CancellationToken ct = default)
     {
-        var lookup = NormalizeRequest(req);
+        var parsed = ParseRequest(req);
         var result = new InstallmentCheckPreviewResult
         {
-            LookupKind = lookup.LookupKind,
-            ApplyEndState = lookup.WillApplyEndState
+            ApplyEndState = parsed.ApplyEndStateRequested
         };
 
-        if (lookup.Values.Count == 0)
+        if (parsed.Values.Count == 0)
         {
             result.Error = "حداقل یک شماره سند یا کد پیگیری وارد کنید";
             return result;
@@ -42,14 +40,19 @@ public class InstallmentCheckService
 
         var foundKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var value in lookup.Values)
+        foreach (var rawValue in parsed.Values)
         {
-            var rows = await LoadRowsAsync(conn, lookup.LookupKind, value, ct);
+            var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
+            var kind = InstallmentIdentifierDetector.Detect(value);
+            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
+
+            var rows = await LoadRowsAsync(conn, kind, value, ct);
             if (rows.Count == 0)
             {
                 result.Items.Add(new InstallmentCheckPreviewItem
                 {
                     LookupValue = value,
+                    DetectedLookupKind = kind,
                     Found = false
                 });
                 continue;
@@ -61,6 +64,7 @@ public class InstallmentCheckService
                 result.Items.Add(new InstallmentCheckPreviewItem
                 {
                     LookupValue = value,
+                    DetectedLookupKind = kind,
                     Found = true,
                     NoDocument = row.NoDocument,
                     TrackingNo = row.TrackingNo,
@@ -69,12 +73,12 @@ public class InstallmentCheckService
                     EndStateCode = row.EndStateCode,
                     Comments = row.Comments,
                     ProposedComments = InstallmentCheckHelper.BuildNewComments(
-                        lookup.PerformedByUser, row.Comments),
+                        parsed.PerformedByUser, row.Comments),
                     ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus,
-                    ProposedEndStateDesc = lookup.WillApplyEndState
+                    ProposedEndStateDesc = willApplyEndState
                         ? InstallmentCheckHelper.EndStateDescOdooat
                         : row.EndStateDesc,
-                    ProposedEndStateCode = lookup.WillApplyEndState
+                    ProposedEndStateCode = willApplyEndState
                         ? InstallmentCheckHelper.EndStateCodeOdooat
                         : row.EndStateCode
                 });
@@ -82,7 +86,7 @@ public class InstallmentCheckService
         }
 
         result.FoundCount = result.Items.Count(i => i.Found);
-        result.NotFoundCount = lookup.Values.Count - foundKeys.Count;
+        result.NotFoundCount = parsed.Values.Count - foundKeys.Count;
         return result;
     }
 
@@ -90,45 +94,48 @@ public class InstallmentCheckService
         InstallmentCheckRequest req,
         CancellationToken ct = default)
     {
-        var lookup = NormalizeRequest(req);
+        var parsed = ParseRequest(req);
         var dryRun = IsDryRun;
         var result = new InstallmentCheckUpdateResult
         {
-            LookupKind = lookup.LookupKind,
-            ApplyEndState = lookup.WillApplyEndState,
+            ApplyEndState = parsed.ApplyEndStateRequested,
             DryRun = dryRun
         };
 
-        if (lookup.Values.Count == 0)
+        if (parsed.Values.Count == 0)
         {
             result.Error = "حداقل یک شماره سند یا کد پیگیری وارد کنید";
             return result;
         }
 
         if (dryRun)
-            return await SimulateUpdateAsync(req, lookup, result, ct);
+            return await SimulateUpdateAsync(req, parsed, result, ct);
 
-        var commentPrefix = InstallmentCheckHelper.BuildCommentPrefix(lookup.PerformedByUser);
+        var commentPrefix = InstallmentCheckHelper.BuildCommentPrefix(parsed.PerformedByUser);
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
 
-        foreach (var value in lookup.Values)
+        foreach (var rawValue in parsed.Values)
         {
-            var item = new InstallmentCheckUpdateItemResult { LookupValue = value };
+            var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
+            var kind = InstallmentIdentifierDetector.Detect(value);
+            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
+            var item = new InstallmentCheckUpdateItemResult
+            {
+                LookupValue = value,
+                DetectedLookupKind = kind
+            };
 
             try
             {
-                var withEndState = lookup.WillApplyEndState;
-                var sql = lookup.LookupKind == InstallmentLookupKind.NoDocument
-                    ? BuildUpdateSql(lookup.LookupKind, withEndState: true)
-                    : BuildUpdateSql(lookup.LookupKind, withEndState);
+                var sql = BuildUpdateSql(kind, willApplyEndState);
 
                 await using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@prefix", commentPrefix);
                 cmd.Parameters.AddWithValue("@status", InstallmentCheckHelper.TreasuryStatus);
                 cmd.Parameters.AddWithValue("@v", value);
-                if (withEndState)
+                if (willApplyEndState)
                 {
                     cmd.Parameters.AddWithValue("@endDesc", InstallmentCheckHelper.EndStateDescOdooat);
                     cmd.Parameters.AddWithValue("@endCode", InstallmentCheckHelper.EndStateCodeOdooat);
@@ -139,8 +146,8 @@ public class InstallmentCheckService
                 item.Found = affected > 0;
                 item.Success = affected > 0;
                 item.Message = affected > 0
-                    ? $"{affected} ردیف به‌روز شد"
-                    : "ردیفی با این شناسه یافت نشد";
+                    ? $"{affected} ردیف به‌روز شد ({InstallmentIdentifierDetector.Describe(kind)})"
+                    : $"ردیفی با {InstallmentIdentifierDetector.Describe(kind)} یافت نشد";
             }
             catch (Exception ex)
             {
@@ -156,7 +163,7 @@ public class InstallmentCheckService
 
     private async Task<InstallmentCheckUpdateResult> SimulateUpdateAsync(
         InstallmentCheckRequest req,
-        InstallmentLookupContext lookup,
+        ParsedInstallmentRequest parsed,
         InstallmentCheckUpdateResult result,
         CancellationToken ct)
     {
@@ -167,18 +174,25 @@ public class InstallmentCheckService
             return result;
         }
 
-        foreach (var value in lookup.Values)
+        foreach (var rawValue in parsed.Values)
         {
+            var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
+            var kind = InstallmentIdentifierDetector.Detect(value);
             var matches = preview.Items
                 .Where(i => i.Found && string.Equals(i.LookupValue, value, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            var item = new InstallmentCheckUpdateItemResult { LookupValue = value };
+            var item = new InstallmentCheckUpdateItemResult
+            {
+                LookupValue = value,
+                DetectedLookupKind = kind
+            };
+
             if (matches.Count == 0)
             {
                 item.Found = false;
                 item.Success = false;
-                item.Message = "DryRun — ردیفی یافت نشد؛ UPDATE روی Sara اجرا نشد";
+                item.Message = $"DryRun — ردیفی یافت نشد ({InstallmentIdentifierDetector.Describe(kind)})";
             }
             else
             {
@@ -186,7 +200,7 @@ public class InstallmentCheckService
                 item.Success = true;
                 item.WouldUpdate = matches.Count;
                 item.Message =
-                    $"DryRun — {matches.Count} ردیف UPDATE نمی‌شود (Installment:DryRun=true؛ همان ConnectionStrings:Sara)";
+                    $"DryRun — {matches.Count} ردیف UPDATE نمی‌شود (Installment:DryRun=true)";
             }
 
             AppendUpdateItemResult(result, item);
@@ -194,6 +208,11 @@ public class InstallmentCheckService
 
         return result;
     }
+
+    private static ParsedInstallmentRequest ParseRequest(InstallmentCheckRequest req) => new(
+        InstallmentCheckHelper.ParseIdentifierList(req.ValuesText),
+        (req.PerformedByUser ?? "").Trim(),
+        req.ApplyEndState);
 
     private static void AppendUpdateItemResult(InstallmentCheckUpdateResult result, InstallmentCheckUpdateItemResult item)
     {
@@ -210,18 +229,6 @@ public class InstallmentCheckService
         if (item.Success) result.Updated += item.RowsAffected;
         else if (!item.Found) result.NotFound++;
         else result.Failed++;
-    }
-
-    private static InstallmentLookupContext NormalizeRequest(InstallmentCheckRequest req)
-    {
-        var lookupKind = req.LookupKind;
-        var values = InstallmentCheckHelper.ParseIdentifierList(req.ValuesText);
-        var applyEndState = lookupKind == InstallmentLookupKind.NoDocument || req.ApplyEndState;
-        return new InstallmentLookupContext(
-            lookupKind,
-            values,
-            (req.PerformedByUser ?? "").Trim(),
-            applyEndState);
     }
 
     private static string BuildUpdateSql(InstallmentLookupKind kind, bool withEndState)
@@ -281,9 +288,8 @@ WHERE {column} = @v";
         public string Comments { get; set; } = "";
     }
 
-    private sealed record InstallmentLookupContext(
-        InstallmentLookupKind LookupKind,
+    private sealed record ParsedInstallmentRequest(
         List<string> Values,
         string PerformedByUser,
-        bool WillApplyEndState);
+        bool ApplyEndStateRequested);
 }

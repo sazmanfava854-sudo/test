@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ورود — Rayvarz Resend</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=20" />
+</head>
+<body class="login-page">
+  <div class="page-bg" aria-hidden="true"></div>
+  <div class="container login-container">
+    <section class="card login-card card-enter">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">🔐</span>
+        <h1>ورود به Rayvarz Resend</h1>
+      </div>
+      <p class="login-subtitle">ورود با کد ملی و رمز عبور — ادمین می‌تواند با نام کاربری <code>admin</code> وارد شود.</p>
+      <form id="loginForm" class="login-form">
+        <label class="field field-required">
+          <span class="field-label">کد ملی</span>
+          <input id="loginUsername" type="text" inputmode="numeric" maxlength="10" autocomplete="username" required placeholder="۱۰ رقم" />
+        </label>
+        <label class="field field-required">
+          <span class="field-label">رمز عبور</span>
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <div class="actions">
+          <button id="btnLogin" class="btn primary" type="submit">ورود</button>
+        </div>
+        <p id="loginError" class="login-error" hidden></p>
+      </form>
+    </section>
+  </div>
+  <script src="js/login.js?v=2"></script>
+</body>
+</html>
