@@ -240,26 +240,19 @@
         <span class="card-icon" aria-hidden="true">🏦</span>
         <h2>تغییر وضعیت چک به خزانه</h2>
       </div>
-      <p class="field-hint installment-note">اتصال: <code>ConnectionStrings:Sara</code> — شماره سند (کوتاه) یا کد پیگیری (بلند) را وارد کنید؛ سیستم خودکار تشخیص می‌دهد.</p>
-      <p id="installmentDryRunNotice" class="installment-dryrun-notice" hidden>DryRun فعال — پیش‌نمایش از Sara؛ UPDATE روی سرور اجرا نمی‌شود.</p>
       <div class="form-grid unsent-form-grid">
         <label class="field field-required installment-values-field">
           <span class="field-label">شماره سند / کد پیگیری</span>
-          <textarea id="installmentValues" rows="5" placeholder="مثال NoDocument: 809552&#10;مثال TrackingNo: 0212280614002187"></textarea>
-          <span id="installmentDetectHint" class="field-hint" hidden></span>
+          <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
         </label>
-        <label class="field installment-endstate-field" id="installmentEndStateWrap">
-          <span class="field-label">عودت (اختیاری)</span>
-          <label class="check-all-label">
-            <input id="installmentApplyEndState" type="checkbox" />
-            <span>اعمال EndStateDesc=عودت و EndStateCode=17</span>
-          </label>
-          <span class="field-hint">فقط برای کد پیگیری (TrackingNo). شماره سند همیشه عودت اعمال می‌شود.</span>
+        <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
+          <input id="installmentApplyEndState" type="checkbox" />
+          <span>عودت</span>
         </label>
       </div>
       <div class="actions">
         <button id="btnInstallmentPreview" class="btn secondary" type="button">پیش‌نمایش</button>
-        <button id="btnInstallmentUpdate" class="btn danger" type="button" disabled>اعمال UPDATE</button>
+        <button id="btnInstallmentUpdate" class="btn danger" type="button" disabled>اعمال</button>
       </div>
       <div class="subsection" id="installmentPreviewSection" hidden>
         <div class="unsent-toolbar">
@@ -358,6 +351,6 @@
     </div>
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="js/app.js?v=30"></script>
 </body>
 </html>

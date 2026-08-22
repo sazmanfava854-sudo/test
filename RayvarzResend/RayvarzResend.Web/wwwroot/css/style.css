@@ -823,6 +823,15 @@ tbody tr:last-child td {
   font-weight: 600;
 }
 
+.installment-values-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
 .installment-values-field textarea {
   width: 100%;
   min-height: 110px;

@@ -183,38 +183,16 @@ function detectInstallmentLookupKind(value) {
 }
 
 function getInstallmentPayload() {
+  const raw = ($('installmentValues')?.value || '').replace(/\D/g, '');
   return {
-    valuesText: ($('installmentValues')?.value || '').trim(),
+    valuesText: raw,
     applyEndState: !!$('installmentApplyEndState')?.checked
   };
 }
 
-function updateInstallmentDetectHint() {
-  const hint = $('installmentDetectHint');
-  const raw = ($('installmentValues')?.value || '').trim();
-  if (!hint) return;
-  if (!raw) {
-    hint.hidden = true;
-    hint.textContent = '';
-    return;
-  }
-  const lines = raw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
-  const parts = lines.map((line) => {
-    const kind = detectInstallmentLookupKind(line);
-    return kind ? `${line} → ${installmentLookupLabels[kind]}` : line;
-  });
-  hint.hidden = false;
-  hint.textContent = `تشخیص: ${parts.join(' | ')}`;
-}
-
 function syncInstallmentDryRunUi() {
-  const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
-  const notice = $('installmentDryRunNotice');
   const updateBtn = $('btnInstallmentUpdate');
-  if (notice) notice.hidden = !dry;
-  if (updateBtn && !updateBtn.disabled) {
-    updateBtn.textContent = dry ? 'شبیه‌سازی UPDATE (DryRun)' : 'اعمال UPDATE';
-  }
+  if (updateBtn && !updateBtn.disabled) updateBtn.textContent = 'اعمال';
 }
 
 function renderInstallmentPreview(data) {
@@ -248,8 +226,7 @@ function renderInstallmentPreview(data) {
   });
   if (updateBtn) {
     updateBtn.disabled = !(data.foundCount > 0);
-    const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
-    updateBtn.textContent = dry ? 'شبیه‌سازی UPDATE (DryRun)' : 'اعمال UPDATE';
+    updateBtn.textContent = 'اعمال';
   }
 }
 
@@ -921,7 +898,12 @@ async function init() {
   $('actDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('dueDate').onchange = () => { if (currentFiche) renderMappingTable(currentFiche); };
   $('identifierValue')?.addEventListener('input', updateIdentifierHint);
-  $('installmentValues')?.addEventListener('input', updateInstallmentDetectHint);
+  const installmentInput = $('installmentValues');
+  if (installmentInput) {
+    installmentInput.addEventListener('input', () => {
+      installmentInput.value = installmentInput.value.replace(/\D/g, '');
+    });
+  }
   syncFundFromBranch();
   setupMainTabs();
   initDatePickers();
@@ -1264,10 +1246,9 @@ function setupEventHandlers() {
     if (!payload.valuesText) return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
 
     const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
-    const dryNote = dry
-      ? 'DryRun فعال — UPDATE واقعی روی Sara اجرا نمی‌شود.'
-      : 'UPDATE واقعی روی Sara اجرا می‌شود.';
-    if (!confirm(`${dryNote}\n\nادامه؟`)) return;
+    const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';
+    if (dryNote && !confirm(`${dryNote}\n\nادامه؟`)) return;
+    if (!dryNote && !confirm('ادامه؟')) return;
 
     const btn = $('btnInstallmentUpdate');
     const box = $('installmentResultBox');
@@ -1286,7 +1267,7 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       if (box) box.textContent = formatInstallmentUpdateResult(data);
       if (data.dryRun) {
-        alert(`DryRun — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد؛ روی سرور تغییری اعمال نشد.`);
+        alert(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
       } else {
         alert(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
       }
