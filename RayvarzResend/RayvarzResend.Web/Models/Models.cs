@@ -145,8 +145,6 @@ public class SendFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
-    /// <summary>ریست EumFicheStatus در Sara — فقط با درخواست صریح (پیش‌فرض خاموش).</summary>
-    public bool ResetStatus { get; set; } = false;
 }
 
 public class SendResultDto
@@ -291,7 +289,6 @@ public class UnsentBatchSendRequest
 {
     public UnsentFicheKind FicheKind { get; set; } = UnsentFicheKind.Income;
     public List<string> FicheNos { get; set; } = new();
-    public bool ResetStatus { get; set; } = true;
 }
 
 public class UnsentBatchSendItemResult
@@ -341,13 +338,8 @@ public class TahatorFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
-    /// <summary>اگر فیش در رایورز باشد هم ادامه بده (برای تست مرحله وضعیت ۲).</summary>
+    /// <summary>اگر فیش در رایورز باشد هم ادامه بده.</summary>
     public bool Force { get; set; }
-    /// <summary>
-    /// فقط مرحله نگه‌داشت + UPDATE وضعیت ۲ (تاریخ روز) — بدون SOAP و بدون بازگردانی.
-    /// بعد از SELECT در Sara، با POST /api/tahator/restore بازگردانید.
-    /// </summary>
-    public bool HoldAfterStatus2 { get; set; }
 }
 
 /// <summary>جفت تهاتر — گروه ۱۵۷ (مبلغ/مرکز) + ۱۵۸ (درآمد/منطقه) با همان NidIncome.</summary>

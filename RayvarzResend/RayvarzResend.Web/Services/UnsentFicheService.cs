@@ -247,8 +247,7 @@ public class UnsentFicheService
             Fund = fund,
             DocDate = DateHelper.ToShamsiSlashDate(fiche.RayvarzDocDate),
             ActDate = DateHelper.ToShamsiSlashDate(fiche.RayvarzActDate),
-            DueDate = DateHelper.ToShamsiSlashDate(fiche.RayvarzDueDate),
-            ResetStatus = req.ResetStatus
+            DueDate = DateHelper.ToShamsiSlashDate(fiche.RayvarzDueDate)
         };
 
         var sendResult = await _send.SendAsync(sendReq, ct);
