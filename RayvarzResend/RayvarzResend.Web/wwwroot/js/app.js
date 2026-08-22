@@ -208,12 +208,30 @@ function mapExcelHeaderIndex(headers) {
   const map = {};
   headers.forEach((h, idx) => {
     const key = normalizeExcelHeader(h);
-    if (key === 'nodocument') map.noDocument = idx;
-    if (key === 'trackingno') map.trackingNo = idx;
-    if (key === 'paymentcost') map.paymentCost = idx;
-    if (key === 'paymentdate') map.paymentDate = idx;
+    if (key === 'identifier' || key === 'شناسه' || key === 'nodocument' || key === 'trackingno'
+      || key === 'شمارهسند' || key === 'کدپیگیری') {
+      map.identifier = idx;
+    }
+    if (key === 'paymentcost' || key === 'مبلغ') map.paymentCost = idx;
+    if (key === 'paymentdate' || key === 'تاریخ' || key === 'تاریخپرداخت') map.paymentDate = idx;
   });
   return map;
+}
+
+function downloadInstallmentExcelTemplate() {
+  if (typeof XLSX === 'undefined') {
+    alert('کتابخانه اکسل بارگذاری نشد');
+    return;
+  }
+  const rows = [
+    ['Identifier', 'PaymentCost', 'PaymentDate'],
+    ['809552', '20335141229', '1405/09/25'],
+    ['0502090614002610', '813516015', '1405/05/05']
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, 'Installment');
+  XLSX.writeFile(book, 'installment-check-template.xlsx');
 }
 
 function parseInstallmentExcelFile(file) {
@@ -240,10 +258,10 @@ function parseInstallmentExcelFile(file) {
 
         const headerRow = rows[0].map((c) => String(c || '').trim());
         const col = mapExcelHeaderIndex(headerRow);
-        const required = ['noDocument', 'trackingNo', 'paymentCost', 'paymentDate'];
+        const required = ['identifier', 'paymentCost', 'paymentDate'];
         const missing = required.filter((k) => col[k] == null);
         if (missing.length) {
-          reject(new Error('ستون‌های الزامی یافت نشد: NoDocument, trackingno, PaymentCost, PaymentDate'));
+          reject(new Error('ستون‌های الزامی: Identifier، PaymentCost، PaymentDate'));
           return;
         }
 
@@ -251,12 +269,11 @@ function parseInstallmentExcelFile(file) {
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i] || [];
           const item = {
-            noDocument: String(row[col.noDocument] ?? '').trim(),
-            trackingNo: String(row[col.trackingNo] ?? '').trim(),
+            identifier: String(row[col.identifier] ?? '').trim(),
             paymentCost: String(row[col.paymentCost] ?? '').trim(),
             paymentDate: String(row[col.paymentDate] ?? '').trim()
           };
-          if (!item.noDocument && !item.trackingNo && !item.paymentCost && !item.paymentDate) continue;
+          if (!item.identifier && !item.paymentCost && !item.paymentDate) continue;
           parsed.push(item);
         }
 
@@ -282,8 +299,7 @@ function getInstallmentPayload() {
     return {
       ...base,
       excelRows: installmentExcelRows.map((r) => ({
-        noDocument: r.noDocument || '',
-        trackingNo: r.trackingNo || '',
+        identifier: r.identifier || '',
         paymentCost: r.paymentCost || '',
         paymentDate: r.paymentDate || ''
       }))
@@ -345,8 +361,7 @@ function renderInstallmentPreview(data) {
       tr.innerHTML = `
         <td>${row.rowIndex || '-'}</td>
         <td>${installmentLookupLabels[kind] || kind || '—'}</td>
-        <td>${row.excelNoDocument || '-'}</td>
-        <td>${row.excelTrackingNo || '-'}</td>
+        <td>${row.excelIdentifier || '-'}</td>
         <td>${formatInstallmentCost(row.excelPaymentCost)}</td>
         <td>${row.excelPaymentDate || '-'}</td>
         <td>${row.noDocument || '-'}</td>
@@ -1059,6 +1074,8 @@ async function init() {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
   setInstallmentMode('single');
+
+  bindClick('btnInstallmentDownloadTemplate', downloadInstallmentExcelTemplate);
 
   const excelInput = $('installmentExcelFile');
   if (excelInput) {

@@ -176,8 +176,7 @@ public class InstallmentCheckService
                 RowIndex = i + 1,
                 LookupValue = lookupValue,
                 DetectedLookupKind = kind,
-                ExcelNoDocument = InstallmentExcelMatcher.NormalizeCell(excelRow.NoDocument),
-                ExcelTrackingNo = InstallmentExcelMatcher.NormalizeCell(excelRow.TrackingNo),
+                ExcelIdentifier = InstallmentExcelMatcher.NormalizeCell(excelRow.Identifier),
                 ExcelPaymentCost = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentCost),
                 ExcelPaymentDate = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentDate)
             };
@@ -224,7 +223,7 @@ public class InstallmentCheckService
                 ? InstallmentCheckHelper.EndStateCodeOdooat
                 : dbRow.EndStateCode;
 
-            var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow);
+            var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow, kind, lookupValue);
             if (mismatch == null)
             {
                 item.DataMatches = true;
@@ -475,8 +474,7 @@ public class InstallmentCheckService
     }
 
     private static bool IsExcelRowEmpty(InstallmentExcelRowInput row) =>
-        string.IsNullOrWhiteSpace(row.NoDocument)
-        && string.IsNullOrWhiteSpace(row.TrackingNo)
+        string.IsNullOrWhiteSpace(row.Identifier)
         && string.IsNullOrWhiteSpace(row.PaymentCost)
         && string.IsNullOrWhiteSpace(row.PaymentDate);
 

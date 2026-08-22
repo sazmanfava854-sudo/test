@@ -409,11 +409,11 @@ public enum InstallmentLookupKind
     TrackingNo
 }
 
-/// <summary>ردیف اکسل — ستون‌های NoDocument, trackingno, PaymentCost, PaymentDate.</summary>
+/// <summary>ردیف اکسل — سه ستون: Identifier (شماره سند یا کد پیگیری), PaymentCost, PaymentDate.</summary>
 public class InstallmentExcelRowInput
 {
-    public string NoDocument { get; set; } = "";
-    public string TrackingNo { get; set; } = "";
+    /// <summary>شماره سند یا کد پیگیری — نوع از طول رقم تشخیص داده می‌شود.</summary>
+    public string Identifier { get; set; } = "";
     public string PaymentCost { get; set; } = "";
     public string PaymentDate { get; set; } = "";
 }
@@ -444,8 +444,7 @@ public class InstallmentCheckPreviewItem
     public string TrackingNo { get; set; } = "";
     public string? PaymentCost { get; set; }
     public string? PaymentDate { get; set; }
-    public string? ExcelNoDocument { get; set; }
-    public string? ExcelTrackingNo { get; set; }
+    public string? ExcelIdentifier { get; set; }
     public string? ExcelPaymentCost { get; set; }
     public string? ExcelPaymentDate { get; set; }
     public string CI_InstallmentStatus { get; set; } = "";

@@ -253,16 +253,41 @@
         </div>
       </div>
       <div id="installmentExcelPanel" class="installment-mode-panel" hidden>
+        <div class="installment-template-spec">
+          <strong>قالب فایل اکسل — ۳ ستون</strong>
+          <table class="installment-template-table">
+            <thead>
+              <tr>
+                <th>ستون ۱</th>
+                <th>ستون ۲</th>
+                <th>ستون ۳</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Identifier</code><br><span class="field-hint">شماره سند یا کد پیگیری</span></td>
+                <td><code>PaymentCost</code><br><span class="field-hint">مبلغ (ریال)</span></td>
+                <td><code>PaymentDate</code><br><span class="field-hint">تاریخ شمسی</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="field-hint installment-template-note">
+            تشخیص نوع شناسه: کمتر از ۱۰ رقم → شماره سند (NoDocument) — ۱۰ رقم و بیشتر → کد پیگیری (TrackingNo).
+            مثال: <code>809552</code> یا <code>0502090614002610</code>
+          </p>
+        </div>
         <div class="form-grid unsent-form-grid">
           <label class="field field-required installment-excel-field">
             <span class="field-label">فایل اکسل (.xlsx)</span>
             <input id="installmentExcelFile" type="file" accept=".xlsx,.xls" />
-            <span class="field-hint">ستون‌ها: NoDocument، trackingno، PaymentCost، PaymentDate</span>
           </label>
           <div class="field">
             <span class="field-label">وضعیت فایل</span>
             <span id="installmentExcelStatus" class="installment-excel-status">فایلی انتخاب نشده</span>
           </div>
+        </div>
+        <div class="actions installment-template-actions">
+          <button id="btnInstallmentDownloadTemplate" class="btn secondary" type="button">دانلود تمپلیت اکسل</button>
         </div>
       </div>
       <div class="form-grid unsent-form-grid">
@@ -294,8 +319,7 @@
               <tr id="installmentPreviewHeaderExcel" hidden>
                 <th>ردیف</th>
                 <th>تشخیص</th>
-                <th>NoDocument (اکسل)</th>
-                <th>trackingno (اکسل)</th>
+                <th>Identifier (اکسل)</th>
                 <th>PaymentCost (اکسل)</th>
                 <th>PaymentDate (اکسل)</th>
                 <th>NoDocument (DB)</th>
@@ -387,6 +411,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=31"></script>
+  <script src="js/app.js?v=32"></script>
 </body>
 </html>

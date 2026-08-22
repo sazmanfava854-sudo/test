@@ -895,3 +895,34 @@ tbody tr:last-child td {
   padding: 8px 0;
 }
 
+.installment-template-spec {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.installment-template-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 0.88rem;
+}
+
+.installment-template-table th,
+.installment-template-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.installment-template-note {
+  margin: 10px 0 0;
+}
+
+.installment-template-actions {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
