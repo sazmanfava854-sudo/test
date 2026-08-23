@@ -314,6 +314,12 @@ function parseInstallmentExcelFile(file) {
           const paymentCost = parseExcelCellValue(sheet, r, col.paymentCost);
           const paymentDate = parseExcelCellValue(sheet, r, col.paymentDate);
 
+          if (hasScientificNotation(identifier)) {
+            reject(new Error(
+              `ردیف ${r + 1}: شناسه «${identifier}» به‌صورت علمی خوانده شد (مثل 5.02E+14). تغییر نوع ستون به Text عدد را برنمی‌گرداند — کد پیگیری را دوباره تایپ کنید یا از «دانلود قالب اکسل» استفاده کنید.`
+            ));
+            return;
+          }
           if (hasScientificNotation(paymentCost)) {
             reject(new Error(
               `ردیف ${r + 1}: مبلغ «${paymentCost}» به‌صورت علمی است. ستون PaymentCost را Text کنید.`
@@ -321,23 +327,11 @@ function parseInstallmentExcelFile(file) {
             return;
           }
 
-          const identifierDamaged = hasScientificNotation(identifier);
-          if (identifierDamaged) {
-            const hasCostDate = paymentCost.trim() && paymentDate.trim();
-            if (!hasCostDate) {
-              reject(new Error(
-                `ردیف ${r + 1}: شناسه «${identifier}» خراب است — مبلغ و تاریخ را هم وارد کنید تا جستجو با آن‌ها انجام شود، یا کد پیگیری را دوباره به‌صورت Text تایپ کنید.`
-              ));
-              return;
-            }
-          }
-
           const item = {
             identifier: identifier.trim(),
             paymentCost: paymentCost.trim(),
             paymentDate: paymentDate.trim(),
-            odooat: '',
-            identifierDamaged
+            odooat: ''
           };
           if (detectInstallmentKindFromIdentifier(item.identifier) === 'TrackingNo'
             && col.odooat != null) {
@@ -453,9 +447,7 @@ function renderInstallmentPreview(data) {
     if (excelMode) {
       const status = !row.found
         ? (row.validationMessage || 'یافت نشد')
-        : (row.dataMatches
-          ? (row.matchedByCostDate ? 'تطابق با مبلغ/تاریخ (شناسه اکسل خراب)' : 'تطابق کامل')
-          : (row.validationMessage || 'عدم تطابق'));
+        : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
       tr.innerHTML = `
         <td class="col-installment-row">${toPersianDigits(row.rowIndex || '-')}</td>
         <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>

@@ -190,35 +190,12 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
-    public void CanUseCostDateFallback_when_scientific_identifier_and_cost_date_present()
+    public void ResolveLookup_rejects_scientific_identifier()
     {
-        var row = new InstallmentExcelRowInput
-        {
-            Identifier = "5.02091E+14",
-            PaymentCost = "813516015",
-            PaymentDate = "1405/05/05"
-        };
-        var (_, _, _) = InstallmentExcelMatcher.ResolveLookup(row);
-        Assert.True(InstallmentExcelMatcher.CanUseCostDateFallback(row, InstallmentLookupKind.TrackingNo));
-    }
+        var row = new InstallmentExcelRowInput { Identifier = "5.02091E+14" };
+        var (_, value, error) = InstallmentExcelMatcher.ResolveLookup(row);
 
-    [Fact]
-    public void ValidateAgainstDb_skips_tracking_compare_when_identifier_scientific()
-    {
-        var excel = new InstallmentExcelRowInput
-        {
-            Identifier = "5.02091E+14",
-            PaymentCost = "813516015",
-            PaymentDate = "1405/05/05"
-        };
-        var db = new InstallmentRowSnapshot
-        {
-            TrackingNo = "0502090614002610",
-            PaymentCost = 813516015m,
-            PaymentDate = "1405/05/05"
-        };
-
-        Assert.Null(InstallmentExcelMatcher.ValidateAgainstDb(
-            excel, db, InstallmentLookupKind.TrackingNo, "0502090614002610"));
+        Assert.Contains("5.02E+14", error);
+        Assert.Equal("", value);
     }
 }

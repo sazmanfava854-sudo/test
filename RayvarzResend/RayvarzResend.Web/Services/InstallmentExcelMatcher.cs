@@ -78,32 +78,15 @@ public static class InstallmentExcelMatcher
   public static bool DatesMatch(string? excelDate, string? dbDate) =>
     NormalizeDateDigits(excelDate) == NormalizeDateDigits(dbDate);
 
-  public static string ExtractIdentifierDigits(string? raw)
-  {
-    var text = NormalizeCell(raw);
-    if (string.IsNullOrEmpty(text))
-      return "";
-
-    if (LooksLikeScientificNotation(text)
-        && double.TryParse(text, System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out var scientific))
-    {
-      var rounded = (long)Math.Round(scientific);
-      if (rounded > 0)
-        return rounded.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    return NormalizeDigits(text);
-  }
-
-  public static bool CanUseCostDateFallback(InstallmentExcelRowInput row, InstallmentLookupKind kind) =>
-    (kind == InstallmentLookupKind.TrackingNo || LooksLikeScientificNotation(row.Identifier))
-    && TryParseCost(row.PaymentCost, out _)
-    && NormalizeDateDigits(row.PaymentDate).Length >= 8;
+  public const string ScientificIdentifierError =
+    "شناسه در اکسل خراب است (نمایش علمی مثل 5.02E+14). تغییر نوع ستون به Text عدد را برنمی‌گرداند — کد پیگیری را دوباره تایپ کنید یا از قالب اکسل استفاده کنید.";
 
   public static (InstallmentLookupKind Kind, string Value, string? Error) ResolveLookup(InstallmentExcelRowInput row)
   {
-    var digits = ExtractIdentifierDigits(row.Identifier);
+    if (LooksLikeScientificNotation(row.Identifier))
+      return (InstallmentLookupKind.NoDocument, "", ScientificIdentifierError);
+
+    var digits = NormalizeDigits(row.Identifier);
     if (string.IsNullOrEmpty(digits))
       return (InstallmentLookupKind.NoDocument, "", "شناسه (شماره سند / کد پیگیری) الزامی است");
 
@@ -156,12 +139,9 @@ public static class InstallmentExcelMatcher
   {
     if (lookupKind == InstallmentLookupKind.TrackingNo)
     {
-      if (!LooksLikeScientificNotation(excel.Identifier))
-      {
-        var dbTracking = NormalizeDigits(db.TrackingNo);
-        if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
-          return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
-      }
+      var dbTracking = NormalizeDigits(db.TrackingNo);
+      if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
+        return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
       return null;
     }
 

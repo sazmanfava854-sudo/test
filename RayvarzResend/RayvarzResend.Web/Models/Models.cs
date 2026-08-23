@@ -440,7 +440,6 @@ public class InstallmentCheckPreviewItem
     public InstallmentLookupKind DetectedLookupKind { get; set; }
     public bool Found { get; set; }
     public bool DataMatches { get; set; }
-    public bool MatchedByCostDate { get; set; }
     public string? ValidationMessage { get; set; }
     public long? NidInstallmentList { get; set; }
     public string NoDocument { get; set; } = "";

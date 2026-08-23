@@ -23,17 +23,6 @@ public class InstallmentListQueryTests
     }
 
     [Fact]
-    public void BuildExcelLookupByCostDateSql_matches_cost_and_normalized_date_digits()
-    {
-        var sql = InstallmentListQuery.BuildExcelLookupByCostDateSql();
-
-        Assert.Contains("il.PaymentCost = @cost", sql);
-        Assert.Contains("@paymentDateDigits", sql);
-        Assert.Contains("REPLACE(REPLACE(REPLACE", sql);
-        Assert.Contains("il.TrackingNo IS NOT NULL", sql);
-    }
-
-    [Fact]
     public void BuildExcelLookupSql_supports_TrackingNo_column()
     {
         var sql = InstallmentListQuery.BuildExcelLookupSql("TrackingNo");
