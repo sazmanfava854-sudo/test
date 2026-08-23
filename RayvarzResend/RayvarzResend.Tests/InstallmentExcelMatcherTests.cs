@@ -195,10 +195,12 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
-    public void RequiredColumnNames_has_three_columns()
+    public void RequiredColumnNames_has_three_persian_columns()
     {
         Assert.Equal(3, InstallmentExcelMatcher.RequiredColumnNames.Length);
-        Assert.Equal("Identifier", InstallmentExcelMatcher.RequiredColumnNames[0]);
+        Assert.Equal("شناسه", InstallmentExcelMatcher.RequiredColumnNames[0]);
+        Assert.Equal("مبلغ", InstallmentExcelMatcher.RequiredColumnNames[1]);
+        Assert.Equal("تاریخ پرداخت", InstallmentExcelMatcher.RequiredColumnNames[2]);
     }
 
     [Theory]

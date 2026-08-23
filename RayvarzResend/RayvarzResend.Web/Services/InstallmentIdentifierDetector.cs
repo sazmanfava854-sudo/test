@@ -60,8 +60,8 @@ public static class InstallmentIdentifierDetector
     /// <summary>WHERE برای TrackingNo — تطبیق exact یا با صفر ابتدایی از دست‌رفته در اکسل.</summary>
     public static string BuildTrackingNoWhereClause(string columnSql)
     {
-        var trimmed = $"LTRIM(RTRIM(CAST({columnSql} AS varchar(30)))";
+        var normalized = "LTRIM(RTRIM(CAST(" + columnSql + " AS varchar(30))))";
         var missingZeroLen = TrackingNoStandardLength - 1;
-        return $"({trimmed}) = @v OR (LEN(@v) = {missingZeroLen} AND ({trimmed}) = '0' + @v)";
+        return normalized + " = @v OR (LEN(@v) = " + missingZeroLen + " AND " + normalized + " = CONCAT('0', @v))";
     }
 }

@@ -206,7 +206,12 @@ function setInstallmentMode(mode) {
 }
 
 function normalizeExcelHeader(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک');
 }
 
 function mapExcelHeaderIndex(headers) {
@@ -214,7 +219,7 @@ function mapExcelHeaderIndex(headers) {
   headers.forEach((h, idx) => {
     const key = normalizeExcelHeader(h);
     if (key === 'identifier' || key === 'شناسه' || key === 'nodocument' || key === 'trackingno'
-      || key === 'شمارهسند' || key === 'کدپیگیری') {
+      || key === 'شمارهسند' || key === 'کدپیگیری' || key === 'شمارهسند/کدپیگیری') {
       map.identifier = idx;
     }
     if (key === 'paymentcost' || key === 'مبلغ') map.paymentCost = idx;
@@ -253,7 +258,7 @@ function downloadInstallmentExcelTemplate() {
     return;
   }
   const rows = [
-    ['Identifier', 'PaymentCost', 'PaymentDate', 'Odooat'],
+    ['شناسه', 'مبلغ', 'تاریخ پرداخت', 'عودت'],
     ['75360', '661900000', '1405/05/05'],
     ['0502090614002610', '813516015', '1405/05/05', '1'],
     ['0502140614004800', '3157507100', '1405/05/05', '0']
@@ -304,7 +309,7 @@ function parseInstallmentExcelFile(file) {
         const required = ['identifier', 'paymentCost', 'paymentDate'];
         const missing = required.filter((k) => col[k] == null);
         if (missing.length) {
-          reject(new Error('ستون‌های الزامی: Identifier، PaymentCost، PaymentDate'));
+          reject(new Error('ستون‌های الزامی: شناسه، مبلغ، تاریخ پرداخت'));
           return;
         }
 

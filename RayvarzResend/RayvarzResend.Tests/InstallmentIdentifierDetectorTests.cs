@@ -37,4 +37,12 @@ public class InstallmentIdentifierDetectorTests
     {
         Assert.Equal(expected, InstallmentIdentifierDetector.TrackingNoDigitsMatch(a, b));
     }
+
+    [Fact]
+    public void BuildTrackingNoWhereClause_is_balanced_sql()
+    {
+        var clause = InstallmentIdentifierDetector.BuildTrackingNoWhereClause("il.TrackingNo");
+        Assert.Contains("CONCAT('0', @v)", clause);
+        Assert.Equal(clause.Count(c => c == '('), clause.Count(c => c == ')'));
+    }
 }

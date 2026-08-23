@@ -7,12 +7,12 @@ public static class InstallmentExcelMatcher
 {
   public static readonly string[] RequiredColumnNames =
   {
-    "Identifier", "PaymentCost", "PaymentDate"
+    "شناسه", "مبلغ", "تاریخ پرداخت"
   };
 
   public static readonly string[] OptionalColumnNames =
   {
-    "Odooat", "عودت"
+    "عودت"
   };
 
   public static string NormalizeCell(string? raw) => (raw ?? "").Trim();

@@ -26,7 +26,7 @@ public class InstallmentListQueryTests
     public void BuildExcelLookupSql_supports_TrackingNo_column()
     {
         var sql = InstallmentListQuery.BuildExcelLookupSql("TrackingNo");
-        Assert.Contains("'0' + @v", sql);
+        Assert.Contains("CONCAT('0', @v)", sql);
         Assert.DoesNotContain("WHERE il.TrackingNo = @v", sql);
     }
 }
