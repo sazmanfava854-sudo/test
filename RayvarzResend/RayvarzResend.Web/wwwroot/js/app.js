@@ -132,8 +132,7 @@ function formatShamsiDisplay(yyyymmdd) {
 function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
-    unsent: $('tabUnsent'),
-    single: $('tabSingle'),
+    rayvarz: $('tabRayvarz'),
     installment: $('tabInstallment'),
     users: $('tabUsers')
   };
@@ -148,8 +147,7 @@ function setupMainTabs() {
 }
 
 function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
-  unsent: $('tabUnsent'),
-  single: $('tabSingle'),
+  rayvarz: $('tabRayvarz'),
   installment: $('tabInstallment'),
   users: $('tabUsers')
 }) {
@@ -168,6 +166,35 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
 
 function getSingleFicheKind() {
   return $('singleFicheKind')?.value || 'Income';
+}
+
+let rayvarzMode = 'single';
+
+function setRayvarzMode(mode) {
+  const requested = mode === 'batch' ? 'batch' : 'single';
+  if (requested === 'batch' && !canAccessUnsent()) {
+    rayvarzMode = 'single';
+  } else {
+    rayvarzMode = requested;
+  }
+
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    if (btn.hidden) return;
+    const active = btn.dataset.rayvarzMode === rayvarzMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  const singlePanel = $('rayvarzSinglePanel');
+  const batchPanel = $('rayvarzBatchPanel');
+  if (singlePanel) singlePanel.hidden = rayvarzMode !== 'single';
+  if (batchPanel) batchPanel.hidden = rayvarzMode !== 'batch';
+
+  if (rayvarzMode === 'batch') {
+    document.querySelectorAll('.rayvarz-single-only').forEach((el) => {
+      el.hidden = true;
+    });
+  }
 }
 
 const installmentLookupLabels = {
@@ -885,8 +912,19 @@ function applyPermissionUi() {
 }
 
 function defaultMainTabKey() {
-  if (canAccessUnsent()) return 'unsent';
-  return 'single';
+  return 'rayvarz';
+}
+
+function refreshUserRoleBadge() {
+  const badge = $('userRoleBadge');
+  if (!badge || !currentUser) return;
+  const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
+  badge.textContent = isAdminUser()
+    ? 'ادمین'
+    : isCenterUser()
+      ? 'شعبه مرکز (۱۰۲)'
+      : (districtLabel && districtLabel !== '—' ? districtLabel : 'کاربر');
+  badge.className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
 }
 
 function applyAuthUi() {
@@ -896,15 +934,10 @@ function applyAuthUi() {
   if (heroUser && currentUser) {
     heroUser.hidden = false;
     $('userDisplayName').textContent = currentUser.displayName || currentUser.username;
-    const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
-    $('userRoleBadge').textContent = isAdminUser()
-      ? 'ادمین'
-      : isCenterUser()
-        ? 'کاربر — شعبه مرکز'
-        : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
-    $('userRoleBadge').className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
+    refreshUserRoleBadge();
   }
 
+  setRayvarzMode(canAccessUnsent() ? rayvarzMode : 'single');
   activateMainTab(defaultMainTabKey());
 }
 
@@ -922,9 +955,13 @@ async function ensureAuthenticated() {
 
 function districtLabelFromValue(value) {
   if (!value) return '—';
-  if (String(value) === '102') return 'شعبه مرکز (۱۰۲)';
-  const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
-  return branch ? branch.name : value;
+  const d = String(value).trim();
+  if (d === '102') return 'شعبه مرکز (۱۰۲)';
+  if (d === '218') return 'منطقه ثامن';
+  const n = parseInt(d, 10);
+  if (!Number.isNaN(n) && n >= 1 && n <= 12) return `منطقه ${n}`;
+  const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === d);
+  return branch ? branch.name : d;
 }
 
 async function loadUsersTable() {
@@ -938,7 +975,7 @@ async function loadUsersTable() {
   cachedUsers.forEach((u) => {
     const tr = document.createElement('tr');
     const groupNames = (u.groupIds || [])
-      .map((id) => cachedGroups.find((g) => String(g.id) === String(id))?.name)
+      .map((id) => cachedGroups.find((g) => normalizeGuid(g.id) === normalizeGuid(id))?.name)
       .filter(Boolean)
       .join('، ') || '—';
     tr.innerHTML = `
@@ -986,19 +1023,29 @@ async function loadGroupsTable() {
   tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
     btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
   });
-  renderUserGroupCheckboxes();
+  renderUserGroupSelect(resolveUserGroupSelectionForRender());
+  setGroupEditMode(!!editingGroupId);
+}
+
+function setGroupEditMode(editing) {
+  const createBtn = $('btnCreateGroup');
+  const saveBtn = $('btnSaveGroupEdit');
+  const cancelBtn = $('btnCancelGroupEdit');
+  if (createBtn) createBtn.hidden = editing;
+  if (saveBtn) saveBtn.hidden = !editing;
+  if (cancelBtn) cancelBtn.hidden = !editing;
 }
 
 function openGroupEdit(groupId) {
-  const group = cachedGroups.find((g) => String(g.id) === String(groupId));
+  const group = cachedGroups.find((g) => normalizeGuid(g.id) === normalizeGuid(groupId));
   if (!group) return;
   editingGroupId = group.id;
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
-  const btn = $('btnCreateGroup');
-  if (btn) btn.textContent = 'بروزرسانی گروه';
+  setGroupEditMode(true);
+  $('newGroupName')?.focus();
 }
 
 function resetGroupForm() {
@@ -1007,8 +1054,7 @@ function resetGroupForm() {
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
-  const btn = $('btnCreateGroup');
-  if (btn) btn.textContent = 'ثبت گروه';
+  setGroupEditMode(false);
 }
 
 async function saveGroupFromForm() {
@@ -1019,12 +1065,8 @@ async function saveGroupFromForm() {
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
-  const url = editingGroupId
-    ? `/api/admin/groups/${editingGroupId}`
-    : '/api/admin/groups';
-  const method = editingGroupId ? 'PUT' : 'POST';
-  const res = await apiFetch(url, {
-    method,
+  const res = await apiFetch('/api/admin/groups', {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
@@ -1035,54 +1077,101 @@ async function saveGroupFromForm() {
   await loadUsersTable();
 }
 
-function renderUserGroupCheckboxes() {
-  const host = $('editUserGroups');
-  if (!host) return;
-  host.innerHTML = '';
+async function saveGroupEdit() {
+  if (!editingGroupId) return;
+  const payload = {
+    name: ($('newGroupName')?.value || '').trim(),
+    canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
+    canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canManageUsers: !!$('newGroupUsers')?.checked
+  };
+  if (!payload.name) return alert('نام گروه الزامی است');
+  const res = await apiFetch(`/api/admin/groups/${editingGroupId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  resetGroupForm();
+  await loadGroupsTable();
+  await loadUsersTable();
+}
+
+function resolveUserGroupSelectionForRender() {
+  if (!editingUserId) return null;
+  const domSelected = getSelectedUserGroupIds();
+  if (domSelected.length > 0) return domSelected;
+  const user = cachedUsers.find((u) => normalizeGuid(u.id) === normalizeGuid(editingUserId));
+  return user?.groupIds || [];
+}
+
+function normalizeGuid(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getSelectedUserGroupIds() {
+  const select = $('editUserGroups');
+  if (!select) return [];
+  return Array.from(select.selectedOptions).map((opt) => opt.value);
+}
+
+function renderUserGroupSelect(selectedIds = null) {
+  const select = $('editUserGroups');
+  if (!select) return;
+  const selected = new Set((selectedIds || []).map(normalizeGuid));
+  select.innerHTML = '';
+  if (!cachedGroups.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'گروهی ثبت نشده';
+    opt.disabled = true;
+    select.appendChild(opt);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
   cachedGroups.forEach((g) => {
-    const label = document.createElement('label');
-    label.className = 'check-field';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = g.id;
-    input.dataset.groupId = g.id;
-    label.appendChild(input);
-    label.appendChild(document.createTextNode(g.name));
-    host.appendChild(label);
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    opt.selected = selected.has(normalizeGuid(g.id));
+    select.appendChild(opt);
   });
 }
 
 function openUserEdit(userId) {
-  const user = cachedUsers.find((u) => String(u.id) === String(userId));
+  const user = cachedUsers.find((u) => normalizeGuid(u.id) === normalizeGuid(userId));
   if (!user) return;
   editingUserId = user.id;
   const panel = $('userEditPanel');
-  if (panel) panel.hidden = false;
+  if (panel) {
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   if ($('userEditTitle')) {
     $('userEditTitle').textContent = `${user.firstName} ${user.lastName} — ${user.nationalId || user.username}`;
   }
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
-  if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  renderUserGroupCheckboxes();
-  const selected = new Set((user.groupIds || []).map(String));
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-    cb.checked = selected.has(cb.dataset.groupId);
-  });
+  if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
+  renderUserGroupSelect(user.groupIds || []);
 }
 
 function closeUserEdit() {
   editingUserId = null;
   const panel = $('userEditPanel');
   if (panel) panel.hidden = true;
+  if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
+}
+
+function collectUserGroupIdsForSave() {
+  return getSelectedUserGroupIds().filter((id) => id);
 }
 
 async function saveUserEdit() {
   if (!editingUserId) return;
-  const groupIds = [];
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
-    groupIds.push(cb.dataset.groupId);
-  });
+  const groupIds = collectUserGroupIdsForSave();
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
@@ -1095,14 +1184,27 @@ async function saveUserEdit() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-  closeUserEdit();
+
+  const updated = data.user;
+  if (updated) {
+    const idx = cachedUsers.findIndex((u) => normalizeGuid(u.id) === normalizeGuid(editingUserId));
+    if (idx >= 0) cachedUsers[idx] = updated;
+    renderUserGroupSelect(updated.groupIds || []);
+  }
+
   await loadUsersTable();
+  const box = $('usersResultBox');
+  if (box) {
+    box.hidden = false;
+    box.textContent = 'تغییرات کاربر ذخیره شد.';
+  }
 }
 
 async function resetUserPassword() {
   if (!editingUserId) return;
-  const password = $('editUserNewPassword')?.value || '';
+  const password = $('editUserResetPassword')?.value || '';
   if (!password || password.length < 6) return alert('رمز عبور جدید حداقل ۶ کاراکتر باشد');
+  if (!confirm('رمز عبور این کاربر تغییر کند؟')) return;
   const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1110,8 +1212,12 @@ async function resetUserPassword() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-  if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  alert('رمز عبور با موفقیت تغییر کرد');
+  if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
+  const box = $('usersResultBox');
+  if (box) {
+    box.hidden = false;
+    box.textContent = 'رمز عبور با موفقیت تغییر کرد.';
+  }
 }
 
 async function createUserFromForm() {
@@ -1347,6 +1453,7 @@ async function init() {
     const res = await apiFetch('/api/config');
     config = await parseJsonResponse(res);
     syncInstallmentDryRunUi();
+    refreshUserRoleBadge();
   } catch (e) {
     alert(e.message);
     return;
@@ -1358,11 +1465,24 @@ async function init() {
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
   fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
   applyRegionalUserRestrictions();
+
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.hidden) return;
+      setRayvarzMode(btn.dataset.rayvarzMode);
+    });
+  });
+  setRayvarzMode('single');
+
   config.branches.forEach(b => {
     const optFund = document.createElement('option');
     optFund.value = b.fund;
     optFund.textContent = `${b.fund} — ${b.name}`;
     fundSel.appendChild(optFund);
+  });
+
+  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+    btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
 
   branchSel.onchange = () => { syncFundFromBranch(); if (currentFiche) renderMappingTable(currentFiche); };
@@ -1379,9 +1499,6 @@ async function init() {
     });
   }
 
-  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
-    btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
-  });
   setInstallmentMode('single');
   syncInstallmentOdooatCheckbox();
 
@@ -1822,6 +1939,14 @@ function setupAuthAndAdminHandlers() {
       alert(e.message);
     }
   });
+  bindClick('btnSaveGroupEdit', async () => {
+    try {
+      await saveGroupEdit();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+  bindClick('btnCancelGroupEdit', resetGroupForm);
   bindClick('btnRefreshGroups', loadGroupsTable);
   bindClick('btnSaveUserEdit', async () => {
     try {

@@ -377,6 +377,7 @@ public sealed class AppUserRepository
         if (_useInMemory)
             return _memory.ListMemberships();
 
+        await EnsureSchemaAsync(ct);
         const string sql = "SELECT UserId, GroupId FROM dbo.AppUserGroupMember";
         var list = new List<(Guid, Guid)>();
         await using var conn = new SqlConnection(_cs);

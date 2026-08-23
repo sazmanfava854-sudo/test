@@ -10,17 +10,20 @@ public class FicheSendService
     private readonly FicheRepository _repo;
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
+    private readonly AccountingDocWriter _accountingDoc;
     private readonly IConfiguration _config;
 
     public FicheSendService(
         FicheRepository repo,
         RayvarzPayloadBuilder payload,
         RayvarzClient client,
+        AccountingDocWriter accountingDoc,
         IConfiguration config)
     {
         _repo = repo;
         _payload = payload;
         _client = client;
+        _accountingDoc = accountingDoc;
         _config = config;
     }
 
@@ -90,6 +93,14 @@ public class FicheSendService
 
                 result.Warning = CombineWarnings(result.Warning,
                     SendResultVerification.BuildUnverifiedWarning(result.Success, result.VerifiedInRayvarz, dryRun));
+            }
+            else
+            {
+                var accounting = await _accountingDoc.TryWriteAfterSendAsync(fiche, result.PursuitDocNo, ct);
+                result.AccountingDocWritten = accounting.Written;
+                result.AccountingDocMessage = accounting.Message;
+                if (!accounting.Written && !accounting.WasSkipped)
+                    result.Warning = CombineWarnings(result.Warning, $"واسط Sara: {accounting.Message}");
             }
         }
 

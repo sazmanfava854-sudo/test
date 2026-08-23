@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <link rel="stylesheet" href="css/style.css?v=21" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -38,115 +38,22 @@
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active perm-unsent" data-tab="unsent" role="tab" aria-selected="true" hidden>فیش های جمعی</button>
-      <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
+      <button type="button" class="main-tab active" data-tab="rayvarz" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
-    <div id="tabUnsent" class="tab-panel active perm-unsent" role="tabpanel" hidden>
-    <section class="card unsent-card card-enter">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">📤</span>
-        <h2>فیش های جمعی</h2>
-      </div>
-      <div class="form-grid unsent-form-grid">
-        <label class="field field-required">
-          <span class="field-label">نوع فیش</span>
-          <select id="unsentFicheKind">
-            <option value="Income">درآمد</option>
-            <option value="Duty">نوسازی و صنفی</option>
-          </select>
-        </label>
-        <label class="field field-required">
-          <span class="field-label">از تاریخ</span>
-          <div class="date-input-wrap">
-            <input id="unsentFromDate" data-jdp type="text" placeholder="1402/08/01" autocomplete="off" />
-            <button type="button" class="btn-date-icon" data-for="unsentFromDate" title="تقویم" aria-label="تقویم">📅</button>
-          </div>
-        </label>
-        <label class="field field-required">
-          <span class="field-label">تا تاریخ</span>
-          <div class="date-input-wrap">
-            <input id="unsentToDate" data-jdp type="text" placeholder="1402/08/20" autocomplete="off" />
-            <button type="button" class="btn-date-icon" data-for="unsentToDate" title="تقویم" aria-label="تقویم">📅</button>
-          </div>
-        </label>
-        <label class="field">
-          <span class="field-label">شعبه / منطقه</span>
-          <select id="unsentDistrict">
-            <option value="">همه مناطق</option>
-          </select>
-        </label>
-        <label class="field">
-          <span class="field-label">شماره فیش</span>
-          <input id="unsentFicheNo" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span class="field-label">شناسه قبض</span>
-          <input id="unsentBillId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span class="field-label">شناسه پرداخت</span>
-          <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
-        </label>
-      </div>
-      <div class="actions">
-        <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
-        <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
-      </div>
-      <div class="subsection" id="unsentResultsSection" hidden>
-        <div class="unsent-toolbar">
-          <label class="check-all-label">
-            <input id="unsentSelectAll" type="checkbox" />
-            <span>انتخاب همه</span>
-          </label>
-          <span id="unsentCountLabel" class="unsent-count"></span>
-        </div>
-        <div class="table-wrap">
-          <table id="unsentTable">
-            <thead>
-              <tr>
-                <th class="col-check"></th>
-                <th>نوع</th>
-                <th>کد نوسازی</th>
-                <th>شناسه قبض</th>
-                <th>شناسه پرداخت</th>
-                <th>تاریخ پرداخت بانک</th>
-                <th>تاریخ پرداخت دستی</th>
-                <th>شماره فیش</th>
-                <th>مبلغ</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div class="unsent-pagination" id="unsentPagination" hidden>
-          <button id="btnUnsentPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
-          <span id="unsentPageLabel" class="unsent-page-label"></span>
-          <button id="btnUnsentNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
-          <label class="unsent-page-size">
-            <span>در هر صفحه</span>
-            <select id="unsentPageSize">
-              <option value="25">۲۵</option>
-              <option value="50" selected>۵۰</option>
-              <option value="100">۱۰۰</option>
-            </select>
-          </label>
-        </div>
-      </div>
-      <pre id="unsentResultBox" class="code-block" hidden></pre>
-    </section>
-    </div>
-
-    <div id="tabSingle" class="tab-panel active" role="tabpanel">
+    <div id="tabRayvarz" class="tab-panel active" role="tabpanel">
     <section class="card card-enter">
       <div class="card-head">
-        <span class="card-icon" aria-hidden="true">📋</span>
-        <h2>ارسال تکی</h2>
+        <span class="card-icon" aria-hidden="true">📤</span>
+        <h2>ارسال به رایورز</h2>
       </div>
-      <div id="singleRegularPanel">
+      <div class="sub-mode-tabs" role="tablist" aria-label="نوع ارسال">
+        <button type="button" class="sub-mode-tab active" data-rayvarz-mode="single" role="tab" aria-selected="true">تکی</button>
+        <button type="button" class="sub-mode-tab perm-unsent" data-rayvarz-mode="batch" role="tab" aria-selected="false" hidden>جمعی</button>
+      </div>
+      <div id="rayvarzSinglePanel" class="rayvarz-mode-panel">
         <div class="form-grid unsent-form-grid">
           <label class="field field-required">
             <span class="field-label">نوع فیش</span>
@@ -196,9 +103,98 @@
           <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
         </div>
       </div>
+      <div id="rayvarzBatchPanel" class="rayvarz-mode-panel perm-unsent" hidden>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">نوع فیش</span>
+            <select id="unsentFicheKind">
+              <option value="Income">درآمد</option>
+              <option value="Duty">نوسازی و صنفی</option>
+            </select>
+          </label>
+          <label class="field field-required">
+            <span class="field-label">از تاریخ</span>
+            <div class="date-input-wrap">
+              <input id="unsentFromDate" data-jdp type="text" placeholder="1402/08/01" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="unsentFromDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field field-required">
+            <span class="field-label">تا تاریخ</span>
+            <div class="date-input-wrap">
+              <input id="unsentToDate" data-jdp type="text" placeholder="1402/08/20" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="unsentToDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field">
+            <span class="field-label">شعبه / منطقه</span>
+            <select id="unsentDistrict">
+              <option value="">همه مناطق</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">شماره فیش</span>
+            <input id="unsentFicheNo" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">شناسه قبض</span>
+            <input id="unsentBillId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span class="field-label">شناسه پرداخت</span>
+            <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
+          <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
+          <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
+        </div>
+        <div class="subsection" id="unsentResultsSection" hidden>
+          <div class="unsent-toolbar">
+            <label class="check-all-label">
+              <input id="unsentSelectAll" type="checkbox" />
+              <span>انتخاب همه</span>
+            </label>
+            <span id="unsentCountLabel" class="unsent-count"></span>
+          </div>
+          <div class="table-wrap">
+            <table id="unsentTable">
+              <thead>
+                <tr>
+                  <th class="col-check"></th>
+                  <th>نوع</th>
+                  <th>کد نوسازی</th>
+                  <th>شناسه قبض</th>
+                  <th>شناسه پرداخت</th>
+                  <th>تاریخ پرداخت بانک</th>
+                  <th>تاریخ پرداخت دستی</th>
+                  <th>شماره فیش</th>
+                  <th>مبلغ</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="unsent-pagination" id="unsentPagination" hidden>
+            <button id="btnUnsentPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
+            <span id="unsentPageLabel" class="unsent-page-label"></span>
+            <button id="btnUnsentNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
+            <label class="unsent-page-size">
+              <span>در هر صفحه</span>
+              <select id="unsentPageSize">
+                <option value="25">۲۵</option>
+                <option value="50" selected>۵۰</option>
+                <option value="100">۱۰۰</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <pre id="unsentResultBox" class="code-block" hidden></pre>
+      </div>
     </section>
 
-    <section class="card card-enter" id="ficheSection" hidden>
+    <section class="card card-enter rayvarz-single-only" id="ficheSection" hidden>
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📄</span>
         <h2>اطلاعات فیش</h2>
@@ -223,7 +219,7 @@
       </div>
     </section>
 
-    <section class="card card-enter" id="resultSection" hidden>
+    <section class="card card-enter rayvarz-single-only" id="resultSection" hidden>
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">✓</span>
         <h2>نتیجه ارسال</h2>
@@ -231,7 +227,7 @@
       <pre id="resultBox" class="code-block"></pre>
     </section>
 
-    <section class="card card-enter" id="xmlSection" hidden>
+    <section class="card card-enter rayvarz-single-only" id="xmlSection" hidden>
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">&lt;/&gt;</span>
         <h2>XML پیش‌نمایش</h2>
@@ -345,7 +341,7 @@
           </label>
           <label class="field check-field">
             <input id="newGroupUnsent" type="checkbox" />
-            <span>فیش‌های جمعی</span>
+            <span>ارسال به رایورز</span>
           </label>
           <label class="field check-field">
             <input id="newGroupInstallment" type="checkbox" />
@@ -358,6 +354,8 @@
         </div>
         <div class="actions">
           <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
+          <button id="btnSaveGroupEdit" class="btn primary" type="button" hidden>ذخیره</button>
+          <button id="btnCancelGroupEdit" class="btn secondary" type="button" hidden>انصراف</button>
           <button id="btnRefreshGroups" class="btn secondary" type="button">بروزرسانی گروه‌ها</button>
         </div>
         <div class="subsection">
@@ -366,7 +364,7 @@
               <thead>
                 <tr>
                   <th>نام گروه</th>
-                  <th>فیش جمعی</th>
+                  <th>جمعی</th>
                   <th>چک خزانه</th>
                   <th>مدیریت کاربران</th>
                   <th>عملیات</th>
@@ -382,12 +380,6 @@
           <span class="card-icon" aria-hidden="true">👤</span>
           <h2>ایجاد کاربر جدید</h2>
         </div>
-        <p class="field-hint form-intro">
-          کاربر با <strong>کد ملی</strong> وارد می‌شود — فیلد جداگانهٔ نام کاربری لازم نیست.
-          ابتدا نام و نام خانوادگی را وارد کنید، سپس کد ملی و رمز عبور.
-          <strong>شعبه مرکز</strong> در رایورز با شماره <strong>۱۰۲</strong> مشخص است (ارسال تهاتر مبلغ / گروه ۱۵۷).
-          کاربر مرکز فقط فیش‌های مرکز/تهاتر ۱۵۷ را می‌بیند؛ کاربر منطقه‌ای فقط فیش همان منطقه.
-        </p>
         <div class="form-grid unsent-form-grid">
           <label class="field field-required">
             <span class="field-label">نام</span>
@@ -400,7 +392,6 @@
           <label class="field field-required">
             <span class="field-label">کد ملی (ورود به سیستم)</span>
             <input id="newUserNationalId" type="text" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="۱۰ رقم" />
-            <span class="field-hint">همان کد ملی برای لاگین استفاده می‌شود</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
@@ -413,7 +404,6 @@
           <label class="field">
             <span class="field-label">منطقه / شعبه</span>
             <select id="newUserDistrict"></select>
-            <span class="field-hint">مناطق ۱–۱۲ و ثامن، یا شعبه مرکز (۱۰۲)</span>
           </label>
           <label class="field check-field">
             <input id="newUserIsAdmin" type="checkbox" />
@@ -457,19 +447,26 @@
               <input id="editUserIsActive" type="checkbox" />
               <span>فعال</span>
             </label>
-            <label class="field field-required">
-              <span class="field-label">گروه‌های کاربری</span>
-              <div id="editUserGroups" class="checkbox-list"></div>
-            </label>
             <label class="field">
-              <span class="field-label">رمز عبور جدید</span>
-              <input id="editUserNewPassword" type="password" autocomplete="new-password" />
+              <span class="field-label">گروه‌های کاربری</span>
+              <select id="editUserGroups" class="user-groups-select" multiple></select>
             </label>
           </div>
           <div class="actions">
             <button id="btnSaveUserEdit" class="btn primary" type="button">ذخیره تغییرات</button>
-            <button id="btnResetUserPassword" class="btn secondary" type="button">ریست رمز</button>
             <button id="btnCancelUserEdit" class="btn secondary" type="button">انصراف</button>
+          </div>
+          <div class="subsection user-password-reset-panel">
+            <h4>تغییر رمز عبور</h4>
+            <div class="form-grid unsent-form-grid">
+              <label class="field">
+                <span class="field-label">رمز عبور جدید</span>
+                <input id="editUserResetPassword" type="password" autocomplete="new-password" />
+              </label>
+            </div>
+            <div class="actions">
+              <button id="btnResetUserPassword" class="btn secondary" type="button">اعمال رمز جدید</button>
+            </div>
           </div>
         </div>
         <pre id="usersResultBox" class="code-block" hidden></pre>
@@ -478,6 +475,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=40"></script>
+  <script src="js/app.js?v=43"></script>
 </body>
 </html>

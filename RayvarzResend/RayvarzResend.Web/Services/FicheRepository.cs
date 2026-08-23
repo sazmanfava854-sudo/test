@@ -564,6 +564,34 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         return result != null;
     }
 
+    /// <summary>متادیتای سند رایورز برای AccountingNo — از ray.incmdocsys پس از ارسال موفق.</summary>
+    public async Task<RayvarzDocMeta?> GetRayvarzDocMetaAsync(string ficheNo, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
+            FROM ray.incmdocsys
+            WHERE RowDocNo = @f OR Ref = @f
+            ORDER BY ActDate DESC
+            """;
+
+        await using var conn = new SqlConnection(_rayCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo.Trim());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return null;
+
+        return new RayvarzDocMeta
+        {
+            Branch = reader["Branch"] is DBNull ? 0 : Convert.ToInt32(reader["Branch"]),
+            Yr = reader["Yr"] is DBNull ? 0 : Convert.ToInt32(reader["Yr"]),
+            DocTyp = reader["DocTyp"] is DBNull ? 0 : Convert.ToInt32(reader["DocTyp"]),
+            Doc = reader["Doc"] is DBNull ? 0 : Convert.ToInt32(reader["Doc"]),
+            Fund = reader["Fund"] is DBNull ? null : Convert.ToInt32(reader["Fund"])
+        };
+    }
+
     private const string IncomeUnsentDateClause = """
         AND (
               (NULLIF(LTRIM(RTRIM(CAST(f.PaymentDate AS nvarchar(20)))), '') >= @from

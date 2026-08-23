@@ -4,8 +4,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web;
+using RayvarzResend.Web.Hosting;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Engines;
+using RayvarzResend.Web.RuleEngine.Parser;
+using RayvarzResend.Web.RuleEngine.Store;
 using RayvarzResend.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,9 +67,19 @@ builder.Services.AddSingleton<TahatorResendService>();
 builder.Services.AddSingleton<SoapBuilder>();
 builder.Services.AddSingleton<RayvarzClient>();
 builder.Services.AddSingleton<MemberRuleRepository>();
+builder.Services.AddSingleton<LegacyRuleEngine>();
+builder.Services.AddSingleton<DynamicRuleEngine>();
+builder.Services.AddSingleton<RuleEngineFactory>();
+builder.Services.AddSingleton<RuleEngineStore>();
+builder.Services.AddSingleton<RuleHistoryChecker>();
+builder.Services.AddSingleton<RuleDslParserService>();
+builder.Services.AddSingleton<RuleVersionManager>();
+builder.Services.AddSingleton<GoldenDryRunService>();
+builder.Services.AddHostedService<RuleSyncBackgroundService>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
+builder.Services.AddSingleton<AccountingDocWriter>();
 
 var app = builder.Build();
 
@@ -332,7 +346,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         enabled = true,
         isAdmin = AppAuthService.IsAdmin(http.User)
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ruleDslSync = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -352,6 +366,8 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         useLocalBridgeStub = config.GetValue("RuleEngine:UseLocalBridgeStub", false),
         saraBridgeUrl = config["RuleEngine:SaraBridgeUrl"],
         nidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
+        enableBackgroundSync = config.GetValue("RuleEngine:EnableBackgroundSync", true),
+        pollIntervalMinutes = config.GetValue("RuleEngine:PollIntervalMinutes", 15),
     },
     branches = new[] {
         new { id = 102, name = "شعبه مرکز", fund = 0 },
@@ -374,7 +390,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
 app.MapGet("/api/db-test", async (IConfiguration config) =>
 {
     var results = new List<object>();
-    foreach (var name in new[] { "Sara", "Rayvarz" })
+    foreach (var name in new[] { "Sara", "Rayvarz", "RuleEngine", "RayvarzRuleEngine" })
     {
         var cs = config.GetConnectionString(name);
         if (string.IsNullOrWhiteSpace(cs))
@@ -386,9 +402,39 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
         {
             await using var conn = new SqlConnection(cs);
             await conn.OpenAsync();
-            var sql = name == "Sara"
-                ? "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche"
-                : "SELECT TOP 1 Ref FROM ray.incmdocsys";
+            if (name == "RayvarzRuleEngine")
+            {
+                var schemaSql = """
+                    SELECT CASE WHEN EXISTS (
+                        SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+                        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'RuleSyncState')
+                    THEN 1 ELSE 0 END
+                    """;
+                await using var schemaCmd = new SqlCommand(schemaSql, conn);
+                var schemaReady = Convert.ToInt32(await schemaCmd.ExecuteScalarAsync()) == 1;
+                if (!schemaReady)
+                {
+                    results.Add(new
+                    {
+                        name,
+                        ok = false,
+                        server = conn.DataSource,
+                        database = conn.Database,
+                        error = "Invalid object name 'dbo.RuleSyncState'",
+                        hint = "اتصال SQL برقرار است ولی جداول ساخته نشده‌اند. در SSMS روی سرور 232 اجرا کنید: database/01_RayvarzRuleEngine_Schema.sql سپس 02_RuleGolden_Seed.sql — Database باید RayvarzRuleEngine باشد نه DbRuleEngein."
+                    });
+                    continue;
+                }
+            }
+
+            var sql = name switch
+            {
+                "Sara" => "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche",
+                "Rayvarz" => "SELECT TOP 1 Ref FROM ray.incmdocsys",
+                "RuleEngine" => "SELECT TOP 1 NidMember FROM dbo.Member WHERE NidMember = 1388",
+                "RayvarzRuleEngine" => "SELECT TOP 1 NidMember FROM dbo.RuleSyncState",
+                _ => "SELECT 1"
+            };
             await using var cmd = new SqlCommand(sql, conn);
             var sample = (await cmd.ExecuteScalarAsync())?.ToString();
             results.Add(new { name, ok = true, server = conn.DataSource, database = conn.Database, sample });
@@ -479,6 +525,168 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
         return Results.Json(new { error = $"خطا در بارگذاری: {ex.Message}" }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
+
+app.MapGet("/api/rule/schema-diagnostics", async (RuleEngineStore store, CancellationToken ct) =>
+    Results.Ok(await store.GetDiagnosticsAsync(ct))).RequireAuthorization(adminOnly);
+
+app.MapGet("/api/rule/sync/state", async (RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
+{
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+    if (!await store.IsSchemaReadyAsync(ct))
+        return Results.Json(new
+        {
+            error = "جداول RayvarzRuleEngine ساخته نشده‌اند",
+            hint = "روی سرور 232 اجرا کنید: database/01_RayvarzRuleEngine_Schema.sql و 02_RuleGolden_Seed.sql",
+            database = store.ConfiguredDatabaseName
+        }, statusCode: 503);
+
+    var state = await store.GetSyncStateAsync(mgr.NidMember, ct);
+    if (state == null)
+        return Results.Ok(new { nidMember = mgr.NidMember, activeEngine = "Legacy", note = "RuleSyncState row missing — run POST /api/rule/sync/run after seed" });
+    return Results.Ok(state);
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/sync/run", async (RuleVersionManager mgr, CancellationToken ct) =>
+{
+    var state = await mgr.InitializeAsync(ct);
+    return Results.Ok(new { ok = true, state });
+}).RequireAuthorization(adminOnly);
+
+app.MapGet("/api/rule/history/latest", async (MemberRuleRepository repo, IConfiguration config, CancellationToken ct) =>
+{
+    var nid = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388);
+    var latest = await repo.LoadLatestHistoryAsync(nid, ct);
+    if (latest == null)
+        return Results.NotFound(new { error = "MemberHistory یافت نشد — ConnectionStrings:RuleEngine را چک کنید." });
+    return Results.Ok(new
+    {
+        latest.NidHistory,
+        latest.NidMember,
+        latest.NidClass,
+        latest.ModifyDateTime,
+        latest.ModifyDateRaw,
+        latest.ModifyTimeRaw,
+        latest.Modifyer,
+        latest.ModifyDesc,
+        xmlBodyLength = latest.XmlBody.Length
+    });
+}).RequireAuthorization(adminOnly);
+
+app.MapGet("/api/rule/golden", async (RuleEngineStore store, IConfiguration config, CancellationToken ct) =>
+{
+    var nid = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388);
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+
+    var fiches = await store.GetActiveGoldenFichesAsync(nid, ct);
+    var withRows = new List<object>();
+    foreach (var g in fiches)
+    {
+        var rows = await store.GetExpectedRowsAsync(g.GoldenFicheId, ct);
+        withRows.Add(new { g.GoldenFicheId, g.Name, g.FicheNo, g.NidFiche, g.Scenario, g.ExpectedRowCount, expectedRows = rows });
+    }
+    return Results.Ok(new { count = withRows.Count, fiches = withRows });
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/golden/dry-run", async (GoldenDryRunService dryRun, CancellationToken ct) =>
+{
+    var summary = await dryRun.RunAllAsync(compareExpectedRows: true, ct);
+    return Results.Ok(summary);
+}).RequireAuthorization(adminOnly);
+
+app.MapGet("/api/rule/engine", async (RuleEngineFactory factory, RuleEngineStore store, IConfiguration config, CancellationToken ct) =>
+{
+    var resolved = await factory.ResolveEngineNameAsync(ct);
+    string? activeEngine = null;
+    if (store.IsConfigured && await store.IsSchemaReadyAsync(ct))
+    {
+        var state = await store.GetSyncStateAsync(factory.NidMember, ct);
+        activeEngine = state?.ActiveEngine;
+    }
+
+    return Results.Ok(new
+    {
+        nidMember = factory.NidMember,
+        activeEngine = activeEngine ?? "Legacy",
+        resolvedEngine = resolved,
+        payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
+        forceEngine = config["RuleEngine:ForceEngine"]
+    });
+}).RequireAuthorization(adminOnly);
+
+app.MapGet("/api/rule/dsl/latest", async (RuleEngineStore store, RuleDslParserService parser, CancellationToken ct) =>
+{
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+
+    var snapshot = await store.GetLatestSnapshotAsync(parser.NidMember, ct);
+    if (snapshot == null)
+        return Results.NotFound(new { error = "RuleDslSnapshot یافت نشد — POST /api/rule/dsl/parse را اجرا کنید." });
+
+    return Results.Ok(new
+    {
+        snapshot.SnapshotId,
+        snapshot.NidMember,
+        snapshot.DslVersion,
+        snapshot.XmlHash,
+        snapshot.ParserVersion,
+        snapshot.EntryPoint,
+        snapshot.IsActive,
+        snapshot.CreatedAtUtc,
+        dslJsonLength = snapshot.DslJson?.Length ?? 0
+    });
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/dsl/parse", async (RuleDslParserService parser, RuleVersionManager mgr, RuleEngineStore store, CancellationToken ct) =>
+{
+    if (!store.IsConfigured)
+        return Results.Json(new { error = "ConnectionStrings:RayvarzRuleEngine تنظیم نشده" }, statusCode: 503);
+
+    var result = await mgr.ParseActiveMemberSnapshotAsync(ct);
+    return Results.Ok(new
+    {
+        result.Stored,
+        result.SkippedExisting,
+        result.SnapshotId,
+        result.DslVersion,
+        result.XmlHash,
+        result.Message,
+        parseSuccess = result.Parse?.Success,
+        parseError = result.Parse?.ErrorMessage,
+        entryPoint = result.Parse?.Program?.EntryPoint,
+        functionCount = result.Parse?.Program?.Functions.Count,
+        unsupportedFunctions = result.Parse?.Program?.UnsupportedFunctions,
+        warnings = result.Parse?.Program?.Warnings
+    });
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/dsl/preview", (RuleDslParsePreviewRequest? req, RuleDslParserService parser) =>
+{
+    if (string.IsNullOrWhiteSpace(req?.XmlBody))
+        return Results.BadRequest(new { error = "XmlBody در body لازم است (preview بدون ذخیره DB)." });
+
+    var parsed = parser.Parse(req.XmlBody, "preview");
+    if (!parsed.Success || parsed.Program == null)
+        return Results.Json(new { error = parsed.ErrorMessage ?? "Parse failed" }, statusCode: 400);
+
+    return Results.Ok(new
+    {
+        parsed.Envelope?.XmlHash,
+        parsed.Program.EntryPoint,
+        parsed.Program.ParserVersion,
+        functions = parsed.Program.Functions.Select(f => new
+        {
+            f.Name,
+            f.DisplayName,
+            f.IsSupported,
+            statementCount = f.Body.Count
+        }),
+        parsed.Program.UnsupportedFunctions,
+        parsed.Program.Warnings,
+        dsl = parsed.Program
+    });
+}).RequireAuthorization(adminOnly);
 
 app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, MemberRuleRepository repo, CancellationToken ct) =>
 {
@@ -795,6 +1003,8 @@ static string? ConnectionHint(string name, string cs, Exception ex)
         return $"سرور SQL ({name}) از این ماشین در دسترس نیست — VPN/فایروال/پورت 1433 را چک کنید.";
     if (msg.Contains("json") || msg.Contains("configuration"))
         return "خطای خواندن appsettings.json — ویرگول/کاما/گیومه در Password یا ساختار JSON را چک کنید.";
+    if (name == "RayvarzRuleEngine" && msg.Contains("invalid object name") && msg.Contains("rulesyncstate"))
+        return "جداول RayvarzRuleEngine ساخته نشده — فایل database/01_RayvarzRuleEngine_Schema.sql را روی سرور 232 اجرا کنید. ConnectionStrings:RayvarzRuleEngine باید Database=RayvarzRuleEngine باشد (نه DbRuleEngein).";
     if (name == "Rayvarz" && msg.Contains("login failed"))
         return "User Id یا Password رایورز اشتباه است. اگر Password کاراکتر ; یا \" دارد، در JSON باید escape شود.";
     return null;

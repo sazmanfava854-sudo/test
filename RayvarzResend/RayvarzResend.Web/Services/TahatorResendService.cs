@@ -19,19 +19,22 @@ public sealed class TahatorResendService
     private readonly FicheRepository _fiches;
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
+    private readonly AccountingDocWriter _accountingDoc;
 
     public TahatorResendService(
         IConfiguration config,
         ILogger<TahatorResendService> logger,
         FicheRepository fiches,
         RayvarzPayloadBuilder payload,
-        RayvarzClient client)
+        RayvarzClient client,
+        AccountingDocWriter accountingDoc)
     {
         _config = config;
         _logger = logger;
         _fiches = fiches;
         _payload = payload;
         _client = client;
+        _accountingDoc = accountingDoc;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara تنظیم نشده");
     }
@@ -299,6 +302,19 @@ public sealed class TahatorResendService
                     }
                 }
 
+                var accountingMessage = (string?)null;
+                if (!dryRun && soapResult.Success && verifiedRay && !inHeaderAfter)
+                {
+                    var accounting = await _accountingDoc.TryWriteAfterSendAsync(fiche, soapResult.PursuitDocNo, ct);
+                    inHeaderAfter = accounting.Written || await ExistsInAccountingDocHeaderAsync(no, ct);
+                    accountingMessage = accounting.Message;
+                    steps.Add(accounting.Written
+                        ? $"5) واسط Sara {no}: {accounting.Message}"
+                        : accounting.WasSkipped
+                            ? $"5) واسط Sara {no}: {accounting.Message}"
+                            : $"5) ⚠ واسط Sara {no}: {accounting.Message}");
+                }
+
                 string? notSent = null;
                 if (!dryRun && !inHeaderAfter && !verifiedRay)
                 {
@@ -325,7 +341,8 @@ public sealed class TahatorResendService
                     SoapMessage = soapResult.Message,
                     PursuitDocNo = soapResult.PursuitDocNo,
                     PreviewXml = built.Xml,
-                    DocNotSentError = notSent
+                    DocNotSentError = notSent,
+                    AccountingDocMessage = accountingMessage
                 });
 
                 if (!dryRun && !oneOk)
