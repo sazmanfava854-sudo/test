@@ -156,6 +156,8 @@ public class SendResultDto
     public string? PreviewXml { get; set; }
     public bool DryRun { get; set; }
     public bool VerifiedInRayvarz { get; set; }
+    public bool AccountingDocWritten { get; set; }
+    public string? AccountingDocMessage { get; set; }
     public string? DocNotSentError { get; set; }
     public string? Warning { get; set; }
     public RayvarzTransportDiagnostics? Diagnostics { get; set; }
@@ -399,6 +401,7 @@ public class TahatorFicheSendDetail
     public string? PursuitDocNo { get; set; }
     public string? PreviewXml { get; set; }
     public string? DocNotSentError { get; set; }
+    public string? AccountingDocMessage { get; set; }
 }
 
 public enum InstallmentLookupKind

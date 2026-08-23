@@ -66,6 +66,7 @@ builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
+builder.Services.AddSingleton<AccountingDocWriter>();
 
 var app = builder.Build();
 
