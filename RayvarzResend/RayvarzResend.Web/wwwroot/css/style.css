@@ -971,3 +971,14 @@ tbody tr:last-child td {
   border-top: 1px solid var(--border, #ddd);
 }
 
+.user-password-reset-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--border, #ddd);
+}
+
+.user-password-reset-panel h4 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+

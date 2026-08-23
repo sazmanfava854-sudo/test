@@ -457,19 +457,28 @@
               <input id="editUserIsActive" type="checkbox" />
               <span>فعال</span>
             </label>
-            <label class="field field-required">
+            <label class="field">
               <span class="field-label">گروه‌های کاربری</span>
               <div id="editUserGroups" class="checkbox-list"></div>
-            </label>
-            <label class="field">
-              <span class="field-label">رمز عبور جدید</span>
-              <input id="editUserNewPassword" type="password" autocomplete="new-password" />
+              <span class="field-hint">برای کاربر ادمین، گروه اختیاری است؛ برای کاربر منطقه‌ای دسترسی فرم‌ها از گروه‌ها تعیین می‌شود.</span>
             </label>
           </div>
           <div class="actions">
             <button id="btnSaveUserEdit" class="btn primary" type="button">ذخیره تغییرات</button>
-            <button id="btnResetUserPassword" class="btn secondary" type="button">ریست رمز</button>
             <button id="btnCancelUserEdit" class="btn secondary" type="button">انصراف</button>
+          </div>
+          <div class="subsection user-password-reset-panel">
+            <h4>تغییر رمز عبور</h4>
+            <p class="field-hint">این بخش جدا از «ذخیره تغییرات» است — برای تغییر رمز لازم نیست دکمه ذخیره را بزنید.</p>
+            <div class="form-grid unsent-form-grid">
+              <label class="field">
+                <span class="field-label">رمز عبور جدید</span>
+                <input id="editUserResetPassword" type="password" autocomplete="new-password" />
+              </label>
+            </div>
+            <div class="actions">
+              <button id="btnResetUserPassword" class="btn secondary" type="button">اعمال رمز جدید</button>
+            </div>
           </div>
         </div>
         <pre id="usersResultBox" class="code-block" hidden></pre>
@@ -478,6 +487,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=40"></script>
+  <script src="js/app.js?v=41"></script>
 </body>
 </html>

@@ -938,7 +938,7 @@ async function loadUsersTable() {
   cachedUsers.forEach((u) => {
     const tr = document.createElement('tr');
     const groupNames = (u.groupIds || [])
-      .map((id) => cachedGroups.find((g) => String(g.id) === String(id))?.name)
+      .map((id) => cachedGroups.find((g) => normalizeGuid(g.id) === normalizeGuid(id))?.name)
       .filter(Boolean)
       .join('، ') || '—';
     tr.innerHTML = `
@@ -986,7 +986,7 @@ async function loadGroupsTable() {
   tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
     btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
   });
-  renderUserGroupCheckboxes();
+  renderUserGroupCheckboxes(resolveUserGroupSelectionForRender());
 }
 
 function openGroupEdit(groupId) {
@@ -1035,10 +1035,35 @@ async function saveGroupFromForm() {
   await loadUsersTable();
 }
 
-function renderUserGroupCheckboxes() {
+function resolveUserGroupSelectionForRender() {
+  if (!editingUserId) return null;
+  const domSelected = getSelectedUserGroupIds();
+  if (domSelected.length > 0) return domSelected;
+  const user = cachedUsers.find((u) => normalizeGuid(u.id) === normalizeGuid(editingUserId));
+  return user?.groupIds || [];
+}
+
+function normalizeGuid(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getSelectedUserGroupIds() {
+  const ids = [];
+  $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
+    ids.push(cb.dataset.groupId);
+  });
+  return ids;
+}
+
+function renderUserGroupCheckboxes(selectedIds = null) {
   const host = $('editUserGroups');
   if (!host) return;
   host.innerHTML = '';
+  if (!cachedGroups.length) {
+    host.innerHTML = '<span class="field-hint">ابتدا یک گروه کاربری ثبت کنید.</span>';
+    return;
+  }
+  const selected = new Set((selectedIds || []).map(normalizeGuid));
   cachedGroups.forEach((g) => {
     const label = document.createElement('label');
     label.className = 'check-field';
@@ -1046,6 +1071,7 @@ function renderUserGroupCheckboxes() {
     input.type = 'checkbox';
     input.value = g.id;
     input.dataset.groupId = g.id;
+    input.checked = selected.has(normalizeGuid(g.id));
     label.appendChild(input);
     label.appendChild(document.createTextNode(g.name));
     host.appendChild(label);
@@ -1053,36 +1079,41 @@ function renderUserGroupCheckboxes() {
 }
 
 function openUserEdit(userId) {
-  const user = cachedUsers.find((u) => String(u.id) === String(userId));
+  const user = cachedUsers.find((u) => normalizeGuid(u.id) === normalizeGuid(userId));
   if (!user) return;
   editingUserId = user.id;
   const panel = $('userEditPanel');
-  if (panel) panel.hidden = false;
+  if (panel) {
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   if ($('userEditTitle')) {
     $('userEditTitle').textContent = `${user.firstName} ${user.lastName} — ${user.nationalId || user.username}`;
   }
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
-  if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  renderUserGroupCheckboxes();
-  const selected = new Set((user.groupIds || []).map(String));
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-    cb.checked = selected.has(cb.dataset.groupId);
-  });
+  if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
+  renderUserGroupCheckboxes(user.groupIds || []);
 }
 
 function closeUserEdit() {
   editingUserId = null;
   const panel = $('userEditPanel');
   if (panel) panel.hidden = true;
+  if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
 }
 
-async function saveUserEdit() {
-  if (!editingUserId) return;
+function collectUserGroupIdsForSave() {
   const groupIds = [];
   $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
     groupIds.push(cb.dataset.groupId);
   });
+  return groupIds;
+}
+
+async function saveUserEdit() {
+  if (!editingUserId) return;
+  const groupIds = collectUserGroupIdsForSave();
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
@@ -1095,14 +1126,27 @@ async function saveUserEdit() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-  closeUserEdit();
+
+  const updated = data.user;
+  if (updated) {
+    const idx = cachedUsers.findIndex((u) => normalizeGuid(u.id) === normalizeGuid(editingUserId));
+    if (idx >= 0) cachedUsers[idx] = updated;
+    renderUserGroupCheckboxes(updated.groupIds || []);
+  }
+
   await loadUsersTable();
+  const box = $('usersResultBox');
+  if (box) {
+    box.hidden = false;
+    box.textContent = 'تغییرات کاربر (ادمین، فعال، گروه‌ها) ذخیره شد. رمز عبور تغییر نکرد.';
+  }
 }
 
 async function resetUserPassword() {
   if (!editingUserId) return;
-  const password = $('editUserNewPassword')?.value || '';
+  const password = $('editUserResetPassword')?.value || '';
   if (!password || password.length < 6) return alert('رمز عبور جدید حداقل ۶ کاراکتر باشد');
+  if (!confirm('رمز عبور این کاربر تغییر کند؟')) return;
   const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1110,8 +1154,12 @@ async function resetUserPassword() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-  if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  alert('رمز عبور با موفقیت تغییر کرد');
+  if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
+  const box = $('usersResultBox');
+  if (box) {
+    box.hidden = false;
+    box.textContent = 'رمز عبور با موفقیت تغییر کرد.';
+  }
 }
 
 async function createUserFromForm() {
