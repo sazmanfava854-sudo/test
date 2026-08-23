@@ -246,11 +246,6 @@ function setInstallmentMode(mode) {
   if (singlePanel) singlePanel.hidden = installmentMode !== 'single';
   if (excelPanel) excelPanel.hidden = installmentMode !== 'excel';
 
-  const headerSingle = $('installmentPreviewHeaderSingle');
-  const headerExcel = $('installmentPreviewHeaderExcel');
-  if (headerSingle) headerSingle.hidden = installmentMode === 'excel';
-  if (headerExcel) headerExcel.hidden = installmentMode !== 'excel';
-
   $('installmentPreviewSection').hidden = true;
   if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
   if (installmentMode === 'single') syncInstallmentOdooatCheckbox();
@@ -427,7 +422,7 @@ function getInstallmentPayload() {
       }))
     };
   }
-  const raw = ($('installmentValues')?.value || '').replace(/\D/g, '');
+  const raw = ($('installmentValues')?.value || '').trim();
   return {
     ...base,
     valuesText: raw
@@ -475,66 +470,41 @@ function renderInstallmentPreview(data) {
   const tbody = $('installmentPreviewTable')?.querySelector('tbody');
   const summary = $('installmentPreviewSummary');
   const updateBtn = $('btnInstallmentUpdate');
-  const headerSingle = $('installmentPreviewHeaderSingle');
-  const headerExcel = $('installmentPreviewHeaderExcel');
   if (!section || !tbody) return;
-
-  const excelMode = !!data.excelMode || installmentMode === 'excel';
-  if (headerSingle) headerSingle.hidden = excelMode;
-  if (headerExcel) headerExcel.hidden = !excelMode;
 
   const items = data.items || [];
   section.hidden = false;
   if (summary) {
-    if (excelMode) {
-      summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | بدون نتیجه: ${data.notFoundCount || 0} | تطابق کامل: ${data.matchedCount || 0} | عدم تطابق: ${data.mismatchCount || 0}`;
-    } else {
-      summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | شناسه بدون نتیجه: ${data.notFoundCount || 0}`;
-    }
+    summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | بدون نتیجه: ${data.notFoundCount || 0} | تطابق کامل: ${data.matchedCount || 0} | عدم تطابق: ${data.mismatchCount || 0}`;
   }
   tbody.innerHTML = '';
-  items.forEach((row) => {
+  items.forEach((row, idx) => {
     const tr = document.createElement('tr');
     if (!row.found) tr.classList.add('row-not-found');
-    else if (excelMode && row.found && row.dataMatches === false) tr.classList.add('row-mismatch');
+    else if (row.found && row.dataMatches === false) tr.classList.add('row-mismatch');
     const kind = row.detectedLookupKind || '';
-    const endCurrent = `${row.endStateDesc || '-'} / ${row.endStateCode || '-'}`;
+    const rowNum = row.rowIndex || idx + 1;
+    const status = !row.found
+      ? (row.validationMessage || 'یافت نشد')
+      : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
 
-    if (excelMode) {
-      const status = !row.found
-        ? (row.validationMessage || 'یافت نشد')
-        : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
-      tr.innerHTML = `
-        <td class="col-installment-row">${toPersianDigits(row.rowIndex || '-')}</td>
-        <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
-        <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
-        <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
-        <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
-        <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
-        <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
-        <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
-        <td class="col-installment-odooat">${formatOdooatPlan(row, kind)}</td>
-        <td class="col-installment-status">${status}</td>
-        <td class="col-installment-comments">${row.proposedComments || '-'}</td>
-      `;
-    } else {
-      tr.innerHTML = `
-        <td class="col-installment-id">${toPersianDigits(row.lookupValue || '')}</td>
-        <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
-        <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
-        <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
-        <td class="col-installment-status">${row.ci_InstallmentStatus ?? row.cI_InstallmentStatus ?? '-'}</td>
-        <td class="col-installment-endstate">${endCurrent}</td>
-        <td class="col-installment-comments">${row.proposedComments || '-'}</td>
-      `;
-    }
+    tr.innerHTML = `
+      <td class="col-installment-row">${toPersianDigits(rowNum)}</td>
+      <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
+      <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
+      <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
+      <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
+      <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
+      <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
+      <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
+      <td class="col-installment-odooat">${formatOdooatPlan(row, kind)}</td>
+      <td class="col-installment-status">${status}</td>
+      <td class="col-installment-comments">${row.proposedComments || '-'}</td>
+    `;
     tbody.appendChild(tr);
   });
   if (updateBtn) {
-    const canUpdate = excelMode
-      ? (data.matchedCount > 0)
-      : (data.foundCount > 0);
-    updateBtn.disabled = !canUpdate;
+    updateBtn.disabled = !(data.matchedCount > 0);
     updateBtn.textContent = 'اعمال';
   }
 }

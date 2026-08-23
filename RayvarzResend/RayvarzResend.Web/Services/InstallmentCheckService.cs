@@ -42,36 +42,46 @@ public class InstallmentCheckService
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
 
-        var foundKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var rawValue in parsed.Values)
+        for (var i = 0; i < parsed.Values.Count; i++)
         {
+            var rawValue = parsed.Values[i];
             var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
             var kind = InstallmentIdentifierDetector.Detect(value);
             var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
 
-            var rows = await LoadRowsAsync(conn, kind, value, ct);
+            var item = new InstallmentCheckPreviewItem
+            {
+                RowIndex = i + 1,
+                LookupValue = value,
+                DetectedLookupKind = kind,
+                WillApplyEndState = willApplyEndState
+            };
+
+            var rows = await LoadRowsForExcelAsync(conn, kind, value, ct);
             if (rows.Count == 0)
             {
-                result.Items.Add(new InstallmentCheckPreviewItem
-                {
-                    LookupValue = value,
-                    DetectedLookupKind = kind,
-                    Found = false
-                });
+                item.ValidationMessage = "در دیتابیس یافت نشد";
+                result.Items.Add(item);
                 continue;
             }
 
-            foundKeys.Add(value);
-            foreach (var row in rows)
+            if (rows.Count > 1)
             {
-                result.Items.Add(MapPreviewItem(value, kind, row, parsed.PerformedByUser, willApplyEndState));
+                item.Found = true;
+                item.ValidationMessage = $"بیش از یک ردیف ({rows.Count}) در دیتابیس یافت شد";
+                result.Items.Add(item);
+                continue;
             }
+
+            var mapped = MapPreviewItem(value, kind, rows[0], parsed.PerformedByUser, willApplyEndState, i + 1);
+            mapped.DataMatches = true;
+            result.Items.Add(mapped);
         }
 
         result.FoundCount = result.Items.Count(i => i.Found);
-        result.NotFoundCount = parsed.Values.Count - foundKeys.Count;
-        result.MatchedCount = result.Items.Count(i => i.Found);
+        result.NotFoundCount = result.Items.Count(i => !i.Found);
+        result.MatchedCount = result.Items.Count(i => i.Found && i.DataMatches);
+        result.MismatchCount = result.Items.Count(i => i.Found && !i.DataMatches);
         return result;
     }
 
@@ -447,7 +457,8 @@ public class InstallmentCheckService
         InstallmentLookupKind kind,
         InstallmentRowSnapshot row,
         string performedByUser,
-        bool willApplyEndState)
+        bool willApplyEndState,
+        int rowIndex = 0)
     {
         var resolvedLookup = kind == InstallmentLookupKind.TrackingNo
             ? InstallmentIdentifierDetector.ExtractDigits(row.TrackingNo)
@@ -455,14 +466,18 @@ public class InstallmentCheckService
 
         return new InstallmentCheckPreviewItem
         {
+            RowIndex = rowIndex,
             LookupValue = resolvedLookup,
             DetectedLookupKind = kind,
             Found = true,
             DataMatches = true,
+            WillApplyEndState = willApplyEndState,
             NoDocument = row.NoDocument,
             TrackingNo = row.TrackingNo,
             PaymentCost = FormatCost(row.PaymentCost),
             PaymentDate = row.PaymentDate,
+            NidWorkItem = row.NidWorkItem,
+            NosaziCode = row.NosaziCode,
             CI_InstallmentStatus = row.CI_InstallmentStatus,
             EndStateDesc = row.EndStateDesc,
             EndStateCode = row.EndStateCode,
@@ -551,18 +566,6 @@ public class InstallmentCheckService
         return rows;
     }
 
-    private static InstallmentRowSnapshot MapSimpleInstallmentRow(SqlDataReader reader) => new()
-    {
-        NoDocument = reader["NoDocument"]?.ToString() ?? "",
-        TrackingNo = reader["TrackingNo"]?.ToString() ?? "",
-        PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
-        PaymentDate = reader["PaymentDate"]?.ToString() ?? "",
-        CI_InstallmentStatus = reader["CI_InstallmentStatus"]?.ToString() ?? "",
-        EndStateDesc = reader["EndStateDesc"]?.ToString() ?? "",
-        EndStateCode = reader["EndStateCode"]?.ToString() ?? "",
-        Comments = reader["Comments"]?.ToString() ?? ""
-    };
-
     private static InstallmentRowSnapshot MapExcelInstallmentRow(SqlDataReader reader) => new()
     {
         NoDocument = reader["NoDocument"]?.ToString() ?? "",
@@ -576,36 +579,6 @@ public class InstallmentCheckService
         EndStateCode = reader["EndStateCode"]?.ToString() ?? "",
         Comments = reader["Comments"]?.ToString() ?? ""
     };
-
-    private static async Task<List<InstallmentRowSnapshot>> LoadRowsAsync(
-        SqlConnection conn,
-        InstallmentLookupKind kind,
-        string value,
-        CancellationToken ct)
-    {
-        var column = kind == InstallmentLookupKind.NoDocument ? "NoDocument" : "TrackingNo";
-        var whereClause = kind == InstallmentLookupKind.TrackingNo
-            ? InstallmentIdentifierDetector.BuildTrackingNoWhereClause("TrackingNo")
-            : $"{column} = @v";
-        var sql = $@"
-SELECT NoDocument, TrackingNo,
-       PaymentCost,
-       CAST(PaymentDate AS varchar(20)) AS PaymentDate,
-       CAST(CI_InstallmentStatus AS varchar(20)) AS CI_InstallmentStatus,
-       EndStateDesc, EndStateCode, Comments
-FROM dbo.Installment_List
-WHERE {whereClause}";
-
-        var rows = new List<InstallmentRowSnapshot>();
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@v", TrackingNoLookupParameter(kind, value));
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            rows.Add(MapSimpleInstallmentRow(reader));
-        }
-        return rows;
-    }
 
     private static string FormatCost(decimal? cost) =>
         cost?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "";
