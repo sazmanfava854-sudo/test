@@ -47,6 +47,43 @@ public class InstallmentExcelMatcherTests
         Assert.Equal("", value);
     }
 
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("بله", true)]
+    [InlineData("عودت", true)]
+    [InlineData("0", false)]
+    [InlineData("خیر", false)]
+    [InlineData("", null)]
+    public void TryParseOdooatFlag_parses_excel_values(string raw, bool? expected)
+    {
+        Assert.Equal(expected, InstallmentExcelMatcher.TryParseOdooatFlag(raw));
+    }
+
+    [Fact]
+    public void ResolveWillApplyEndState_no_document_always_true()
+    {
+        var row = new InstallmentExcelRowInput { Odooat = "0" };
+        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.NoDocument, false, row));
+    }
+
+    [Fact]
+    public void ResolveWillApplyEndState_tracking_uses_excel_column_over_checkbox()
+    {
+        var rowYes = new InstallmentExcelRowInput { Odooat = "1" };
+        var rowNo = new InstallmentExcelRowInput { Odooat = "0" };
+        var rowEmpty = new InstallmentExcelRowInput();
+
+        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, false, rowYes));
+        Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, true, rowNo));
+        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, true, rowEmpty));
+        Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, false, rowEmpty));
+    }
+
     [Fact]
     public void ValidateAgainstDb_returns_null_when_all_fields_match_NoDocument()
     {
@@ -68,13 +105,13 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
-    public void ValidateAgainstDb_returns_null_when_all_fields_match_TrackingNo()
+    public void ValidateAgainstDb_TrackingNo_skips_cost_and_date()
     {
         var excel = new InstallmentExcelRowInput
         {
             Identifier = "0502090614002610",
-            PaymentCost = "813516015",
-            PaymentDate = "1405/05/05"
+            PaymentCost = "1",
+            PaymentDate = "1400/01/01"
         };
         var db = new InstallmentRowSnapshot
         {
@@ -88,7 +125,7 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
-    public void ValidateAgainstDb_detects_payment_cost_mismatch()
+    public void ValidateAgainstDb_detects_payment_cost_mismatch_for_NoDocument()
     {
         var excel = new InstallmentExcelRowInput
         {
@@ -109,9 +146,9 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
-    public void ExpectedColumnNames_has_three_columns()
+    public void RequiredColumnNames_has_three_columns()
     {
-        Assert.Equal(3, InstallmentExcelMatcher.ExpectedColumnNames.Length);
-        Assert.Equal("Identifier", InstallmentExcelMatcher.ExpectedColumnNames[0]);
+        Assert.Equal(3, InstallmentExcelMatcher.RequiredColumnNames.Length);
+        Assert.Equal("Identifier", InstallmentExcelMatcher.RequiredColumnNames[0]);
     }
 }

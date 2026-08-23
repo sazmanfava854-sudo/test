@@ -169,7 +169,8 @@ public class InstallmentCheckService
         {
             var excelRow = parsed.ExcelRows[i];
             var (kind, lookupValue, lookupError) = InstallmentExcelMatcher.ResolveLookup(excelRow);
-            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
+            var willApplyEndState = InstallmentExcelMatcher.ResolveWillApplyEndState(
+                kind, parsed.ApplyEndStateRequested, excelRow);
 
             var item = new InstallmentCheckPreviewItem
             {
@@ -178,7 +179,9 @@ public class InstallmentCheckService
                 DetectedLookupKind = kind,
                 ExcelIdentifier = InstallmentExcelMatcher.NormalizeCell(excelRow.Identifier),
                 ExcelPaymentCost = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentCost),
-                ExcelPaymentDate = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentDate)
+                ExcelPaymentDate = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentDate),
+                ExcelOdooat = InstallmentExcelMatcher.NormalizeCell(excelRow.Odooat),
+                WillApplyEndState = willApplyEndState
             };
 
             if (!string.IsNullOrEmpty(lookupError))
@@ -327,8 +330,7 @@ public class InstallmentCheckService
 
         foreach (var row in eligible)
         {
-            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(
-                row.DetectedLookupKind, parsed.ApplyEndStateRequested);
+            var willApplyEndState = row.WillApplyEndState;
             var item = new InstallmentCheckUpdateItemResult
             {
                 LookupValue = row.LookupValue,
@@ -478,7 +480,8 @@ public class InstallmentCheckService
     private static bool IsExcelRowEmpty(InstallmentExcelRowInput row) =>
         string.IsNullOrWhiteSpace(row.Identifier)
         && string.IsNullOrWhiteSpace(row.PaymentCost)
-        && string.IsNullOrWhiteSpace(row.PaymentDate);
+        && string.IsNullOrWhiteSpace(row.PaymentDate)
+        && string.IsNullOrWhiteSpace(row.Odooat);
 
     private static void AppendUpdateItemResult(InstallmentCheckUpdateResult result, InstallmentCheckUpdateItemResult item)
     {

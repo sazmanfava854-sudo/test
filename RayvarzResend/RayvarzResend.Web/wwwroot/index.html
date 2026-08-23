@@ -254,13 +254,14 @@
       </div>
       <div id="installmentExcelPanel" class="installment-mode-panel" hidden>
         <div class="installment-template-spec">
-          <strong>قالب فایل اکسل — ۳ ستون</strong>
+          <strong>قالب فایل اکسل — ۳ ستون الزامی + ۱ ستون اختیاری</strong>
           <table class="installment-template-table">
             <thead>
               <tr>
                 <th>ستون ۱</th>
                 <th>ستون ۲</th>
                 <th>ستون ۳</th>
+                <th>ستون ۴ (اختیاری)</th>
               </tr>
             </thead>
             <tbody>
@@ -268,12 +269,14 @@
                 <td><code>Identifier</code><br><span class="field-hint">شماره سند یا کد پیگیری</span></td>
                 <td><code>PaymentCost</code><br><span class="field-hint">مبلغ (ریال)</span></td>
                 <td><code>PaymentDate</code><br><span class="field-hint">تاریخ شمسی</span></td>
+                <td><code>Odooat</code> یا <code>عودت</code><br><span class="field-hint">۱/بله یا ۰/خیر — فقط کد پیگیری</span></td>
               </tr>
             </tbody>
           </table>
           <p class="field-hint installment-template-note">
-            تشخیص نوع شناسه: کمتر از ۱۰ رقم → شماره سند (NoDocument) — ۱۰ رقم و بیشتر → کد پیگیری (TrackingNo).
-            مثال: <code>809552</code> یا <code>0502090614002610</code>
+            <strong>شماره سند</strong> (کمتر از ۱۰ رقم): چک غیر بانک شهر — اعتبارسنجی کامل مبلغ/تاریخ + عودت <strong>اجباری</strong>.<br>
+            <strong>کد پیگیری</strong> (۱۰ رقم و بیشتر): بانک شهر — فقط وجود در DB؛ عودت با ستون ۴ یا تیک فرم (پیش‌فرض همه ردیف‌های کد پیگیری).<br>
+            مثال ستون ۴: برای ۵۰ ردیف عودت → <code>1</code>، برای ۹۵۰ ردیف بدون عودت → <code>0</code> یا خالی + تیک خاموش.
           </p>
         </div>
         <div class="form-grid unsent-form-grid">
@@ -293,7 +296,8 @@
       <div class="form-grid unsent-form-grid">
         <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
           <input id="installmentApplyEndState" type="checkbox" />
-          <span>عودت</span>
+          <span>عودت برای کد پیگیری (پیش‌فرض دسته‌ای)</span>
+          <span class="field-hint">در اکسل ستون <code>Odooat</code> هر ردیف را جدا مشخص کنید — بدون تیک تک‌تک</span>
         </label>
       </div>
       <div class="actions">
@@ -325,6 +329,7 @@
                 <th>تاریخ پرداخت</th>
                 <th>شناسه پرونده</th>
                 <th>کد نوسازی</th>
+                <th>عودت</th>
                 <th>وضعیت</th>
                 <th>توضیحات پیشنهادی</th>
               </tr>
@@ -410,6 +415,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=34"></script>
+  <script src="js/app.js?v=35"></script>
 </body>
 </html>

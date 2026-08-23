@@ -416,6 +416,8 @@ public class InstallmentExcelRowInput
     public string Identifier { get; set; } = "";
     public string PaymentCost { get; set; } = "";
     public string PaymentDate { get; set; } = "";
+    /// <summary>ستون اختیاری — 1/بله/yes یا 0/خیر/no؛ فقط برای کد پیگیری. خالی = تیک فرم.</summary>
+    public string Odooat { get; set; } = "";
 }
 
 /// <summary>تب تغییر وضعیت چک به خزانه — dbo.Installment_List (بدون رایورز).</summary>
@@ -447,6 +449,8 @@ public class InstallmentCheckPreviewItem
     public string? ExcelIdentifier { get; set; }
     public string? ExcelPaymentCost { get; set; }
     public string? ExcelPaymentDate { get; set; }
+    public string? ExcelOdooat { get; set; }
+    public bool WillApplyEndState { get; set; }
     public string? NidWorkItem { get; set; }
     public string? NosaziCode { get; set; }
     public string CI_InstallmentStatus { get; set; } = "";

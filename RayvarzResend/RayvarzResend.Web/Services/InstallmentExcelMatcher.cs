@@ -5,9 +5,14 @@ namespace RayvarzResend.Web.Services;
 /// <summary>اعتبارسنجی ردیف‌های اکسل با dbo.Installment_List.</summary>
 public static class InstallmentExcelMatcher
 {
-  public static readonly string[] ExpectedColumnNames =
+  public static readonly string[] RequiredColumnNames =
   {
     "Identifier", "PaymentCost", "PaymentDate"
+  };
+
+  public static readonly string[] OptionalColumnNames =
+  {
+    "Odooat", "عودت"
   };
 
   public static string NormalizeCell(string? raw) => (raw ?? "").Trim();
@@ -57,30 +62,65 @@ public static class InstallmentExcelMatcher
     return (kind, digits, null);
   }
 
+  public static bool? TryParseOdooatFlag(string? raw)
+  {
+    var text = NormalizeCell(raw);
+    if (string.IsNullOrEmpty(text))
+      return null;
+
+    var lower = text.ToLowerInvariant().Replace('ي', 'ی').Replace('ك', 'ک');
+    if (lower is "1" or "yes" or "y" or "true" or "بله" or "بلی" or "عودت" or "ع")
+      return true;
+    if (lower is "0" or "no" or "n" or "false" or "خیر" or "نه")
+      return false;
+
+    return null;
+  }
+
+  /// <summary>NoDocument همیشه عودت — TrackingNo از ستون اکسل یا تیک فرم.</summary>
+  public static bool ResolveWillApplyEndState(
+    InstallmentLookupKind kind,
+    bool globalApplyEndStateRequested,
+    InstallmentExcelRowInput row)
+  {
+    if (kind == InstallmentLookupKind.NoDocument)
+      return true;
+
+    var rowFlag = TryParseOdooatFlag(row.Odooat);
+    if (rowFlag.HasValue)
+      return rowFlag.Value;
+
+    return globalApplyEndStateRequested;
+  }
+
+  public static string DescribeOdooatPlan(InstallmentLookupKind kind, bool willApplyEndState) =>
+    kind == InstallmentLookupKind.NoDocument
+      ? "اجباری"
+      : willApplyEndState ? "بله" : "خیر";
+
   public static string? ValidateAgainstDb(
     InstallmentExcelRowInput excel,
     InstallmentRowSnapshot db,
     InstallmentLookupKind lookupKind,
     string lookupValue)
   {
+    if (lookupKind == InstallmentLookupKind.TrackingNo)
+    {
+      var dbTracking = NormalizeDigits(db.TrackingNo);
+      if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
+        return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
+      return null;
+    }
+
     if (!CostsMatch(excel.PaymentCost, db.PaymentCost))
       return "مبلغ (PaymentCost) با دیتابیس مطابقت ندارد";
 
     if (!DatesMatch(excel.PaymentDate, db.PaymentDate))
       return "تاریخ (PaymentDate) با دیتابیس مطابقت ندارد";
 
-    if (lookupKind == InstallmentLookupKind.NoDocument)
-    {
-      var dbNoDoc = NormalizeDigits(db.NoDocument);
-      if (!string.Equals(lookupValue, dbNoDoc, StringComparison.OrdinalIgnoreCase))
-        return "شماره سند (NoDocument) با دیتابیس مطابقت ندارد";
-    }
-    else
-    {
-      var dbTracking = NormalizeDigits(db.TrackingNo);
-      if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
-        return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
-    }
+    var dbNoDoc = NormalizeDigits(db.NoDocument);
+    if (!string.Equals(lookupValue, dbNoDoc, StringComparison.OrdinalIgnoreCase))
+      return "شماره سند (NoDocument) با دیتابیس مطابقت ندارد";
 
     return null;
   }

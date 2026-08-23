@@ -214,6 +214,7 @@ function mapExcelHeaderIndex(headers) {
     }
     if (key === 'paymentcost' || key === 'مبلغ') map.paymentCost = idx;
     if (key === 'paymentdate' || key === 'تاریخ' || key === 'تاریخپرداخت') map.paymentDate = idx;
+    if (key === 'odooat' || key === 'عودت' || key === 'applyodooat' || key === 'applyendstate') map.odooat = idx;
   });
   return map;
 }
@@ -224,9 +225,10 @@ function downloadInstallmentExcelTemplate() {
     return;
   }
   const rows = [
-    ['Identifier', 'PaymentCost', 'PaymentDate'],
-    ['809552', '20335141229', '1405/09/25'],
-    ['0502090614002610', '813516015', '1405/05/05']
+    ['Identifier', 'PaymentCost', 'PaymentDate', 'Odooat'],
+    ['809552', '20335141229', '1405/09/25', ''],
+    ['0502090614002610', '813516015', '1405/05/05', '1'],
+    ['0212280614002187', '500000000', '1405/06/01', '0']
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   const book = XLSX.utils.book_new();
@@ -271,7 +273,8 @@ function parseInstallmentExcelFile(file) {
           const item = {
             identifier: String(row[col.identifier] ?? '').trim(),
             paymentCost: String(row[col.paymentCost] ?? '').trim(),
-            paymentDate: String(row[col.paymentDate] ?? '').trim()
+            paymentDate: String(row[col.paymentDate] ?? '').trim(),
+            odooat: col.odooat != null ? String(row[col.odooat] ?? '').trim() : ''
           };
           if (!item.identifier && !item.paymentCost && !item.paymentDate) continue;
           parsed.push(item);
@@ -301,7 +304,8 @@ function getInstallmentPayload() {
       excelRows: installmentExcelRows.map((r) => ({
         identifier: r.identifier || '',
         paymentCost: r.paymentCost || '',
-        paymentDate: r.paymentDate || ''
+        paymentDate: r.paymentDate || '',
+        odooat: r.odooat || ''
       }))
     };
   }
@@ -341,6 +345,11 @@ function formatInstallmentDate(value) {
 function formatNosaziCode(value) {
   if (!value) return '-';
   return toPersianDigits(String(value).trim());
+}
+
+function formatOdooatPlan(row, kind) {
+  if (kind === 'NoDocument') return 'اجباری';
+  return row.willApplyEndState ? 'بله' : 'خیر';
 }
 
 function renderInstallmentPreview(data) {
@@ -386,6 +395,7 @@ function renderInstallmentPreview(data) {
         <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
         <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
         <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
+        <td class="col-installment-odooat">${formatOdooatPlan(row, kind)}</td>
         <td class="col-installment-status">${status}</td>
         <td class="col-installment-comments">${row.proposedComments || '-'}</td>
       `;
