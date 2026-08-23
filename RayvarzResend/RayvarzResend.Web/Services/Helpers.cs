@@ -100,6 +100,45 @@ public static class DateHelper
         return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();
     }
 
+    /// <summary>مقایسه دو تاریخ شمسی (yyyyMMdd) — برای اعتبارسنجی بازه.</summary>
+    public static int CompareShamsiRayvarz(string? a, string? b)
+    {
+        var na = ToRayvarzDate(a ?? "");
+        var nb = ToRayvarzDate(b ?? "");
+        if (na.Length < 8 || nb.Length < 8)
+            return string.Compare(a, b, StringComparison.Ordinal);
+        return string.Compare(na, nb, StringComparison.Ordinal);
+    }
+
+    /// <summary>فاصله روز بین دو تاریخ شمسی — برای محدودیت بازه جستجو.</summary>
+    public static bool TryGetShamsiRangeDaySpan(string? from, string? to, out int days)
+    {
+        days = 0;
+        var fromYmd = ToRayvarzDate(from ?? "");
+        var toYmd = ToRayvarzDate(to ?? "");
+        if (fromYmd.Length < 8 || toYmd.Length < 8) return false;
+
+        try
+        {
+            var pc = new System.Globalization.PersianCalendar();
+            var fromDt = pc.ToDateTime(
+                int.Parse(fromYmd[..4], System.Globalization.CultureInfo.InvariantCulture),
+                int.Parse(fromYmd.Substring(4, 2), System.Globalization.CultureInfo.InvariantCulture),
+                int.Parse(fromYmd.Substring(6, 2), System.Globalization.CultureInfo.InvariantCulture),
+                0, 0, 0, 0);
+            var toDt = pc.ToDateTime(
+                int.Parse(toYmd[..4], System.Globalization.CultureInfo.InvariantCulture),
+                int.Parse(toYmd.Substring(4, 2), System.Globalization.CultureInfo.InvariantCulture),
+                int.Parse(toYmd.Substring(6, 2), System.Globalization.CultureInfo.InvariantCulture),
+                0, 0, 0, 0);
+            days = (int)(toDt - fromDt).TotalDays;
+            return days >= 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
     private static string FormatShamsiYyyyMmDd(int year, int month, int day)
     {
         if (year is < MinShamsiYear or > MaxShamsiYear) return "";

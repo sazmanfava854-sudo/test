@@ -1,6 +1,15 @@
 let currentFiche = null;
 let config = null;
+let currentUser = null;
 let unsentItems = [];
+const selectedUnsentFicheNos = new Set();
+const unsentSearchState = {
+  page: 1,
+  pageSize: 50,
+  totalCount: 0,
+  totalPages: 0,
+  filters: null
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -14,6 +23,7 @@ const categoryLabels = {
 function branchFromRegion(regionStr) {
   const r = parseInt(regionStr, 10);
   if (Number.isNaN(r)) return null;
+  if (r === 102) return 102;
   if (r === 218 || r === 80) return 218;
   if (r >= 1 && r <= 12) return 200 + r;
   if (r >= 201 && r <= 212) return r;
@@ -24,6 +34,7 @@ function branchFromRegion(regionStr) {
 function branchIdToDistrict(branchId) {
   const id = parseInt(branchId, 10);
   if (!id) return '';
+  if (id === 102) return '102';
   if (id === 218) return '218';
   if (id >= 201 && id <= 212) return String(id - 200);
   if (id >= 1 && id <= 12) return String(id);
@@ -31,7 +42,7 @@ function branchIdToDistrict(branchId) {
 }
 
 /** پر کردن کمبو منطقه/شعبه از config.branches — مشترک بین ارسال تکی و دسته‌ای */
-function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه مناطق' } = {}) {
+function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه مناطق', restrictToDistrict = null } = {}) {
   if (!selectEl || !config?.branches) return;
   selectEl.innerHTML = '';
   if (includeAll) {
@@ -40,12 +51,42 @@ function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه م�
     all.textContent = allLabel;
     selectEl.appendChild(all);
   }
+  const restrict = restrictToDistrict ? String(restrictToDistrict) : '';
   config.branches.forEach((b) => {
+    if (restrict) {
+      const dist = branchIdToDistrict(String(b.id));
+      if (dist !== restrict) return;
+    }
     const opt = document.createElement('option');
     opt.value = b.id;
     opt.textContent = b.name;
     selectEl.appendChild(opt);
   });
+}
+
+function getUserDistrict() {
+  const d = currentUser?.district;
+  return d == null || d === '' ? '' : String(d);
+}
+
+function applyRegionalUserRestrictions() {
+  if (isAdminUser()) {
+    fillBranchSelect($('branch'));
+    $('branch')?.removeAttribute('disabled');
+    $('fund')?.removeAttribute('disabled');
+    syncFundFromBranch();
+    return;
+  }
+
+  const district = getUserDistrict();
+  fillBranchSelect($('branch'), { restrictToDistrict: district || '__none__' });
+  const branchId = district ? branchFromRegion(district) : null;
+  if (branchId) {
+    $('branch').value = branchId;
+    $('branch').disabled = true;
+    if (branchId !== 102) syncFundFromBranch();
+    $('fund').disabled = true;
+  }
 }
 
 function applyBranchFromFiche(f) {
@@ -92,24 +133,35 @@ function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
     unsent: $('tabUnsent'),
-    single: $('tabSingle')
+    single: $('tabSingle'),
+    users: $('tabUsers')
   };
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const key = tab.dataset.tab;
-      tabs.forEach((t) => {
-        const active = t === tab;
-        t.classList.toggle('active', active);
-        t.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      Object.entries(panels).forEach(([name, panel]) => {
-        if (!panel) return;
-        const show = name === key;
-        panel.hidden = !show;
-        panel.classList.toggle('active', show);
-      });
+      if (tab.hidden) return;
+      if (tab.classList.contains('admin-only') && !isAdminUser()) return;
+      activateMainTab(key, tabs, panels);
     });
+  });
+}
+
+function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
+  unsent: $('tabUnsent'),
+  single: $('tabSingle'),
+  users: $('tabUsers')
+}) {
+  tabs.forEach((t) => {
+    const active = t.dataset.tab === key && !t.hidden;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  Object.entries(panels).forEach(([name, panel]) => {
+    if (!panel) return;
+    const show = name === key;
+    panel.hidden = !show;
+    panel.classList.toggle('active', show);
   });
 }
 
@@ -188,9 +240,54 @@ function initDatePickers() {
 }
 
 function getSelectedUnsentFicheNos() {
-  return Array.from(document.querySelectorAll('.unsent-row-check:checked'))
-    .map((el) => el.dataset.ficheNo)
-    .filter(Boolean);
+  return Array.from(selectedUnsentFicheNos);
+}
+
+function getUnsentSearchFilters() {
+  const fromDate = ($('unsentFromDate')?.value || '').trim();
+  const toDate = ($('unsentToDate')?.value || '').trim();
+  return {
+    ficheKind: $('unsentFicheKind').value,
+    ficheNo: ($('unsentFicheNo')?.value || '').trim(),
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+    billId: ($('unsentBillId')?.value || '').trim(),
+    paymentId: ($('unsentPaymentId')?.value || '').trim(),
+    district: branchIdToDistrict($('unsentDistrict')?.value)
+  };
+}
+
+function validateUnsentSearchFilters(filters) {
+  if ((filters.fromDate && !filters.toDate) || (!filters.fromDate && filters.toDate)) {
+    return 'هر دو تاریخ از و تا را وارد کنید';
+  }
+  if (!filters.fromDate || !filters.toDate) {
+    return 'بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است';
+  }
+  return null;
+}
+
+function updateUnsentPaginationUi() {
+  const bar = $('unsentPagination');
+  const label = $('unsentPageLabel');
+  const prevBtn = $('btnUnsentPrevPage');
+  const nextBtn = $('btnUnsentNextPage');
+  if (!bar || !label || !prevBtn || !nextBtn) return;
+
+  const { page, totalPages, totalCount } = unsentSearchState;
+  const hasResults = totalCount > 0;
+  bar.hidden = !hasResults;
+
+  if (!hasResults) {
+    label.textContent = '';
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+
+  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${totalPages.toLocaleString('fa-IR')} — ${totalCount.toLocaleString('fa-IR')} مورد`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
 }
 
 function updateUnsentSendButton() {
@@ -205,8 +302,13 @@ function updateUnsentSendButton() {
     : 'ارسال انتخاب‌شده‌ها';
 }
 
-function renderUnsentTable(items) {
+function renderUnsentTable(items, meta = {}) {
   unsentItems = items || [];
+  if (meta.page != null) unsentSearchState.page = meta.page;
+  if (meta.pageSize != null) unsentSearchState.pageSize = meta.pageSize;
+  if (meta.totalCount != null) unsentSearchState.totalCount = meta.totalCount;
+  if (meta.totalPages != null) unsentSearchState.totalPages = meta.totalPages;
+
   const section = $('unsentResultsSection');
   const tbody = $('unsentTable')?.querySelector('tbody');
   const countLabel = $('unsentCountLabel');
@@ -216,16 +318,23 @@ function renderUnsentTable(items) {
   if (!unsentItems.length) {
     section.hidden = false;
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
-    if (countLabel) countLabel.textContent = '۰ مورد';
+    if (countLabel) {
+      countLabel.textContent = unsentSearchState.totalCount > 0
+        ? `۰ مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
+        : '۰ مورد';
+    }
     if (selectAll) selectAll.checked = false;
+    updateUnsentPaginationUi();
     updateUnsentSendButton();
     return;
   }
 
   section.hidden = false;
-  tbody.innerHTML = unsentItems.map((item) => `
+  tbody.innerHTML = unsentItems.map((item) => {
+    const checked = selectedUnsentFicheNos.has(item.ficheNo) ? ' checked' : '';
+    return `
     <tr>
-      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}" /></td>
+      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${item.bnkAcntNo || '-'}</td>
       <td>${item.billId || '-'}</td>
@@ -235,20 +344,102 @@ function renderUnsentTable(items) {
       <td>${item.ficheNo}</td>
       <td>${Number(item.payable || 0).toLocaleString()}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
-  if (countLabel) countLabel.textContent = `${unsentItems.length.toLocaleString('fa-IR')} مورد`;
-  if (selectAll) selectAll.checked = false;
+  const selectedOnPage = unsentItems.filter((item) => selectedUnsentFicheNos.has(item.ficheNo)).length;
+  if (countLabel) {
+    const selectedTotal = selectedUnsentFicheNos.size;
+    const pageInfo = `${unsentItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+    countLabel.textContent = selectedTotal > 0
+      ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+      : pageInfo;
+  }
+  if (selectAll) {
+    selectAll.checked = unsentItems.length > 0 && selectedOnPage === unsentItems.length;
+  }
 
   document.querySelectorAll('.unsent-row-check').forEach((cb) => {
     cb.addEventListener('change', () => {
+      const ficheNo = cb.dataset.ficheNo;
+      if (!ficheNo) return;
+      if (cb.checked) selectedUnsentFicheNos.add(ficheNo);
+      else selectedUnsentFicheNos.delete(ficheNo);
+
       const all = document.querySelectorAll('.unsent-row-check');
       const checked = document.querySelectorAll('.unsent-row-check:checked');
       if (selectAll) selectAll.checked = all.length > 0 && checked.length === all.length;
       updateUnsentSendButton();
+      const countLabelEl = $('unsentCountLabel');
+      if (countLabelEl && unsentSearchState.totalCount > 0) {
+        const selectedTotal = selectedUnsentFicheNos.size;
+        const pageInfo = `${unsentItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+        countLabelEl.textContent = selectedTotal > 0
+          ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+          : pageInfo;
+      }
     });
   });
+  updateUnsentPaginationUi();
   updateUnsentSendButton();
+}
+
+async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
+  const filters = getUnsentSearchFilters();
+  const validationError = validateUnsentSearchFilters(filters);
+  if (validationError) {
+    alert(validationError);
+    return false;
+  }
+
+  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 50;
+  unsentSearchState.pageSize = pageSize;
+  unsentSearchState.filters = filters;
+  if (clearSelection) selectedUnsentFicheNos.clear();
+
+  const btn = $('btnUnsentSearch');
+  const prevBtn = $('btnUnsentPrevPage');
+  const nextBtn = $('btnUnsentNextPage');
+  if (btn) btn.disabled = true;
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+  const prevLabel = btn?.textContent;
+  if (btn) btn.textContent = 'در حال جستجو…';
+  $('unsentResultBox').hidden = true;
+
+  try {
+    const res = await apiFetch('/api/unsent/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...filters,
+        page,
+        pageSize
+      })
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+    const totalCount = data.totalCount ?? data.count ?? 0;
+    const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
+    renderUnsentTable(data.items || [], {
+      page: data.page ?? page,
+      pageSize: data.pageSize ?? pageSize,
+      totalCount,
+      totalPages
+    });
+    return true;
+  } catch (e) {
+    alert(e.message);
+    renderUnsentTable([], { page: 1, pageSize, totalCount: 0, totalPages: 0 });
+    return false;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'جستجو';
+    }
+    updateUnsentPaginationUi();
+  }
 }
 
 function formatShamsiInput(yyyymmdd) {
@@ -285,6 +476,135 @@ async function parseJsonResponse(res) {
     return JSON.parse(text);
   } catch {
     throw new Error(`پاسخ نامعتبر از سرور (HTTP ${res.status}): ${text.slice(0, 300)}`);
+  }
+}
+
+function redirectToLogin() {
+  window.location.href = '/login.html';
+}
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, { credentials: 'include', ...options });
+  if (res.status === 401) {
+    redirectToLogin();
+    throw new Error('نشست منقضی شده — دوباره وارد شوید');
+  }
+  return res;
+}
+
+function isAdminUser() {
+  return !!currentUser?.isAdmin;
+}
+
+function isCenterUser() {
+  return !isAdminUser() && getUserDistrict() === '102';
+}
+
+function applyAuthUi() {
+  const admin = isAdminUser();
+  document.querySelectorAll('.admin-only').forEach((el) => {
+    el.hidden = !admin;
+  });
+
+  const heroUser = $('heroUser');
+  if (heroUser && currentUser) {
+    heroUser.hidden = false;
+    $('userDisplayName').textContent = currentUser.displayName || currentUser.username;
+    const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
+    $('userRoleBadge').textContent = admin
+      ? 'ادمین'
+      : isCenterUser()
+        ? 'کاربر — شعبه مرکز'
+        : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
+    $('userRoleBadge').className = `user-badge ${admin ? 'badge-admin' : 'badge-user'}`;
+  }
+
+  activateMainTab(admin ? 'unsent' : 'single');
+}
+
+async function ensureAuthenticated() {
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
+  if (!res.ok) {
+    redirectToLogin();
+    return false;
+  }
+  currentUser = await res.json();
+  applyAuthUi();
+  return true;
+}
+
+function districtLabelFromValue(value) {
+  if (!value) return '—';
+  if (String(value) === '102') return 'شعبه مرکز (۱۰۲)';
+  const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
+  return branch ? branch.name : value;
+}
+
+async function loadUsersTable() {
+  if (!isAdminUser()) return;
+  const res = await apiFetch('/api/admin/users');
+  const data = await parseJsonResponse(res);
+  const tbody = $('usersTable')?.querySelector('tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  (data.items || []).forEach((u) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.nationalId || u.username}</td>
+      <td>${u.firstName || '—'}</td>
+      <td>${u.lastName || '—'}</td>
+      <td>${u.position || '—'}</td>
+      <td>${districtLabelFromValue(u.district)}</td>
+      <td>${u.isAdmin ? 'ادمین' : 'کاربر'}</td>
+      <td>${u.isActive ? 'فعال' : 'غیرفعال'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function createUserFromForm() {
+  const nationalId = ($('newUserNationalId')?.value || '').trim();
+  const payload = {
+    username: nationalId,
+    password: $('newUserPassword')?.value || '',
+    firstName: ($('newUserFirstName')?.value || '').trim(),
+    lastName: ($('newUserLastName')?.value || '').trim(),
+    nationalId,
+    position: ($('newUserPosition')?.value || '').trim(),
+    district: branchIdToDistrict($('newUserDistrict')?.value || ''),
+    isAdmin: !!$('newUserIsAdmin')?.checked
+  };
+  if (!payload.firstName || !payload.lastName || !payload.nationalId || !payload.password) {
+    return alert('نام، نام خانوادگی، کد ملی و رمز عبور الزامی است');
+  }
+  if (payload.nationalId.length !== 10 || !/^\d+$/.test(payload.nationalId)) {
+    return alert('کد ملی باید ۱۰ رقم باشد');
+  }
+  if (!payload.isAdmin && !payload.district) {
+    return alert('برای کاربر منطقه‌ای، انتخاب منطقه یا شعبه مرکز الزامی است');
+  }
+  const box = $('usersResultBox');
+  try {
+    const res = await apiFetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    if (box) {
+      box.hidden = false;
+      box.textContent = `کاربر ${data.user?.nationalId || data.user?.username || nationalId} با موفقیت ثبت شد.`;
+    }
+    $('newUserPassword').value = '';
+    $('newUserNationalId').value = '';
+    await loadUsersTable();
+  } catch (e) {
+    if (box) {
+      box.hidden = false;
+      box.textContent = e.message;
+    }
+    alert(e.message);
   }
 }
 
@@ -468,8 +788,11 @@ function renderFiche(f) {
 }
 
 async function init() {
+  const authed = await ensureAuthenticated();
+  if (!authed) return;
+
   try {
-    const res = await fetch('/api/config');
+    const res = await apiFetch('/api/config');
     config = await parseJsonResponse(res);
   } catch (e) {
     alert(e.message);
@@ -480,6 +803,8 @@ async function init() {
   const fundSel = $('fund');
   fillBranchSelect(branchSel);
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
+  fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
+  applyRegionalUserRestrictions();
   config.branches.forEach(b => {
     const optFund = document.createElement('option');
     optFund.value = b.fund;
@@ -497,6 +822,7 @@ async function init() {
   setupMainTabs();
   initDatePickers();
   window.addEventListener('load', initDatePickers);
+  if (isAdminUser()) await loadUsersTable();
 }
 
 function bindClick(id, handler) {
@@ -523,7 +849,7 @@ function setupEventHandlers() {
 
   $('btnLoad').disabled = true;
   try {
-    const res = await fetch('/api/fiche/load', {
+    const res = await apiFetch('/api/fiche/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -568,7 +894,7 @@ function setupEventHandlers() {
   }
   $('btnPreview').disabled = true;
   try {
-    const res = await fetch('/api/fiche/preview', {
+    const res = await apiFetch('/api/fiche/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getPayload(false))
@@ -599,7 +925,7 @@ function setupEventHandlers() {
     if (!confirm(warn)) return;
     $('btnSend').disabled = true;
     try {
-      const res = await fetch('/api/tahator/send', {
+      const res = await apiFetch('/api/tahator/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ficheNo: currentFiche.ficheNo, branch: 0, fund: 0 })
@@ -629,7 +955,7 @@ function setupEventHandlers() {
 
   $('btnSend').disabled = true;
   try {
-    const res = await fetch('/api/fiche/send', {
+    const res = await apiFetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getPayload(true))
@@ -666,58 +992,46 @@ function setupEventHandlers() {
   const selectAll = $('unsentSelectAll');
   if (selectAll) {
     selectAll.addEventListener('change', () => {
+      unsentItems.forEach((item) => {
+        if (selectAll.checked) selectedUnsentFicheNos.add(item.ficheNo);
+        else selectedUnsentFicheNos.delete(item.ficheNo);
+      });
       document.querySelectorAll('.unsent-row-check').forEach((cb) => {
         cb.checked = selectAll.checked;
       });
       updateUnsentSendButton();
+      const countLabelEl = $('unsentCountLabel');
+      if (countLabelEl && unsentSearchState.totalCount > 0) {
+        const selectedTotal = selectedUnsentFicheNos.size;
+        const pageInfo = `${unsentItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+        countLabelEl.textContent = selectedTotal > 0
+          ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+          : pageInfo;
+      }
     });
   }
 
   bindClick('btnUnsentSearch', async () => {
-    const fromDate = ($('unsentFromDate')?.value || '').trim();
-    const toDate = ($('unsentToDate')?.value || '').trim();
-    const ficheNo = ($('unsentFicheNo')?.value || '').trim();
-    const billId = ($('unsentBillId')?.value || '').trim();
-    const paymentId = ($('unsentPaymentId')?.value || '').trim();
-    const district = branchIdToDistrict($('unsentDistrict')?.value);
-
-    if ((fromDate && !toDate) || (!fromDate && toDate)) {
-      return alert('هر دو تاریخ از و تا را وارد کنید یا هر دو را خالی بگذارید');
-    }
-    if (!ficheNo && !billId && !paymentId && !district && !fromDate) {
-      return alert('حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید');
-    }
-
-    const btn = $('btnUnsentSearch');
-    btn.disabled = true;
-    $('unsentResultBox').hidden = true;
-    try {
-      const res = await fetch('/api/unsent/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind').value,
-          ficheNo,
-          fromDate: fromDate || null,
-          toDate: toDate || null,
-          billId,
-          paymentId,
-          district
-        })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      renderUnsentTable(data.items || []);
-      if (data.truncated) {
-        alert(`بیش از ${data.count} مورد یافت شد — فقط ${data.count} مورد اول نمایش داده شد. فیلترها را محدودتر کنید.`);
-      }
-    } catch (e) {
-      alert(e.message);
-      renderUnsentTable([]);
-    } finally {
-      btn.disabled = false;
-    }
+    await fetchUnsentResults(1, { clearSelection: true });
   });
+
+  bindClick('btnUnsentPrevPage', async () => {
+    if (unsentSearchState.page <= 1) return;
+    await fetchUnsentResults(unsentSearchState.page - 1);
+  });
+
+  bindClick('btnUnsentNextPage', async () => {
+    if (unsentSearchState.page >= unsentSearchState.totalPages) return;
+    await fetchUnsentResults(unsentSearchState.page + 1);
+  });
+
+  const pageSizeSel = $('unsentPageSize');
+  if (pageSizeSel) {
+    pageSizeSel.addEventListener('change', async () => {
+      if (!unsentSearchState.filters) return;
+      await fetchUnsentResults(1);
+    });
+  }
 
   bindClick('btnUnsentPlan', async () => {
     const selected = getSelectedUnsentFicheNos();
@@ -730,7 +1044,7 @@ function setupEventHandlers() {
     box.textContent = 'در حال بررسی مسیر ارسال هر فیش…';
 
     try {
-      const res = await fetch('/api/unsent/plan-batch', {
+      const res = await apiFetch('/api/unsent/plan-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -778,7 +1092,7 @@ function setupEventHandlers() {
     box.textContent = `در حال ارسال ${selected.length} فیش…\n\nصبر کنید…`;
 
     try {
-      const res = await fetch('/api/unsent/send-batch', {
+      const res = await apiFetch('/api/unsent/send-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -804,7 +1118,10 @@ function setupEventHandlers() {
       if (data.dryRun) alert('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
       else alert(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
 
-      $('btnUnsentSearch').click();
+      selectedUnsentFicheNos.clear();
+      if (unsentSearchState.filters) {
+        await fetchUnsentResults(unsentSearchState.page);
+      }
     } catch (e) {
       box.textContent = e.message;
       alert(e.message);
@@ -812,6 +1129,20 @@ function setupEventHandlers() {
       updateUnsentSendButton();
     }
   });
+}
+
+function setupAuthAndAdminHandlers() {
+  bindClick('btnLogout', async () => {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    redirectToLogin();
+  });
+
+  bindClick('btnCreateUser', createUserFromForm);
+  bindClick('btnRefreshUsers', loadUsersTable);
 }
 
 function showTahatorSendResult(data) {
@@ -869,4 +1200,5 @@ function formatTahatorSend(d) {
 }
 
 setupEventHandlers();
+setupAuthAndAdminHandlers();
 init();

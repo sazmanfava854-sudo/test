@@ -58,4 +58,21 @@ public class DateHelperTests
         var dt = new DateTime(1404, 5, 5);
         Assert.Equal("14040505", DateHelper.FromDatabaseDateValue(dt));
     }
+
+    [Theory]
+    [InlineData("1404/05/05", "1404/05/05", 0)]
+    [InlineData("1405/05/04", "1405/05/25", 21)]
+    public void TryGetShamsiRangeDaySpan_counts_days(string from, string to, int expectedDays)
+    {
+        Assert.True(DateHelper.TryGetShamsiRangeDaySpan(from, to, out var days));
+        Assert.Equal(expectedDays, days);
+    }
+
+    [Fact]
+    public void CompareShamsiRayvarz_orders_user_reported_range()
+    {
+        Assert.True(DateHelper.CompareShamsiRayvarz("1405/05/04", "1405/05/25") < 0);
+        Assert.Equal("1405/05/04", DateHelper.ToShamsiSlashDate("1405/05/04"));
+        Assert.Equal("1405/05/25", DateHelper.ToShamsiSlashDate("1405/05/25"));
+    }
 }

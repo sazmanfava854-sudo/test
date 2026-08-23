@@ -15,6 +15,8 @@ public class SoapBuilder
     private const string TempUriNs = "http://tempuri.org/";
     private const string WcfNs = "http://schemas.datacontract.org/2004/07/WCFServer";
     private const string XsiNs = "http://www.w3.org/2001/XMLSchema-instance";
+    /// <summary>شناسه مبدأ در SourceId ردیف SOAP — برای تشخیص ارسال از Rayvarz Resend در incmdocsys.</summary>
+    public const string DefaultSourceSystemId = "RAYVARZ-RESEND";
 
     /// <summary>مقادیر عددی PDF/DLL → نام عضو enum در XML (DataContractSerializer).</summary>
     private static readonly IReadOnlyDictionary<string, string> PhasTypCodeToWireName =
@@ -94,7 +96,7 @@ public class SoapBuilder
         if (fund <= 0 && fiche.SuggestedFund is > 0)
             fund = fiche.SuggestedFund.Value;
 
-        var sourceSystemId = _config["Rayvarz:SourceSystemId"];
+        var sourceSystemId = ResolveSourceSystemId();
         var transactionId = ResolveTransactionId(fiche);
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
@@ -194,7 +196,7 @@ public class SoapBuilder
         var phasTyp = ResolveSoapDataContractEnum(_config["Rayvarz:PhasTyp"], "7", PhasTypCodeToWireName);
         var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
         var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
-        var sourceSystemId = _config["Rayvarz:SourceSystemId"];
+        var sourceSystemId = ResolveSourceSystemId();
         var transactionId = Guid.NewGuid().ToString();
         const string docDateRay = "14000101";
         const string rowDateRay = "14000101";
@@ -379,6 +381,14 @@ public class SoapBuilder
     /// ارسال مجدد: GUID جدید در هر POST (پیش‌فرض) تا «تراکنش تکراری» نشود.
     /// برای هم‌خوانی با سامانه اصلی: TransactionIdMode=nidFiche
     /// </summary>
+    private string ResolveSourceSystemId()
+    {
+        var configured = _config["Rayvarz:SourceSystemId"];
+        return string.IsNullOrWhiteSpace(configured)
+            ? DefaultSourceSystemId
+            : configured.Trim();
+    }
+
     private string ResolveTransactionId(FicheHeaderDto fiche)
     {
         var mode = (_config["Rayvarz:TransactionIdMode"] ?? "newGuidPerSend").Trim();
