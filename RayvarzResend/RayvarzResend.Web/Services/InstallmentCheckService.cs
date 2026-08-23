@@ -193,11 +193,18 @@ public class InstallmentCheckService
                 continue;
             }
 
+            var usedCostDateFallback = false;
             var rows = await LoadRowsForExcelAsync(conn, kind, lookupValue, ct);
+            if (rows.Count == 0 && InstallmentExcelMatcher.CanUseCostDateFallback(excelRow, kind))
+            {
+                rows = await LoadRowsForExcelByCostDateAsync(conn, excelRow, ct);
+                usedCostDateFallback = rows.Count > 0;
+            }
+
             if (rows.Count == 0)
             {
                 item.ValidationMessage = InstallmentExcelMatcher.LooksLikeScientificNotation(excelRow.Identifier)
-                    ? "کد پیگیری در اکسل نادرست خوانده شد (فرمت علمی مثل 5.02E+14) — ستون Identifier را Text کنید"
+                    ? "کد پیگیری در اکسل خراب است (5.02E+14) — مبلغ/تاریخ هم منطبق نبود"
                     : "در دیتابیس یافت نشد";
                 result.Items.Add(item);
                 continue;
@@ -206,12 +213,26 @@ public class InstallmentCheckService
             if (rows.Count > 1)
             {
                 item.Found = true;
-                item.ValidationMessage = $"بیش از یک ردیف ({rows.Count}) در دیتابیس یافت شد";
+                item.ValidationMessage = usedCostDateFallback
+                    ? $"بیش از یک ردیف با همین مبلغ/تاریخ ({rows.Count})"
+                    : $"بیش از یک ردیف ({rows.Count}) در دیتابیس یافت شد";
                 result.Items.Add(item);
                 continue;
             }
 
             var dbRow = rows[0];
+            if (usedCostDateFallback)
+            {
+                kind = InstallmentLookupKind.TrackingNo;
+                lookupValue = InstallmentExcelMatcher.NormalizeDigits(dbRow.TrackingNo);
+                item.DetectedLookupKind = kind;
+                item.LookupValue = lookupValue;
+                item.MatchedByCostDate = true;
+                willApplyEndState = InstallmentExcelMatcher.ResolveWillApplyEndState(
+                    kind, parsed.ApplyEndStateRequested, excelRow, excelMode: true);
+                item.WillApplyEndState = willApplyEndState;
+            }
+
             item.Found = true;
             item.NoDocument = dbRow.NoDocument;
             item.TrackingNo = dbRow.TrackingNo;
@@ -236,6 +257,8 @@ public class InstallmentCheckService
             if (mismatch == null)
             {
                 item.DataMatches = true;
+                if (item.MatchedByCostDate)
+                    item.ValidationMessage = "تطابق با مبلغ و تاریخ (شناسه اکسل خراب بود)";
             }
             else
             {
@@ -530,6 +553,31 @@ public class InstallmentCheckService
         var rows = new List<InstallmentRowSnapshot>();
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@v", value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(MapExcelInstallmentRow(reader));
+        }
+        return rows;
+    }
+
+    private static async Task<List<InstallmentRowSnapshot>> LoadRowsForExcelByCostDateAsync(
+        SqlConnection conn,
+        InstallmentExcelRowInput excelRow,
+        CancellationToken ct)
+    {
+        if (!InstallmentExcelMatcher.TryParseCost(excelRow.PaymentCost, out var cost))
+            return [];
+
+        var paymentDateDigits = InstallmentExcelMatcher.NormalizeDateDigits(excelRow.PaymentDate);
+        if (paymentDateDigits.Length < 8)
+            return [];
+
+        var sql = InstallmentListQuery.BuildExcelLookupByCostDateSql();
+        var rows = new List<InstallmentRowSnapshot>();
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@cost", cost);
+        cmd.Parameters.AddWithValue("@paymentDateDigits", paymentDateDigits);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {

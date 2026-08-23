@@ -28,10 +28,30 @@ public static class InstallmentExcelMatcher
 
   public static string NormalizeDate(string? raw)
   {
-    var digits = NormalizeDigits(raw);
+    var digits = NormalizeDateDigits(raw);
     if (digits.Length >= 8)
       return $"{digits[..4]}/{digits.Substring(4, 2)}/{digits.Substring(6, 2)}";
     return NormalizeCell(raw);
+  }
+
+  public static string NormalizeDateDigits(string? raw)
+  {
+    var text = NormalizeCell(raw);
+    if (string.IsNullOrEmpty(text))
+      return "";
+
+    var parts = text.Split(['/', '-'], StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length >= 3)
+    {
+      var year = NormalizeDigits(parts[0]);
+      var month = NormalizeDigits(parts[1]);
+      var day = NormalizeDigits(parts[2]);
+      if (year.Length == 4 && month.Length >= 1 && day.Length >= 1)
+        return $"{year}{month.PadLeft(2, '0')}{day.PadLeft(2, '0')}";
+    }
+
+    var digits = NormalizeDigits(raw);
+    return digits.Length >= 8 ? digits[..8] : digits;
   }
 
   public static bool TryParseCost(string? raw, out decimal cost)
@@ -56,15 +76,38 @@ public static class InstallmentExcelMatcher
   }
 
   public static bool DatesMatch(string? excelDate, string? dbDate) =>
-    NormalizeDate(excelDate) == NormalizeDate(dbDate);
+    NormalizeDateDigits(excelDate) == NormalizeDateDigits(dbDate);
+
+  public static string ExtractIdentifierDigits(string? raw)
+  {
+    var text = NormalizeCell(raw);
+    if (string.IsNullOrEmpty(text))
+      return "";
+
+    if (LooksLikeScientificNotation(text)
+        && double.TryParse(text, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var scientific))
+    {
+      var rounded = (long)Math.Round(scientific);
+      if (rounded > 0)
+        return rounded.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    return NormalizeDigits(text);
+  }
+
+  public static bool CanUseCostDateFallback(InstallmentExcelRowInput row, InstallmentLookupKind kind) =>
+    (kind == InstallmentLookupKind.TrackingNo || LooksLikeScientificNotation(row.Identifier))
+    && TryParseCost(row.PaymentCost, out _)
+    && NormalizeDateDigits(row.PaymentDate).Length >= 8;
 
   public static (InstallmentLookupKind Kind, string Value, string? Error) ResolveLookup(InstallmentExcelRowInput row)
   {
-    var digits = NormalizeDigits(row.Identifier);
+    var digits = ExtractIdentifierDigits(row.Identifier);
     if (string.IsNullOrEmpty(digits))
       return (InstallmentLookupKind.NoDocument, "", "شناسه (شماره سند / کد پیگیری) الزامی است");
 
-    var kind = InstallmentIdentifierDetector.Detect(row.Identifier);
+    var kind = InstallmentIdentifierDetector.Detect(digits);
     return (kind, digits, null);
   }
 
@@ -113,9 +156,12 @@ public static class InstallmentExcelMatcher
   {
     if (lookupKind == InstallmentLookupKind.TrackingNo)
     {
-      var dbTracking = NormalizeDigits(db.TrackingNo);
-      if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
-        return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
+      if (!LooksLikeScientificNotation(excel.Identifier))
+      {
+        var dbTracking = NormalizeDigits(db.TrackingNo);
+        if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
+          return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
+      }
       return null;
     }
 

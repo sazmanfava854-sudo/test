@@ -28,4 +28,28 @@ public static class InstallmentListQuery
         INNER JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
         WHERE il.{installmentListColumn} = @v
         """;
+
+    public static string BuildExcelLookupByCostDateSql() => $"""
+        SELECT il.NoDocument,
+               il.TrackingNo AS trackingno,
+               il.PaymentCost,
+               CAST(il.PaymentDate AS varchar(20)) AS PaymentDate,
+               CAST(r.NidWorkItem AS nvarchar(50)) AS nidworkitem,
+               {NosaziCodeSql} AS NosaziCode,
+               CAST(il.CI_InstallmentStatus AS varchar(20)) AS CI_InstallmentStatus,
+               il.EndStateDesc,
+               il.EndStateCode,
+               il.Comments
+        FROM dbo.Income i
+        INNER JOIN dbo.Income_Fiche f ON i.NidIncome = f.NidIncome
+        INNER JOIN dbo.Installment ins ON f.NidFiche = ins.NidFiche
+        INNER JOIN dbo.Installment_List il ON ins.NidInstallment = il.NidInstallment
+        INNER JOIN dbo.Sh_RequestInfo r ON i.NidProc = r.NidProc
+        INNER JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
+        WHERE il.PaymentCost = @cost
+          AND REPLACE(REPLACE(REPLACE(LTRIM(RTRIM(CAST(il.PaymentDate AS varchar(30)))), '/', ''), '-', ''), ' ', '')
+              = @paymentDateDigits
+          AND il.TrackingNo IS NOT NULL
+          AND LEN(LTRIM(RTRIM(CAST(il.TrackingNo AS varchar(30)))) >= {InstallmentIdentifierDetector.TrackingNoMinDigitLength}
+        """;
 }

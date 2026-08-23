@@ -180,4 +180,45 @@ public class InstallmentExcelMatcherTests
         Assert.Equal(3, InstallmentExcelMatcher.RequiredColumnNames.Length);
         Assert.Equal("Identifier", InstallmentExcelMatcher.RequiredColumnNames[0]);
     }
+
+    [Theory]
+    [InlineData("1405/05/05", "14050505")]
+    [InlineData("1405-5-5", "14050505")]
+    public void NormalizeDateDigits_strips_separators(string raw, string expected)
+    {
+        Assert.Equal(expected, InstallmentExcelMatcher.NormalizeDateDigits(raw));
+    }
+
+    [Fact]
+    public void CanUseCostDateFallback_when_scientific_identifier_and_cost_date_present()
+    {
+        var row = new InstallmentExcelRowInput
+        {
+            Identifier = "5.02091E+14",
+            PaymentCost = "813516015",
+            PaymentDate = "1405/05/05"
+        };
+        var (_, _, _) = InstallmentExcelMatcher.ResolveLookup(row);
+        Assert.True(InstallmentExcelMatcher.CanUseCostDateFallback(row, InstallmentLookupKind.TrackingNo));
+    }
+
+    [Fact]
+    public void ValidateAgainstDb_skips_tracking_compare_when_identifier_scientific()
+    {
+        var excel = new InstallmentExcelRowInput
+        {
+            Identifier = "5.02091E+14",
+            PaymentCost = "813516015",
+            PaymentDate = "1405/05/05"
+        };
+        var db = new InstallmentRowSnapshot
+        {
+            TrackingNo = "0502090614002610",
+            PaymentCost = 813516015m,
+            PaymentDate = "1405/05/05"
+        };
+
+        Assert.Null(InstallmentExcelMatcher.ValidateAgainstDb(
+            excel, db, InstallmentLookupKind.TrackingNo, "0502090614002610"));
+    }
 }
