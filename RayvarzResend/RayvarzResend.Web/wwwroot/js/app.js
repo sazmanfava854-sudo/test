@@ -142,7 +142,6 @@ function setupMainTabs() {
     tab.addEventListener('click', () => {
       const key = tab.dataset.tab;
       if (tab.hidden) return;
-      if (tab.classList.contains('admin-only') && !isAdminUser()) return;
       activateMainTab(key, tabs, panels);
     });
   });
@@ -887,30 +886,56 @@ function isAdminUser() {
   return !!currentUser?.isAdmin;
 }
 
+function canAccessUnsent() {
+  return isAdminUser() || !!currentUser?.canAccessUnsentFiches;
+}
+
+function canAccessInstallment() {
+  return isAdminUser() || !!currentUser?.canAccessInstallment;
+}
+
+function canManageUsers() {
+  return isAdminUser() || !!currentUser?.canManageUsers;
+}
+
 function isCenterUser() {
   return !isAdminUser() && getUserDistrict() === '102';
 }
 
-function applyAuthUi() {
-  const admin = isAdminUser();
-  document.querySelectorAll('.admin-only').forEach((el) => {
-    el.hidden = !admin;
+function applyPermissionUi() {
+  document.querySelectorAll('.perm-unsent').forEach((el) => {
+    el.hidden = !canAccessUnsent();
   });
+  document.querySelectorAll('.perm-installment').forEach((el) => {
+    el.hidden = !canAccessInstallment();
+  });
+  document.querySelectorAll('.perm-users').forEach((el) => {
+    el.hidden = !canManageUsers();
+  });
+}
+
+function defaultMainTabKey() {
+  if (canAccessUnsent()) return 'unsent';
+  return 'single';
+}
+
+function applyAuthUi() {
+  applyPermissionUi();
 
   const heroUser = $('heroUser');
   if (heroUser && currentUser) {
     heroUser.hidden = false;
     $('userDisplayName').textContent = currentUser.displayName || currentUser.username;
     const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
-    $('userRoleBadge').textContent = admin
+    $('userRoleBadge').textContent = isAdminUser()
       ? 'ادمین'
       : isCenterUser()
         ? 'کاربر — شعبه مرکز'
         : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
-    $('userRoleBadge').className = `user-badge ${admin ? 'badge-admin' : 'badge-user'}`;
+    $('userRoleBadge').className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
   }
 
-  activateMainTab(admin ? 'unsent' : 'single');
+  activateMainTab(defaultMainTabKey());
 }
 
 async function ensureAuthenticated() {
@@ -933,14 +958,19 @@ function districtLabelFromValue(value) {
 }
 
 async function loadUsersTable() {
-  if (!isAdminUser()) return;
+  if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/users');
   const data = await parseJsonResponse(res);
+  cachedUsers = data.items || [];
   const tbody = $('usersTable')?.querySelector('tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  (data.items || []).forEach((u) => {
+  cachedUsers.forEach((u) => {
     const tr = document.createElement('tr');
+    const groupNames = (u.groupIds || [])
+      .map((id) => cachedGroups.find((g) => String(g.id) === String(id))?.name)
+      .filter(Boolean)
+      .join('، ') || '—';
     tr.innerHTML = `
       <td>${u.nationalId || u.username}</td>
       <td>${u.firstName || '—'}</td>
@@ -948,10 +978,170 @@ async function loadUsersTable() {
       <td>${u.position || '—'}</td>
       <td>${districtLabelFromValue(u.district)}</td>
       <td>${u.isAdmin ? 'ادمین' : 'کاربر'}</td>
+      <td>${groupNames}</td>
       <td>${u.isActive ? 'فعال' : 'غیرفعال'}</td>
+      <td><button type="button" class="btn secondary btn-sm btn-edit-user" data-user-id="${u.id}">ویرایش</button></td>
     `;
     tbody.appendChild(tr);
   });
+  tbody.querySelectorAll('.btn-edit-user').forEach((btn) => {
+    btn.addEventListener('click', () => openUserEdit(btn.dataset.userId));
+  });
+}
+
+let cachedGroups = [];
+let cachedUsers = [];
+let editingUserId = null;
+let editingGroupId = null;
+
+async function loadGroupsTable() {
+  if (!canManageUsers()) return;
+  const res = await apiFetch('/api/admin/groups');
+  const data = await parseJsonResponse(res);
+  cachedGroups = data.items || [];
+  const tbody = $('groupsTable')?.querySelector('tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  cachedGroups.forEach((g) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${g.name}</td>
+      <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
+      <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
+      <td><button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
+    btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
+  });
+  renderUserGroupCheckboxes();
+}
+
+function openGroupEdit(groupId) {
+  const group = cachedGroups.find((g) => String(g.id) === String(groupId));
+  if (!group) return;
+  editingGroupId = group.id;
+  if ($('newGroupName')) $('newGroupName').value = group.name;
+  if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
+  if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
+  if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
+  const btn = $('btnCreateGroup');
+  if (btn) btn.textContent = 'بروزرسانی گروه';
+}
+
+function resetGroupForm() {
+  editingGroupId = null;
+  if ($('newGroupName')) $('newGroupName').value = '';
+  if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
+  if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
+  if ($('newGroupUsers')) $('newGroupUsers').checked = false;
+  const btn = $('btnCreateGroup');
+  if (btn) btn.textContent = 'ثبت گروه';
+}
+
+async function saveGroupFromForm() {
+  const payload = {
+    name: ($('newGroupName')?.value || '').trim(),
+    canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
+    canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canManageUsers: !!$('newGroupUsers')?.checked
+  };
+  if (!payload.name) return alert('نام گروه الزامی است');
+  const url = editingGroupId
+    ? `/api/admin/groups/${editingGroupId}`
+    : '/api/admin/groups';
+  const method = editingGroupId ? 'PUT' : 'POST';
+  const res = await apiFetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  resetGroupForm();
+  await loadGroupsTable();
+  await loadUsersTable();
+}
+
+function renderUserGroupCheckboxes() {
+  const host = $('editUserGroups');
+  if (!host) return;
+  host.innerHTML = '';
+  cachedGroups.forEach((g) => {
+    const label = document.createElement('label');
+    label.className = 'check-field';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = g.id;
+    input.dataset.groupId = g.id;
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(g.name));
+    host.appendChild(label);
+  });
+}
+
+function openUserEdit(userId) {
+  const user = cachedUsers.find((u) => String(u.id) === String(userId));
+  if (!user) return;
+  editingUserId = user.id;
+  const panel = $('userEditPanel');
+  if (panel) panel.hidden = false;
+  if ($('userEditTitle')) {
+    $('userEditTitle').textContent = `${user.firstName} ${user.lastName} — ${user.nationalId || user.username}`;
+  }
+  if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
+  if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
+  if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
+  renderUserGroupCheckboxes();
+  const selected = new Set((user.groupIds || []).map(String));
+  $('editUserGroups')?.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+    cb.checked = selected.has(cb.dataset.groupId);
+  });
+}
+
+function closeUserEdit() {
+  editingUserId = null;
+  const panel = $('userEditPanel');
+  if (panel) panel.hidden = true;
+}
+
+async function saveUserEdit() {
+  if (!editingUserId) return;
+  const groupIds = [];
+  $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
+    groupIds.push(cb.dataset.groupId);
+  });
+  const payload = {
+    isAdmin: !!$('editUserIsAdmin')?.checked,
+    isActive: !!$('editUserIsActive')?.checked,
+    groupIds
+  };
+  const res = await apiFetch(`/api/admin/users/${editingUserId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  closeUserEdit();
+  await loadUsersTable();
+}
+
+async function resetUserPassword() {
+  if (!editingUserId) return;
+  const password = $('editUserNewPassword')?.value || '';
+  if (!password || password.length < 6) return alert('رمز عبور جدید حداقل ۶ کاراکتر باشد');
+  const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
+  alert('رمز عبور با موفقیت تغییر کرد');
 }
 
 async function createUserFromForm() {
@@ -1256,7 +1446,10 @@ async function init() {
   setupMainTabs();
   initDatePickers();
   window.addEventListener('load', initDatePickers);
-  if (isAdminUser()) await loadUsersTable();
+  if (canManageUsers()) {
+    await loadGroupsTable();
+    await loadUsersTable();
+  }
 }
 
 function bindClick(id, handler) {
@@ -1648,7 +1841,33 @@ function setupAuthAndAdminHandlers() {
   });
 
   bindClick('btnCreateUser', createUserFromForm);
-  bindClick('btnRefreshUsers', loadUsersTable);
+  bindClick('btnRefreshUsers', async () => {
+    await loadGroupsTable();
+    await loadUsersTable();
+  });
+  bindClick('btnCreateGroup', async () => {
+    try {
+      await saveGroupFromForm();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+  bindClick('btnRefreshGroups', loadGroupsTable);
+  bindClick('btnSaveUserEdit', async () => {
+    try {
+      await saveUserEdit();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+  bindClick('btnResetUserPassword', async () => {
+    try {
+      await resetUserPassword();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+  bindClick('btnCancelUserEdit', closeUserEdit);
 }
 
 function showTahatorSendResult(data) {

@@ -54,6 +54,7 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddSingleton<InMemoryAppUserStore>();
 builder.Services.AddSingleton<AppUserRepository>();
+builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<FicheSendService>();
@@ -135,7 +136,7 @@ app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, Ht
         CookieAuthenticationDefaults.AuthenticationScheme,
         principal,
         auth.CreateAuthProperties(persistent: true));
-    return Results.Ok(AppAuthService.ToSession(user));
+    return Results.Ok(await auth.ToSessionAsync(user, ct));
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/logout", async (HttpContext http) =>
@@ -152,12 +153,17 @@ app.MapGet("/api/auth/me", async (HttpContext http, AppAuthService auth, Cancell
         : Results.Ok(session);
 }).RequireAuthorization(authenticated);
 
-app.MapGet("/api/admin/users", async (AppUserRepository users, CancellationToken ct) =>
-    Results.Ok(new { items = await users.ListUsersAsync(ct) }))
-    .RequireAuthorization(adminOnly);
-
-app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserRepository users, CancellationToken ct) =>
+app.MapGet("/api/admin/users", async (AppUserRepository users, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
 {
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
+    return Results.Ok(new { items = await users.ListUsersWithGroupsAsync(ct) });
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserRepository users, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
+{
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
     try
@@ -188,7 +194,121 @@ app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserReposit
     {
         return Results.BadRequest(new { error = ex.Message });
     }
-}).RequireAuthorization(adminOnly);
+}).RequireAuthorization(authenticated);
+
+app.MapPut("/api/admin/users/{id:guid}", async (
+    Guid id,
+    UpdateAppUserRequest? req,
+    AppUserRepository users,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var updated = await users.UpdateUserAsync(id, req, ct);
+        return Results.Ok(new { user = updated });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/admin/users/{id:guid}/reset-password", async (
+    Guid id,
+    ResetAppUserPasswordRequest? req,
+    AppUserRepository users,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null || string.IsNullOrWhiteSpace(req.Password))
+        return Results.BadRequest(new { error = "رمز عبور جدید الزامی است" });
+    try
+    {
+        await users.ResetPasswordAsync(id, req.Password, ct);
+        return Results.Ok(new { ok = true });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapGet("/api/admin/groups", async (AppUserRepository users, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
+{
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
+    return Results.Ok(new { items = await users.ListGroupsAsync(ct) });
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/admin/groups", async (
+    CreateAppUserGroupRequest? req,
+    AppUserRepository users,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var group = await users.CreateGroupAsync(req, ct);
+        return Results.Ok(new { group });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPut("/api/admin/groups/{id:guid}", async (
+    Guid id,
+    UpdateAppUserGroupRequest? req,
+    AppUserRepository users,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessManageUsers(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var group = await users.UpdateGroupAsync(id, req, ct);
+        return Results.Ok(new { group });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization(authenticated);
 
 app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
 {
@@ -509,8 +629,15 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService se
     }
 }).RequireAuthorization(authenticated);
 
-app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
+app.MapPost("/api/unsent/search", async (
+    UnsentFicheSearchRequest? req,
+    UnsentFicheService unsent,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
 {
+    var denied = await DenyUnlessUnsent(http, perms, ct);
+    if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست جستجو خالی است" });
     if (req.HasPartialDateRange)
@@ -527,10 +654,17 @@ app.MapPost("/api/unsent/search", async (UnsentFicheSearchRequest? req, UnsentFi
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-}).RequireAuthorization(adminOnly);
+}).RequireAuthorization(authenticated);
 
-app.MapPost("/api/unsent/plan-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
+app.MapPost("/api/unsent/plan-batch", async (
+    UnsentBatchSendRequest? req,
+    UnsentFicheService unsent,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
 {
+    var denied = await DenyUnlessUnsent(http, perms, ct);
+    if (denied != null) return denied;
     if (req?.FicheNos == null || req.FicheNos.Count == 0)
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
@@ -541,10 +675,17 @@ app.MapPost("/api/unsent/plan-batch", async (UnsentBatchSendRequest? req, Unsent
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-}).RequireAuthorization(adminOnly);
+}).RequireAuthorization(authenticated);
 
-app.MapPost("/api/unsent/send-batch", async (UnsentBatchSendRequest? req, UnsentFicheService unsent, CancellationToken ct) =>
+app.MapPost("/api/unsent/send-batch", async (
+    UnsentBatchSendRequest? req,
+    UnsentFicheService unsent,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
 {
+    var denied = await DenyUnlessUnsent(http, perms, ct);
+    if (denied != null) return denied;
     if (req?.FicheNos == null || req.FicheNos.Count == 0)
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
@@ -555,14 +696,17 @@ app.MapPost("/api/unsent/send-batch", async (UnsentBatchSendRequest? req, Unsent
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
-}).RequireAuthorization(adminOnly);
+}).RequireAuthorization(authenticated);
 
 app.MapPost("/api/installment/preview", async (
     InstallmentCheckRequest? req,
     InstallmentCheckService installment,
+    AppPermissionService perms,
     HttpContext http,
     CancellationToken ct) =>
 {
+    var denied = await DenyUnlessInstallment(http, perms, ct);
+    if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
     req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
@@ -586,9 +730,12 @@ app.MapPost("/api/installment/preview", async (
 app.MapPost("/api/installment/update", async (
     InstallmentCheckRequest? req,
     InstallmentCheckService installment,
+    AppPermissionService perms,
     HttpContext http,
     CancellationToken ct) =>
 {
+    var denied = await DenyUnlessInstallment(http, perms, ct);
+    if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
     req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
@@ -608,6 +755,30 @@ app.MapPost("/api/installment/update", async (
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
+
+static async Task<IResult?> DenyUnlessManageUsers(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanManageUsers))
+        return Results.Json(new { error = "دسترسی به مدیریت کاربران مجاز نیست" }, statusCode: 403);
+    return null;
+}
+
+static async Task<IResult?> DenyUnlessUnsent(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessUnsentFiches))
+        return Results.Json(new { error = "دسترسی به فیش‌های جمعی مجاز نیست" }, statusCode: 403);
+    return null;
+}
+
+static async Task<IResult?> DenyUnlessInstallment(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessInstallment))
+        return Results.Json(new { error = "دسترسی به چک خزانه مجاز نیست" }, statusCode: 403);
+    return null;
+}
 
 static string? ConnectionHint(string name, string cs, Exception ex)
 {

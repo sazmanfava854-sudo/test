@@ -8,6 +8,8 @@ public sealed class InMemoryAppUserStore
 {
     private readonly ConcurrentDictionary<string, AppUserRecord> _byUsername = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<Guid, AppUserRecord> _byId = new();
+    private readonly ConcurrentDictionary<Guid, AppUserGroupRecord> _groups = new();
+    private readonly ConcurrentDictionary<Guid, HashSet<Guid>> _userGroups = new();
 
     public int Count => _byUsername.Count;
 
@@ -34,6 +36,7 @@ public sealed class InMemoryAppUserStore
         };
         _byUsername[user.Username] = user;
         _byId[user.Id] = user;
+        _userGroups[user.Id] = [];
         return user;
     }
 
@@ -57,7 +60,111 @@ public sealed class InMemoryAppUserStore
                 District = u.District,
                 IsAdmin = u.IsAdmin,
                 IsActive = u.IsActive,
-                CreatedAtUtc = u.CreatedAtUtc.ToString("O")
+                CreatedAtUtc = u.CreatedAtUtc.ToString("O"),
+                GroupIds = GetUserGroupIds(u.Id)
             })
             .ToList();
+
+    public List<AppUserGroupDto> ListGroups() =>
+        _groups.Values
+            .OrderBy(g => g.Name)
+            .Select(g => new AppUserGroupDto
+            {
+                Id = g.Id,
+                Name = g.Name,
+                CanAccessUnsentFiches = g.CanAccessUnsentFiches,
+                CanAccessInstallment = g.CanAccessInstallment,
+                CanManageUsers = g.CanManageUsers,
+                CreatedAtUtc = g.CreatedAtUtc.ToString("O")
+            })
+            .ToList();
+
+    public AppUserGroupDto AddGroup(CreateAppUserGroupRequest req)
+    {
+        var name = (req.Name ?? "").Trim();
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("نام گروه الزامی است");
+        if (_groups.Values.Any(g => g.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("گروه با این نام قبلاً ثبت شده است");
+
+        var group = new AppUserGroupRecord
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            CanAccessUnsentFiches = req.CanAccessUnsentFiches,
+            CanAccessInstallment = req.CanAccessInstallment,
+            CanManageUsers = req.CanManageUsers,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        _groups[group.Id] = group;
+        return new AppUserGroupDto
+        {
+            Id = group.Id,
+            Name = group.Name,
+            CanAccessUnsentFiches = group.CanAccessUnsentFiches,
+            CanAccessInstallment = group.CanAccessInstallment,
+            CanManageUsers = group.CanManageUsers,
+            CreatedAtUtc = group.CreatedAtUtc.ToString("O")
+        };
+    }
+
+    public AppUserGroupDto UpdateGroup(Guid id, UpdateAppUserGroupRequest req)
+    {
+        if (!_groups.TryGetValue(id, out var group))
+            throw new InvalidOperationException("گروه یافت نشد");
+
+        var name = (req.Name ?? "").Trim();
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("نام گروه الزامی است");
+
+        group.Name = name;
+        group.CanAccessUnsentFiches = req.CanAccessUnsentFiches;
+        group.CanAccessInstallment = req.CanAccessInstallment;
+        group.CanManageUsers = req.CanManageUsers;
+
+        return new AppUserGroupDto
+        {
+            Id = group.Id,
+            Name = group.Name,
+            CanAccessUnsentFiches = group.CanAccessUnsentFiches,
+            CanAccessInstallment = group.CanAccessInstallment,
+            CanManageUsers = group.CanManageUsers,
+            CreatedAtUtc = group.CreatedAtUtc.ToString("O")
+        };
+    }
+
+    public List<Guid> GetUserGroupIds(Guid userId) =>
+        _userGroups.TryGetValue(userId, out var set) ? set.ToList() : [];
+
+    public void SetUserGroups(Guid userId, IReadOnlyList<Guid> groupIds)
+    {
+        if (!_byId.ContainsKey(userId))
+            throw new InvalidOperationException("کاربر یافت نشد");
+        _userGroups[userId] = groupIds.Distinct().ToHashSet();
+    }
+
+    public List<(Guid UserId, Guid GroupId)> ListMemberships() =>
+        _userGroups.SelectMany(kv => kv.Value.Select(g => (kv.Key, g))).ToList();
+
+    public AppUserDto UpdateUser(Guid id, UpdateAppUserRequest req)
+    {
+        if (!_byId.TryGetValue(id, out var user))
+            throw new InvalidOperationException("کاربر یافت نشد");
+
+        if (req.IsAdmin.HasValue)
+            user.IsAdmin = req.IsAdmin.Value;
+        if (req.IsActive.HasValue)
+            user.IsActive = req.IsActive.Value;
+        if (req.GroupIds != null)
+            SetUserGroups(id, req.GroupIds);
+
+        return List().First(u => u.Id == id);
+    }
+
+    public void ResetPassword(Guid id, string password)
+    {
+        if (!_byId.TryGetValue(id, out var user))
+            throw new InvalidOperationException("کاربر یافت نشد");
+        user.PasswordHash = PasswordHasherUtil.Hash(password);
+    }
 }

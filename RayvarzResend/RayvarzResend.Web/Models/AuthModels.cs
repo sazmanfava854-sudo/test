@@ -45,6 +45,7 @@ public sealed class AppUserDto
     public bool IsAdmin { get; set; }
     public bool IsActive { get; set; }
     public string CreatedAtUtc { get; set; } = "";
+    public List<Guid> GroupIds { get; set; } = [];
 }
 
 public sealed class AuthSessionDto
@@ -58,6 +59,65 @@ public sealed class AuthSessionDto
     public string Position { get; set; } = "";
     public string District { get; set; } = "";
     public bool IsAdmin { get; set; }
+    public bool CanAccessUnsentFiches { get; set; }
+    public bool CanAccessInstallment { get; set; }
+    public bool CanManageUsers { get; set; }
+    public List<Guid> GroupIds { get; set; } = [];
+}
+
+public sealed class UserPermissionsDto
+{
+    public bool IsAdmin { get; set; }
+    public bool CanAccessUnsentFiches { get; set; }
+    public bool CanAccessInstallment { get; set; }
+    public bool CanManageUsers { get; set; }
+    public List<Guid> GroupIds { get; set; } = [];
+
+    public static UserPermissionsDto FullAdmin() => new()
+    {
+        IsAdmin = true,
+        CanAccessUnsentFiches = true,
+        CanAccessInstallment = true,
+        CanManageUsers = true
+    };
+}
+
+public sealed class AppUserGroupDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool CanAccessUnsentFiches { get; set; }
+    public bool CanAccessInstallment { get; set; }
+    public bool CanManageUsers { get; set; }
+    public string CreatedAtUtc { get; set; } = "";
+}
+
+public sealed class CreateAppUserGroupRequest
+{
+    public string? Name { get; set; }
+    public bool CanAccessUnsentFiches { get; set; }
+    public bool CanAccessInstallment { get; set; }
+    public bool CanManageUsers { get; set; }
+}
+
+public sealed class UpdateAppUserGroupRequest
+{
+    public string? Name { get; set; }
+    public bool CanAccessUnsentFiches { get; set; }
+    public bool CanAccessInstallment { get; set; }
+    public bool CanManageUsers { get; set; }
+}
+
+public sealed class UpdateAppUserRequest
+{
+    public bool? IsAdmin { get; set; }
+    public bool? IsActive { get; set; }
+    public List<Guid>? GroupIds { get; set; }
+}
+
+public sealed class ResetAppUserPasswordRequest
+{
+    public string? Password { get; set; }
 }
 
 public static class AuthPolicies

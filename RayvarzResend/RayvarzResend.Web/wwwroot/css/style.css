@@ -959,3 +959,15 @@ tbody tr:last-child td {
   margin-bottom: 12px;
 }
 
+.checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.user-edit-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #ddd);
+}
+

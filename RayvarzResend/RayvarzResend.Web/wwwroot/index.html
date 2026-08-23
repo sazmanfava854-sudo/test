@@ -38,13 +38,13 @@
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active admin-only" data-tab="unsent" role="tab" aria-selected="true" hidden>فیش های جمعی</button>
+      <button type="button" class="main-tab active perm-unsent" data-tab="unsent" role="tab" aria-selected="true" hidden>فیش های جمعی</button>
       <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
-      <button type="button" class="main-tab" data-tab="installment" role="tab" aria-selected="false">چک خزانه (تقسیط)</button>
-      <button type="button" class="main-tab admin-only" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
+      <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
+      <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
-    <div id="tabUnsent" class="tab-panel active admin-only" role="tabpanel" hidden>
+    <div id="tabUnsent" class="tab-panel active perm-unsent" role="tabpanel" hidden>
     <section class="card unsent-card card-enter">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📤</span>
@@ -93,7 +93,7 @@
       </div>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentPlan" class="btn secondary admin-only" type="button" disabled hidden>بررسی مسیر ارسال</button>
+        <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
@@ -192,7 +192,7 @@
         </div>
         <div class="actions">
           <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
-          <button id="btnPreview" class="btn secondary admin-only" type="button" disabled hidden>پیش‌نمایش XML</button>
+          <button id="btnPreview" class="btn secondary perm-unsent" type="button" disabled hidden>پیش‌نمایش XML</button>
           <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
         </div>
       </div>
@@ -240,7 +240,7 @@
     </section>
     </div>
 
-    <div id="tabInstallment" class="tab-panel" role="tabpanel" hidden>
+    <div id="tabInstallment" class="tab-panel perm-installment" role="tabpanel" hidden>
     <section class="card card-enter installment-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">🏦</span>
@@ -284,12 +284,6 @@
               </tr>
             </tbody>
           </table>
-          <p class="field-hint installment-template-note">
-            <strong>شماره سند</strong>: اعتبارسنجی کامل + عودت همیشه (ستون عودت خوانده نمی‌شود).<br>
-            <strong>کد پیگیری</strong>: فقط وجود در DB — عودت با ستون <code>عودت</code> (<code>1</code> یا <code>0</code>).<br>
-            <strong>مهم:</strong> ستون <code>شناسه</code> برای کد پیگیری باید <strong>Text</strong> باشد — اگر عدد شود، صفر اول حذف می‌شود (<code>0502…</code> → <code>502…</code>) یا به <code>5.02E+14</code> خراب می‌شود.<br>
-            سیستم صفر ابتدای از‌دست‌رفته را در جستجو تشخیص می‌دهد؛ بهتر است از «دانلود تمپلیت اکسل» استفاده کنید.
-          </p>
         </div>
         <div class="form-grid unsent-form-grid">
           <label class="field field-required installment-excel-field">
@@ -347,7 +341,51 @@
     </section>
     </div>
 
-    <div id="tabUsers" class="tab-panel admin-only" role="tabpanel" hidden>
+    <div id="tabUsers" class="tab-panel perm-users" role="tabpanel" hidden>
+      <section class="card card-enter">
+        <div class="card-head">
+          <span class="card-icon" aria-hidden="true">👥</span>
+          <h2>گروه‌های کاربری</h2>
+        </div>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">نام گروه</span>
+            <input id="newGroupName" type="text" autocomplete="off" />
+          </label>
+          <label class="field check-field">
+            <input id="newGroupUnsent" type="checkbox" />
+            <span>فیش‌های جمعی</span>
+          </label>
+          <label class="field check-field">
+            <input id="newGroupInstallment" type="checkbox" />
+            <span>چک خزانه</span>
+          </label>
+          <label class="field check-field">
+            <input id="newGroupUsers" type="checkbox" />
+            <span>مدیریت کاربران</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
+          <button id="btnRefreshGroups" class="btn secondary" type="button">بروزرسانی گروه‌ها</button>
+        </div>
+        <div class="subsection">
+          <div class="table-wrap">
+            <table id="groupsTable">
+              <thead>
+                <tr>
+                  <th>نام گروه</th>
+                  <th>فیش جمعی</th>
+                  <th>چک خزانه</th>
+                  <th>مدیریت کاربران</th>
+                  <th>عملیات</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
       <section class="card card-enter">
         <div class="card-head">
           <span class="card-icon" aria-hidden="true">👤</span>
@@ -407,11 +445,40 @@
                   <th>سمت</th>
                   <th>منطقه</th>
                   <th>نقش</th>
+                  <th>گروه‌ها</th>
                   <th>وضعیت</th>
+                  <th>عملیات</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
+          </div>
+        </div>
+        <div id="userEditPanel" class="subsection user-edit-panel" hidden>
+          <h3>ویرایش کاربر</h3>
+          <p id="userEditTitle" class="field-hint"></p>
+          <div class="form-grid unsent-form-grid">
+            <label class="field check-field">
+              <input id="editUserIsAdmin" type="checkbox" />
+              <span>دسترسی ادمین</span>
+            </label>
+            <label class="field check-field">
+              <input id="editUserIsActive" type="checkbox" />
+              <span>فعال</span>
+            </label>
+            <label class="field field-required">
+              <span class="field-label">گروه‌های کاربری</span>
+              <div id="editUserGroups" class="checkbox-list"></div>
+            </label>
+            <label class="field">
+              <span class="field-label">رمز عبور جدید</span>
+              <input id="editUserNewPassword" type="password" autocomplete="new-password" />
+            </label>
+          </div>
+          <div class="actions">
+            <button id="btnSaveUserEdit" class="btn primary" type="button">ذخیره تغییرات</button>
+            <button id="btnResetUserPassword" class="btn secondary" type="button">ریست رمز</button>
+            <button id="btnCancelUserEdit" class="btn secondary" type="button">انصراف</button>
           </div>
         </div>
         <pre id="usersResultBox" class="code-block" hidden></pre>
@@ -420,6 +487,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=37"></script>
+  <script src="js/app.js?v=38"></script>
 </body>
 </html>

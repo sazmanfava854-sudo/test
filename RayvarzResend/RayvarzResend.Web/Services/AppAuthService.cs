@@ -8,12 +8,18 @@ namespace RayvarzResend.Web.Services;
 public sealed class AppAuthService
 {
     private readonly AppUserRepository _users;
+    private readonly AppPermissionService _permissions;
     private readonly IConfiguration _config;
     private readonly ILogger<AppAuthService> _logger;
 
-    public AppAuthService(AppUserRepository users, IConfiguration config, ILogger<AppAuthService> logger)
+    public AppAuthService(
+        AppUserRepository users,
+        AppPermissionService permissions,
+        IConfiguration config,
+        ILogger<AppAuthService> logger)
     {
         _users = users;
+        _permissions = permissions;
         _config = config;
         _logger = logger;
     }
@@ -59,18 +65,26 @@ public sealed class AppAuthService
         return PasswordHasherUtil.Verify(password, user.PasswordHash) ? user : null;
     }
 
-    public static AuthSessionDto ToSession(AppUserRecord user) => new()
+    public async Task<AuthSessionDto> ToSessionAsync(AppUserRecord user, CancellationToken ct = default)
     {
-        Id = user.Id,
-        Username = user.Username,
-        FirstName = user.FirstName,
-        LastName = user.LastName,
-        NationalId = user.NationalId,
-        Position = user.Position,
-        District = user.District,
-        DisplayName = BuildDisplayName(user),
-        IsAdmin = user.IsAdmin
-    };
+        var perms = await _permissions.ResolveAsync(user, ct);
+        return new AuthSessionDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            NationalId = user.NationalId,
+            Position = user.Position,
+            District = user.District,
+            DisplayName = BuildDisplayName(user),
+            IsAdmin = user.IsAdmin,
+            CanAccessUnsentFiches = perms.CanAccessUnsentFiches,
+            CanAccessInstallment = perms.CanAccessInstallment,
+            CanManageUsers = perms.CanManageUsers,
+            GroupIds = perms.GroupIds
+        };
+    }
 
     public static string BuildDisplayName(AppUserRecord user)
     {
@@ -131,6 +145,6 @@ public sealed class AppAuthService
             return null;
 
         var user = await _users.FindByIdAsync(id.Value, ct);
-        return user is { IsActive: true } ? ToSession(user) : null;
+        return user is { IsActive: true } ? await ToSessionAsync(user, ct) : null;
     }
 }
