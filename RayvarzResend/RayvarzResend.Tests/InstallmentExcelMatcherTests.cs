@@ -126,6 +126,26 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
+    public void ValidateAgainstDb_TrackingNo_accepts_missing_leading_zero_in_excel()
+    {
+        var excel = new InstallmentExcelRowInput
+        {
+            Identifier = "502090614002610",
+            PaymentCost = "1",
+            PaymentDate = "1400/01/01"
+        };
+        var db = new InstallmentRowSnapshot
+        {
+            TrackingNo = "0502090614002610",
+            PaymentCost = 813516015m,
+            PaymentDate = "1405/05/05"
+        };
+
+        Assert.Null(InstallmentExcelMatcher.ValidateAgainstDb(
+            excel, db, InstallmentLookupKind.TrackingNo, "502090614002610"));
+    }
+
+    [Fact]
     public void ValidateAgainstDb_TrackingNo_skips_cost_and_date()
     {
         var excel = new InstallmentExcelRowInput

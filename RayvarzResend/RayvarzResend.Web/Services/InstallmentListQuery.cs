@@ -9,7 +9,13 @@ public static class InstallmentListQuery
         '0' + '-' + '-' + CAST(b.Apartment AS varchar(5)) + '-' + CAST(b.Shop AS varchar(5))
         """;
 
-    public static string BuildExcelLookupSql(string installmentListColumn) => $"""
+    public static string BuildExcelLookupSql(string installmentListColumn)
+    {
+        var where = installmentListColumn == "TrackingNo"
+            ? InstallmentIdentifierDetector.BuildTrackingNoWhereClause("il.TrackingNo")
+            : $"il.{installmentListColumn} = @v";
+
+        return $"""
         SELECT il.NoDocument,
                il.TrackingNo AS trackingno,
                il.PaymentCost,
@@ -26,6 +32,7 @@ public static class InstallmentListQuery
         INNER JOIN dbo.Installment_List il ON ins.NidInstallment = il.NidInstallment
         INNER JOIN dbo.Sh_RequestInfo r ON i.NidProc = r.NidProc
         INNER JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
-        WHERE il.{installmentListColumn} = @v
+        WHERE {where}
         """;
+    }
 }

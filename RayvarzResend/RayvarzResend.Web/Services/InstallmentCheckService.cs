@@ -210,6 +210,12 @@ public class InstallmentCheckService
             }
 
             var dbRow = rows[0];
+            if (kind == InstallmentLookupKind.TrackingNo)
+            {
+                lookupValue = InstallmentIdentifierDetector.ExtractDigits(dbRow.TrackingNo);
+                item.LookupValue = lookupValue;
+            }
+
             item.Found = true;
             item.NoDocument = dbRow.NoDocument;
             item.TrackingNo = dbRow.TrackingNo;
@@ -441,29 +447,36 @@ public class InstallmentCheckService
         InstallmentLookupKind kind,
         InstallmentRowSnapshot row,
         string performedByUser,
-        bool willApplyEndState) => new()
+        bool willApplyEndState)
     {
-        LookupValue = lookupValue,
-        DetectedLookupKind = kind,
-        Found = true,
-        DataMatches = true,
-        NoDocument = row.NoDocument,
-        TrackingNo = row.TrackingNo,
-        PaymentCost = FormatCost(row.PaymentCost),
-        PaymentDate = row.PaymentDate,
-        CI_InstallmentStatus = row.CI_InstallmentStatus,
-        EndStateDesc = row.EndStateDesc,
-        EndStateCode = row.EndStateCode,
-        Comments = row.Comments,
-        ProposedComments = InstallmentCheckHelper.BuildNewComments(performedByUser, row.Comments),
-        ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus,
-        ProposedEndStateDesc = willApplyEndState
-            ? InstallmentCheckHelper.EndStateDescOdooat
-            : row.EndStateDesc,
-        ProposedEndStateCode = willApplyEndState
-            ? InstallmentCheckHelper.EndStateCodeOdooat
-            : row.EndStateCode
-    };
+        var resolvedLookup = kind == InstallmentLookupKind.TrackingNo
+            ? InstallmentIdentifierDetector.ExtractDigits(row.TrackingNo)
+            : lookupValue;
+
+        return new InstallmentCheckPreviewItem
+        {
+            LookupValue = resolvedLookup,
+            DetectedLookupKind = kind,
+            Found = true,
+            DataMatches = true,
+            NoDocument = row.NoDocument,
+            TrackingNo = row.TrackingNo,
+            PaymentCost = FormatCost(row.PaymentCost),
+            PaymentDate = row.PaymentDate,
+            CI_InstallmentStatus = row.CI_InstallmentStatus,
+            EndStateDesc = row.EndStateDesc,
+            EndStateCode = row.EndStateCode,
+            Comments = row.Comments,
+            ProposedComments = InstallmentCheckHelper.BuildNewComments(performedByUser, row.Comments),
+            ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus,
+            ProposedEndStateDesc = willApplyEndState
+                ? InstallmentCheckHelper.EndStateDescOdooat
+                : row.EndStateDesc,
+            ProposedEndStateCode = willApplyEndState
+                ? InstallmentCheckHelper.EndStateCodeOdooat
+                : row.EndStateCode
+        };
+    }
 
     private static ParsedInstallmentRequest ParseRequest(InstallmentCheckRequest req)
     {
@@ -504,7 +517,9 @@ public class InstallmentCheckService
 
     private static string BuildUpdateSql(InstallmentLookupKind kind, bool withEndState)
     {
-        var whereColumn = kind == InstallmentLookupKind.NoDocument ? "NoDocument" : "TrackingNo";
+        var whereClause = kind == InstallmentLookupKind.NoDocument
+            ? "NoDocument = @v"
+            : InstallmentIdentifierDetector.BuildTrackingNoWhereClause("TrackingNo");
         var endStateSql = withEndState
             ? ", EndStateDesc = @endDesc, EndStateCode = @endCode"
             : "";
@@ -512,7 +527,7 @@ public class InstallmentCheckService
             UPDATE dbo.Installment_List
             SET Comments = @prefix + ISNULL(Comments, ''),
                 CI_InstallmentStatus = @status{endStateSql}
-            WHERE {whereColumn} = @v
+            WHERE {whereClause}
             """;
     }
 
@@ -527,7 +542,7 @@ public class InstallmentCheckService
 
         var rows = new List<InstallmentRowSnapshot>();
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@v", value);
+        cmd.Parameters.AddWithValue("@v", TrackingNoLookupParameter(kind, value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
@@ -569,6 +584,9 @@ public class InstallmentCheckService
         CancellationToken ct)
     {
         var column = kind == InstallmentLookupKind.NoDocument ? "NoDocument" : "TrackingNo";
+        var whereClause = kind == InstallmentLookupKind.TrackingNo
+            ? InstallmentIdentifierDetector.BuildTrackingNoWhereClause("TrackingNo")
+            : $"{column} = @v";
         var sql = $@"
 SELECT NoDocument, TrackingNo,
        PaymentCost,
@@ -576,11 +594,11 @@ SELECT NoDocument, TrackingNo,
        CAST(CI_InstallmentStatus AS varchar(20)) AS CI_InstallmentStatus,
        EndStateDesc, EndStateCode, Comments
 FROM dbo.Installment_List
-WHERE {column} = @v";
+WHERE {whereClause}";
 
         var rows = new List<InstallmentRowSnapshot>();
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@v", value);
+        cmd.Parameters.AddWithValue("@v", TrackingNoLookupParameter(kind, value));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
@@ -591,6 +609,11 @@ WHERE {column} = @v";
 
     private static string FormatCost(decimal? cost) =>
         cost?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+
+    private static string TrackingNoLookupParameter(InstallmentLookupKind kind, string value) =>
+        kind == InstallmentLookupKind.TrackingNo
+            ? InstallmentIdentifierDetector.ExtractDigits(value)
+            : value;
 }
 
 internal sealed record ParsedInstallmentRequest(

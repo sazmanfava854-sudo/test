@@ -244,7 +244,7 @@ function parseExcelCellValue(sheet, rowIdx, colIdx) {
 
 function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
   const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
-  sheet[ref] = { t: 's', v: String(value) };
+  sheet[ref] = { t: 's', v: String(value), w: String(value) };
 }
 
 function downloadInstallmentExcelTemplate() {

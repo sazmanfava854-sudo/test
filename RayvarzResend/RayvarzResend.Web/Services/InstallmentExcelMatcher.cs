@@ -139,8 +139,7 @@ public static class InstallmentExcelMatcher
   {
     if (lookupKind == InstallmentLookupKind.TrackingNo)
     {
-      var dbTracking = NormalizeDigits(db.TrackingNo);
-      if (!string.Equals(lookupValue, dbTracking, StringComparison.OrdinalIgnoreCase))
+      if (!InstallmentIdentifierDetector.TrackingNoDigitsMatch(excel.Identifier, db.TrackingNo))
         return "کد پیگیری (TrackingNo) با دیتابیس مطابقت ندارد";
       return null;
     }

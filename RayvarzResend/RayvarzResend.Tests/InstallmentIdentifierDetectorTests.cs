@@ -27,4 +27,14 @@ public class InstallmentIdentifierDetectorTests
         Assert.False(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.TrackingNo, false));
         Assert.True(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.TrackingNo, true));
     }
+
+    [Theory]
+    [InlineData("0502090614002610", "0502090614002610", true)]
+    [InlineData("502090614002610", "0502090614002610", true)]
+    [InlineData("0502090614002610", "502090614002610", true)]
+    [InlineData("502090614002610", "502090614002611", false)]
+    public void TrackingNoDigitsMatch_handles_missing_leading_zero(string a, string b, bool expected)
+    {
+        Assert.Equal(expected, InstallmentIdentifierDetector.TrackingNoDigitsMatch(a, b));
+    }
 }

@@ -287,7 +287,8 @@
           <p class="field-hint installment-template-note">
             <strong>شماره سند</strong>: اعتبارسنجی کامل + عودت همیشه (ستون ۴ خوانده نمی‌شود).<br>
             <strong>کد پیگیری</strong>: فقط وجود در DB — عودت با ستون ۴ (<code>1</code> یا <code>0</code>).<br>
-            <strong>مهم:</strong> ستون‌های <code>Identifier</code> و <code>PaymentCost</code> در اکسل باید <strong>Text</strong> باشند — اگر عدد شود، کد پیگیری به‌صورت <code>5.02E+14</code> خراب می‌شود و در DB پیدا نمی‌شود.
+            <strong>مهم:</strong> ستون <code>Identifier</code> برای کد پیگیری باید <strong>Text</strong> باشد — اگر عدد شود، صفر اول حذف می‌شود (<code>0502…</code> → <code>502…</code>) یا به <code>5.02E+14</code> خراب می‌شود.<br>
+            سیستم صفر ابتدای از‌دست‌رفته را در جستجو تشخیص می‌دهد؛ بهتر است از «دانلود تمپلیت اکسل» استفاده کنید.
           </p>
         </div>
         <div class="form-grid unsent-form-grid">
