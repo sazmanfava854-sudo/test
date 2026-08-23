@@ -178,10 +178,61 @@ const installmentLookupLabels = {
 
 let installmentMode = 'single';
 let installmentExcelRows = [];
+let installmentOdooatAutoProfile = null;
 
 function detectInstallmentKindFromIdentifier(identifier) {
   const digits = String(identifier || '').replace(/\D/g, '');
   return digits.length >= 10 ? 'TrackingNo' : 'NoDocument';
+}
+
+function parseInstallmentValueTokens(raw) {
+  return String(raw || '')
+    .split(/[\s,;]+/)
+    .map((s) => s.replace(/\D/g, ''))
+    .filter((s) => s.length > 0);
+}
+
+function syncInstallmentOdooatCheckbox() {
+  const checkbox = $('installmentApplyEndState');
+  const wrap = $('installmentEndStateWrap');
+  if (!checkbox || installmentMode !== 'single') return;
+
+  const hint = wrap?.querySelector('.field-hint');
+  const tokens = parseInstallmentValueTokens($('installmentValues')?.value);
+
+  if (tokens.length === 0) {
+    installmentOdooatAutoProfile = null;
+    checkbox.checked = false;
+    checkbox.disabled = false;
+    if (hint) {
+      hint.textContent = 'شماره سند: عودت پیش‌فرض — کد پیگیری: انتخابی';
+    }
+    return;
+  }
+
+  const kinds = tokens.map((t) => detectInstallmentKindFromIdentifier(t));
+  const allNoDocument = kinds.every((k) => k === 'NoDocument');
+  const allTracking = kinds.every((k) => k === 'TrackingNo');
+  const profile = allNoDocument ? 'nodoc' : allTracking ? 'tracking' : 'mixed';
+
+  if (profile === 'nodoc') {
+    checkbox.checked = true;
+    checkbox.disabled = true;
+    if (hint) hint.textContent = 'شماره سند — عودت همیشه اعمال می‌شود';
+  } else if (profile === 'tracking') {
+    checkbox.disabled = false;
+    if (installmentOdooatAutoProfile !== 'tracking') {
+      checkbox.checked = false;
+    }
+    if (hint) hint.textContent = 'کد پیگیری — عودت در صورت تیک خوردن اعمال می‌شود';
+  } else {
+    checkbox.disabled = false;
+    if (hint) {
+      hint.textContent = 'ترکیب شماره سند و کد پیگیری — عودت برای شماره سند همیشه؛ برای کد پیگیری با این تیک';
+    }
+  }
+
+  installmentOdooatAutoProfile = profile;
 }
 
 function setInstallmentMode(mode) {
@@ -203,6 +254,7 @@ function setInstallmentMode(mode) {
 
   $('installmentPreviewSection').hidden = true;
   if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
+  if (installmentMode === 'single') syncInstallmentOdooatCheckbox();
 }
 
 function normalizeExcelHeader(value) {
@@ -1163,6 +1215,7 @@ async function init() {
   if (installmentInput) {
     installmentInput.addEventListener('input', () => {
       installmentInput.value = installmentInput.value.replace(/\D/g, '');
+      syncInstallmentOdooatCheckbox();
     });
   }
 
@@ -1170,6 +1223,7 @@ async function init() {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
   setInstallmentMode('single');
+  syncInstallmentOdooatCheckbox();
 
   bindClick('btnInstallmentDownloadTemplate', downloadInstallmentExcelTemplate);
 
