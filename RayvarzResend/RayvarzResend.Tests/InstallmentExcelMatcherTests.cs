@@ -60,6 +60,32 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
+    public void ResolveWillApplyEndState_no_document_ignores_odooat_column()
+    {
+        var row = new InstallmentExcelRowInput { Odooat = "0" };
+        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.NoDocument, false, row, excelMode: true));
+    }
+
+    [Fact]
+    public void ResolveWillApplyEndState_tracking_excel_empty_column_defaults_false()
+    {
+        var row = new InstallmentExcelRowInput();
+        Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, true, row, excelMode: true));
+    }
+
+    [Fact]
+    public void ResolveWillApplyEndState_tracking_single_uses_checkbox_when_column_empty()
+    {
+        var row = new InstallmentExcelRowInput();
+        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, true, row, excelMode: false));
+        Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.TrackingNo, false, row, excelMode: false));
+    }
+
+    [Fact]
     public void ResolveWillApplyEndState_no_document_always_true()
     {
         var row = new InstallmentExcelRowInput { Odooat = "0" };
@@ -72,16 +98,11 @@ public class InstallmentExcelMatcherTests
     {
         var rowYes = new InstallmentExcelRowInput { Odooat = "1" };
         var rowNo = new InstallmentExcelRowInput { Odooat = "0" };
-        var rowEmpty = new InstallmentExcelRowInput();
 
         Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, false, rowYes));
+            InstallmentLookupKind.TrackingNo, false, rowYes, excelMode: true));
         Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, true, rowNo));
-        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, true, rowEmpty));
-        Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, false, rowEmpty));
+            InstallmentLookupKind.TrackingNo, true, rowNo, excelMode: true));
     }
 
     [Fact]

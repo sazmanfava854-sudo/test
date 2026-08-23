@@ -250,6 +250,11 @@
             <span class="field-label">شماره سند / کد پیگیری</span>
             <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
           </label>
+          <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
+            <input id="installmentApplyEndState" type="checkbox" />
+            <span>عودت</span>
+            <span class="field-hint">فقط برای کد پیگیری — شماره سند همیشه با عودت به‌روز می‌شود</span>
+          </label>
         </div>
       </div>
       <div id="installmentExcelPanel" class="installment-mode-panel" hidden>
@@ -269,14 +274,13 @@
                 <td><code>Identifier</code><br><span class="field-hint">شماره سند یا کد پیگیری</span></td>
                 <td><code>PaymentCost</code><br><span class="field-hint">مبلغ (ریال)</span></td>
                 <td><code>PaymentDate</code><br><span class="field-hint">تاریخ شمسی</span></td>
-                <td><code>Odooat</code> یا <code>عودت</code><br><span class="field-hint">۱/بله یا ۰/خیر — فقط کد پیگیری</span></td>
+                <td><code>Odooat</code> یا <code>عودت</code><br><span class="field-hint">فقط ردیف‌های کد پیگیری — ۱/بله یا ۰/خیر</span></td>
               </tr>
             </tbody>
           </table>
           <p class="field-hint installment-template-note">
-            <strong>شماره سند</strong> (کمتر از ۱۰ رقم): چک غیر بانک شهر — اعتبارسنجی کامل مبلغ/تاریخ + عودت <strong>اجباری</strong>.<br>
-            <strong>کد پیگیری</strong> (۱۰ رقم و بیشتر): بانک شهر — فقط وجود در DB؛ عودت با ستون ۴ یا تیک فرم (پیش‌فرض همه ردیف‌های کد پیگیری).<br>
-            مثال ستون ۴: برای ۵۰ ردیف عودت → <code>1</code>، برای ۹۵۰ ردیف بدون عودت → <code>0</code> یا خالی + تیک خاموش.
+            <strong>شماره سند</strong>: اعتبارسنجی کامل + عودت همیشه (ستون ۴ خوانده نمی‌شود).<br>
+            <strong>کد پیگیری</strong>: فقط وجود در DB — عودت با ستون ۴ (<code>1</code> یا <code>0</code> برای هر ردیف).
           </p>
         </div>
         <div class="form-grid unsent-form-grid">
@@ -292,13 +296,6 @@
         <div class="actions installment-template-actions">
           <button id="btnInstallmentDownloadTemplate" class="btn secondary" type="button">دانلود تمپلیت اکسل</button>
         </div>
-      </div>
-      <div class="form-grid unsent-form-grid">
-        <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
-          <input id="installmentApplyEndState" type="checkbox" />
-          <span>عودت برای کد پیگیری (پیش‌فرض دسته‌ای)</span>
-          <span class="field-hint">در اکسل ستون <code>Odooat</code> هر ردیف را جدا مشخص کنید — بدون تیک تک‌تک</span>
-        </label>
       </div>
       <div class="actions">
         <button id="btnInstallmentPreview" class="btn secondary" type="button">پیش‌نمایش</button>
@@ -415,6 +412,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=35"></script>
+  <script src="js/app.js?v=36"></script>
 </body>
 </html>

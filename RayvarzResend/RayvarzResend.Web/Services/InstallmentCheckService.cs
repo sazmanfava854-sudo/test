@@ -170,7 +170,7 @@ public class InstallmentCheckService
             var excelRow = parsed.ExcelRows[i];
             var (kind, lookupValue, lookupError) = InstallmentExcelMatcher.ResolveLookup(excelRow);
             var willApplyEndState = InstallmentExcelMatcher.ResolveWillApplyEndState(
-                kind, parsed.ApplyEndStateRequested, excelRow);
+                kind, parsed.ApplyEndStateRequested, excelRow, excelMode: true);
 
             var item = new InstallmentCheckPreviewItem
             {
@@ -180,7 +180,9 @@ public class InstallmentCheckService
                 ExcelIdentifier = InstallmentExcelMatcher.NormalizeCell(excelRow.Identifier),
                 ExcelPaymentCost = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentCost),
                 ExcelPaymentDate = InstallmentExcelMatcher.NormalizeCell(excelRow.PaymentDate),
-                ExcelOdooat = InstallmentExcelMatcher.NormalizeCell(excelRow.Odooat),
+                ExcelOdooat = kind == InstallmentLookupKind.TrackingNo
+                    ? InstallmentExcelMatcher.NormalizeCell(excelRow.Odooat)
+                    : null,
                 WillApplyEndState = willApplyEndState
             };
 

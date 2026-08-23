@@ -77,11 +77,12 @@ public static class InstallmentExcelMatcher
     return null;
   }
 
-  /// <summary>NoDocument همیشه عودت — TrackingNo از ستون اکسل یا تیک فرم.</summary>
+  /// <summary>NoDocument همیشه عودت — ستون Odooat نادیده. TrackingNo فقط از ستون اکسل.</summary>
   public static bool ResolveWillApplyEndState(
     InstallmentLookupKind kind,
     bool globalApplyEndStateRequested,
-    InstallmentExcelRowInput row)
+    InstallmentExcelRowInput row,
+    bool excelMode = false)
   {
     if (kind == InstallmentLookupKind.NoDocument)
       return true;
@@ -90,12 +91,12 @@ public static class InstallmentExcelMatcher
     if (rowFlag.HasValue)
       return rowFlag.Value;
 
-    return globalApplyEndStateRequested;
+    return excelMode ? false : globalApplyEndStateRequested;
   }
 
   public static string DescribeOdooatPlan(InstallmentLookupKind kind, bool willApplyEndState) =>
     kind == InstallmentLookupKind.NoDocument
-      ? "اجباری"
+      ? "همیشه"
       : willApplyEndState ? "بله" : "خیر";
 
   public static string? ValidateAgainstDb(

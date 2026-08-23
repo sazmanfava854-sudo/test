@@ -179,6 +179,11 @@ const installmentLookupLabels = {
 let installmentMode = 'single';
 let installmentExcelRows = [];
 
+function detectInstallmentKindFromIdentifier(identifier) {
+  const digits = String(identifier || '').replace(/\D/g, '');
+  return digits.length >= 10 ? 'TrackingNo' : 'NoDocument';
+}
+
 function setInstallmentMode(mode) {
   installmentMode = mode === 'excel' ? 'excel' : 'single';
   document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
@@ -226,7 +231,7 @@ function downloadInstallmentExcelTemplate() {
   }
   const rows = [
     ['Identifier', 'PaymentCost', 'PaymentDate', 'Odooat'],
-    ['809552', '20335141229', '1405/09/25', ''],
+    ['809552', '20335141229', '1405/09/25'],
     ['0502090614002610', '813516015', '1405/05/05', '1'],
     ['0212280614002187', '500000000', '1405/06/01', '0']
   ];
@@ -274,8 +279,12 @@ function parseInstallmentExcelFile(file) {
             identifier: String(row[col.identifier] ?? '').trim(),
             paymentCost: String(row[col.paymentCost] ?? '').trim(),
             paymentDate: String(row[col.paymentDate] ?? '').trim(),
-            odooat: col.odooat != null ? String(row[col.odooat] ?? '').trim() : ''
+            odooat: ''
           };
+          if (detectInstallmentKindFromIdentifier(item.identifier) === 'TrackingNo'
+            && col.odooat != null) {
+            item.odooat = String(row[col.odooat] ?? '').trim();
+          }
           if (!item.identifier && !item.paymentCost && !item.paymentDate) continue;
           parsed.push(item);
         }
@@ -301,6 +310,7 @@ function getInstallmentPayload() {
   if (installmentMode === 'excel') {
     return {
       ...base,
+      applyEndState: false,
       excelRows: installmentExcelRows.map((r) => ({
         identifier: r.identifier || '',
         paymentCost: r.paymentCost || '',
@@ -348,7 +358,7 @@ function formatNosaziCode(value) {
 }
 
 function formatOdooatPlan(row, kind) {
-  if (kind === 'NoDocument') return 'اجباری';
+  if (kind === 'NoDocument') return 'همیشه';
   return row.willApplyEndState ? 'بله' : 'خیر';
 }
 
