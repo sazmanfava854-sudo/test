@@ -286,7 +286,8 @@
           </table>
           <p class="field-hint installment-template-note">
             <strong>شماره سند</strong>: اعتبارسنجی کامل + عودت همیشه (ستون ۴ خوانده نمی‌شود).<br>
-            <strong>کد پیگیری</strong>: فقط وجود در DB — عودت با ستون ۴ (<code>1</code> یا <code>0</code> برای هر ردیف).
+            <strong>کد پیگیری</strong>: فقط وجود در DB — عودت با ستون ۴ (<code>1</code> یا <code>0</code>).<br>
+            <strong>مهم:</strong> ستون‌های <code>Identifier</code> و <code>PaymentCost</code> در اکسل باید <strong>Text</strong> باشند — اگر عدد شود، کد پیگیری به‌صورت <code>5.02E+14</code> خراب می‌شود و در DB پیدا نمی‌شود.
           </p>
         </div>
         <div class="form-grid unsent-form-grid">
@@ -418,6 +419,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=36"></script>
+  <script src="js/app.js?v=37"></script>
 </body>
 </html>

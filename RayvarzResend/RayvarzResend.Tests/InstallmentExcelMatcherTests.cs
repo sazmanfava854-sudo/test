@@ -166,6 +166,14 @@ public class InstallmentExcelMatcherTests
         Assert.Contains("PaymentCost", message);
     }
 
+    [Theory]
+    [InlineData("5.02091E+14", true)]
+    [InlineData("0502090614002610", false)]
+    public void LooksLikeScientificNotation_detects_excel_damage(string raw, bool expected)
+    {
+        Assert.Equal(expected, InstallmentExcelMatcher.LooksLikeScientificNotation(raw));
+    }
+
     [Fact]
     public void RequiredColumnNames_has_three_columns()
     {

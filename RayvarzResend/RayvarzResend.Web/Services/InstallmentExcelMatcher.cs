@@ -17,6 +17,12 @@ public static class InstallmentExcelMatcher
 
   public static string NormalizeCell(string? raw) => (raw ?? "").Trim();
 
+  public static bool LooksLikeScientificNotation(string? raw)
+  {
+    var t = NormalizeCell(raw);
+    return System.Text.RegularExpressions.Regex.IsMatch(t, @"e[+-]?\d", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+  }
+
   public static string NormalizeDigits(string? raw) =>
     new string((raw ?? "").Where(char.IsDigit).ToArray());
 

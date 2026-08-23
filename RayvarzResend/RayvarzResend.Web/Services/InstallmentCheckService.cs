@@ -196,7 +196,9 @@ public class InstallmentCheckService
             var rows = await LoadRowsForExcelAsync(conn, kind, lookupValue, ct);
             if (rows.Count == 0)
             {
-                item.ValidationMessage = "در دیتابیس یافت نشد";
+                item.ValidationMessage = InstallmentExcelMatcher.LooksLikeScientificNotation(excelRow.Identifier)
+                    ? "کد پیگیری در اکسل نادرست خوانده شد (فرمت علمی مثل 5.02E+14) — ستون Identifier را Text کنید"
+                    : "در دیتابیس یافت نشد";
                 result.Items.Add(item);
                 continue;
             }

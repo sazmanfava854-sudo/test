@@ -224,6 +224,29 @@ function mapExcelHeaderIndex(headers) {
   return map;
 }
 
+function hasScientificNotation(text) {
+  return /e[+-]?\d+/i.test(String(text ?? '').trim());
+}
+
+function parseExcelCellValue(sheet, rowIdx, colIdx) {
+  const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+  const cell = sheet[ref];
+  if (!cell) return '';
+  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
+  if (cell.t === 's') return String(cell.v ?? '').trim();
+  if (cell.t === 'n' && Number.isFinite(cell.v)) {
+    const n = cell.v;
+    if (Number.isInteger(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER) return String(Math.trunc(n));
+    return String(n);
+  }
+  return String(cell.v ?? '').trim();
+}
+
+function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
+  const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+  sheet[ref] = { t: 's', v: String(value) };
+}
+
 function downloadInstallmentExcelTemplate() {
   if (typeof XLSX === 'undefined') {
     alert('کتابخانه اکسل بارگذاری نشد');
@@ -231,11 +254,17 @@ function downloadInstallmentExcelTemplate() {
   }
   const rows = [
     ['Identifier', 'PaymentCost', 'PaymentDate', 'Odooat'],
-    ['809552', '20335141229', '1405/09/25'],
+    ['75360', '661900000', '1405/05/05'],
     ['0502090614002610', '813516015', '1405/05/05', '1'],
-    ['0212280614002187', '500000000', '1405/06/01', '0']
+    ['0502140614004800', '3157507100', '1405/05/05', '0']
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
+  rows.forEach((row, r) => {
+    row.forEach((val, c) => {
+      if (val != null && val !== '') setSheetCellAsText(sheet, r, c, val);
+    });
+  });
+  sheet['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 8 }];
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Installment');
   XLSX.writeFile(book, 'installment-check-template.xlsx');
@@ -251,19 +280,26 @@ function parseInstallmentExcelFile(file) {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const workbook = XLSX.read(data, { type: 'array', cellText: true, cellDates: false });
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) {
           reject(new Error('برگه‌ای در فایل اکسل یافت نشد'));
           return;
         }
-        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
-        if (!rows.length) {
+        const sheet = workbook.Sheets[sheetName];
+        const range = sheet?.['!ref']
+          ? XLSX.utils.decode_range(sheet['!ref'])
+          : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+
+        const headerRow = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          headerRow.push(parseExcelCellValue(sheet, range.s.r, c));
+        }
+        if (!headerRow.length) {
           reject(new Error('فایل اکسل خالی است'));
           return;
         }
 
-        const headerRow = rows[0].map((c) => String(c || '').trim());
         const col = mapExcelHeaderIndex(headerRow);
         const required = ['identifier', 'paymentCost', 'paymentDate'];
         const missing = required.filter((k) => col[k] == null);
@@ -273,17 +309,33 @@ function parseInstallmentExcelFile(file) {
         }
 
         const parsed = [];
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i] || [];
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const identifier = parseExcelCellValue(sheet, r, col.identifier);
+          const paymentCost = parseExcelCellValue(sheet, r, col.paymentCost);
+          const paymentDate = parseExcelCellValue(sheet, r, col.paymentDate);
+
+          if (hasScientificNotation(identifier)) {
+            reject(new Error(
+              `ردیف ${r + 1}: شناسه «${identifier}» به‌صورت علمی خوانده شد. ستون Identifier را در اکسل Text کنید و فایل را دوباره بارگذاری کنید.`
+            ));
+            return;
+          }
+          if (hasScientificNotation(paymentCost)) {
+            reject(new Error(
+              `ردیف ${r + 1}: مبلغ «${paymentCost}» به‌صورت علمی است. ستون PaymentCost را Text کنید.`
+            ));
+            return;
+          }
+
           const item = {
-            identifier: String(row[col.identifier] ?? '').trim(),
-            paymentCost: String(row[col.paymentCost] ?? '').trim(),
-            paymentDate: String(row[col.paymentDate] ?? '').trim(),
+            identifier: identifier.trim(),
+            paymentCost: paymentCost.trim(),
+            paymentDate: paymentDate.trim(),
             odooat: ''
           };
           if (detectInstallmentKindFromIdentifier(item.identifier) === 'TrackingNo'
             && col.odooat != null) {
-            item.odooat = String(row[col.odooat] ?? '').trim();
+            item.odooat = parseExcelCellValue(sheet, r, col.odooat).trim();
           }
           if (!item.identifier && !item.paymentCost && !item.paymentDate) continue;
           parsed.push(item);
