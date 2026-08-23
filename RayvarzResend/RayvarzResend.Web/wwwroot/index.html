@@ -358,6 +358,8 @@
         </div>
         <div class="actions">
           <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
+          <button id="btnSaveGroupEdit" class="btn primary" type="button" hidden>ذخیره</button>
+          <button id="btnCancelGroupEdit" class="btn secondary" type="button" hidden>انصراف</button>
           <button id="btnRefreshGroups" class="btn secondary" type="button">بروزرسانی گروه‌ها</button>
         </div>
         <div class="subsection">
@@ -459,8 +461,7 @@
             </label>
             <label class="field">
               <span class="field-label">گروه‌های کاربری</span>
-              <div id="editUserGroups" class="checkbox-list"></div>
-              <span class="field-hint">برای کاربر ادمین، گروه اختیاری است؛ برای کاربر منطقه‌ای دسترسی فرم‌ها از گروه‌ها تعیین می‌شود.</span>
+              <select id="editUserGroups" class="user-groups-select" multiple></select>
             </label>
           </div>
           <div class="actions">
@@ -469,7 +470,6 @@
           </div>
           <div class="subsection user-password-reset-panel">
             <h4>تغییر رمز عبور</h4>
-            <p class="field-hint">این بخش جدا از «ذخیره تغییرات» است — برای تغییر رمز لازم نیست دکمه ذخیره را بزنید.</p>
             <div class="form-grid unsent-form-grid">
               <label class="field">
                 <span class="field-label">رمز عبور جدید</span>
@@ -487,6 +487,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=41"></script>
+  <script src="js/app.js?v=42"></script>
 </body>
 </html>

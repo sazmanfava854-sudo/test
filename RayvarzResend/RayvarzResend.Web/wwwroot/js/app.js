@@ -986,19 +986,29 @@ async function loadGroupsTable() {
   tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
     btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
   });
-  renderUserGroupCheckboxes(resolveUserGroupSelectionForRender());
+  renderUserGroupSelect(resolveUserGroupSelectionForRender());
+  setGroupEditMode(!!editingGroupId);
+}
+
+function setGroupEditMode(editing) {
+  const createBtn = $('btnCreateGroup');
+  const saveBtn = $('btnSaveGroupEdit');
+  const cancelBtn = $('btnCancelGroupEdit');
+  if (createBtn) createBtn.hidden = editing;
+  if (saveBtn) saveBtn.hidden = !editing;
+  if (cancelBtn) cancelBtn.hidden = !editing;
 }
 
 function openGroupEdit(groupId) {
-  const group = cachedGroups.find((g) => String(g.id) === String(groupId));
+  const group = cachedGroups.find((g) => normalizeGuid(g.id) === normalizeGuid(groupId));
   if (!group) return;
   editingGroupId = group.id;
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
-  const btn = $('btnCreateGroup');
-  if (btn) btn.textContent = 'بروزرسانی گروه';
+  setGroupEditMode(true);
+  $('newGroupName')?.focus();
 }
 
 function resetGroupForm() {
@@ -1007,8 +1017,7 @@ function resetGroupForm() {
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
-  const btn = $('btnCreateGroup');
-  if (btn) btn.textContent = 'ثبت گروه';
+  setGroupEditMode(false);
 }
 
 async function saveGroupFromForm() {
@@ -1019,12 +1028,29 @@ async function saveGroupFromForm() {
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
-  const url = editingGroupId
-    ? `/api/admin/groups/${editingGroupId}`
-    : '/api/admin/groups';
-  const method = editingGroupId ? 'PUT' : 'POST';
-  const res = await apiFetch(url, {
-    method,
+  const res = await apiFetch('/api/admin/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  resetGroupForm();
+  await loadGroupsTable();
+  await loadUsersTable();
+}
+
+async function saveGroupEdit() {
+  if (!editingGroupId) return;
+  const payload = {
+    name: ($('newGroupName')?.value || '').trim(),
+    canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
+    canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canManageUsers: !!$('newGroupUsers')?.checked
+  };
+  if (!payload.name) return alert('نام گروه الزامی است');
+  const res = await apiFetch(`/api/admin/groups/${editingGroupId}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
@@ -1048,33 +1074,32 @@ function normalizeGuid(value) {
 }
 
 function getSelectedUserGroupIds() {
-  const ids = [];
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
-    ids.push(cb.dataset.groupId);
-  });
-  return ids;
+  const select = $('editUserGroups');
+  if (!select) return [];
+  return Array.from(select.selectedOptions).map((opt) => opt.value);
 }
 
-function renderUserGroupCheckboxes(selectedIds = null) {
-  const host = $('editUserGroups');
-  if (!host) return;
-  host.innerHTML = '';
+function renderUserGroupSelect(selectedIds = null) {
+  const select = $('editUserGroups');
+  if (!select) return;
+  const selected = new Set((selectedIds || []).map(normalizeGuid));
+  select.innerHTML = '';
   if (!cachedGroups.length) {
-    host.innerHTML = '<span class="field-hint">ابتدا یک گروه کاربری ثبت کنید.</span>';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'گروهی ثبت نشده';
+    opt.disabled = true;
+    select.appendChild(opt);
+    select.disabled = true;
     return;
   }
-  const selected = new Set((selectedIds || []).map(normalizeGuid));
+  select.disabled = false;
   cachedGroups.forEach((g) => {
-    const label = document.createElement('label');
-    label.className = 'check-field';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = g.id;
-    input.dataset.groupId = g.id;
-    input.checked = selected.has(normalizeGuid(g.id));
-    label.appendChild(input);
-    label.appendChild(document.createTextNode(g.name));
-    host.appendChild(label);
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    opt.selected = selected.has(normalizeGuid(g.id));
+    select.appendChild(opt);
   });
 }
 
@@ -1093,7 +1118,7 @@ function openUserEdit(userId) {
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
   if ($('editUserResetPassword')) $('editUserResetPassword').value = '';
-  renderUserGroupCheckboxes(user.groupIds || []);
+  renderUserGroupSelect(user.groupIds || []);
 }
 
 function closeUserEdit() {
@@ -1104,11 +1129,7 @@ function closeUserEdit() {
 }
 
 function collectUserGroupIdsForSave() {
-  const groupIds = [];
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
-    groupIds.push(cb.dataset.groupId);
-  });
-  return groupIds;
+  return getSelectedUserGroupIds().filter((id) => id);
 }
 
 async function saveUserEdit() {
@@ -1131,14 +1152,14 @@ async function saveUserEdit() {
   if (updated) {
     const idx = cachedUsers.findIndex((u) => normalizeGuid(u.id) === normalizeGuid(editingUserId));
     if (idx >= 0) cachedUsers[idx] = updated;
-    renderUserGroupCheckboxes(updated.groupIds || []);
+    renderUserGroupSelect(updated.groupIds || []);
   }
 
   await loadUsersTable();
   const box = $('usersResultBox');
   if (box) {
     box.hidden = false;
-    box.textContent = 'تغییرات کاربر (ادمین، فعال، گروه‌ها) ذخیره شد. رمز عبور تغییر نکرد.';
+    box.textContent = 'تغییرات کاربر ذخیره شد.';
   }
 }
 
@@ -1870,6 +1891,14 @@ function setupAuthAndAdminHandlers() {
       alert(e.message);
     }
   });
+  bindClick('btnSaveGroupEdit', async () => {
+    try {
+      await saveGroupEdit();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+  bindClick('btnCancelGroupEdit', resetGroupForm);
   bindClick('btnRefreshGroups', loadGroupsTable);
   bindClick('btnSaveUserEdit', async () => {
     try {

@@ -982,3 +982,7 @@ tbody tr:last-child td {
   font-size: 1rem;
 }
 
+.user-groups-select {
+  min-height: 6.5rem;
+}
+
