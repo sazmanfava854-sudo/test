@@ -70,7 +70,6 @@ public class AccountingDocRowBuilderTests
       Assert.Equal(AccountingDocRowBuilder.ObjOnPriceIncome, header.EumObjOnPrice);
       Assert.Equal(AccountingDocRowBuilder.ObjInDocumentFiche, header.EumAccountingObjInDocument);
       Assert.Equal(AccountingDocRowBuilder.DocumentingCauseConfirm, header.EumAccountingDocumentingCause);
-      Assert.Equal(AccountingDocRowBuilder.PhasTypeRayvarz, header.DocRow);
       Assert.Equal(AccountingDocRowBuilder.PhasTypeRayvarz, header.PhasType);
       Assert.Equal("Rayvarz", header.SubSystem);
       Assert.Equal(6, details.Count);

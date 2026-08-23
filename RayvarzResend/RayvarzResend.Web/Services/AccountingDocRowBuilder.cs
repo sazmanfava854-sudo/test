@@ -66,7 +66,7 @@ public static class AccountingDocRowBuilder
             DocDate = $"{pc.GetYear(now):0000}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}",
             DocTime = now.ToString("HH:mm:ss"),
             EumObjOnPrice = ResolveObjOnPrice(fiche),
-            DocRow = PhasTypeRayvarz,
+            DocRow = ResolveDocRow(fiche),
             FicheNo = fiche.FicheNo.Trim(),
             NidFiche = fiche.NidFiche
         };
@@ -149,6 +149,10 @@ public static class AccountingDocRowBuilder
             FicheCategory.DutyNosazi => ObjOnPriceNosazi,
             _ => ObjOnPriceIncome
         };
+
+    /// <summary>Member 1388: درآمد PhasType=7؛ نوسازی/صنفی DocRow=1.</summary>
+    private static int ResolveDocRow(FicheHeaderDto fiche) =>
+        fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? 1 : PhasTypeRayvarz;
 
     private static int ResolvePaymentDateCompact(FicheHeaderDto fiche)
     {
