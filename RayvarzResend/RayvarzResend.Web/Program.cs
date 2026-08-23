@@ -95,10 +95,28 @@ app.UseExceptionHandler(handler =>
     });
 });
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// index.html بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value ?? "";
+    if (path.Equals("/", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
+    {
+        if (context.User?.Identity?.IsAuthenticated != true)
+        {
+            context.Response.Redirect("/login.html");
+            return;
+        }
+    }
+
+    await next();
+});
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 var authenticated = AuthPolicies.Authenticated;
 var adminOnly = AuthPolicies.AdminOnly;

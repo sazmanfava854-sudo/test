@@ -811,6 +811,7 @@ async function ensureAuthenticated() {
     return false;
   }
   currentUser = await res.json();
+  document.body.classList.add('app-authenticated');
   applyAuthUi();
   return true;
 }
