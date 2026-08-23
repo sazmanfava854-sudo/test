@@ -892,12 +892,14 @@ tbody tr:last-child td {
   background: rgba(234, 179, 8, 0.08);
 }
 
+.sub-mode-tabs,
 .installment-mode-tabs {
   display: flex;
   gap: 8px;
   margin-bottom: 14px;
 }
 
+.sub-mode-tab,
 .installment-mode-tab {
   padding: 8px 16px;
   border: 1px solid var(--border);
@@ -908,6 +910,7 @@ tbody tr:last-child td {
   font-size: 0.9rem;
 }
 
+.sub-mode-tab.active,
 .installment-mode-tab.active {
   background: var(--primary);
   color: #fff;

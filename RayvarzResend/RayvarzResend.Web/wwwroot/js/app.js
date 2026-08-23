@@ -132,8 +132,7 @@ function formatShamsiDisplay(yyyymmdd) {
 function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
-    unsent: $('tabUnsent'),
-    single: $('tabSingle'),
+    rayvarz: $('tabRayvarz'),
     installment: $('tabInstallment'),
     users: $('tabUsers')
   };
@@ -148,8 +147,7 @@ function setupMainTabs() {
 }
 
 function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
-  unsent: $('tabUnsent'),
-  single: $('tabSingle'),
+  rayvarz: $('tabRayvarz'),
   installment: $('tabInstallment'),
   users: $('tabUsers')
 }) {
@@ -168,6 +166,35 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
 
 function getSingleFicheKind() {
   return $('singleFicheKind')?.value || 'Income';
+}
+
+let rayvarzMode = 'single';
+
+function setRayvarzMode(mode) {
+  const requested = mode === 'batch' ? 'batch' : 'single';
+  if (requested === 'batch' && !canAccessUnsent()) {
+    rayvarzMode = 'single';
+  } else {
+    rayvarzMode = requested;
+  }
+
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    if (btn.hidden) return;
+    const active = btn.dataset.rayvarzMode === rayvarzMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  const singlePanel = $('rayvarzSinglePanel');
+  const batchPanel = $('rayvarzBatchPanel');
+  if (singlePanel) singlePanel.hidden = rayvarzMode !== 'single';
+  if (batchPanel) batchPanel.hidden = rayvarzMode !== 'batch';
+
+  if (rayvarzMode === 'batch') {
+    document.querySelectorAll('.rayvarz-single-only').forEach((el) => {
+      el.hidden = true;
+    });
+  }
 }
 
 const installmentLookupLabels = {
@@ -885,8 +912,19 @@ function applyPermissionUi() {
 }
 
 function defaultMainTabKey() {
-  if (canAccessUnsent()) return 'unsent';
-  return 'single';
+  return 'rayvarz';
+}
+
+function refreshUserRoleBadge() {
+  const badge = $('userRoleBadge');
+  if (!badge || !currentUser) return;
+  const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
+  badge.textContent = isAdminUser()
+    ? 'ادمین'
+    : isCenterUser()
+      ? 'شعبه مرکز (۱۰۲)'
+      : (districtLabel && districtLabel !== '—' ? districtLabel : 'کاربر');
+  badge.className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
 }
 
 function applyAuthUi() {
@@ -896,15 +934,10 @@ function applyAuthUi() {
   if (heroUser && currentUser) {
     heroUser.hidden = false;
     $('userDisplayName').textContent = currentUser.displayName || currentUser.username;
-    const districtLabel = getUserDistrict() ? districtLabelFromValue(getUserDistrict()) : '';
-    $('userRoleBadge').textContent = isAdminUser()
-      ? 'ادمین'
-      : isCenterUser()
-        ? 'کاربر — شعبه مرکز'
-        : (districtLabel ? `کاربر — ${districtLabel}` : 'کاربر');
-    $('userRoleBadge').className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
+    refreshUserRoleBadge();
   }
 
+  setRayvarzMode(canAccessUnsent() ? rayvarzMode : 'single');
   activateMainTab(defaultMainTabKey());
 }
 
@@ -922,9 +955,13 @@ async function ensureAuthenticated() {
 
 function districtLabelFromValue(value) {
   if (!value) return '—';
-  if (String(value) === '102') return 'شعبه مرکز (۱۰۲)';
-  const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
-  return branch ? branch.name : value;
+  const d = String(value).trim();
+  if (d === '102') return 'شعبه مرکز (۱۰۲)';
+  if (d === '218') return 'منطقه ثامن';
+  const n = parseInt(d, 10);
+  if (!Number.isNaN(n) && n >= 1 && n <= 12) return `منطقه ${n}`;
+  const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === d);
+  return branch ? branch.name : d;
 }
 
 async function loadUsersTable() {
@@ -1416,6 +1453,7 @@ async function init() {
     const res = await apiFetch('/api/config');
     config = await parseJsonResponse(res);
     syncInstallmentDryRunUi();
+    refreshUserRoleBadge();
   } catch (e) {
     alert(e.message);
     return;
@@ -1427,11 +1465,24 @@ async function init() {
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
   fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
   applyRegionalUserRestrictions();
+
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.hidden) return;
+      setRayvarzMode(btn.dataset.rayvarzMode);
+    });
+  });
+  setRayvarzMode('single');
+
   config.branches.forEach(b => {
     const optFund = document.createElement('option');
     optFund.value = b.fund;
     optFund.textContent = `${b.fund} — ${b.name}`;
     fundSel.appendChild(optFund);
+  });
+
+  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+    btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
 
   branchSel.onchange = () => { syncFundFromBranch(); if (currentFiche) renderMappingTable(currentFiche); };
@@ -1448,9 +1499,6 @@ async function init() {
     });
   }
 
-  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
-    btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
-  });
   setInstallmentMode('single');
   syncInstallmentOdooatCheckbox();
 
