@@ -117,6 +117,11 @@ public class IncmRowDto
     public string? Num { get; set; }
 }
 
+public class RuleDslParsePreviewRequest
+{
+    public string? XmlBody { get; set; }
+}
+
 /// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1.</summary>
 public class IncomeOddmentDto
 {

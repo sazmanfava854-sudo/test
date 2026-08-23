@@ -23,4 +23,8 @@
     <ProjectReference Include="..\RayvarzResend.Web\RayvarzResend.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\RayvarzResend.Web\RuleEngine\Parser\Fixtures\member-1388-sample.xml" Link="Fixtures\member-1388-sample.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

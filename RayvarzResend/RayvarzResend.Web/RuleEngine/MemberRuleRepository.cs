@@ -63,7 +63,63 @@ public sealed class MemberRuleRepository
             VersionDateTime = reader.IsDBNull(reader.GetOrdinal("VersionDateTime"))
                 ? null
                 : reader.GetDateTime(reader.GetOrdinal("VersionDateTime")),
-            Source = "DbRuleEngein"
+            Source = "DbRuleEngein.Member"
+        };
+    }
+
+    /// <summary>آخرین رکورد MemberHistory برای تشخیص تغییر قانون.</summary>
+    public async Task<MemberHistoryRecord?> LoadLatestHistoryAsync(int nidMember, CancellationToken ct = default)
+    {
+        var cs = _config.GetConnectionString("RuleEngine") ?? _config["RuleEngine:ConnectionString"];
+        if (string.IsNullOrWhiteSpace(cs))
+            return null;
+
+        const string sql = """
+            SELECT TOP 1
+                h.NidHistory,
+                h.NidClass,
+                h.NidMember,
+                h.XmlBody,
+                h.Modifyer,
+                h.ModifyDesc,
+                h.ModifyDate,
+                h.ModifyTime
+            FROM dbo.MemberHistory h
+            WHERE h.NidMember = @nid
+            ORDER BY h.NidHistory DESC
+            """;
+
+        await using var conn = new SqlConnection(cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return null;
+
+        var xmlBody = reader.IsDBNull(reader.GetOrdinal("XmlBody"))
+            ? ""
+            : reader.GetString(reader.GetOrdinal("XmlBody"));
+
+        var modifyDate = reader.IsDBNull(reader.GetOrdinal("ModifyDate"))
+            ? null
+            : reader.GetValue(reader.GetOrdinal("ModifyDate"));
+        var modifyTime = reader.IsDBNull(reader.GetOrdinal("ModifyTime"))
+            ? null
+            : reader.GetValue(reader.GetOrdinal("ModifyTime"));
+
+        return new MemberHistoryRecord
+        {
+            NidHistory = Convert.ToInt64(reader.GetValue(reader.GetOrdinal("NidHistory"))),
+            NidClass = reader.IsDBNull(reader.GetOrdinal("NidClass")) ? 0 : reader.GetInt32(reader.GetOrdinal("NidClass")),
+            NidMember = reader.GetInt32(reader.GetOrdinal("NidMember")),
+            XmlBody = xmlBody,
+            Modifyer = reader.IsDBNull(reader.GetOrdinal("Modifyer")) ? null : reader.GetString(reader.GetOrdinal("Modifyer")),
+            ModifyDesc = reader.IsDBNull(reader.GetOrdinal("ModifyDesc")) ? null : reader.GetString(reader.GetOrdinal("ModifyDesc")),
+            ModifyDateRaw = modifyDate?.ToString(),
+            ModifyTimeRaw = modifyTime?.ToString(),
+            ModifyDateTime = MemberHistoryDateParser.CombineModifyDateTime(modifyDate, modifyTime)
         };
     }
 }
@@ -75,4 +131,17 @@ public sealed class MemberRuleRecord
     public int Version { get; init; }
     public DateTime? VersionDateTime { get; init; }
     public string Source { get; init; } = "";
+}
+
+public sealed class MemberHistoryRecord
+{
+    public long NidHistory { get; init; }
+    public int NidClass { get; init; }
+    public int NidMember { get; init; }
+    public string XmlBody { get; init; } = "";
+    public string? Modifyer { get; init; }
+    public string? ModifyDesc { get; init; }
+    public string? ModifyDateRaw { get; init; }
+    public string? ModifyTimeRaw { get; init; }
+    public DateTime ModifyDateTime { get; init; }
 }
