@@ -172,8 +172,8 @@ function getSingleFicheKind() {
 }
 
 const installmentLookupLabels = {
-  NoDocument: 'شماره سند (NoDocument)',
-  TrackingNo: 'کد پیگیری (TrackingNo)'
+  NoDocument: 'شماره سند',
+  TrackingNo: 'کد پیگیری'
 };
 
 let installmentMode = 'single';
@@ -317,11 +317,30 @@ function syncInstallmentDryRunUi() {
   if (updateBtn && !updateBtn.disabled) updateBtn.textContent = 'اعمال';
 }
 
+function toPersianDigits(value) {
+  return String(value ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+}
+
 function formatInstallmentCost(value) {
   if (value == null || value === '') return '-';
-  const n = Number(value);
-  if (!Number.isNaN(n)) return n.toLocaleString('en-US');
-  return String(value);
+  const n = Number(String(value).replace(/,/g, ''));
+  if (!Number.isNaN(n)) return n.toLocaleString('fa-IR');
+  return toPersianDigits(value);
+}
+
+function formatInstallmentDate(value) {
+  if (!value) return '-';
+  const raw = String(value).trim();
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 8) {
+    return toPersianDigits(`${digits.slice(0, 4)}/${digits.slice(4, 6)}/${digits.slice(6, 8)}`);
+  }
+  return toPersianDigits(raw);
+}
+
+function formatNosaziCode(value) {
+  if (!value) return '-';
+  return toPersianDigits(String(value).trim());
 }
 
 function renderInstallmentPreview(data) {
@@ -359,26 +378,26 @@ function renderInstallmentPreview(data) {
         ? (row.validationMessage || 'یافت نشد')
         : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
       tr.innerHTML = `
-        <td>${row.rowIndex || '-'}</td>
-        <td>${installmentLookupLabels[kind] || kind || '—'}</td>
-        <td>${row.noDocument || '-'}</td>
-        <td>${row.trackingNo || '-'}</td>
-        <td>${formatInstallmentCost(row.paymentCost)}</td>
-        <td>${row.paymentDate || '-'}</td>
-        <td>${row.nidWorkItem || '-'}</td>
-        <td>${row.nosaziCode || '-'}</td>
-        <td>${status}</td>
-        <td class="col-comments">${row.proposedComments || '-'}</td>
+        <td class="col-installment-row">${toPersianDigits(row.rowIndex || '-')}</td>
+        <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
+        <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
+        <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
+        <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
+        <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
+        <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
+        <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
+        <td class="col-installment-status">${status}</td>
+        <td class="col-installment-comments">${row.proposedComments || '-'}</td>
       `;
     } else {
       tr.innerHTML = `
-        <td>${row.lookupValue || ''}</td>
-        <td>${installmentLookupLabels[kind] || kind || '—'}</td>
-        <td>${row.noDocument || '-'}</td>
-        <td>${row.trackingNo || '-'}</td>
-        <td>${row.ci_InstallmentStatus ?? row.cI_InstallmentStatus ?? '-'}</td>
-        <td>${endCurrent}</td>
-        <td class="col-comments">${row.proposedComments || '-'}</td>
+        <td class="col-installment-id">${toPersianDigits(row.lookupValue || '')}</td>
+        <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
+        <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
+        <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
+        <td class="col-installment-status">${row.ci_InstallmentStatus ?? row.cI_InstallmentStatus ?? '-'}</td>
+        <td class="col-installment-endstate">${endCurrent}</td>
+        <td class="col-installment-comments">${row.proposedComments || '-'}</td>
       `;
     }
     tbody.appendChild(tr);

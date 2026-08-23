@@ -850,6 +850,39 @@ tbody tr:last-child td {
   font-size: 0.82rem;
 }
 
+.installment-preview-table-wrap {
+  overflow-x: auto;
+}
+
+.installment-preview-table {
+  width: max-content;
+  max-width: 100%;
+  table-layout: auto;
+}
+
+.installment-preview-table th,
+.installment-preview-table td {
+  white-space: nowrap;
+  padding: 8px 12px;
+  vertical-align: top;
+}
+
+.installment-preview-table .col-installment-comments {
+  white-space: normal;
+  min-width: 10rem;
+  max-width: 22rem;
+  word-break: break-word;
+}
+
+.installment-preview-table .col-installment-nosazi {
+  font-family: ui-monospace, Consolas, 'Vazirmatn', monospace;
+  letter-spacing: 0.02em;
+}
+
+.installment-preview-table .col-installment-cost {
+  font-variant-numeric: tabular-nums;
+}
+
 #installmentPreviewTable tr.row-not-found td {
   background: rgba(220, 38, 38, 0.06);
   color: var(--danger);
