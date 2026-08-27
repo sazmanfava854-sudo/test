@@ -959,6 +959,12 @@ tbody tr:last-child td {
   margin-bottom: 12px;
 }
 
+.fiche-date-status-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.35rem 1rem;
+}
+
 .fiche-date-change-panel {
   margin-top: 1.25rem;
   padding-top: 1rem;
