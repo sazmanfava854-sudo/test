@@ -405,7 +405,7 @@ public enum InstallmentLookupKind
 {
     /// <summary>جستجو/آپدیت با NoDocument</summary>
     NoDocument,
-    /// <summary>جستجو/آپدیت با TrackingNo — EndState اختیاری</summary>
+    /// <summary>جستجو/آپدیت با TrackingNo</summary>
     TrackingNo
 }
 
@@ -416,7 +416,7 @@ public class InstallmentExcelRowInput
     public string Identifier { get; set; } = "";
     public string PaymentCost { get; set; } = "";
     public string PaymentDate { get; set; } = "";
-    /// <summary>ستون اختیاری — 1/بله/yes یا 0/خیر/no؛ فقط برای کد پیگیری. خالی = تیک فرم.</summary>
+    /// <summary>ستون عودت در اکسل استفاده نمی‌شود — فقط تیک فرم.</summary>
     public string Odooat { get; set; } = "";
 }
 
@@ -429,7 +429,7 @@ public class InstallmentCheckRequest
     public List<InstallmentExcelRowInput>? ExcelRows { get; set; }
     /// <summary>از لاگین — در API پر می‌شود.</summary>
     public string PerformedByUser { get; set; } = "";
-    /// <summary>فقط وقتی TrackingNo تشخیص داده شود — اعمال EndStateDesc/EndStateCode عودت.</summary>
+    /// <summary>در صورت true — EndStateDesc=عودت و EndStateCode=17 برای همه ردیف‌ها.</summary>
     public bool ApplyEndState { get; set; }
 }
 

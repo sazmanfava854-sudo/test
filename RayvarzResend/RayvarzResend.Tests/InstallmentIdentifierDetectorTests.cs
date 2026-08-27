@@ -16,14 +16,10 @@ public class InstallmentIdentifierDetectorTests
     }
 
     [Fact]
-    public void WillApplyEndState_no_document_always_true()
+    public void WillApplyEndState_follows_checkbox_for_both_kinds()
     {
-        Assert.True(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.NoDocument, false));
-    }
-
-    [Fact]
-    public void WillApplyEndState_tracking_no_follows_checkbox()
-    {
+        Assert.False(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.NoDocument, false));
+        Assert.True(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.NoDocument, true));
         Assert.False(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.TrackingNo, false));
         Assert.True(InstallmentIdentifierDetector.WillApplyEndState(InstallmentLookupKind.TrackingNo, true));
     }

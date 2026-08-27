@@ -60,49 +60,27 @@ public class InstallmentExcelMatcherTests
     }
 
     [Fact]
-    public void ResolveWillApplyEndState_no_document_ignores_odooat_column()
+    public void ResolveWillApplyEndState_uses_global_checkbox_only()
     {
-        var row = new InstallmentExcelRowInput { Odooat = "0" };
-        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.NoDocument, false, row, excelMode: true));
-    }
+        var rowWithOdooat = new InstallmentExcelRowInput { Odooat = "1" };
+        var rowNoOdooat = new InstallmentExcelRowInput { Odooat = "0" };
 
-    [Fact]
-    public void ResolveWillApplyEndState_tracking_excel_empty_column_defaults_false()
-    {
-        var row = new InstallmentExcelRowInput();
+        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
+            InstallmentLookupKind.NoDocument, true, rowNoOdooat, excelMode: true));
         Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, true, row, excelMode: true));
-    }
+            InstallmentLookupKind.NoDocument, false, rowWithOdooat, excelMode: true));
 
-    [Fact]
-    public void ResolveWillApplyEndState_tracking_single_uses_checkbox_when_column_empty()
-    {
-        var row = new InstallmentExcelRowInput();
         Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, true, row, excelMode: false));
+            InstallmentLookupKind.TrackingNo, true, rowNoOdooat, excelMode: false));
         Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, false, row, excelMode: false));
+            InstallmentLookupKind.TrackingNo, false, rowWithOdooat, excelMode: false));
     }
 
     [Fact]
-    public void ResolveWillApplyEndState_no_document_always_true()
+    public void DescribeOdooatPlan_reflects_checkbox_only()
     {
-        var row = new InstallmentExcelRowInput { Odooat = "0" };
-        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.NoDocument, false, row));
-    }
-
-    [Fact]
-    public void ResolveWillApplyEndState_tracking_uses_excel_column_over_checkbox()
-    {
-        var rowYes = new InstallmentExcelRowInput { Odooat = "1" };
-        var rowNo = new InstallmentExcelRowInput { Odooat = "0" };
-
-        Assert.True(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, false, rowYes, excelMode: true));
-        Assert.False(InstallmentExcelMatcher.ResolveWillApplyEndState(
-            InstallmentLookupKind.TrackingNo, true, rowNo, excelMode: true));
+        Assert.Equal("بله", InstallmentExcelMatcher.DescribeOdooatPlan(InstallmentLookupKind.NoDocument, true));
+        Assert.Equal("خیر", InstallmentExcelMatcher.DescribeOdooatPlan(InstallmentLookupKind.TrackingNo, false));
     }
 
     [Fact]
@@ -201,6 +179,12 @@ public class InstallmentExcelMatcherTests
         Assert.Equal("شناسه", InstallmentExcelMatcher.RequiredColumnNames[0]);
         Assert.Equal("مبلغ", InstallmentExcelMatcher.RequiredColumnNames[1]);
         Assert.Equal("تاریخ پرداخت", InstallmentExcelMatcher.RequiredColumnNames[2]);
+    }
+
+    [Fact]
+    public void OptionalColumnNames_is_empty()
+    {
+        Assert.Empty(InstallmentExcelMatcher.OptionalColumnNames);
     }
 
     [Theory]

@@ -177,62 +177,6 @@ const installmentLookupLabels = {
 
 let installmentMode = 'single';
 let installmentExcelRows = [];
-let installmentOdooatAutoProfile = null;
-
-function detectInstallmentKindFromIdentifier(identifier) {
-  const digits = String(identifier || '').replace(/\D/g, '');
-  return digits.length >= 10 ? 'TrackingNo' : 'NoDocument';
-}
-
-function parseInstallmentValueTokens(raw) {
-  return String(raw || '')
-    .split(/[\s,;]+/)
-    .map((s) => s.replace(/\D/g, ''))
-    .filter((s) => s.length > 0);
-}
-
-function syncInstallmentOdooatCheckbox() {
-  const checkbox = $('installmentApplyEndState');
-  const wrap = $('installmentEndStateWrap');
-  if (!checkbox || installmentMode !== 'single') return;
-
-  const hint = wrap?.querySelector('.field-hint');
-  const tokens = parseInstallmentValueTokens($('installmentValues')?.value);
-
-  if (tokens.length === 0) {
-    installmentOdooatAutoProfile = null;
-    checkbox.checked = false;
-    checkbox.disabled = false;
-    if (hint) {
-      hint.textContent = 'شماره سند: عودت پیش‌فرض — کد پیگیری: انتخابی';
-    }
-    return;
-  }
-
-  const kinds = tokens.map((t) => detectInstallmentKindFromIdentifier(t));
-  const allNoDocument = kinds.every((k) => k === 'NoDocument');
-  const allTracking = kinds.every((k) => k === 'TrackingNo');
-  const profile = allNoDocument ? 'nodoc' : allTracking ? 'tracking' : 'mixed';
-
-  if (profile === 'nodoc') {
-    checkbox.checked = true;
-    checkbox.disabled = true;
-    if (hint) hint.textContent = 'شماره سند — عودت همیشه اعمال می‌شود';
-  } else if (profile === 'tracking') {
-    checkbox.disabled = false;
-    if (installmentOdooatAutoProfile !== 'tracking') {
-      checkbox.checked = false;
-    }
-    if (hint) hint.textContent = 'کد پیگیری — عودت در صورت تیک خوردن اعمال می‌شود';
-  } else {
-    checkbox.disabled = false;
-    if (hint) {
-      hint.textContent = 'ترکیب شماره سند و کد پیگیری — عودت برای شماره سند همیشه؛ برای کد پیگیری با این تیک';
-    }
-  }
-
-  installmentOdooatAutoProfile = profile;
-}
 
 function setInstallmentMode(mode) {
   installmentMode = mode === 'excel' ? 'excel' : 'single';
@@ -248,7 +192,6 @@ function setInstallmentMode(mode) {
 
   $('installmentPreviewSection').hidden = true;
   if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
-  if (installmentMode === 'single') syncInstallmentOdooatCheckbox();
 }
 
 function normalizeExcelHeader(value) {
@@ -270,7 +213,6 @@ function mapExcelHeaderIndex(headers) {
     }
     if (key === 'paymentcost' || key === 'مبلغ') map.paymentCost = idx;
     if (key === 'paymentdate' || key === 'تاریخ' || key === 'تاریخپرداخت') map.paymentDate = idx;
-    if (key === 'odooat' || key === 'عودت' || key === 'applyodooat' || key === 'applyendstate') map.odooat = idx;
   });
   return map;
 }
@@ -304,10 +246,10 @@ function downloadInstallmentExcelTemplate() {
     return;
   }
   const rows = [
-    ['شناسه', 'مبلغ', 'تاریخ پرداخت', 'عودت'],
+    ['شناسه', 'مبلغ', 'تاریخ پرداخت'],
     ['75360', '661900000', '1405/05/05'],
-    ['0502090614002610', '813516015', '1405/05/05', '1'],
-    ['0502140614004800', '3157507100', '1405/05/05', '0']
+    ['0502090614002610', '813516015', '1405/05/05'],
+    ['0502140614004800', '3157507100', '1405/05/05']
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   rows.forEach((row, r) => {
@@ -315,7 +257,7 @@ function downloadInstallmentExcelTemplate() {
       if (val != null && val !== '') setSheetCellAsText(sheet, r, c, val);
     });
   });
-  sheet['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 8 }];
+  sheet['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 14 }];
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Installment');
   XLSX.writeFile(book, 'installment-check-template.xlsx');
@@ -381,13 +323,8 @@ function parseInstallmentExcelFile(file) {
           const item = {
             identifier: identifier.trim(),
             paymentCost: paymentCost.trim(),
-            paymentDate: paymentDate.trim(),
-            odooat: ''
+            paymentDate: paymentDate.trim()
           };
-          if (detectInstallmentKindFromIdentifier(item.identifier) === 'TrackingNo'
-            && col.odooat != null) {
-            item.odooat = parseExcelCellValue(sheet, r, col.odooat).trim();
-          }
           if (!item.identifier && !item.paymentCost && !item.paymentDate) continue;
           parsed.push(item);
         }
@@ -413,12 +350,10 @@ function getInstallmentPayload() {
   if (installmentMode === 'excel') {
     return {
       ...base,
-      applyEndState: false,
       excelRows: installmentExcelRows.map((r) => ({
         identifier: r.identifier || '',
         paymentCost: r.paymentCost || '',
-        paymentDate: r.paymentDate || '',
-        odooat: r.odooat || ''
+        paymentDate: r.paymentDate || ''
       }))
     };
   }
@@ -460,8 +395,7 @@ function formatNosaziCode(value) {
   return toPersianDigits(String(value).trim());
 }
 
-function formatOdooatPlan(row, kind) {
-  if (kind === 'NoDocument') return 'همیشه';
+function formatOdooatPlan(row) {
   return row.willApplyEndState ? 'بله' : 'خیر';
 }
 
@@ -497,7 +431,7 @@ function renderInstallmentPreview(data) {
       <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
       <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
       <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
-      <td class="col-installment-odooat">${formatOdooatPlan(row, kind)}</td>
+      <td class="col-installment-odooat">${formatOdooatPlan(row)}</td>
       <td class="col-installment-status">${status}</td>
       <td class="col-installment-comments">${row.proposedComments || '-'}</td>
     `;
@@ -520,7 +454,7 @@ function formatInstallmentUpdateResult(data) {
     '=== نتیجه UPDATE Installment_List ===',
     modeLine,
     `DryRun: ${data.dryRun}`,
-    `ApplyEndState (TrackingNo): ${data.applyEndState}`,
+    `ApplyEndState (عودت): ${data.applyEndState}`,
     data.dryRun
       ? `شبیه‌سازی — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد | بدون نتیجه: ${data.notFound}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`
       : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`,
@@ -1375,7 +1309,6 @@ async function init() {
   if (installmentInput) {
     installmentInput.addEventListener('input', () => {
       installmentInput.value = installmentInput.value.replace(/\D/g, '');
-      syncInstallmentOdooatCheckbox();
     });
   }
 
@@ -1383,7 +1316,6 @@ async function init() {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
   setInstallmentMode('single');
-  syncInstallmentOdooatCheckbox();
 
   bindClick('btnInstallmentDownloadTemplate', downloadInstallmentExcelTemplate);
 

@@ -10,10 +10,7 @@ public static class InstallmentExcelMatcher
     "شناسه", "مبلغ", "تاریخ پرداخت"
   };
 
-  public static readonly string[] OptionalColumnNames =
-  {
-    "عودت"
-  };
+  public static readonly string[] OptionalColumnNames = [];
 
   public static string NormalizeCell(string? raw) => (raw ?? "").Trim();
 
@@ -109,27 +106,16 @@ public static class InstallmentExcelMatcher
     return null;
   }
 
-  /// <summary>NoDocument همیشه عودت — ستون Odooat نادیده. TrackingNo فقط از ستون اکسل.</summary>
+  /// <summary>عودت فقط با تیک فرم — ستون اکسل (در صورت وجود) نادیده گرفته می‌شود.</summary>
   public static bool ResolveWillApplyEndState(
     InstallmentLookupKind kind,
     bool globalApplyEndStateRequested,
     InstallmentExcelRowInput row,
-    bool excelMode = false)
-  {
-    if (kind == InstallmentLookupKind.NoDocument)
-      return true;
-
-    var rowFlag = TryParseOdooatFlag(row.Odooat);
-    if (rowFlag.HasValue)
-      return rowFlag.Value;
-
-    return excelMode ? false : globalApplyEndStateRequested;
-  }
+    bool excelMode = false) =>
+    globalApplyEndStateRequested;
 
   public static string DescribeOdooatPlan(InstallmentLookupKind kind, bool willApplyEndState) =>
-    kind == InstallmentLookupKind.NoDocument
-      ? "همیشه"
-      : willApplyEndState ? "بله" : "خیر";
+    willApplyEndState ? "بله" : "خیر";
 
   public static string? ValidateAgainstDb(
     InstallmentExcelRowInput excel,

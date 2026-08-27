@@ -250,29 +250,28 @@
         <button type="button" class="installment-mode-tab active" data-installment-mode="single" role="tab" aria-selected="true">تکی</button>
         <button type="button" class="installment-mode-tab" data-installment-mode="excel" role="tab" aria-selected="false">اکسل</button>
       </div>
+      <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
+        <input id="installmentApplyEndState" type="checkbox" />
+        <span>عودت</span>
+        <span class="field-hint">اختیاری — در صورت تیک، EndStateDesc=عودت و EndStateCode=17 برای همه ردیف‌ها</span>
+      </label>
       <div id="installmentSinglePanel" class="installment-mode-panel">
         <div class="form-grid unsent-form-grid">
           <label class="field field-required installment-values-field">
             <span class="field-label">شماره سند / کد پیگیری</span>
             <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
           </label>
-          <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
-            <input id="installmentApplyEndState" type="checkbox" />
-            <span>عودت</span>
-            <span class="field-hint">شماره سند: عودت پیش‌فرض — کد پیگیری: انتخابی</span>
-          </label>
         </div>
       </div>
       <div id="installmentExcelPanel" class="installment-mode-panel" hidden>
         <div class="installment-template-spec">
-          <strong>قالب فایل اکسل — ۳ ستون الزامی + ۱ ستون اختیاری</strong>
+          <strong>قالب فایل اکسل — ۳ ستون الزامی</strong>
           <table class="installment-template-table">
             <thead>
               <tr>
                 <th>ستون ۱</th>
                 <th>ستون ۲</th>
                 <th>ستون ۳</th>
-                <th>ستون ۴ (اختیاری)</th>
               </tr>
             </thead>
             <tbody>
@@ -280,7 +279,6 @@
                 <td><code>شناسه</code><br><span class="field-hint">شماره سند یا کد پیگیری</span></td>
                 <td><code>مبلغ</code><br><span class="field-hint">مبلغ (ریال)</span></td>
                 <td><code>تاریخ پرداخت</code><br><span class="field-hint">تاریخ شمسی</span></td>
-                <td><code>عودت</code><br><span class="field-hint">فقط ردیف‌های کد پیگیری — ۱/بله یا ۰/خیر</span></td>
               </tr>
             </tbody>
           </table>
@@ -478,6 +476,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=40"></script>
+  <script src="js/app.js?v=44"></script>
 </body>
 </html>

@@ -36,7 +36,7 @@ public static class InstallmentIdentifierDetector
             : "شماره سند (NoDocument)";
 
     public static bool WillApplyEndState(InstallmentLookupKind kind, bool applyEndStateRequested) =>
-        kind == InstallmentLookupKind.NoDocument || applyEndStateRequested;
+        applyEndStateRequested;
 
     /// <summary>مقایسه کد پیگیری — صفر ابتدای اکسل ممکن است حذف شده باشد (۱۵ رقم vs ۱۶ رقم DB).</summary>
     public static bool TrackingNoDigitsMatch(string? a, string? b)
