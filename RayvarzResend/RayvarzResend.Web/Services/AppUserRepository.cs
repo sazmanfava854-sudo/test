@@ -60,6 +60,7 @@ public sealed class AppUserRepository
                     Name                    NVARCHAR(100)    NOT NULL,
                     CanAccessUnsentFiches   BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Unsent DEFAULT (0),
                     CanAccessInstallment    BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Installment DEFAULT (0),
+                    CanAccessFicheDateChange BIT             NOT NULL CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0),
                     CanManageUsers          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Users DEFAULT (0),
                     CreatedAtUtc            DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserGroup_Created DEFAULT (SYSUTCDATETIME())
                 );
@@ -76,6 +77,10 @@ public sealed class AppUserRepository
                     CONSTRAINT FK_AppUserGroupMember_Group FOREIGN KEY (GroupId) REFERENCES dbo.AppUserGroup (Id)
                 );
             END
+
+            IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
+                ALTER TABLE dbo.AppUserGroup ADD CanAccessFicheDateChange BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0);
             """;
         await using var cmd = new SqlCommand(sql, conn);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -192,7 +197,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanManageUsers, CreatedAtUtc
+            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanManageUsers, CreatedAtUtc
             FROM dbo.AppUserGroup
             ORDER BY Name
             """;
@@ -216,8 +221,8 @@ public sealed class AppUserRepository
         var group = NewGroupRecord(req);
         const string sql = """
             INSERT INTO dbo.AppUserGroup
-                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanManageUsers, CreatedAtUtc)
-            VALUES (@id, @name, @unsent, @installment, @users, @created)
+                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanManageUsers, CreatedAtUtc)
+            VALUES (@id, @name, @unsent, @installment, @ficheDate, @users, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -226,6 +231,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@name", group.Name);
         cmd.Parameters.AddWithValue("@unsent", group.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@installment", group.CanAccessInstallment);
+        cmd.Parameters.AddWithValue("@ficheDate", group.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@users", group.CanManageUsers);
         cmd.Parameters.AddWithValue("@created", group.CreatedAtUtc);
         try
@@ -252,6 +258,7 @@ public sealed class AppUserRepository
             SET Name = @name,
                 CanAccessUnsentFiches = @unsent,
                 CanAccessInstallment = @installment,
+                CanAccessFicheDateChange = @ficheDate,
                 CanManageUsers = @users
             WHERE Id = @id
             """;
@@ -262,6 +269,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@name", req.Name!.Trim());
         cmd.Parameters.AddWithValue("@unsent", req.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@installment", req.CanAccessInstallment);
+        cmd.Parameters.AddWithValue("@ficheDate", req.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@users", req.CanManageUsers);
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
@@ -400,6 +408,7 @@ public sealed class AppUserRepository
         Name = req.Name!.Trim(),
         CanAccessUnsentFiches = req.CanAccessUnsentFiches,
         CanAccessInstallment = req.CanAccessInstallment,
+        CanAccessFicheDateChange = req.CanAccessFicheDateChange,
         CanManageUsers = req.CanManageUsers,
         CreatedAtUtc = DateTime.UtcNow
     };
@@ -410,6 +419,7 @@ public sealed class AppUserRepository
         Name = group.Name,
         CanAccessUnsentFiches = group.CanAccessUnsentFiches,
         CanAccessInstallment = group.CanAccessInstallment,
+        CanAccessFicheDateChange = group.CanAccessFicheDateChange,
         CanManageUsers = group.CanManageUsers,
         CreatedAtUtc = group.CreatedAtUtc.ToString("O")
     };
@@ -420,6 +430,7 @@ public sealed class AppUserRepository
         Name = reader.GetString(reader.GetOrdinal("Name")),
         CanAccessUnsentFiches = reader.GetBoolean(reader.GetOrdinal("CanAccessUnsentFiches")),
         CanAccessInstallment = reader.GetBoolean(reader.GetOrdinal("CanAccessInstallment")),
+        CanAccessFicheDateChange = ReadOptionalBoolean(reader, "CanAccessFicheDateChange"),
         CanManageUsers = reader.GetBoolean(reader.GetOrdinal("CanManageUsers")),
         CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O")
     };
@@ -477,6 +488,12 @@ public sealed class AppUserRepository
         }
 
         return user;
+    }
+
+    private static bool ReadOptionalBoolean(SqlDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? false : reader.GetBoolean(ordinal);
     }
 
     private static AppUserRecord ReadUser(SqlDataReader reader) => new()
