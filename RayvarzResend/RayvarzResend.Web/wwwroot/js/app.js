@@ -455,21 +455,20 @@ function formatInstallmentUpdateResult(data) {
 }
 
 function initFicheDateStatusControls() {
-  const filterHost = $('ficheDateStatusFilters');
+  const filterSelect = $('ficheDateStatusFilter');
   const statusSelect = $('ficheDateNewStatus');
-  if (filterHost) {
-    filterHost.innerHTML = '';
+  if (filterSelect) {
+    filterSelect.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = 'همه وضعیت‌ها';
+    filterSelect.appendChild(allOpt);
     Object.entries(ficheDateStatusLabels).forEach(([value, label]) => {
-      const labelEl = document.createElement('label');
-      labelEl.className = 'check-field';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = value;
-      input.className = 'fiche-date-status-filter';
-      if (value === '1') input.checked = true;
-      labelEl.appendChild(input);
-      labelEl.appendChild(document.createTextNode(`${label} (${value})`));
-      filterHost.appendChild(labelEl);
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = `${label} (${value})`;
+      if (value === '1') opt.selected = true;
+      filterSelect.appendChild(opt);
     });
   }
   if (statusSelect) {
@@ -505,9 +504,10 @@ async function loadFicheDateAccountGroups() {
 }
 
 function getSelectedFicheDateStatuses() {
-  return Array.from(document.querySelectorAll('.fiche-date-status-filter:checked'))
-    .map((el) => parseInt(el.value, 10))
-    .filter((n) => !Number.isNaN(n));
+  const value = ($('ficheDateStatusFilter')?.value || '').trim();
+  if (!value) return [];
+  const status = parseInt(value, 10);
+  return Number.isNaN(status) ? [] : [status];
 }
 
 function getFicheDateSearchPayload() {
