@@ -1,7 +1,17 @@
 {
   "ConnectionStrings": {
     "Sara": "Server=tcp:YOUR_SARA_SERVER,1433;Database=Sara8M03;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
-    "Rayvarz": "Server=tcp:YOUR_RAY_SERVER,1433;Database=Ray_CityHall;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
+    "Rayvarz": "Server=tcp:YOUR_RAY_SERVER,1433;Database=Ray_CityHall;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;",
+    "AppAuth": "Server=tcp:YOUR_SERVER,1433;Database=RayvarzRuleEngine;Integrated Security=True;TrustServerCertificate=True;Encrypt=False;Connect Timeout=30;"
+  },
+  "Auth": {
+    "SessionHours": 8,
+    "BootstrapAdmin": {
+      "Username": "admin",
+      "Password": "Admin@1234",
+      "FirstName": "مدیر",
+      "LastName": "سیستم"
+    }
   },
   "Rayvarz": {
     "ServiceUrl": "http://mdc-rayvarzsvc.itc.mashhad.ir/safa_shahrsazi_v2/WCFServer.ReceiveIncmVchrServices.svc",
@@ -12,5 +22,8 @@
     "DryRun": true,
     "AllowInvalidSsl": false,
     "ProxyUrl": ""
+  },
+  "Installment": {
+    "DryRun": true
   }
 }

@@ -5,11 +5,11 @@ using RayvarzResend.Web.RuleEngine;
 namespace RayvarzResend.Web.Services;
 
 /// <summary>
-/// ارسال تهاتر: چک Accounting_DocHeader + نگه‌داشت Income_Fiche + وضعیت ۲
+/// ارسال تهاتر: خواندن از Sara + چک Accounting_DocHeader / incmdocsys
 /// + ساخت/ارسال SOAP:
 ///   گروه ۱۵۷ / Tahator1 → مرکز Branch=102، DocTyp ۱۴/۱۵؛
-///   گروه ۱۵۸ / Tahator → منطقه Branch=۲۰۱–۲۱۲، DocTyp ۱۷/۱۸
-/// + بازگردانی وضعیت ۳ + بررسی واسط / DocNotSent / incmdocsys.
+///   گروه ۱۵۸ / Tahator → منطقه Branch=۲۰۱–۲۱۲، DocTyp ۱۷/۱۸.
+/// تغییر وضعیت Income_Fiche پس از ارسال در Sara (تایید فیش دستی) انجام می‌شود — نه در این سرویس.
 /// </summary>
 public sealed class TahatorResendService
 {
@@ -19,22 +19,19 @@ public sealed class TahatorResendService
     private readonly FicheRepository _fiches;
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
-    private readonly TahatorSnapshotStore _snapshots;
 
     public TahatorResendService(
         IConfiguration config,
         ILogger<TahatorResendService> logger,
         FicheRepository fiches,
         RayvarzPayloadBuilder payload,
-        RayvarzClient client,
-        TahatorSnapshotStore snapshots)
+        RayvarzClient client)
     {
         _config = config;
         _logger = logger;
         _fiches = fiches;
         _payload = payload;
         _client = client;
-        _snapshots = snapshots;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara تنظیم نشده");
     }
@@ -71,14 +68,13 @@ public sealed class TahatorResendService
         var allInRayvarz = true;
         var rayvarzCheckWarnings = new List<string>();
         IncomeFicheTahatorSnapshot? inputSnapshot = null;
-        IncomeFicheTahatorSnapshot? pendingStored = null;
 
         foreach (var fiche in new[] { pair.AmountFiche!, pair.IncomeFiche! })
         {
             ApplyTahatorDocTyp(fiche);
             var no = fiche.FicheNo.Trim();
             if (string.Equals(no, ficheNo, StringComparison.Ordinal))
-                inputSnapshot ??= await TryLoadSnapshotAsync(no, ct);
+                inputSnapshot ??= await TryLoadIncomeFicheStateAsync(no, ct);
 
             var inHeader = await ExistsInAccountingDocHeaderAsync(no, ct);
             var inRayvarz = false;
@@ -116,18 +112,6 @@ public sealed class TahatorResendService
             });
         }
 
-        try
-        {
-            if (_snapshots.IsConfigured)
-                pendingStored = await _snapshots.GetPendingAsync(ficheNo, ct)
-                    ?? await _snapshots.GetPendingAsync(pair.AmountFicheNo, ct)
-                    ?? await _snapshots.GetPendingAsync(pair.IncomeFicheNo, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "خواندن snapshot Pending تهاتر ناموفق");
-        }
-
         var primary = string.Equals(ficheNo, pair.AmountFiche!.FicheNo, StringComparison.Ordinal)
             ? pair.AmountFiche
             : string.Equals(ficheNo, pair.IncomeFiche!.FicheNo, StringComparison.Ordinal)
@@ -144,8 +128,6 @@ public sealed class TahatorResendService
                         ? $"آماده ارسال مجدد: {headerOnlyCount} فیش در واسط است ولی در رایورز نیست — ۱۵۷={pair.AmountFicheNo} سپس ۱۵۸={pair.IncomeFicheNo}."
                         : $"آماده ارسال جفت تهاتر: ۱۵۷={pair.AmountFicheNo} سپس ۱۵۸={pair.IncomeFicheNo}."
                     : "وضعیت جفت تهاتر نامشخص.";
-        if (pendingStored != null)
-            msg += $" | Snapshot Pending: Id={pendingStored.SnapshotId} — POST /api/tahator/restore";
         var warning = rayvarzCheckWarnings.Count > 0
             ? string.Join(" | ", rayvarzCheckWarnings)
             : null;
@@ -159,7 +141,6 @@ public sealed class TahatorResendService
             ExistsInIncomeFiche = true,
             ExistsInRayvarz = allInRayvarz,
             Snapshot = inputSnapshot,
-            PendingStoredSnapshot = pendingStored,
             Fiche = primary,
             Pair = pair,
             PairMembers = members,
@@ -174,14 +155,9 @@ public sealed class TahatorResendService
     {
         var steps = new List<string>();
         var dryRun = IsDryRun;
-        var force = req.Force || req.HoldAfterStatus2;
+        var force = req.Force;
         var ficheNo = NormalizeFicheNo(req.FicheNo);
-        steps.Add(
-            $"0) جفت تهاتر — FicheNo={ficheNo} | DryRun={dryRun} | force={force}" +
-            (req.HoldAfterStatus2 && !req.Force ? " (به‌خاطر holdAfterStatus2)" : "") +
-            (req.HoldAfterStatus2 ? " | holdAfterStatus2=true" : ""));
-        if (dryRun)
-            steps.Add("⚠ DryRun=true — UPDATE وضعیت ۲ روی Sara زده نمی‌شود مگر DryRun=false + Restart.");
+        steps.Add($"0) جفت تهاتر — FicheNo={ficheNo} | DryRun={dryRun} | force={force}");
 
         var pair = await _fiches.ResolveTahatorPairAsync(ficheNo, ct);
         if (pair?.AmountFiche == null || pair.IncomeFiche == null)
@@ -198,8 +174,7 @@ public sealed class TahatorResendService
 
         var ordered = new[] { pair.AmountFiche, pair.IncomeFiche };
         var ficheResults = new List<TahatorFicheSendDetail>();
-        var snapshots = new List<(FicheHeaderDto Fiche, IncomeFicheTahatorSnapshot Snap, long? SnapId)>();
-        var statusChangedFiches = new List<string>();
+        var toSend = new List<(FicheHeaderDto Fiche, IncomeFicheTahatorSnapshot State)>();
 
         try
         {
@@ -246,14 +221,14 @@ public sealed class TahatorResendService
                 if (fiche.Rows.Count == 0 || fiche.Payable <= 0)
                     return Fail(ficheNo, dryRun, steps, $"فیش {no} ردیف/مبلغ معتبر ندارد.");
 
-                var snap = await TryLoadSnapshotAsync(no, ct);
-                if (snap == null)
-                    return Fail(ficheNo, dryRun, steps, $"Snapshot Income_Fiche برای {no} خوانده نشد.");
+                var state = await TryLoadIncomeFicheStateAsync(no, ct);
+                if (state == null)
+                    return Fail(ficheNo, dryRun, steps, $"فیش {no} در Income_Fiche یافت نشد.");
 
-                snapshots.Add((fiche, snap, null));
+                toSend.Add((fiche, state));
             }
 
-            if (snapshots.Count == 0)
+            if (toSend.Count == 0)
             {
                 var allSkipped = ficheResults.All(r => r.Skipped);
                 var detail = string.Join(" | ", ficheResults.Select(r =>
@@ -274,72 +249,21 @@ public sealed class TahatorResendService
                 };
             }
 
-            var today = DateHelper.CurrentShamsiSlashDate();
             var todayRay = DateHelper.CurrentShamsiRayvarzDate();
             var docDate = FirstDateOrToday(req.DocDate, todayRay);
             var actDate = FirstDateOrToday(req.ActDate, todayRay);
             var dueDate = FirstDateOrToday(req.DueDate, todayRay);
             steps.Add($"2) تاریخ SOAP: DocDate/ActDate/Due={docDate} (امروز مگر override)");
 
-            if (dryRun && req.HoldAfterStatus2)
-                return Fail(ficheNo, dryRun, steps,
-                    "HoldAfterStatus2 با DryRun ممکن نیست — Rayvarz:DryRun=false + Restart.");
-
-            if (!dryRun)
+            for (var i = 0; i < toSend.Count; i++)
             {
-                if (!_snapshots.IsConfigured)
-                    return Fail(ficheNo, dryRun, steps,
-                        "ConnectionStrings:RayvarzRuleEngine برای snapshot تهاتر تنظیم نشده.");
-
-                for (var i = 0; i < snapshots.Count; i++)
-                {
-                    var (fiche, snap, _) = snapshots[i];
-                    var no = fiche.FicheNo.Trim();
-                    var snapId = await _snapshots.InsertPendingAsync(
-                        snap, today, $"قبل از UPDATE وضعیت ۲ — ارسال تهاتر {fiche.IncomeAccountGroup}", ct);
-                    snap.SnapshotId = snapId;
-                    snap.PersistStatus = TahatorSnapshotStore.StatusPending;
-                    snapshots[i] = (fiche, snap, snapId);
-                    steps.Add($"3) Snapshot {no}: Id={snapId}");
-
-                    await ApplyTriggerStatus2Async(no, today, ct);
-                    statusChangedFiches.Add(no);
-                    var after = await TryLoadSnapshotAsync(no, ct);
-                    steps.Add(
-                        $"4) UPDATE وضعیت ۲ {no}: Status={after?.EumFicheStatus}, " +
-                        $"Export={after?.ExportPermanentDate}, Break={after?.PaymentBreakDate}, Pay='{after?.PaymentDate ?? ""}'");
-                }
-            }
-            else
-            {
-                steps.Add("3-4) DryRun — UPDATE وضعیت ۲ روی Sara زده نشد.");
-            }
-
-            if (!dryRun && req.HoldAfterStatus2)
-            {
-                return new TahatorSendResult
-                {
-                    Success = true,
-                    FicheNo = ficheNo,
-                    DryRun = false,
-                    Pair = pair,
-                    Snapshot = snapshots[0].Snap,
-                    SnapshotId = snapshots[0].SnapId,
-                    TriggerDate = today,
-                    Steps = steps,
-                    Message =
-                        $"وضعیت ۲ روی {snapshots.Count} فیش اعمال شد (Export/Break={today}). " +
-                        "POST /api/tahator/restore برای بازگردانی."
-                };
-            }
-
-            for (var i = 0; i < snapshots.Count; i++)
-            {
-                var (fiche, _, _) = snapshots[i];
+                var (fiche, state) = toSend[i];
                 var no = fiche.FicheNo.Trim();
                 var branch = TahatorRowBuilder.ResolveSendBranch(fiche, req.Branch);
                 var fund = ResolveFund(fiche, req.Fund);
-                steps.Add($"5) SOAP {fiche.IncomeAccountGroup} FicheNo={no} Branch={branch} Fund={fund}");
+                steps.Add(
+                    $"3) SOAP {fiche.IncomeAccountGroup} FicheNo={no} Branch={branch} Fund={fund} " +
+                    $"(Sara Status={state.EumFicheStatus} — بدون UPDATE)");
 
                 var built = await _payload.BuildAsync(fiche, branch, fund, docDate, actDate, dueDate, ct);
                 steps.Add($"   engine={built.Mode}, bytes={built.Xml.Length}");
@@ -348,10 +272,10 @@ public sealed class TahatorResendService
 
                 var soapResult = await _client.SendAsync(built.Xml, dryRun, ct);
                 steps.Add(dryRun
-                    ? $"6) DryRun — SOAP {no} POST نشد"
+                    ? $"4) DryRun — SOAP {no} POST نشد"
                     : soapResult.Success
-                        ? $"6) SOAP {no} OK — {soapResult.Message}"
-                        : $"6) SOAP {no} FAIL — {soapResult.Message}");
+                        ? $"4) SOAP {no} OK — {soapResult.Message}"
+                        : $"4) SOAP {no} FAIL — {soapResult.Message}");
 
                 var inHeaderAfter = await ExistsInAccountingDocHeaderAsync(no, ct);
                 var verifiedRay = false;
@@ -380,7 +304,7 @@ public sealed class TahatorResendService
                 {
                     notSent = await TryGetDocNotSentAsync(no, ct);
                     if (!string.IsNullOrWhiteSpace(notSent))
-                        steps.Add($"7) DocNotSent {no}: {notSent}");
+                        steps.Add($"5) DocNotSent {no}: {notSent}");
                 }
 
                 var oneOk = dryRun
@@ -407,9 +331,9 @@ public sealed class TahatorResendService
                 if (!dryRun && !oneOk)
                 {
                     steps.Add($"⚠ ارسال متوقف شد — {no} ناموفق؛ فیش‌های بعدی جفت ارسال نمی‌شوند.");
-                    for (var j = i + 1; j < snapshots.Count; j++)
+                    for (var j = i + 1; j < toSend.Count; j++)
                     {
-                        var aborted = snapshots[j].Fiche;
+                        var aborted = toSend[j].Fiche;
                         var abortedNo = aborted.FicheNo.Trim();
                         ficheResults.Add(new TahatorFicheSendDetail
                         {
@@ -417,10 +341,10 @@ public sealed class TahatorResendService
                             IncomeAccountGroup = aborted.IncomeAccountGroup ?? 0,
                             DocTyp = aborted.DocTyp,
                             Branch = aborted.ResolvedDistrictBranch is > 0
-                            ? aborted.ResolvedDistrictBranch.Value
-                            : TahatorRowBuilder.IsTahatorAmountFiche(aborted)
-                                ? TahatorRowBuilder.DefaultRayvarzBranch
-                                : 0,
+                                ? aborted.ResolvedDistrictBranch.Value
+                                : TahatorRowBuilder.IsTahatorAmountFiche(aborted)
+                                    ? TahatorRowBuilder.DefaultRayvarzBranch
+                                    : 0,
                             Fund = ResolveFund(aborted, req.Fund),
                             Success = false,
                             Skipped = true,
@@ -431,22 +355,6 @@ public sealed class TahatorResendService
 
                     break;
                 }
-            }
-
-            if (!dryRun)
-            {
-                for (var i = 0; i < snapshots.Count; i++)
-                {
-                    var (_, snap, snapId) = snapshots[i];
-                    if (snapId is not > 0) continue;
-                    // پس از SOAP (موفق یا ناموفق): بازگردانی کامل از snapshot — شامل Export/Break
-                    await RestoreFromStoredSnapshotAsync(snapId.Value, steps, ct);
-                    statusChangedFiches.Remove(snap.FicheNo);
-                }
-            }
-            else
-            {
-                steps.Add("8) DryRun — بازگردانی وضعیت ۳ شبیه‌سازی شد");
             }
 
             var primaryDetail = ficheResults.FirstOrDefault(r =>
@@ -464,9 +372,7 @@ public sealed class TahatorResendService
                 FicheResults = ficheResults,
                 ExistsInAccountingDocHeaderAfter = ficheResults.All(r => r.ExistsInAccountingDocHeaderAfter || r.Skipped),
                 ExistsInRayvarz = ficheResults.All(r => r.ExistsInRayvarz || r.Skipped),
-                Snapshot = snapshots.FirstOrDefault().Snap,
-                SnapshotId = snapshots.FirstOrDefault().SnapId,
-                TriggerDate = today,
+                Snapshot = toSend.FirstOrDefault().State,
                 EngineName = primaryDetail != null ? "Active" : null,
                 DocTyp = primaryDetail?.DocTyp ?? 0,
                 Branch = primaryDetail?.Branch ?? 0,
@@ -476,32 +382,15 @@ public sealed class TahatorResendService
                 DocNotSentError = ficheResults.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.DocNotSentError))?.DocNotSentError,
                 Steps = steps,
                 Message = dryRun
-                    ? "DryRun جفت تهاتر: SOAP ساخته شد؛ UPDATE Sara زده نشد."
+                    ? "DryRun جفت تهاتر: SOAP ساخته شد؛ Sara تغییر نکرد."
                     : success
-                        ? $"جفت تهاتر ارسال شد: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}. تاریخ‌های Sara از snapshot اصلی بازگردانی شد."
+                        ? $"جفت تهاتر ارسال شد: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}. تایید وضعیت در Sara (تایید فیش دستی)."
                         : "ارسال جفت تهاتر ناموفق — جزئیات در ficheResults."
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Tahator pair send failed for {FicheNo}", ficheNo);
-            foreach (var no in statusChangedFiches.ToList())
-            {
-                try
-                {
-                    var pending = await _snapshots.GetPendingAsync(no, ct);
-                    if (pending != null)
-                    {
-                        await RestoreFromStoredSnapshotAsync(pending.SnapshotId, steps, ct);
-                        steps.Add($"⚠ پس از خطا {no} از snapshot بازگردانی شد");
-                    }
-                }
-                catch (Exception restoreEx)
-                {
-                    steps.Add($"⚠ بازگردانی {no} ناموفق: {restoreEx.Message}");
-                }
-            }
-
             return Fail(ficheNo, dryRun, steps, ex.Message);
         }
     }
@@ -530,65 +419,6 @@ public sealed class TahatorResendService
             : TahatorRowBuilder.ResolveTahatorFund(district);
     }
 
-    /// <summary>بازگردانی دستی از snapshot Pending — هر دو فیش جفت در صورت وجود.</summary>
-    public async Task<TahatorSendResult> RestorePendingAsync(string ficheNo, CancellationToken ct = default)
-    {
-        ficheNo = NormalizeFicheNo(ficheNo);
-        var steps = new List<string>();
-        if (!_snapshots.IsConfigured)
-            return Fail(ficheNo, false, steps, "RayvarzRuleEngine تنظیم نشده.");
-
-        var pair = await _fiches.ResolveTahatorPairAsync(ficheNo, ct);
-        var ficheNos = pair != null
-            ? new[] { pair.AmountFicheNo, pair.IncomeFicheNo }
-            : new[] { ficheNo };
-
-        var restored = 0;
-        foreach (var no in ficheNos.Distinct(StringComparer.Ordinal))
-        {
-            var pending = await _snapshots.GetPendingAsync(no, ct);
-            if (pending == null) continue;
-            steps.Add($"SnapshotId={pending.SnapshotId} ({pending.FicheNo})");
-            await RestoreFromStoredSnapshotAsync(pending.SnapshotId, steps, ct);
-            restored++;
-        }
-
-        if (restored == 0)
-            return Fail(ficheNo, false, steps, "Snapshot Pending برای این فیش/جفت یافت نشد.");
-
-        return new TahatorSendResult
-        {
-            Success = true,
-            FicheNo = ficheNo,
-            Pair = pair,
-            Steps = steps,
-            Message = $"وضعیت {restored} فیش از snapshot به ۳ بازگردانی شد."
-        };
-    }
-
-    public Task<IReadOnlyList<IncomeFicheTahatorSnapshot>> ListPendingAsync(CancellationToken ct = default) =>
-        _snapshots.ListPendingAsync(50, ct);
-
-    private async Task RestoreFromStoredSnapshotAsync(
-        long snapshotId,
-        List<string> steps,
-        CancellationToken ct,
-        string? keepExportBreakSlash = null)
-    {
-        var stored = await _snapshots.GetByIdAsync(snapshotId, ct)
-            ?? throw new InvalidOperationException($"SnapshotId={snapshotId} یافت نشد.");
-
-        await RestoreSnapshotStatus3Async(stored, ct, keepExportBreakSlash);
-        await _snapshots.MarkRestoredAsync(snapshotId, "بازگردانی وضعیت ۳ روی Income_Fiche", ct);
-        var export = keepExportBreakSlash ?? stored.ExportPermanentDate;
-        var brk = keepExportBreakSlash ?? stored.PaymentBreakDate;
-        steps.Add(
-            $"7) وضعیت ۳ از SnapshotId={snapshotId}: " +
-            $"Export={export}, Break={brk}" +
-            (keepExportBreakSlash != null ? " (تاریخ روز — نگه داشته شد)" : " (مقادیر اصلی snapshot)") +
-            $", PaymentDate='{stored.PaymentDate ?? ""}'");
-    }
-
     /// <summary>DocTyp تهاتر — تفویض به <see cref="TahatorRowBuilder.ApplyTahatorDocTyp"/>.</summary>
     public static void ApplyTahatorDocTyp(FicheHeaderDto fiche) =>
         TahatorRowBuilder.ApplyTahatorDocTyp(fiche);
@@ -604,7 +434,7 @@ public sealed class TahatorResendService
         return result != null;
     }
 
-    public async Task<IncomeFicheTahatorSnapshot?> TryLoadSnapshotAsync(string ficheNo, CancellationToken ct = default)
+    public async Task<IncomeFicheTahatorSnapshot?> TryLoadIncomeFicheStateAsync(string ficheNo, CancellationToken ct = default)
     {
         const string sql = @"
 SELECT FicheNo,
@@ -637,74 +467,6 @@ WHERE FicheNo = @f";
             UsernameUserConfirm = ReadNullableString(reader, "UsernameUserConfirm"),
             NidUserUserConfirm = ReadNullableGuid(reader, "NidUserUserConfirm")
         };
-    }
-
-    private async Task ApplyTriggerStatus2Async(string ficheNo, string todaySlash, CancellationToken ct)
-    {
-        // PaymentDate عمداً خالی می‌شود (تریگر واسط) — مقدار اصلی قبل از این در snapshot است
-        const string sql = @"
-UPDATE dbo.Income_Fiche
-SET EumFicheStatus = 2,
-    ExportPermanentDate = @today,
-    PaymentBreakDate = @today,
-    PaymentDate = @emptyPay
-WHERE FicheNo = @f";
-
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@f", ficheNo);
-        cmd.Parameters.AddWithValue("@today", todaySlash);
-        cmd.Parameters.Add("@emptyPay", System.Data.SqlDbType.NVarChar, 30).Value = "";
-        var n = await cmd.ExecuteNonQueryAsync(ct);
-        if (n == 0)
-            throw new InvalidOperationException($"UPDATE وضعیت ۲ برای فیش {ficheNo} هیچ ردیفی را تغییر نداد.");
-        _logger.LogInformation("Tahator trigger status=2 FicheNo={FicheNo} Today={Today}", ficheNo, todaySlash);
-    }
-
-    private async Task RestoreSnapshotStatus3Async(
-        IncomeFicheTahatorSnapshot snap,
-        CancellationToken ct,
-        string? keepExportBreakSlash = null)
-    {
-        const string sql = @"
-UPDATE dbo.Income_Fiche
-SET EumFicheStatus = 3,
-    ExportPermanentDate = @export,
-    PaymentBreakDate = @brk,
-    PaymentDate = @pay,
-    UserConfirmDate = @ucDate,
-    UsernameUserConfirm = @ucName,
-    NidUserUserConfirm = @ucNid
-WHERE FicheNo = @f";
-
-        var export = keepExportBreakSlash ?? snap.ExportPermanentDate;
-        var brk = keepExportBreakSlash ?? snap.PaymentBreakDate;
-
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@f", snap.FicheNo);
-        AddSlashDateParam(cmd, "@export", export);
-        AddSlashDateParam(cmd, "@brk", brk);
-        // PaymentDate اصلی (مثلاً 1404/12/11) باید عین همان برگردد — نه NULL
-        AddSlashDateParam(cmd, "@pay", snap.PaymentDate);
-        AddSlashDateParam(cmd, "@ucDate", snap.UserConfirmDate);
-        cmd.Parameters.AddWithValue("@ucName", (object?)NullIfEmpty(snap.UsernameUserConfirm) ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@ucNid", (object?)snap.NidUserUserConfirm ?? DBNull.Value);
-        var n = await cmd.ExecuteNonQueryAsync(ct);
-        if (n == 0)
-            throw new InvalidOperationException($"بازگردانی وضعیت ۳ برای فیش {snap.FicheNo} انجام نشد.");
-        _logger.LogInformation(
-            "Tahator restore status=3 FicheNo={FicheNo} Export={Export} Break={Break} PaymentDate={Pay}",
-            snap.FicheNo, export ?? "", brk ?? "", snap.PaymentDate ?? "");
-    }
-
-    /// <summary>ستون‌های تاریخ شمسی Income_Fiche معمولاً NVARCHAR هستند — مقدار اسلش‌دار را عین خودش بنویس.</summary>
-    private static void AddSlashDateParam(SqlCommand cmd, string name, string? value)
-    {
-        var p = cmd.Parameters.Add(name, System.Data.SqlDbType.NVarChar, 30);
-        p.Value = string.IsNullOrWhiteSpace(value) ? "" : value.Trim();
     }
 
     private static string FirstDateOrToday(string? fromReq, string todayRayvarz)
@@ -756,9 +518,6 @@ WHERE FicheNo = @f";
     private static string NormalizeFicheNo(string ficheNo) =>
         TahatorRowBuilder.NormalizeFicheNo(ficheNo);
 
-    private static string? NullIfEmpty(string? s) =>
-        string.IsNullOrWhiteSpace(s) ? null : s;
-
     private static int ReadInt(SqlDataReader reader, string column)
     {
         var ord = reader.GetOrdinal(column);
@@ -789,7 +548,6 @@ WHERE FicheNo = @f";
         var value = reader.GetValue(ord);
         if (value is DateTime dt)
         {
-            // بعضی ستون‌های Sara تاریخ شمسی را به‌صورت DateTime با سال ۱۳xx–۱۴xx نگه می‌دارند
             if (dt.Year is >= 1300 and <= 1500)
                 return dt.ToString("yyyy/MM/dd", System.Globalization.CultureInfo.InvariantCulture);
             return DateHelper.ToShamsiSlashDate(DateHelper.FromDatabaseDateValue(dt));
@@ -797,7 +555,6 @@ WHERE FicheNo = @f";
 
         var s = value.ToString()?.Trim();
         if (string.IsNullOrWhiteSpace(s)) return null;
-        // "" بعد از تریگر وضعیت ۲ — خالی معتبر است
         if (s.Length == 0) return "";
         return s.Contains('/') ? s : DateHelper.ToShamsiSlashDate(s);
     }

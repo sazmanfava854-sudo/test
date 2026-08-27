@@ -43,4 +43,28 @@ public class DeliveryReleaseTests
         Assert.Contains("formatValMappingDetail", script);
         Assert.Contains("✓ جمع = Payable", script);
     }
+
+    [Fact]
+    public void appsettings_has_installment_dry_run_default_true()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "appsettings.json"));
+        Assert.True(File.Exists(path), path);
+        var json = File.ReadAllText(path);
+        Assert.Contains("\"Installment\"", json);
+        Assert.Contains("\"DryRun\": true", json);
+    }
+
+    [Fact]
+    public void Program_cs_registers_RayvarzPayloadBuilder_for_preview_endpoint()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "Program.cs"));
+        Assert.True(File.Exists(path), path);
+        var program = File.ReadAllText(path);
+        Assert.Contains("AddSingleton<RayvarzPayloadBuilder>", program);
+        Assert.Contains("[FromServices] RayvarzPayloadBuilder", program);
+    }
 }

@@ -539,29 +539,6 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         return result != null;
     }
 
-    public async Task ResetStatusAsync(FicheHeaderDto fiche, CancellationToken ct = default)
-    {
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-
-        if (fiche.Category == FicheCategory.Income)
-        {
-            const string sql = @"UPDATE dbo.Income_Fiche SET EumFicheStatus = 2
-WHERE FicheNo = @f AND EumFicheStatus IN (5, 7)";
-            await using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@f", fiche.FicheNo);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-        else
-        {
-            const string sql = @"UPDATE dbo.Duty_Fiche SET EumDutyFicheStatus = 1
-WHERE FicheNo = @f AND EumDutyFicheStatus = 4";
-            await using var cmd = new SqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@f", fiche.FicheNo);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-    }
-
     public async Task<string?> GetDocNotSentErrorAsync(string ficheNo, CancellationToken ct = default)
     {
         const string sql = @"

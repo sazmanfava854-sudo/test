@@ -145,8 +145,6 @@ public class SendFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
-    /// <summary>ریست EumFicheStatus در Sara — فقط با درخواست صریح (پیش‌فرض خاموش).</summary>
-    public bool ResetStatus { get; set; } = false;
 }
 
 public class SendResultDto
@@ -291,7 +289,6 @@ public class UnsentBatchSendRequest
 {
     public UnsentFicheKind FicheKind { get; set; } = UnsentFicheKind.Income;
     public List<string> FicheNos { get; set; } = new();
-    public bool ResetStatus { get; set; } = true;
 }
 
 public class UnsentBatchSendItemResult
@@ -341,13 +338,8 @@ public class TahatorFicheRequest
     public string DocDate { get; set; } = "";
     public string ActDate { get; set; } = "";
     public string DueDate { get; set; } = "";
-    /// <summary>اگر فیش در رایورز باشد هم ادامه بده (برای تست مرحله وضعیت ۲).</summary>
+    /// <summary>اگر فیش در رایورز باشد هم ادامه بده.</summary>
     public bool Force { get; set; }
-    /// <summary>
-    /// فقط مرحله نگه‌داشت + UPDATE وضعیت ۲ (تاریخ روز) — بدون SOAP و بدون بازگردانی.
-    /// بعد از SELECT در Sara، با POST /api/tahator/restore بازگردانید.
-    /// </summary>
-    public bool HoldAfterStatus2 { get; set; }
 }
 
 /// <summary>جفت تهاتر — گروه ۱۵۷ (مبلغ/مرکز) + ۱۵۸ (درآمد/منطقه) با همان NidIncome.</summary>
@@ -407,6 +399,108 @@ public class TahatorFicheSendDetail
     public string? PursuitDocNo { get; set; }
     public string? PreviewXml { get; set; }
     public string? DocNotSentError { get; set; }
+}
+
+public enum InstallmentLookupKind
+{
+    /// <summary>جستجو/آپدیت با NoDocument</summary>
+    NoDocument,
+    /// <summary>جستجو/آپدیت با TrackingNo</summary>
+    TrackingNo
+}
+
+/// <summary>ردیف اکسل — سه ستون: Identifier (شماره سند یا کد پیگیری), PaymentCost, PaymentDate.</summary>
+public class InstallmentExcelRowInput
+{
+    /// <summary>شماره سند یا کد پیگیری — نوع از طول رقم تشخیص داده می‌شود.</summary>
+    public string Identifier { get; set; } = "";
+    public string PaymentCost { get; set; } = "";
+    public string PaymentDate { get; set; } = "";
+    /// <summary>ستون عودت در اکسل استفاده نمی‌شود — فقط تیک فرم.</summary>
+    public string Odooat { get; set; } = "";
+}
+
+/// <summary>تب تغییر وضعیت چک به خزانه — dbo.Installment_List (بدون رایورز).</summary>
+public class InstallmentCheckRequest
+{
+    /// <summary>لیست شماره‌ها — در UI به‌صورت متن چندخطی/با کاما. نوع (NoDocument/TrackingNo) خودکار تشخیص داده می‌شود.</summary>
+    public string ValuesText { get; set; } = "";
+    /// <summary>ردیف‌های اکسل — وقتی پر باشد حالت دسته‌ای فعال می‌شود.</summary>
+    public List<InstallmentExcelRowInput>? ExcelRows { get; set; }
+    /// <summary>از لاگین — در API پر می‌شود.</summary>
+    public string PerformedByUser { get; set; } = "";
+    /// <summary>در صورت true — EndStateDesc=عودت و EndStateCode=17 برای همه ردیف‌ها.</summary>
+    public bool ApplyEndState { get; set; }
+}
+
+public class InstallmentCheckPreviewItem
+{
+    public int RowIndex { get; set; }
+    public string LookupValue { get; set; } = "";
+    public InstallmentLookupKind DetectedLookupKind { get; set; }
+    public bool Found { get; set; }
+    public bool DataMatches { get; set; }
+    public string? ValidationMessage { get; set; }
+    public long? NidInstallmentList { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public string? PaymentCost { get; set; }
+    public string? PaymentDate { get; set; }
+    public string? ExcelIdentifier { get; set; }
+    public string? ExcelPaymentCost { get; set; }
+    public string? ExcelPaymentDate { get; set; }
+    public string? ExcelOdooat { get; set; }
+    public bool WillApplyEndState { get; set; }
+    public string? NidWorkItem { get; set; }
+    public string? NosaziCode { get; set; }
+    public string CI_InstallmentStatus { get; set; } = "";
+    public string EndStateDesc { get; set; } = "";
+    public string EndStateCode { get; set; } = "";
+    public string Comments { get; set; } = "";
+    public string ProposedComments { get; set; } = "";
+    public string ProposedCI_InstallmentStatus { get; set; } = "";
+    public string ProposedEndStateDesc { get; set; } = "";
+    public string ProposedEndStateCode { get; set; } = "";
+}
+
+public class InstallmentCheckPreviewResult
+{
+    public bool ExcelMode { get; set; }
+    public bool ApplyEndState { get; set; }
+    public int FoundCount { get; set; }
+    public int NotFoundCount { get; set; }
+    public int MatchedCount { get; set; }
+    public int MismatchCount { get; set; }
+    public string? Error { get; set; }
+    public List<InstallmentCheckPreviewItem> Items { get; set; } = new();
+}
+
+public class InstallmentCheckUpdateItemResult
+{
+    public string LookupValue { get; set; } = "";
+    public InstallmentLookupKind DetectedLookupKind { get; set; }
+    public bool Success { get; set; }
+    public bool Found { get; set; }
+    public int RowsAffected { get; set; }
+    /// <summary>در DryRun — تعداد ردیف‌هایی که UPDATE می‌شدند.</summary>
+    public int WouldUpdate { get; set; }
+    public string? Message { get; set; }
+}
+
+public class InstallmentCheckUpdateResult
+{
+    public bool ExcelMode { get; set; }
+    public bool ApplyEndState { get; set; }
+    public bool DryRun { get; set; }
+    public int Total { get; set; }
+    public int Updated { get; set; }
+    /// <summary>در DryRun — جمع ردیف‌هایی که UPDATE می‌شدند.</summary>
+    public int WouldUpdate { get; set; }
+    public int NotFound { get; set; }
+    public int Failed { get; set; }
+    public int SkippedMismatch { get; set; }
+    public string? Error { get; set; }
+    public List<InstallmentCheckUpdateItemResult> Results { get; set; } = new();
 }
 
 public class TahatorSendResult
