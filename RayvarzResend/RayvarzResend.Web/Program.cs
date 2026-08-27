@@ -66,6 +66,7 @@ builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
+builder.Services.AddSingleton<FicheDateChangeService>();
 
 var app = builder.Build();
 
@@ -332,7 +333,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         enabled = true,
         isAdmin = AppAuthService.IsAdmin(http.User)
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -345,6 +346,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         connection = "ConnectionStrings:Sara",
         database = "Sara8M03",
         table = "dbo.Installment_List"
+    },
+    ficheDateChange = new
+    {
+        dryRun = config.GetValue<bool?>("FicheDateChange:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Income_Fiche",
+        defaultStatus = 1,
+        statusLabels = FicheDateChangeHelper.FicheStatusLabels
     },
     ruleEngine = new
     {
@@ -756,6 +766,86 @@ app.MapPost("/api/installment/update", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapGet("/api/fiche-date/account-groups", async (
+    FicheDateChangeService ficheDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    if (denied != null) return denied;
+    try
+    {
+        var titles = await ficheDate.ListAccountGroupTitlesAsync(ct);
+        return Results.Ok(new { titles });
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/fiche-date/search", async (
+    FicheDateChangeSearchRequest? req,
+    FicheDateChangeService ficheDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await ficheDate.SearchAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/fiche-date/update", async (
+    FicheDateChangeUpdateRequest? req,
+    FicheDateChangeService ficheDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
+    try
+    {
+        var result = await ficheDate.UpdateAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
 static async Task<IResult?> DenyUnlessManageUsers(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
@@ -777,6 +867,14 @@ static async Task<IResult?> DenyUnlessInstallment(HttpContext http, AppPermissio
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
     if (!AppPermissionService.Allows(p, x => x.CanAccessInstallment))
         return Results.Json(new { error = "دسترسی به چک خزانه مجاز نیست" }, statusCode: 403);
+    return null;
+}
+
+static async Task<IResult?> DenyUnlessFicheDateChange(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessFicheDateChange))
+        return Results.Json(new { error = "دسترسی به تغییر تاریخ فیش مجاز نیست" }, statusCode: 403);
     return null;
 }
 
