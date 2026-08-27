@@ -40,6 +40,27 @@ public class FicheDateChangeHelperTests
     }
 
     [Fact]
+    public void HasAnySearchFilter_accepts_identifier_value()
+    {
+        Assert.True(FicheDateChangeHelper.HasAnySearchFilter(new FicheDateChangeSearchRequest
+        {
+            IdentifierValue = "101104/9881711"
+        }));
+    }
+
+    [Fact]
+    public void BuildIdentifierFilter_uses_fiche_no_or_bill_payment()
+    {
+        var fiche = FicheDateChangeHelper.BuildIdentifierFilter("101104/9881711");
+        Assert.NotNull(fiche);
+        Assert.Contains("FicheNo", fiche.Value.Clause);
+
+        var bill = FicheDateChangeHelper.BuildIdentifierFilter("12345678901234567890123456");
+        Assert.NotNull(bill);
+        Assert.Contains("BillID", bill.Value.Clause);
+    }
+
+    [Fact]
     public void HasAnyChange_detects_selected_fields()
     {
         Assert.False(FicheDateChangeHelper.HasAnyChange(new FicheDateChangeUpdateRequest

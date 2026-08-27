@@ -512,6 +512,8 @@ public class FicheDateChangeSearchRequest
     public string? TemporaryToDate { get; set; }
     /// <summary>LIKE روی CI_IncomeAccountGroup.Title</summary>
     public string? AccountGroupTitle { get; set; }
+    /// <summary>شماره فیش یا BillID+PaymentID — همان منطق ارسال تکی.</summary>
+    public string? IdentifierValue { get; set; }
     public List<int>? EumFicheStatuses { get; set; }
     public int MaxResults { get; set; } = 500;
 }
@@ -547,7 +549,7 @@ public class FicheDateChangeUpdateRequest
     public string? NewExportTemporaryDate { get; set; }
     public bool ApplyPaymentBreakDate { get; set; }
     public string? NewPaymentBreakDate { get; set; }
-    public bool ApplyEumFicheStatus { get; set; } = true;
+    public bool ApplyEumFicheStatus { get; set; }
     public int? NewEumFicheStatus { get; set; } = 1;
     public string PerformedByUser { get; set; } = "";
 }

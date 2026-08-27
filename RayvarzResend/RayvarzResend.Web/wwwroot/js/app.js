@@ -189,6 +189,8 @@ const ficheDateStatusLabels = {
   5: 'تایید بانک'
 };
 
+const ficheDateStatusOrder = [0, 1, 2, 3, 4, 5];
+
 let ficheDateItems = [];
 const selectedFicheDateNos = new Set();
 
@@ -459,29 +461,69 @@ function initFicheDateStatusControls() {
   const statusSelect = $('ficheDateNewStatus');
   if (filterHost) {
     filterHost.innerHTML = '';
-    Object.entries(ficheDateStatusLabels).forEach(([value, label]) => {
+    ficheDateStatusOrder.forEach((value) => {
+      const label = ficheDateStatusLabels[value];
       const labelEl = document.createElement('label');
-      labelEl.className = 'check-field';
+      labelEl.className = 'fiche-date-status-item';
+      labelEl.setAttribute('role', 'listitem');
       const input = document.createElement('input');
       input.type = 'checkbox';
-      input.value = value;
+      input.value = String(value);
       input.className = 'fiche-date-status-filter';
-      if (value === '1') input.checked = true;
+      if (value === 1) input.checked = true;
       labelEl.appendChild(input);
-      labelEl.appendChild(document.createTextNode(`${label} (${value})`));
+      labelEl.appendChild(document.createTextNode(`${value} — ${label}`));
       filterHost.appendChild(labelEl);
     });
   }
   if (statusSelect) {
     statusSelect.innerHTML = '';
-    Object.entries(ficheDateStatusLabels).forEach(([value, label]) => {
+    ficheDateStatusOrder.forEach((value) => {
+      const label = ficheDateStatusLabels[value];
       const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = `${label} (${value})`;
-      if (value === '1') opt.selected = true;
+      opt.value = String(value);
+      opt.textContent = `${value} — ${label}`;
+      if (value === 1) opt.selected = true;
       statusSelect.appendChild(opt);
     });
   }
+  syncFicheDateApplyFields();
+}
+
+function syncFicheDateApplyFields() {
+  const pairs = [
+    ['ficheDateApplyPermanent', 'ficheDateNewPermanent'],
+    ['ficheDateApplyTemporary', 'ficheDateNewTemporary'],
+    ['ficheDateApplyBreak', 'ficheDateNewBreak']
+  ];
+  pairs.forEach(([chkId, inputId]) => {
+    const chk = $(chkId);
+    const input = $(inputId);
+    if (!chk || !input) return;
+    input.disabled = !chk.checked;
+  });
+  const statusChk = $('ficheDateApplyStatus');
+  const statusSel = $('ficheDateNewStatus');
+  if (statusChk && statusSel) statusSel.disabled = !statusChk.checked;
+}
+
+function updateFicheDateIdentifierHint() {
+  const input = $('ficheDateIdentifier');
+  const hint = $('ficheDateIdentifierHint');
+  if (!input || !hint) return;
+  const value = (input.value || '').trim();
+  if (!value) {
+    hint.hidden = true;
+    hint.textContent = '';
+    return;
+  }
+  const type = detectIdentifierType(value);
+  if (!type) {
+    hint.hidden = true;
+    return;
+  }
+  hint.hidden = false;
+  hint.textContent = `تشخیص: ${identifierTypeLabels[type] || type}`;
 }
 
 async function loadFicheDateAccountGroups() {
@@ -514,6 +556,7 @@ function getFicheDateSearchPayload() {
   const selectedTitle = ($('ficheDateAccountGroup')?.value || '').trim();
   const textTitle = ($('ficheDateAccountGroupText')?.value || '').trim();
   return {
+    identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
     permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
     permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
     temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
@@ -587,6 +630,7 @@ function renderFicheDateTable(items) {
 }
 
 function getFicheDateUpdatePayload() {
+  const applyStatus = !!$('ficheDateApplyStatus')?.checked;
   return {
     ficheNos: Array.from(selectedFicheDateNos),
     applyExportPermanentDate: !!$('ficheDateApplyPermanent')?.checked,
@@ -595,8 +639,8 @@ function getFicheDateUpdatePayload() {
     newExportTemporaryDate: ($('ficheDateNewTemporary')?.value || '').trim(),
     applyPaymentBreakDate: !!$('ficheDateApplyBreak')?.checked,
     newPaymentBreakDate: ($('ficheDateNewBreak')?.value || '').trim(),
-    applyEumFicheStatus: !!$('ficheDateApplyStatus')?.checked,
-    newEumFicheStatus: parseInt($('ficheDateNewStatus')?.value || '1', 10)
+    applyEumFicheStatus: applyStatus,
+    newEumFicheStatus: applyStatus ? parseInt($('ficheDateNewStatus')?.value || '1', 10) : null
   };
 }
 
@@ -1509,6 +1553,9 @@ async function init() {
   setupMainTabs();
   initDatePickers();
   initFicheDateStatusControls();
+  $('ficheDateIdentifier')?.addEventListener('input', updateFicheDateIdentifierHint);
+  ['ficheDateApplyPermanent', 'ficheDateApplyTemporary', 'ficheDateApplyBreak', 'ficheDateApplyStatus']
+    .forEach((id) => $(id)?.addEventListener('change', syncFicheDateApplyFields));
   if (canAccessFicheDateChange()) {
     await loadFicheDateAccountGroups();
   }
@@ -1898,7 +1945,8 @@ function setupEventHandlers() {
 
   bindClick('btnFicheDateSearch', async () => {
     const payload = getFicheDateSearchPayload();
-    const hasFilter = payload.permanentFromDate || payload.permanentToDate
+    const hasFilter = payload.identifierValue
+      || payload.permanentFromDate || payload.permanentToDate
       || payload.temporaryFromDate || payload.temporaryToDate
       || payload.accountGroupTitle
       || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0);
@@ -1946,7 +1994,7 @@ function setupEventHandlers() {
     const hasChange = (payload.applyExportPermanentDate && payload.newExportPermanentDate)
       || (payload.applyExportTemporaryDate && payload.newExportTemporaryDate)
       || (payload.applyPaymentBreakDate && payload.newPaymentBreakDate)
-      || payload.applyEumFicheStatus;
+      || (payload.applyEumFicheStatus && payload.newEumFicheStatus != null);
     if (!hasChange) return alert('حداقل یک فیلد برای تغییر مشخص کنید');
 
     const dry = config?.ficheDateChange?.dryRun ?? config?.dryRun ?? true;

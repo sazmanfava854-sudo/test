@@ -77,11 +77,23 @@ public static class FicheDateChangeHelper
         || !string.IsNullOrWhiteSpace(req.TemporaryFromDate)
         || !string.IsNullOrWhiteSpace(req.TemporaryToDate)
         || !string.IsNullOrWhiteSpace(req.AccountGroupTitle)
+        || !string.IsNullOrWhiteSpace(req.IdentifierValue)
         || req.EumFicheStatuses is { Count: > 0 };
+
+    public static (string Clause, string ParamName, string Value)? BuildIdentifierFilter(string? raw)
+    {
+        var value = (raw ?? "").Trim();
+        if (value.Length == 0) return null;
+
+        var type = IdentifierDetector.Detect(value);
+        return type == IdentifierType.BillPaymentKey
+            ? ("f.BillID + f.PaymentID = @idVal", "@idVal", value)
+            : ("f.FicheNo = @idVal", "@idVal", value);
+    }
 
     public static bool HasAnyChange(FicheDateChangeUpdateRequest req) =>
         (req.ApplyExportPermanentDate && !string.IsNullOrWhiteSpace(req.NewExportPermanentDate))
         || (req.ApplyExportTemporaryDate && !string.IsNullOrWhiteSpace(req.NewExportTemporaryDate))
         || (req.ApplyPaymentBreakDate && !string.IsNullOrWhiteSpace(req.NewPaymentBreakDate))
-        || req.ApplyEumFicheStatus;
+        || (req.ApplyEumFicheStatus && req.NewEumFicheStatus.HasValue);
 }

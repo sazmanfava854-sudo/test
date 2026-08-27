@@ -50,7 +50,7 @@ public sealed class FicheDateChangeService
         var result = new FicheDateChangeSearchResult();
         if (!FicheDateChangeHelper.HasAnySearchFilter(req))
         {
-            result.Error = "حداقل یک فیلتر (بازه تاریخ، عنوان مالکیت، یا وضعیت فیش) وارد کنید";
+            result.Error = "حداقل یک فیلتر (شماره فیش، بازه تاریخ، عنوان مالکیت، یا وضعیت فیش) وارد کنید";
             return result;
         }
 
@@ -252,6 +252,13 @@ public sealed class FicheDateChangeService
         {
             clauses.Add("g.Title LIKE @title");
             parameters.Add(("@title", $"%{req.AccountGroupTitle.Trim()}%"));
+        }
+
+        var identifierFilter = FicheDateChangeHelper.BuildIdentifierFilter(req.IdentifierValue);
+        if (identifierFilter != null)
+        {
+            clauses.Add(identifierFilter.Value.Clause);
+            parameters.Add((identifierFilter.Value.ParamName, identifierFilter.Value.Value));
         }
 
         if (req.EumFicheStatuses is { Count: > 0 })
