@@ -375,16 +375,10 @@
           </div>
         </label>
         <label class="field">
-          <span class="field-label">عنوان مالکیت (انتخاب دقیق)</span>
-          <select id="ficheDateAccountGroup">
-            <option value="">— انتخاب از لیست —</option>
-          </select>
-          <span class="field-hint">یکی از ۱۵۲+ عنوان جدول CI_IncomeAccountGroup</span>
-        </label>
-        <label class="field">
-          <span class="field-label">جستجوی بخشی در عنوان مالکیت</span>
-          <input id="ficheDateAccountGroupText" type="text" placeholder="مثلاً شهردار" autocomplete="off" />
-          <span class="field-hint">فیش‌هایی که عنوان مالکیتشان شامل این متن باشد — معادل Title LIKE N'%متن%'. اگر این فیلد پر باشد، اولویت با آن است.</span>
+          <span class="field-label">عنوان مالکیت</span>
+          <input id="ficheDateAccountGroup" type="text" list="ficheDateAccountGroupOptions" placeholder="انتخاب از لیست یا جستجو — مثلاً شهردار" autocomplete="off" />
+          <datalist id="ficheDateAccountGroupOptions"></datalist>
+          <span class="field-hint">از لیست انتخاب کنید یا بخشی از عنوان را تایپ کنید (Title LIKE N'%متن%')</span>
         </label>
         <label class="field field-span-all">
           <span class="field-label">وضعیت فیش (فیلتر)</span>
@@ -636,6 +630,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=49"></script>
+  <script src="js/app.js?v=50"></script>
 </body>
 </html>

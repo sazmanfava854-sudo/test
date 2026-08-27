@@ -528,21 +528,21 @@ function updateFicheDateIdentifierHint() {
 
 async function loadFicheDateAccountGroups() {
   if (!canAccessFicheDateChange()) return;
-  const select = $('ficheDateAccountGroup');
-  if (!select) return;
+  const input = $('ficheDateAccountGroup');
+  const datalist = $('ficheDateAccountGroupOptions');
+  if (!input || !datalist) return;
   try {
     const res = await apiFetch('/api/fiche-date/account-groups');
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-    select.innerHTML = '<option value="">— انتخاب از لیست —</option>';
+    datalist.innerHTML = '';
     (data.titles || []).forEach((title) => {
       const opt = document.createElement('option');
       opt.value = title;
-      opt.textContent = title;
-      select.appendChild(opt);
+      datalist.appendChild(opt);
     });
   } catch {
-    // account groups optional — text filter still works
+    // account groups optional — free-text search still works
   }
 }
 
@@ -553,15 +553,13 @@ function getSelectedFicheDateStatuses() {
 }
 
 function getFicheDateSearchPayload() {
-  const selectedTitle = ($('ficheDateAccountGroup')?.value || '').trim();
-  const textTitle = ($('ficheDateAccountGroupText')?.value || '').trim();
   return {
     identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
     permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
     permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
     temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
     temporaryToDate: ($('ficheDateTemporaryTo')?.value || '').trim(),
-    accountGroupTitle: textTitle || selectedTitle,
+    accountGroupTitle: ($('ficheDateAccountGroup')?.value || '').trim(),
     eumFicheStatuses: getSelectedFicheDateStatuses(),
     maxResults: 500
   };
