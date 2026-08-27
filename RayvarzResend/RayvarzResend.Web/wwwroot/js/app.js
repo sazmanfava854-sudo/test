@@ -135,6 +135,7 @@ function setupMainTabs() {
     unsent: $('tabUnsent'),
     single: $('tabSingle'),
     installment: $('tabInstallment'),
+    ficheDate: $('tabFicheDate'),
     users: $('tabUsers')
   };
 
@@ -151,6 +152,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
   unsent: $('tabUnsent'),
   single: $('tabSingle'),
   installment: $('tabInstallment'),
+  ficheDate: $('tabFicheDate'),
   users: $('tabUsers')
 }) {
   tabs.forEach((t) => {
@@ -177,6 +179,18 @@ const installmentLookupLabels = {
 
 let installmentMode = 'single';
 let installmentExcelRows = [];
+
+const ficheDateStatusLabels = {
+  0: 'صدورموقت',
+  1: 'صدوردایم',
+  2: 'چاپ',
+  3: 'تایید دستی/لحظه‌ای بانک',
+  4: 'ابطال',
+  5: 'تایید بانک'
+};
+
+let ficheDateItems = [];
+const selectedFicheDateNos = new Set();
 
 function setInstallmentMode(mode) {
   installmentMode = mode === 'excel' ? 'excel' : 'single';
@@ -435,6 +449,167 @@ function formatInstallmentUpdateResult(data) {
     data.dryRun
       ? `شبیه‌سازی — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد | بدون نتیجه: ${data.notFound}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`
       : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`,
+    '',
+    ...lines
+  ].join('\n');
+}
+
+function initFicheDateStatusControls() {
+  const filterHost = $('ficheDateStatusFilters');
+  const statusSelect = $('ficheDateNewStatus');
+  if (filterHost) {
+    filterHost.innerHTML = '';
+    Object.entries(ficheDateStatusLabels).forEach(([value, label]) => {
+      const labelEl = document.createElement('label');
+      labelEl.className = 'check-field';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = value;
+      input.className = 'fiche-date-status-filter';
+      if (value === '1') input.checked = true;
+      labelEl.appendChild(input);
+      labelEl.appendChild(document.createTextNode(`${label} (${value})`));
+      filterHost.appendChild(labelEl);
+    });
+  }
+  if (statusSelect) {
+    statusSelect.innerHTML = '';
+    Object.entries(ficheDateStatusLabels).forEach(([value, label]) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = `${label} (${value})`;
+      if (value === '1') opt.selected = true;
+      statusSelect.appendChild(opt);
+    });
+  }
+}
+
+async function loadFicheDateAccountGroups() {
+  if (!canAccessFicheDateChange()) return;
+  const select = $('ficheDateAccountGroup');
+  if (!select) return;
+  try {
+    const res = await apiFetch('/api/fiche-date/account-groups');
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    select.innerHTML = '<option value="">همه / جستجوی متنی</option>';
+    (data.titles || []).forEach((title) => {
+      const opt = document.createElement('option');
+      opt.value = title;
+      opt.textContent = title;
+      select.appendChild(opt);
+    });
+  } catch {
+    // account groups optional — text filter still works
+  }
+}
+
+function getSelectedFicheDateStatuses() {
+  return Array.from(document.querySelectorAll('.fiche-date-status-filter:checked'))
+    .map((el) => parseInt(el.value, 10))
+    .filter((n) => !Number.isNaN(n));
+}
+
+function getFicheDateSearchPayload() {
+  const selectedTitle = ($('ficheDateAccountGroup')?.value || '').trim();
+  const textTitle = ($('ficheDateAccountGroupText')?.value || '').trim();
+  return {
+    permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
+    permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
+    temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
+    temporaryToDate: ($('ficheDateTemporaryTo')?.value || '').trim(),
+    accountGroupTitle: textTitle || selectedTitle,
+    eumFicheStatuses: getSelectedFicheDateStatuses(),
+    maxResults: 500
+  };
+}
+
+function syncFicheDateUpdateButton() {
+  const btn = $('btnFicheDateUpdate');
+  if (!btn) return;
+  btn.disabled = selectedFicheDateNos.size === 0;
+}
+
+function renderFicheDateTable(items) {
+  ficheDateItems = items || [];
+  selectedFicheDateNos.clear();
+  const section = $('ficheDateResultsSection');
+  const tbody = $('ficheDateTable')?.querySelector('tbody');
+  const countLabel = $('ficheDateCountLabel');
+  const selectAll = $('ficheDateSelectAll');
+  if (!section || !tbody) return;
+
+  tbody.innerHTML = '';
+  if (ficheDateItems.length === 0) {
+    section.hidden = false;
+    if (countLabel) countLabel.textContent = 'نتیجه‌ای یافت نشد';
+    if (selectAll) selectAll.checked = false;
+    syncFicheDateUpdateButton();
+    return;
+  }
+
+  ficheDateItems.forEach((item) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${item.ficheNo}" /></td>
+      <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${toPersianDigits(item.billId || '-')}</td>
+      <td>${toPersianDigits(item.paymentId || '-')}</td>
+      <td>${item.accountGroupTitle || '-'}</td>
+      <td>${toPersianDigits(item.exportTemporaryDate || '-')}</td>
+      <td>${toPersianDigits(item.exportPermanentDate || '-')}</td>
+      <td>${toPersianDigits(item.paymentBreakDate || '-')}</td>
+      <td>${toPersianDigits(item.paymentDate || '-')}</td>
+      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.fiche-date-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const ficheNo = cb.dataset.ficheNo;
+      if (cb.checked) selectedFicheDateNos.add(ficheNo);
+      else selectedFicheDateNos.delete(ficheNo);
+      syncFicheDateUpdateButton();
+      if (selectAll) {
+        const all = tbody.querySelectorAll('.fiche-date-row-check');
+        selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
+      }
+    });
+  });
+
+  section.hidden = false;
+  if (countLabel) {
+    countLabel.textContent = `${ficheDateItems.length.toLocaleString('fa-IR')} فیش${ficheDateItems.length >= 500 ? ' (حداکثر ۵۰۰)' : ''}`;
+  }
+  if (selectAll) selectAll.checked = false;
+  syncFicheDateUpdateButton();
+}
+
+function getFicheDateUpdatePayload() {
+  return {
+    ficheNos: Array.from(selectedFicheDateNos),
+    applyExportPermanentDate: !!$('ficheDateApplyPermanent')?.checked,
+    newExportPermanentDate: ($('ficheDateNewPermanent')?.value || '').trim(),
+    applyExportTemporaryDate: !!$('ficheDateApplyTemporary')?.checked,
+    newExportTemporaryDate: ($('ficheDateNewTemporary')?.value || '').trim(),
+    applyPaymentBreakDate: !!$('ficheDateApplyBreak')?.checked,
+    newPaymentBreakDate: ($('ficheDateNewBreak')?.value || '').trim(),
+    applyEumFicheStatus: !!$('ficheDateApplyStatus')?.checked,
+    newEumFicheStatus: parseInt($('ficheDateNewStatus')?.value || '1', 10)
+  };
+}
+
+function formatFicheDateUpdateResult(data) {
+  const lines = (data.results || []).map((r) =>
+    `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}`
+  );
+  return [
+    '=== نتیجه UPDATE Income_Fiche ===',
+    `DryRun: ${data.dryRun}`,
+    data.dryRun
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
+      : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
     '',
     ...lines
   ].join('\n');
@@ -775,6 +950,10 @@ function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
 }
 
+function canAccessFicheDateChange() {
+  return isAdminUser() || !!currentUser?.canAccessFicheDateChange;
+}
+
 function canManageUsers() {
   return isAdminUser() || !!currentUser?.canManageUsers;
 }
@@ -789,6 +968,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-installment').forEach((el) => {
     el.hidden = !canAccessInstallment();
+  });
+  document.querySelectorAll('.perm-fiche-date').forEach((el) => {
+    el.hidden = !canAccessFicheDateChange();
   });
   document.querySelectorAll('.perm-users').forEach((el) => {
     el.hidden = !canManageUsers();
@@ -889,6 +1071,7 @@ async function loadGroupsTable() {
       <td>${g.name}</td>
       <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td><button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button></td>
     `;
@@ -907,6 +1090,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
+  if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   const btn = $('btnCreateGroup');
   if (btn) btn.textContent = 'بروزرسانی گروه';
@@ -917,6 +1101,7 @@ function resetGroupForm() {
   if ($('newGroupName')) $('newGroupName').value = '';
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
+  if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   const btn = $('btnCreateGroup');
   if (btn) btn.textContent = 'ثبت گروه';
@@ -927,6 +1112,7 @@ async function saveGroupFromForm() {
     name: ($('newGroupName')?.value || '').trim(),
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
@@ -1322,6 +1508,10 @@ async function init() {
   syncFundFromBranch();
   setupMainTabs();
   initDatePickers();
+  initFicheDateStatusControls();
+  if (canAccessFicheDateChange()) {
+    await loadFicheDateAccountGroups();
+  }
   window.addEventListener('load', initDatePickers);
   if (canManageUsers()) {
     await loadGroupsTable();
@@ -1703,6 +1893,96 @@ function setupEventHandlers() {
       alert(e.message);
     } finally {
       btn.disabled = false;
+    }
+  });
+
+  bindClick('btnFicheDateSearch', async () => {
+    const payload = getFicheDateSearchPayload();
+    const hasFilter = payload.permanentFromDate || payload.permanentToDate
+      || payload.temporaryFromDate || payload.temporaryToDate
+      || payload.accountGroupTitle
+      || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0);
+    if (!hasFilter) return alert('حداقل یک فیلتر وارد کنید');
+
+    const btn = $('btnFicheDateSearch');
+    const box = $('ficheDateResultBox');
+    btn.disabled = true;
+    if (box) box.hidden = true;
+    try {
+      const res = await apiFetch('/api/fiche-date/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      renderFicheDateTable(data.items || []);
+    } catch (e) {
+      renderFicheDateTable([]);
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  const ficheDateSelectAll = $('ficheDateSelectAll');
+  if (ficheDateSelectAll) {
+    ficheDateSelectAll.addEventListener('change', () => {
+      const tbody = $('ficheDateTable')?.querySelector('tbody');
+      if (!tbody) return;
+      tbody.querySelectorAll('.fiche-date-row-check').forEach((cb) => {
+        cb.checked = ficheDateSelectAll.checked;
+        const ficheNo = cb.dataset.ficheNo;
+        if (ficheDateSelectAll.checked) selectedFicheDateNos.add(ficheNo);
+        else selectedFicheDateNos.delete(ficheNo);
+      });
+      syncFicheDateUpdateButton();
+    });
+  }
+
+  bindClick('btnFicheDateUpdate', async () => {
+    const payload = getFicheDateUpdatePayload();
+    if (!payload.ficheNos.length) return alert('حداقل یک فیش انتخاب کنید');
+    const hasChange = (payload.applyExportPermanentDate && payload.newExportPermanentDate)
+      || (payload.applyExportTemporaryDate && payload.newExportTemporaryDate)
+      || (payload.applyPaymentBreakDate && payload.newPaymentBreakDate)
+      || payload.applyEumFicheStatus;
+    if (!hasChange) return alert('حداقل یک فیلد برای تغییر مشخص کنید');
+
+    const dry = config?.ficheDateChange?.dryRun ?? config?.dryRun ?? true;
+    const warn = dry
+      ? `DryRun فعال — ${payload.ficheNos.length} فیش فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `تغییر تاریخ/وضعیت ${payload.ficheNos.length} فیش در Income_Fiche؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnFicheDateUpdate');
+    const box = $('ficheDateResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال اعمال…';
+    }
+    try {
+      const res = await apiFetch('/api/fiche-date/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) box.textContent = formatFicheDateUpdateResult(data);
+      if (data.dryRun) {
+        alert(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
+      } else {
+        alert(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
+        $('btnFicheDateSearch').click();
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      syncFicheDateUpdateButton();
     }
   });
 }

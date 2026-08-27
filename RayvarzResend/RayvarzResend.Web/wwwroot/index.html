@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <link rel="stylesheet" href="css/style.css?v=21" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -41,6 +41,7 @@
       <button type="button" class="main-tab active perm-unsent" data-tab="unsent" role="tab" aria-selected="true" hidden>فیش های جمعی</button>
       <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
+      <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
@@ -330,6 +331,144 @@
     </section>
     </div>
 
+    <div id="tabFicheDate" class="tab-panel perm-fiche-date" role="tabpanel" hidden>
+    <section class="card card-enter fiche-date-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">📅</span>
+        <h2>تغییر تاریخ فیش درآمد</h2>
+      </div>
+      <p class="field-hint form-intro">
+        فیش‌های درآمد را با فیلترهای زیر جستجو کنید، سپس تاریخ صدور (موقت/دایم)، مهلت پرداخت و وضعیت فیش را برای فیش‌های انتخاب‌شده به‌روزرسانی کنید.
+        وضعیت پیش‌فرض: <strong>صدور دایم (۱)</strong>.
+      </p>
+      <div class="form-grid unsent-form-grid">
+        <label class="field">
+          <span class="field-label">صدور دایم — از تاریخ</span>
+          <div class="date-input-wrap">
+            <input id="ficheDatePermanentFrom" data-jdp type="text" placeholder="1405/01/01" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="ficheDatePermanentFrom" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">صدور دایم — تا تاریخ</span>
+          <div class="date-input-wrap">
+            <input id="ficheDatePermanentTo" data-jdp type="text" placeholder="1405/01/31" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="ficheDatePermanentTo" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">صدور موقت — از تاریخ</span>
+          <div class="date-input-wrap">
+            <input id="ficheDateTemporaryFrom" data-jdp type="text" placeholder="1405/01/01" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="ficheDateTemporaryFrom" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">صدور موقت — تا تاریخ</span>
+          <div class="date-input-wrap">
+            <input id="ficheDateTemporaryTo" data-jdp type="text" placeholder="1405/01/31" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="ficheDateTemporaryTo" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">عنوان مالکیت</span>
+          <select id="ficheDateAccountGroup">
+            <option value="">همه / جستجوی متنی</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">جستجو در عنوان (LIKE)</span>
+          <input id="ficheDateAccountGroupText" type="text" placeholder="مثلاً شهردار" autocomplete="off" />
+        </label>
+        <label class="field field-span-all">
+          <span class="field-label">وضعیت فیش (فیلتر)</span>
+          <div id="ficheDateStatusFilters" class="checkbox-list fiche-date-status-filters"></div>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnFicheDateSearch" class="btn primary" type="button">جستجو</button>
+      </div>
+      <div class="subsection" id="ficheDateResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="ficheDateSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="ficheDateCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="ficheDateTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>شماره فیش</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+                <th>مالکیت</th>
+                <th>صدور موقت</th>
+                <th>صدور دایم</th>
+                <th>مهلت پرداخت</th>
+                <th>تاریخ پرداخت</th>
+                <th>وضعیت</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="subsection fiche-date-change-panel">
+        <h3>مقادیر جدید</h3>
+        <div class="form-grid unsent-form-grid">
+          <label class="field check-field">
+            <input id="ficheDateApplyPermanent" type="checkbox" />
+            <span>تغییر تاریخ صدور دایم</span>
+          </label>
+          <label class="field">
+            <span class="field-label">تاریخ صدور دایم جدید</span>
+            <div class="date-input-wrap">
+              <input id="ficheDateNewPermanent" data-jdp type="text" placeholder="1404/01/11" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="ficheDateNewPermanent" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field check-field">
+            <input id="ficheDateApplyTemporary" type="checkbox" />
+            <span>تغییر تاریخ صدور موقت</span>
+          </label>
+          <label class="field">
+            <span class="field-label">تاریخ صدور موقت جدید</span>
+            <div class="date-input-wrap">
+              <input id="ficheDateNewTemporary" data-jdp type="text" placeholder="1404/01/10" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="ficheDateNewTemporary" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field check-field">
+            <input id="ficheDateApplyBreak" type="checkbox" />
+            <span>تغییر مهلت پرداخت</span>
+          </label>
+          <label class="field">
+            <span class="field-label">مهلت پرداخت جدید</span>
+            <div class="date-input-wrap">
+              <input id="ficheDateNewBreak" data-jdp type="text" placeholder="1404/01/20" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="ficheDateNewBreak" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+          <label class="field check-field">
+            <input id="ficheDateApplyStatus" type="checkbox" checked />
+            <span>تغییر وضعیت فیش</span>
+          </label>
+          <label class="field">
+            <span class="field-label">وضعیت فیش جدید</span>
+            <select id="ficheDateNewStatus"></select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="btnFicheDateUpdate" class="btn danger" type="button" disabled>اعمال روی انتخاب‌شده‌ها</button>
+        </div>
+      </div>
+      <pre id="ficheDateResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
     <div id="tabUsers" class="tab-panel perm-users" role="tabpanel" hidden>
       <section class="card card-enter">
         <div class="card-head">
@@ -350,6 +489,10 @@
             <span>چک خزانه</span>
           </label>
           <label class="field check-field">
+            <input id="newGroupFicheDate" type="checkbox" />
+            <span>تغییر تاریخ فیش</span>
+          </label>
+          <label class="field check-field">
             <input id="newGroupUsers" type="checkbox" />
             <span>مدیریت کاربران</span>
           </label>
@@ -366,6 +509,7 @@
                   <th>نام گروه</th>
                   <th>فیش جمعی</th>
                   <th>چک خزانه</th>
+                  <th>تغییر تاریخ فیش</th>
                   <th>مدیریت کاربران</th>
                   <th>عملیات</th>
                 </tr>
@@ -476,6 +620,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=45"></script>
+  <script src="js/app.js?v=46"></script>
 </body>
 </html>
