@@ -534,7 +534,7 @@ async function loadFicheDateAccountGroups() {
     const res = await apiFetch('/api/fiche-date/account-groups');
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-    select.innerHTML = '<option value="">همه / جستجوی متنی</option>';
+    select.innerHTML = '<option value="">— انتخاب از لیست —</option>';
     (data.titles || []).forEach((title) => {
       const opt = document.createElement('option');
       opt.value = title;

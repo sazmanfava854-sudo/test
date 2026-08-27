@@ -375,14 +375,16 @@
           </div>
         </label>
         <label class="field">
-          <span class="field-label">عنوان مالکیت</span>
+          <span class="field-label">عنوان مالکیت (انتخاب دقیق)</span>
           <select id="ficheDateAccountGroup">
-            <option value="">همه / جستجوی متنی</option>
+            <option value="">— انتخاب از لیست —</option>
           </select>
+          <span class="field-hint">یکی از ۱۵۲+ عنوان جدول CI_IncomeAccountGroup</span>
         </label>
         <label class="field">
-          <span class="field-label">جستجو در عنوان (LIKE)</span>
+          <span class="field-label">جستجوی بخشی در عنوان مالکیت</span>
           <input id="ficheDateAccountGroupText" type="text" placeholder="مثلاً شهردار" autocomplete="off" />
+          <span class="field-hint">فیش‌هایی که عنوان مالکیتشان شامل این متن باشد — معادل Title LIKE N'%متن%'. اگر این فیلد پر باشد، اولویت با آن است.</span>
         </label>
         <label class="field field-span-all">
           <span class="field-label">وضعیت فیش (فیلتر)</span>
@@ -501,9 +503,10 @@
             <input id="newGroupInstallment" type="checkbox" />
             <span>چک خزانه</span>
           </label>
-          <label class="field check-field">
+          <label class="field check-field perm-fiche-date-group">
             <input id="newGroupFicheDate" type="checkbox" />
             <span>تغییر تاریخ فیش</span>
+            <span class="field-hint">دسترسی به تب «تغییر تاریخ فیش» — نیاز به ورود و مجوز گروه</span>
           </label>
           <label class="field check-field">
             <input id="newGroupUsers" type="checkbox" />

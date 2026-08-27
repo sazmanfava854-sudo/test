@@ -1023,6 +1023,17 @@ tbody tr:last-child td {
   border-top: 1px solid var(--border);
 }
 
+.perm-fiche-date-group {
+  padding-top: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.perm-fiche-date-group .field-hint {
+  margin-right: 1.6rem;
+}
+
 .checkbox-list {
   display: flex;
   flex-wrap: wrap;
