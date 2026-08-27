@@ -240,29 +240,6 @@ function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
   sheet[ref] = { t: 's', v: String(value), w: String(value) };
 }
 
-function downloadInstallmentExcelTemplate() {
-  if (typeof XLSX === 'undefined') {
-    alert('کتابخانه اکسل بارگذاری نشد');
-    return;
-  }
-  const rows = [
-    ['شناسه', 'مبلغ', 'تاریخ پرداخت'],
-    ['75360', '661900000', '1405/05/05'],
-    ['0502090614002610', '813516015', '1405/05/05'],
-    ['0502140614004800', '3157507100', '1405/05/05']
-  ];
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  rows.forEach((row, r) => {
-    row.forEach((val, c) => {
-      if (val != null && val !== '') setSheetCellAsText(sheet, r, c, val);
-    });
-  });
-  sheet['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 14 }];
-  const book = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(book, sheet, 'Installment');
-  XLSX.writeFile(book, 'installment-check-template.xlsx');
-}
-
 function parseInstallmentExcelFile(file) {
   return new Promise((resolve, reject) => {
     if (typeof XLSX === 'undefined') {
@@ -1316,8 +1293,6 @@ async function init() {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
   setInstallmentMode('single');
-
-  bindClick('btnInstallmentDownloadTemplate', downloadInstallmentExcelTemplate);
 
   const excelInput = $('installmentExcelFile');
   if (excelInput) {
