@@ -745,7 +745,7 @@ app.MapPost("/api/unsent/plan-batch", async (
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
-        return Results.Ok(await unsent.PlanBatchAsync(req, ct));
+        return Results.Ok(await unsent.PlanBatchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
@@ -766,7 +766,7 @@ app.MapPost("/api/unsent/send-batch", async (
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
-        return Results.Ok(await unsent.SendBatchAsync(req, ct));
+        return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
