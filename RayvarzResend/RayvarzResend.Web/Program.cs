@@ -67,6 +67,7 @@ builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
+builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
 
@@ -333,7 +334,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         enabled = true,
         isAdmin = AppAuthService.IsAdmin(http.User)
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -355,6 +356,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         table = "dbo.Income_Fiche",
         defaultStatus = 1,
         statusLabels = FicheDateChangeHelper.FicheStatusLabels
+    },
+    bankInquiryConfirm = new
+    {
+        dryRun = config.GetValue<bool?>("BankInquiryConfirm:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Income_Fiche",
+        ficheStatus = BankInquiryConfirmHelper.ConfirmedFicheStatus,
+        incomePaymentType = BankInquiryConfirmHelper.ConfirmedIncomePaymentType
     },
     ruleEngine = new
     {
@@ -836,6 +846,35 @@ app.MapPost("/api/fiche-date/update", async (
         var result = await ficheDate.UpdateAsync(req, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/bank-inquiry/confirm", async (
+    BankInquiryConfirmRequest? req,
+    BankInquiryConfirmService bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
+    try
+    {
+        var result = await bankInquiry.ConfirmAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error, result });
         return Results.Ok(result);
     }
     catch (SqlException ex)

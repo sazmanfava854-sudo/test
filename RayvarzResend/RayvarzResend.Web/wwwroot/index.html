@@ -43,6 +43,7 @@
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
+      <button type="button" class="main-tab perm-fiche-date" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>تایید استعلام بانک</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
@@ -482,6 +483,45 @@
     </section>
     </div>
 
+    <div id="tabBankInquiry" class="tab-panel perm-fiche-date" role="tabpanel" hidden>
+    <section class="card card-enter bank-inquiry-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">🏦</span>
+        <h2>تایید استعلام بانک</h2>
+      </div>
+      <p class="field-hint form-intro">
+        پس از استعلام بانک، فیش درآمد با وضعیت <strong>تایید دستی/لحظه‌ای بانک (۳)</strong> و نوع تایید <strong>۴</strong> به‌روز می‌شود.
+        تاریخ تایید (<code>UserConfirmDate</code>) به‌صورت خودکار برابر امروز و کاربر تایید‌کننده از حساب فعلی پر می‌شود.
+      </p>
+      <div class="form-grid unsent-form-grid">
+        <label class="field field-required">
+          <span class="field-label">تاریخ پرداخت</span>
+          <div class="date-input-wrap">
+            <input id="bankInquiryPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="bankInquiryPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field-label">شماره فیش</span>
+          <input id="bankInquiryFicheNo" type="text" placeholder="101104/9881711" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">شناسه قبض</span>
+          <input id="bankInquiryBillId" type="text" placeholder="در صورت نبود شماره فیش" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">شناسه پرداخت</span>
+          <input id="bankInquiryPaymentId" type="text" placeholder="همراه با شناسه قبض" autocomplete="off" />
+        </label>
+      </div>
+      <p class="field-hint">یکی از دو روش: <strong>شماره فیش</strong> یا <strong>هر دو</strong> شناسه قبض و شناسه پرداخت.</p>
+      <div class="actions">
+        <button id="btnBankInquiryConfirm" class="btn danger" type="button">ثبت تایید استعلام بانک</button>
+      </div>
+      <pre id="bankInquiryResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
     <div id="tabUsers" class="tab-panel perm-users" role="tabpanel" hidden>
       <section class="card card-enter">
         <div class="card-head">
@@ -638,6 +678,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=58"></script>
+  <script src="js/app.js?v=59"></script>
 </body>
 </html>

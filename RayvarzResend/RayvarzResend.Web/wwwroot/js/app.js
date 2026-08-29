@@ -193,6 +193,7 @@ function setupMainTabs() {
     unsent: $('tabUnsent'),
     installment: $('tabInstallment'),
     ficheDate: $('tabFicheDate'),
+    bankInquiry: $('tabBankInquiry'),
     users: $('tabUsers')
   };
 
@@ -209,6 +210,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
   unsent: $('tabUnsent'),
   installment: $('tabInstallment'),
   ficheDate: $('tabFicheDate'),
+  bankInquiry: $('tabBankInquiry'),
   users: $('tabUsers')
 }) {
   tabs.forEach((t) => {
@@ -1001,6 +1003,47 @@ function formatFicheDateUpdateResult(data) {
     '',
     ...lines
   ].join('\n');
+}
+
+function getBankInquiryConfirmPayload() {
+  return {
+    paymentDate: ($('bankInquiryPaymentDate')?.value || '').trim(),
+    ficheNo: ($('bankInquiryFicheNo')?.value || '').trim(),
+    billId: ($('bankInquiryBillId')?.value || '').trim(),
+    paymentId: ($('bankInquiryPaymentId')?.value || '').trim()
+  };
+}
+
+function validateBankInquiryConfirmPayload(payload) {
+  if (!payload.paymentDate) return 'تاریخ پرداخت را وارد کنید';
+  const hasFicheNo = !!payload.ficheNo;
+  const hasBillPayment = !!payload.billId && !!payload.paymentId;
+  if (!hasFicheNo && !hasBillPayment) {
+    return 'شماره فیش یا هر دو فیلد شناسه قبض و شناسه پرداخت را وارد کنید';
+  }
+  if ((payload.billId && !payload.paymentId) || (!payload.billId && payload.paymentId)) {
+    return 'هر دو فیلد شناسه قبض و شناسه پرداخت الزامی است';
+  }
+  return null;
+}
+
+function formatBankInquiryConfirmResult(data) {
+  return [
+    '=== نتیجه UPDATE Income_Fiche (تایید استعلام بانک) ===',
+    `DryRun: ${data.dryRun}`,
+    data.dryRun
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد`
+      : `به‌روز: ${data.updated || data.rowsAffected || 0}`,
+    `فیش: ${data.ficheNo || '-'}`,
+    `قبض/پرداخت: ${data.billId || '-'} / ${data.paymentId || '-'}`,
+    `وضعیت قبلی: ${data.previousEumFicheStatus ?? '-'}`,
+    `PaymentDate جدید: ${data.paymentDate || '-'}`,
+    `UserConfirmDate: ${data.userConfirmDate || '-'}`,
+    `UsernameUserConfirm: ${data.usernameUserConfirm || '-'}`,
+    `EumFicheStatus → ${data.newEumFicheStatus}`,
+    `EumIncomePaymentType → ${data.newEumIncomePaymentType}`,
+    data.message || ''
+  ].filter(Boolean).join('\n');
 }
 
 /** همان منطق سرور IdentifierDetector — فقط برای نمایش راهنما */
@@ -2388,6 +2431,47 @@ function setupEventHandlers() {
     } finally {
       btn.disabled = false;
       syncFicheDateUpdateButton();
+    }
+  });
+
+  bindClick('btnBankInquiryConfirm', async () => {
+    const payload = getBankInquiryConfirmPayload();
+    const validationError = validateBankInquiryConfirmPayload(payload);
+    if (validationError) return showAppWarning(validationError);
+
+    const dry = config?.bankInquiryConfirm?.dryRun ?? config?.dryRun ?? true;
+    const target = payload.ficheNo || `${payload.billId}/${payload.paymentId}`;
+    const warn = dry
+      ? `DryRun فعال — تایید استعلام بانک برای «${target}» فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `تایید استعلام بانک برای «${target}» در Income_Fiche ثبت شود؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnBankInquiryConfirm');
+    const box = $('bankInquiryResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال ثبت…';
+    }
+    try {
+      const res = await apiFetch('/api/bank-inquiry/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) box.textContent = formatBankInquiryConfirmResult(data);
+      if (data.dryRun) {
+        showAppInfo('تایید استعلام بانک — تغییری روی سرور اعمال نشد (DryRun).');
+      } else {
+        showAppSuccess(data.message || 'تایید استعلام بانک ثبت شد');
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 }

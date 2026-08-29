@@ -583,6 +583,43 @@ public class FicheDateChangeUpdateResult
     public List<FicheDateChangeUpdateItemResult> Results { get; set; } = new();
 }
 
+/// <summary>تب تایید استعلام بانک — dbo.Income_Fiche.</summary>
+public class BankInquiryConfirmRequest
+{
+    /// <summary>تاریخ پرداخت — از کاربر.</summary>
+    public string? PaymentDate { get; set; }
+    /// <summary>شماره فیش — یا BillID+PaymentID یا IdentifierValue.</summary>
+    public string? FicheNo { get; set; }
+    public string? BillId { get; set; }
+    public string? PaymentId { get; set; }
+    /// <summary>شماره فیش یا BillID+PaymentID ادغام‌شده — همان منطق ارسال تکی.</summary>
+    public string? IdentifierValue { get; set; }
+    public string PerformedByUser { get; set; } = "";
+}
+
+public class BankInquiryConfirmResult
+{
+    public bool DryRun { get; set; }
+    public bool Success { get; set; }
+    public int Updated { get; set; }
+    public int WouldUpdate { get; set; }
+    public int NotFound { get; set; }
+    public int Failed { get; set; }
+    public int RowsAffected { get; set; }
+    public string? Error { get; set; }
+    public string? Message { get; set; }
+    public string FicheNo { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public int? PreviousEumFicheStatus { get; set; }
+    public string? PreviousPaymentDate { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string UserConfirmDate { get; set; } = "";
+    public string UsernameUserConfirm { get; set; } = "";
+    public int NewEumFicheStatus { get; set; }
+    public int NewEumIncomePaymentType { get; set; }
+}
+
 public class TahatorSendResult
 {
     public bool Success { get; set; }
