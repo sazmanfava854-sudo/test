@@ -586,7 +586,7 @@
           <div class="user-groups-perms">
             <label class="user-group-perm-item">
               <input id="newGroupUnsent" type="checkbox" />
-              <span class="user-group-perm-text">فیش‌های جمعی</span>
+              <span class="user-group-perm-text">ارسال به رایورز</span>
             </label>
             <label class="user-group-perm-item">
               <input id="newGroupInstallment" type="checkbox" />
@@ -622,7 +622,7 @@
               <thead>
                 <tr>
                   <th>نام گروه</th>
-                  <th>فیش جمعی</th>
+                  <th>ارسال به رایورز</th>
                   <th>چک خزانه</th>
                   <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
@@ -708,16 +708,18 @@
           <p id="userEditTitle" class="field-hint"></p>
           <div class="form-grid unsent-form-grid">
             <label class="field check-field">
-              <input id="editUserIsAdmin" type="checkbox" />
-              <span>دسترسی ادمین</span>
-            </label>
-            <label class="field check-field">
               <input id="editUserIsActive" type="checkbox" />
               <span>فعال</span>
             </label>
+            <label class="field check-field">
+              <input id="editUserIsAdmin" type="checkbox" />
+              <span>دسترسی ادمین</span>
+            </label>
             <label class="field field-required">
-              <span class="field-label">گروه‌های کاربری</span>
-              <div id="editUserGroups" class="checkbox-list"></div>
+              <span class="field-label">گروه کاربری</span>
+              <select id="editUserGroupSelect">
+                <option value="">— انتخاب گروه —</option>
+              </select>
             </label>
             <label class="field">
               <span class="field-label">رمز عبور جدید</span>
@@ -736,6 +738,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=62"></script>
+  <script src="js/app.js?v=63"></script>
 </body>
 </html>

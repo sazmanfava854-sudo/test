@@ -1713,10 +1713,16 @@ async function loadGroupsTable() {
   const res = await apiFetch('/api/admin/groups');
   const data = await parseJsonResponse(res);
   cachedGroups = data.items || [];
+  renderGroupsTableBody();
+  renderUserGroupSelect();
+}
+
+function renderGroupsTableBody() {
   const tbody = $('groupsTable')?.querySelector('tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
   cachedGroups.forEach((g) => {
+    const isEditing = editingGroupId && String(editingGroupId) === String(g.id);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${g.name}</td>
@@ -1725,14 +1731,24 @@ async function loadGroupsTable() {
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
-      <td><button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button></td>
+      <td class="group-actions-cell">
+        <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${g.id}">ذخیره</button>` : ''}
+      </td>
     `;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
     btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
   });
-  renderUserGroupCheckboxes();
+  tbody.querySelectorAll('.btn-save-group').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        await saveGroupFromForm();
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+  });
 }
 
 function openGroupEdit(groupId) {
@@ -1745,8 +1761,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
-  const btn = $('btnCreateGroup');
-  if (btn) btn.textContent = 'بروزرسانی گروه';
+  renderGroupsTableBody();
 }
 
 function resetGroupForm() {
@@ -1757,11 +1772,10 @@ function resetGroupForm() {
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
-  const btn = $('btnCreateGroup');
-  if (btn) btn.textContent = 'ثبت گروه';
+  renderGroupsTableBody();
 }
 
-async function saveGroupFromForm() {
+async function saveGroupFromForm({ forceCreate = false } = {}) {
   const payload = {
     name: ($('newGroupName')?.value || '').trim(),
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
@@ -1771,10 +1785,11 @@ async function saveGroupFromForm() {
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
-  const url = editingGroupId
+  const isUpdate = !!editingGroupId && !forceCreate;
+  const url = isUpdate
     ? `/api/admin/groups/${editingGroupId}`
     : '/api/admin/groups';
-  const method = editingGroupId ? 'PUT' : 'POST';
+  const method = isUpdate ? 'PUT' : 'POST';
   const res = await apiFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -1787,21 +1802,20 @@ async function saveGroupFromForm() {
   await loadUsersTable();
 }
 
-function renderUserGroupCheckboxes() {
-  const host = $('editUserGroups');
-  if (!host) return;
-  host.innerHTML = '';
+function renderUserGroupSelect() {
+  const select = $('editUserGroupSelect');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">— انتخاب گروه —</option>';
   cachedGroups.forEach((g) => {
-    const label = document.createElement('label');
-    label.className = 'check-field';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = g.id;
-    input.dataset.groupId = g.id;
-    label.appendChild(input);
-    label.appendChild(document.createTextNode(g.name));
-    host.appendChild(label);
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    select.appendChild(opt);
   });
+  if (current && cachedGroups.some((g) => String(g.id) === String(current))) {
+    select.value = current;
+  }
 }
 
 function openUserEdit(userId) {
@@ -1813,14 +1827,14 @@ function openUserEdit(userId) {
   if ($('userEditTitle')) {
     $('userEditTitle').textContent = `${user.firstName} ${user.lastName} — ${user.nationalId || user.username}`;
   }
-  if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
+  if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  renderUserGroupCheckboxes();
-  const selected = new Set((user.groupIds || []).map(String));
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]').forEach((cb) => {
-    cb.checked = selected.has(cb.dataset.groupId);
-  });
+  renderUserGroupSelect();
+  const primaryGroupId = (user.groupIds || [])[0];
+  if ($('editUserGroupSelect')) {
+    $('editUserGroupSelect').value = primaryGroupId ? String(primaryGroupId) : '';
+  }
 }
 
 function closeUserEdit() {
@@ -1831,10 +1845,8 @@ function closeUserEdit() {
 
 async function saveUserEdit() {
   if (!editingUserId) return;
-  const groupIds = [];
-  $('editUserGroups')?.querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
-    groupIds.push(cb.dataset.groupId);
-  });
+  const groupId = ($('editUserGroupSelect')?.value || '').trim();
+  const groupIds = groupId ? [groupId] : [];
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
@@ -2746,7 +2758,7 @@ function setupAuthAndAdminHandlers() {
   });
   bindClick('btnCreateGroup', async () => {
     try {
-      await saveGroupFromForm();
+      await saveGroupFromForm({ forceCreate: true });
     } catch (e) {
       alert(e.message);
     }
