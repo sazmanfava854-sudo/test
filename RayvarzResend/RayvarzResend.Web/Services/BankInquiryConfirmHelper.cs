@@ -2,11 +2,30 @@ using RayvarzResend.Web.Models;
 
 namespace RayvarzResend.Web.Services;
 
-/// <summary>تب «تایید استعلام بانک» — dbo.Income_Fiche.</summary>
+/// <summary>تب «خدمات الکترونیک» — dbo.Income_Fiche.</summary>
 public static class BankInquiryConfirmHelper
 {
     public const int ConfirmedFicheStatus = 3;
     public const int ConfirmedIncomePaymentType = 4;
+
+    /// <summary>همان فرمول FicheRepository برای Income_Fiche → Base_NosaziCode.</summary>
+    public const string IncomeNosaziCodeSql = """
+        ISNULL(
+          NULLIF(LTRIM(RTRIM(
+            CAST(b.District AS varchar) + '-' + CAST(b.Region AS varchar) + '-' +
+            CAST(b.Block AS varchar) + '-' + CAST(b.House AS varchar) + '-' +
+            CAST(b.Building AS varchar) + '-' + CAST(b.Apartment AS varchar) + '-' +
+            ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
+          )), '-'),
+          ''
+        )
+        """;
+
+    public const string IncomeFicheNosaziJoins = """
+        JOIN dbo.Income i ON i.NidIncome = f.NidIncome
+        LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
+        LEFT JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
+        """;
 
     public static string NormalizeSlashDate(string? input)
     {
@@ -23,8 +42,6 @@ public static class BankInquiryConfirmHelper
 
     public static bool HasAnySearchFilter(BankInquirySearchRequest req)
     {
-        if (!string.IsNullOrWhiteSpace(req.PaymentDate))
-            return TryNormalizeSlashDate(req.PaymentDate, out _);
         if (!string.IsNullOrWhiteSpace(req.FicheNo)) return true;
         if (!string.IsNullOrWhiteSpace(req.IdentifierValue)) return true;
         return !string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId);
@@ -33,11 +50,7 @@ public static class BankInquiryConfirmHelper
     public static string? ValidateSearchRequest(BankInquirySearchRequest req)
     {
         if (!HasAnySearchFilter(req))
-            return "حداقل یکی از فیلترها را وارد کنید: تاریخ پرداخت، شماره فیش، یا شناسه قبض و شناسه پرداخت";
-
-        if (!string.IsNullOrWhiteSpace(req.PaymentDate)
-            && !TryNormalizeSlashDate(req.PaymentDate, out _))
-            return "تاریخ پرداخت نامعتبر است";
+            return "حداقل یکی از فیلترها را وارد کنید: شماره فیش، یا شناسه قبض و شناسه پرداخت";
 
         var hasBill = !string.IsNullOrWhiteSpace(req.BillId);
         var hasPayment = !string.IsNullOrWhiteSpace(req.PaymentId);
@@ -52,13 +65,6 @@ public static class BankInquiryConfirmHelper
     {
         var clauses = new List<string>();
         var parameters = new List<(string, object)>();
-
-        if (!string.IsNullOrWhiteSpace(req.PaymentDate)
-            && TryNormalizeSlashDate(req.PaymentDate, out var paymentDate))
-        {
-            clauses.Add("f.PaymentDate = @paymentDate");
-            parameters.Add(("@paymentDate", paymentDate));
-        }
 
         if (!string.IsNullOrWhiteSpace(req.FicheNo))
         {

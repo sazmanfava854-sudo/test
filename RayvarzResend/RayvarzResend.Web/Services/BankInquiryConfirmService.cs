@@ -45,6 +45,7 @@ public sealed class BankInquiryConfirmService
         var countSql = $"""
             SELECT COUNT(*)
             FROM dbo.Income_Fiche f
+            {BankInquiryConfirmHelper.IncomeFicheNosaziJoins}
             WHERE {whereSql}
             """;
 
@@ -56,8 +57,10 @@ public sealed class BankInquiryConfirmService
                    f.BankPaymentDate,
                    f.EumFicheStatus,
                    f.UserConfirmDate,
-                   f.UsernameUserConfirm
+                   f.UsernameUserConfirm,
+                   {BankInquiryConfirmHelper.IncomeNosaziCodeSql} AS NosaziCode
             FROM dbo.Income_Fiche f
+            {BankInquiryConfirmHelper.IncomeFicheNosaziJoins}
             WHERE {whereSql}
             ORDER BY f.PaymentDate DESC, f.FicheNo DESC
             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -99,6 +102,7 @@ public sealed class BankInquiryConfirmService
                 PaymentId = reader["PaymentID"]?.ToString() ?? "",
                 PaymentDate = reader["PaymentDate"]?.ToString() ?? "",
                 BankPaymentDate = reader["BankPaymentDate"]?.ToString() ?? "",
+                NosaziCode = reader["NosaziCode"]?.ToString() ?? "",
                 EumFicheStatus = status,
                 EumFicheStatusLabel = FicheDateChangeHelper.StatusLabel(status),
                 UserConfirmDate = reader["UserConfirmDate"]?.ToString() ?? "",

@@ -10,17 +10,8 @@ public class BankInquiryConfirmHelperTests
     public void ValidateSearchRequest_requires_at_least_one_filter()
     {
         Assert.Equal(
-            "حداقل یکی از فیلترها را وارد کنید: تاریخ پرداخت، شماره فیش، یا شناسه قبض و شناسه پرداخت",
+            "حداقل یکی از فیلترها را وارد کنید: شماره فیش، یا شناسه قبض و شناسه پرداخت",
             BankInquiryConfirmHelper.ValidateSearchRequest(new BankInquirySearchRequest()));
-    }
-
-    [Fact]
-    public void ValidateSearchRequest_accepts_payment_date()
-    {
-        Assert.Null(BankInquiryConfirmHelper.ValidateSearchRequest(new BankInquirySearchRequest
-        {
-            PaymentDate = "1404/01/11"
-        }));
     }
 
     [Fact]
@@ -43,17 +34,24 @@ public class BankInquiryConfirmHelperTests
     }
 
     [Fact]
-    public void BuildSearchWhere_combines_filters()
+    public void BuildSearchWhere_uses_fiche_no()
     {
         var (where, parameters) = BankInquiryConfirmHelper.BuildSearchWhere(new BankInquirySearchRequest
         {
-            PaymentDate = "1404/01/11",
             FicheNo = "101104/9881711"
         });
 
-        Assert.Contains("PaymentDate", where);
         Assert.Contains("FicheNo", where);
-        Assert.Equal(2, parameters.Count);
+        Assert.DoesNotContain("PaymentDate", where);
+        Assert.Single(parameters);
+    }
+
+    [Fact]
+    public void IncomeNosaziCodeSql_uses_base_nosazi_join_fields()
+    {
+        Assert.Contains("b.District", BankInquiryConfirmHelper.IncomeNosaziCodeSql);
+        Assert.Contains("b.Shop", BankInquiryConfirmHelper.IncomeNosaziCodeSql);
+        Assert.Contains("Base_NosaziCode", BankInquiryConfirmHelper.IncomeFicheNosaziJoins);
     }
 
     [Fact]

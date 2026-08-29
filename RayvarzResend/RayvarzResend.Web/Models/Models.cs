@@ -583,11 +583,9 @@ public class FicheDateChangeUpdateResult
     public List<FicheDateChangeUpdateItemResult> Results { get; set; } = new();
 }
 
-/// <summary>تب تایید استعلام بانک — جستجو.</summary>
+/// <summary>تب خدمات الکترونیک — جستجو.</summary>
 public class BankInquirySearchRequest
 {
-    /// <summary>فیلتر تاریخ پرداخت — اختیاری.</summary>
-    public string? PaymentDate { get; set; }
     public string? FicheNo { get; set; }
     public string? BillId { get; set; }
     public string? PaymentId { get; set; }
@@ -604,6 +602,7 @@ public class BankInquiryListItem
     public string PaymentId { get; set; } = "";
     public string PaymentDate { get; set; } = "";
     public string BankPaymentDate { get; set; } = "";
+    public string NosaziCode { get; set; } = "";
     public int EumFicheStatus { get; set; }
     public string EumFicheStatusLabel { get; set; } = "";
     public string UserConfirmDate { get; set; } = "";

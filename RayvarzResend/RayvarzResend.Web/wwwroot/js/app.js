@@ -1019,7 +1019,6 @@ function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
   const pageSize = parseInt($('bankInquiryPageSize')?.value || bankInquirySearchState.pageSize, 10) || 25;
   bankInquirySearchState.pageSize = pageSize;
   return {
-    paymentDate: ($('bankInquirySearchPaymentDate')?.value || '').trim(),
     ficheNo: ($('bankInquiryFicheNo')?.value || '').trim(),
     billId: ($('bankInquiryBillId')?.value || '').trim(),
     paymentId: ($('bankInquiryPaymentId')?.value || '').trim(),
@@ -1029,11 +1028,10 @@ function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
 }
 
 function validateBankInquirySearchPayload(payload) {
-  const hasDate = !!payload.paymentDate;
   const hasFicheNo = !!payload.ficheNo;
   const hasBillPayment = !!payload.billId && !!payload.paymentId;
-  if (!hasDate && !hasFicheNo && !hasBillPayment) {
-    return 'حداقل یکی از فیلترها را وارد کنید: تاریخ پرداخت، شماره فیش، یا شناسه قبض و شناسه پرداخت';
+  if (!hasFicheNo && !hasBillPayment) {
+    return 'حداقل یکی از فیلترها را وارد کنید: شماره فیش، یا شناسه قبض و شناسه پرداخت';
   }
   if ((payload.billId && !payload.paymentId) || (!payload.billId && payload.paymentId)) {
     return 'هر دو فیلد شناسه قبض و شناسه پرداخت الزامی است';
@@ -1091,7 +1089,7 @@ function renderBankInquiryTable(items, meta = {}) {
   section.hidden = false;
 
   if (bankInquiryItems.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">موردی یافت نشد</td></tr>';
     updateBankInquiryCountLabel();
     updateBankInquiryPaginationUi();
     syncBankInquiryConfirmButton();
@@ -1103,6 +1101,7 @@ function renderBankInquiryTable(items, meta = {}) {
     return `<tr>
       <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${formatNosaziCode(item.nosaziCode)}</td>
       <td>${toPersianDigits(item.billId || '-')}</td>
       <td>${toPersianDigits(item.paymentId || '-')}</td>
       <td>${formatShamsiDisplay(item.paymentDate)}</td>
@@ -1204,11 +1203,16 @@ function validateBankInquiryConfirmPayload(payload) {
 }
 
 function formatBankInquiryConfirmResult(data) {
-  const lines = (data.results || []).map((r) =>
-    `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}`
+  const nosaziByFiche = new Map(
+    bankInquiryItems.map((item) => [item.ficheNo, item.nosaziCode])
   );
+  const lines = (data.results || []).map((r) => {
+    const nosazi = nosaziByFiche.get(r.ficheNo);
+    const nosaziPart = nosazi ? ` | کد نوسازی: ${formatNosaziCode(nosazi)}` : '';
+    return `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}${nosaziPart}`;
+  });
   return [
-    '=== نتیجه UPDATE Income_Fiche (تایید استعلام بانک) ===',
+    '=== نتیجه UPDATE Income_Fiche (خدمات الکترونیک) ===',
     `DryRun: ${data.dryRun}`,
     data.dryRun
       ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد | بدون نتیجه: ${data.notFound}`

@@ -42,7 +42,7 @@
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
-      <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>تایید استعلام بانک</button>
+      <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
@@ -486,20 +486,13 @@
     <section class="card card-enter bank-inquiry-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">🏦</span>
-        <h2>تایید استعلام بانک</h2>
+        <h2>خدمات الکترونیک</h2>
       </div>
       <p class="field-hint form-intro">
         ابتدا فیش را با یکی از فیلترهای زیر جستجو کنید. پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و تایید استعلام بانک را ثبت کنید.
         وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند؛ تاریخ تایید و کاربر تایید‌کننده خودکار پر می‌شود.
       </p>
       <div class="bank-inquiry-search-grid unsent-form-grid">
-        <label class="field field-compact-date">
-          <span class="field-label">تاریخ پرداخت (فیلتر جستجو)</span>
-          <div class="date-input-wrap">
-            <input id="bankInquirySearchPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
-            <button type="button" class="btn-date-icon" data-for="bankInquirySearchPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
-          </div>
-        </label>
         <label class="field">
           <span class="field-label">شماره فیش</span>
           <input id="bankInquiryFicheNo" type="text" placeholder="101104/9881711" autocomplete="off" />
@@ -513,7 +506,7 @@
           <input id="bankInquiryPaymentId" type="text" placeholder="همراه با شناسه قبض" autocomplete="off" />
         </label>
       </div>
-      <p class="field-hint">حداقل یکی از فیلترها: <strong>تاریخ پرداخت</strong>، <strong>شماره فیش</strong>، یا <strong>هر دو شناسه قبض و پرداخت</strong>.</p>
+      <p class="field-hint">حداقل یکی از فیلترها: <strong>شماره فیش</strong>، یا <strong>هر دو شناسه قبض و پرداخت</strong>.</p>
       <div class="actions">
         <button id="btnBankInquirySearch" class="btn primary" type="button">جستجو</button>
       </div>
@@ -531,6 +524,7 @@
               <tr>
                 <th class="col-check"></th>
                 <th>شماره فیش</th>
+                <th>کد نوسازی</th>
                 <th>شناسه قبض</th>
                 <th>شناسه پرداخت</th>
                 <th>تاریخ پرداخت</th>
@@ -610,8 +604,8 @@
             <label class="user-group-perm-item user-group-perm-item-wide">
               <input id="newGroupBankInquiry" type="checkbox" />
               <span class="user-group-perm-content">
-                <span class="user-group-perm-text">تایید استعلام بانک</span>
-                <span class="user-group-perm-hint">دسترسی به تب «تایید استعلام بانک»</span>
+                <span class="user-group-perm-text">خدمات الکترونیک</span>
+                <span class="user-group-perm-hint">دسترسی به تب «خدمات الکترونیک»</span>
               </span>
             </label>
           </div>
@@ -630,7 +624,7 @@
                   <th>چک خزانه</th>
                   <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
-                  <th>تایید استعلام بانک</th>
+                  <th>خدمات الکترونیک</th>
                   <th>عملیات</th>
                 </tr>
               </thead>
