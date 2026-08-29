@@ -975,7 +975,7 @@ static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPe
 {
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
     if (!AppPermissionService.Allows(p, x => x.CanAccessBankInquiryConfirm))
-        return Results.Json(new { error = "دسترسی به تایید استعلام بانک مجاز نیست" }, statusCode: 403);
+        return Results.Json(new { error = "دسترسی به خدمات الکترونیک مجاز نیست" }, statusCode: 403);
     return null;
 }
 
