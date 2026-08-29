@@ -177,4 +177,31 @@ public sealed class InMemoryAppUserStore
             throw new InvalidOperationException("کاربر یافت نشد");
         user.PasswordHash = PasswordHasherUtil.Hash(password);
     }
+
+    public AppUserRecord CreateSsoUser(
+        string username,
+        (string FirstName, string LastName, string NationalId, string Position, string District) normalized)
+    {
+        if (_byUsername.ContainsKey(username))
+            return _byUsername[username];
+
+        var user = new AppUserRecord
+        {
+            Id = Guid.NewGuid(),
+            Username = username,
+            PasswordHash = PasswordHasherUtil.Hash(Guid.NewGuid().ToString("N")),
+            FirstName = normalized.FirstName,
+            LastName = normalized.LastName,
+            NationalId = normalized.NationalId,
+            Position = normalized.Position,
+            District = normalized.District,
+            IsAdmin = false,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        _byUsername[user.Username] = user;
+        _byId[user.Id] = user;
+        _userGroups[user.Id] = [];
+        return user;
+    }
 }

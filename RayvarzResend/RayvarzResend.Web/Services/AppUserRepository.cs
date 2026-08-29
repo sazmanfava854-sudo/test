@@ -501,6 +501,65 @@ public sealed class AppUserRepository
         return user;
     }
 
+    public async Task<AppUserRecord> CreateSsoUserAsync(ShimasUserProfile profile, CancellationToken ct = default)
+    {
+        var username = (profile.Username ?? "").Trim();
+        if (username.Length == 0)
+            throw new ArgumentException("username الزامی است");
+
+        var normalized = SsoUserProvisioningHelper.NormalizeProfile(profile);
+        if (_useInMemory)
+            return _memory.CreateSsoUser(username, normalized);
+
+        await EnsureSchemaAsync(ct);
+        var user = new AppUserRecord
+        {
+            Id = Guid.NewGuid(),
+            Username = username,
+            PasswordHash = PasswordHasherUtil.Hash(Guid.NewGuid().ToString("N")),
+            FirstName = normalized.FirstName,
+            LastName = normalized.LastName,
+            NationalId = normalized.NationalId,
+            Position = normalized.Position,
+            District = normalized.District,
+            IsAdmin = false,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        const string sql = """
+            INSERT INTO dbo.AppUser
+                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, IsAdmin, IsActive, CreatedAtUtc)
+            VALUES
+                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, 0, 1, @created)
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", user.Id);
+        cmd.Parameters.AddWithValue("@u", user.Username);
+        cmd.Parameters.AddWithValue("@hash", user.PasswordHash);
+        cmd.Parameters.AddWithValue("@fn", user.FirstName);
+        cmd.Parameters.AddWithValue("@ln", user.LastName);
+        cmd.Parameters.AddWithValue("@nid", user.NationalId);
+        cmd.Parameters.AddWithValue("@pos", user.Position);
+        cmd.Parameters.AddWithValue("@dist", user.District);
+        cmd.Parameters.AddWithValue("@created", user.CreatedAtUtc);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex) when (ex.Number is 2627 or 2601)
+        {
+            var existing = await FindByUsernameAsync(username, ct);
+            if (existing != null)
+                return existing;
+            throw;
+        }
+
+        return user;
+    }
+
     private static bool ReadOptionalBoolean(SqlDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);

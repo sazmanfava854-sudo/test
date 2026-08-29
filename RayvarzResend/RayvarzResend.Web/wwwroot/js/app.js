@@ -1,6 +1,7 @@
 let currentFiche = null;
 let config = null;
 let currentUser = null;
+let authMode = null;
 let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
 const unsentSearchState = {
@@ -1532,8 +1533,21 @@ async function parseJsonResponse(res) {
   }
 }
 
-function redirectToLogin() {
-  window.location.href = '/login.html';
+async function loadAuthMode() {
+  if (authMode) return authMode;
+  try {
+    const res = await fetch('/api/auth/mode', { credentials: 'include' });
+    if (res.ok) authMode = await res.json();
+  } catch {
+    // ignore
+  }
+  return authMode;
+}
+
+async function redirectToLogin() {
+  const mode = await loadAuthMode();
+  const path = mode?.preferSsoLogin ? (mode.loginPath || '/auth/login') : '/login.html';
+  window.location.href = path;
 }
 
 async function apiFetch(url, options = {}) {
