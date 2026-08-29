@@ -1692,9 +1692,9 @@ async function loadGroupsTable() {
       <td>${g.name}</td>
       <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
+      <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
-      <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td><button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button></td>
     `;
     tbody.appendChild(tr);

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=36" />
+  <link rel="stylesheet" href="css/style.css?v=37" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -492,7 +492,7 @@
         ابتدا فیش را با یکی از فیلترهای زیر جستجو کنید. پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و تایید استعلام بانک را ثبت کنید.
         وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند؛ تاریخ تایید و کاربر تایید‌کننده خودکار پر می‌شود.
       </p>
-      <div class="form-grid unsent-form-grid">
+      <div class="bank-inquiry-search-grid unsent-form-grid">
         <label class="field field-compact-date">
           <span class="field-label">تاریخ پرداخت (فیلتر جستجو)</span>
           <div class="date-input-wrap">
@@ -596,6 +596,10 @@
               <input id="newGroupInstallment" type="checkbox" />
               <span class="user-group-perm-text">چک خزانه</span>
             </label>
+            <label class="user-group-perm-item">
+              <input id="newGroupUsers" type="checkbox" />
+              <span class="user-group-perm-text">مدیریت کاربران</span>
+            </label>
             <label class="user-group-perm-item user-group-perm-item-wide">
               <input id="newGroupFicheDate" type="checkbox" />
               <span class="user-group-perm-content">
@@ -609,10 +613,6 @@
                 <span class="user-group-perm-text">تایید استعلام بانک</span>
                 <span class="user-group-perm-hint">دسترسی به تب «تایید استعلام بانک»</span>
               </span>
-            </label>
-            <label class="user-group-perm-item">
-              <input id="newGroupUsers" type="checkbox" />
-              <span class="user-group-perm-text">مدیریت کاربران</span>
             </label>
           </div>
           <div class="actions user-groups-actions">
@@ -628,9 +628,9 @@
                   <th>نام گروه</th>
                   <th>فیش جمعی</th>
                   <th>چک خزانه</th>
+                  <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
                   <th>تایید استعلام بانک</th>
-                  <th>مدیریت کاربران</th>
                   <th>عملیات</th>
                 </tr>
               </thead>
@@ -740,6 +740,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=61"></script>
+  <script src="js/app.js?v=62"></script>
 </body>
 </html>
