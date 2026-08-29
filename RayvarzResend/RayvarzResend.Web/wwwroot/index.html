@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=30" />
+  <link rel="stylesheet" href="css/style.css?v=31" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -423,6 +423,19 @@
             <tbody></tbody>
           </table>
         </div>
+        <div class="unsent-pagination" id="ficheDatePagination" hidden>
+          <button id="btnFicheDatePrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
+          <span id="ficheDatePageLabel" class="unsent-page-label"></span>
+          <button id="btnFicheDateNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
+          <label class="unsent-page-size">
+            <span>در هر صفحه</span>
+            <select id="ficheDatePageSize">
+              <option value="25">۲۵</option>
+              <option value="50" selected>۵۰</option>
+              <option value="100">۱۰۰</option>
+            </select>
+          </label>
+        </div>
       </div>
       <div class="subsection fiche-date-change-panel">
         <h3>مقادیر جدید</h3>
@@ -622,6 +635,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=52"></script>
+  <script src="js/app.js?v=53"></script>
 </body>
 </html>

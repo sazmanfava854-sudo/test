@@ -193,6 +193,12 @@ const ficheDateStatusOrder = [0, 1, 2, 3, 4, 5];
 
 let ficheDateItems = [];
 const selectedFicheDateNos = new Set();
+const ficheDateSearchState = {
+  page: 1,
+  pageSize: 50,
+  totalCount: 0,
+  totalPages: 0
+};
 
 function setInstallmentMode(mode) {
   installmentMode = mode === 'excel' ? 'excel' : 'single';
@@ -685,7 +691,9 @@ function getSelectedFicheDateStatuses() {
     .filter((n) => !Number.isNaN(n));
 }
 
-function getFicheDateSearchPayload() {
+function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
+  const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 50;
+  ficheDateSearchState.pageSize = pageSize;
   return {
     identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
     permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
@@ -694,8 +702,40 @@ function getFicheDateSearchPayload() {
     temporaryToDate: ($('ficheDateTemporaryTo')?.value || '').trim(),
     accountGroupTitle: ($('ficheDateAccountGroup')?.value || '').trim(),
     eumFicheStatuses: getSelectedFicheDateStatuses(),
-    maxResults: 500
+    page,
+    pageSize
   };
+}
+
+function hasFicheDateSearchFilter(payload = getFicheDateSearchPayload()) {
+  return !!(payload.identifierValue
+    || payload.permanentFromDate || payload.permanentToDate
+    || payload.temporaryFromDate || payload.temporaryToDate
+    || payload.accountGroupTitle
+    || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0));
+}
+
+function updateFicheDatePaginationUi() {
+  const bar = $('ficheDatePagination');
+  const label = $('ficheDatePageLabel');
+  const prevBtn = $('btnFicheDatePrevPage');
+  const nextBtn = $('btnFicheDateNextPage');
+  if (!bar || !label || !prevBtn || !nextBtn) return;
+
+  const { page, totalPages, totalCount } = ficheDateSearchState;
+  const hasResults = totalCount > 0;
+  bar.hidden = !hasResults;
+
+  if (!hasResults) {
+    label.textContent = '';
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+
+  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${totalPages.toLocaleString('fa-IR')} — ${totalCount.toLocaleString('fa-IR')} مورد`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
 }
 
 function syncFicheDateUpdateButton() {
@@ -704,9 +744,13 @@ function syncFicheDateUpdateButton() {
   btn.disabled = selectedFicheDateNos.size === 0;
 }
 
-function renderFicheDateTable(items) {
+function renderFicheDateTable(items, meta = {}) {
   ficheDateItems = items || [];
-  selectedFicheDateNos.clear();
+  if (meta.page != null) ficheDateSearchState.page = meta.page;
+  if (meta.pageSize != null) ficheDateSearchState.pageSize = meta.pageSize;
+  if (meta.totalCount != null) ficheDateSearchState.totalCount = meta.totalCount;
+  if (meta.totalPages != null) ficheDateSearchState.totalPages = meta.totalPages;
+
   const section = $('ficheDateResultsSection');
   const tbody = $('ficheDateTable')?.querySelector('tbody');
   const countLabel = $('ficheDateCountLabel');
@@ -716,16 +760,22 @@ function renderFicheDateTable(items) {
   tbody.innerHTML = '';
   if (ficheDateItems.length === 0) {
     section.hidden = false;
-    if (countLabel) countLabel.textContent = 'نتیجه‌ای یافت نشد';
+    if (countLabel) {
+      countLabel.textContent = ficheDateSearchState.totalCount > 0
+        ? `۰ مورد در این صفحه — ${ficheDateSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
+        : 'نتیجه‌ای یافت نشد';
+    }
     if (selectAll) selectAll.checked = false;
+    updateFicheDatePaginationUi();
     syncFicheDateUpdateButton();
     return;
   }
 
   ficheDateItems.forEach((item) => {
+    const checked = selectedFicheDateNos.has(item.ficheNo) ? ' checked' : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${item.ficheNo}" /></td>
+      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${toPersianDigits(item.ficheNo || '-')}</td>
       <td>${toPersianDigits(item.billId || '-')}</td>
       <td>${toPersianDigits(item.paymentId || '-')}</td>
@@ -749,15 +799,80 @@ function renderFicheDateTable(items) {
         const all = tbody.querySelectorAll('.fiche-date-row-check');
         selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
       }
+      updateFicheDateCountLabel();
     });
   });
 
   section.hidden = false;
-  if (countLabel) {
-    countLabel.textContent = `${ficheDateItems.length.toLocaleString('fa-IR')} فیش${ficheDateItems.length >= 500 ? ' (حداکثر ۵۰۰)' : ''}`;
+  updateFicheDateCountLabel();
+  if (selectAll) {
+    const selectedOnPage = ficheDateItems.filter((item) => selectedFicheDateNos.has(item.ficheNo)).length;
+    selectAll.checked = ficheDateItems.length > 0 && selectedOnPage === ficheDateItems.length;
   }
-  if (selectAll) selectAll.checked = false;
+  updateFicheDatePaginationUi();
   syncFicheDateUpdateButton();
+}
+
+function updateFicheDateCountLabel() {
+  const countLabel = $('ficheDateCountLabel');
+  if (!countLabel) return;
+  const selectedTotal = selectedFicheDateNos.size;
+  const pageInfo = `${ficheDateItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${ficheDateSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+  countLabel.textContent = selectedTotal > 0
+    ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+    : pageInfo;
+}
+
+async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) {
+  const payload = getFicheDateSearchPayload(page);
+  if (!hasFicheDateSearchFilter(payload)) {
+    alert('حداقل یک فیلتر وارد کنید');
+    return false;
+  }
+
+  if (clearSelection) selectedFicheDateNos.clear();
+  ficheDateSearchState.page = page;
+
+  const btn = $('btnFicheDateSearch');
+  const prevBtn = $('btnFicheDatePrevPage');
+  const nextBtn = $('btnFicheDateNextPage');
+  const box = $('ficheDateResultBox');
+  if (btn) btn.disabled = true;
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+  const prevLabel = btn?.textContent;
+  if (btn) btn.textContent = 'در حال جستجو…';
+  if (box) box.hidden = true;
+
+  try {
+    const res = await apiFetch('/api/fiche-date/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+    const totalCount = data.totalCount ?? data.count ?? 0;
+    const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
+    renderFicheDateTable(data.items || [], {
+      page: data.page ?? page,
+      pageSize: data.pageSize ?? payload.pageSize,
+      totalCount,
+      totalPages
+    });
+    return true;
+  } catch (e) {
+    alert(e.message);
+    renderFicheDateTable([], { page: 1, pageSize: payload.pageSize, totalCount: 0, totalPages: 0 });
+    return false;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'جستجو';
+    }
+    updateFicheDatePaginationUi();
+  }
 }
 
 function getFicheDateUpdatePayload() {
@@ -2075,34 +2190,27 @@ function setupEventHandlers() {
   });
 
   bindClick('btnFicheDateSearch', async () => {
-    const payload = getFicheDateSearchPayload();
-    const hasFilter = payload.identifierValue
-      || payload.permanentFromDate || payload.permanentToDate
-      || payload.temporaryFromDate || payload.temporaryToDate
-      || payload.accountGroupTitle
-      || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0);
-    if (!hasFilter) return alert('حداقل یک فیلتر وارد کنید');
-
-    const btn = $('btnFicheDateSearch');
-    const box = $('ficheDateResultBox');
-    btn.disabled = true;
-    if (box) box.hidden = true;
-    try {
-      const res = await apiFetch('/api/fiche-date/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      renderFicheDateTable(data.items || []);
-    } catch (e) {
-      renderFicheDateTable([]);
-      alert(e.message);
-    } finally {
-      btn.disabled = false;
-    }
+    await fetchFicheDateResults(1, { clearSelection: true });
   });
+
+  bindClick('btnFicheDatePrevPage', async () => {
+    if (ficheDateSearchState.page <= 1) return;
+    await fetchFicheDateResults(ficheDateSearchState.page - 1);
+  });
+
+  bindClick('btnFicheDateNextPage', async () => {
+    if (ficheDateSearchState.page >= ficheDateSearchState.totalPages) return;
+    await fetchFicheDateResults(ficheDateSearchState.page + 1);
+  });
+
+  const ficheDatePageSize = $('ficheDatePageSize');
+  if (ficheDatePageSize) {
+    ficheDatePageSize.addEventListener('change', async () => {
+      if (ficheDateSearchState.totalCount > 0) {
+        await fetchFicheDateResults(1);
+      }
+    });
+  }
 
   const ficheDateSelectAll = $('ficheDateSelectAll');
   if (ficheDateSelectAll) {
@@ -2115,6 +2223,7 @@ function setupEventHandlers() {
         if (ficheDateSelectAll.checked) selectedFicheDateNos.add(ficheNo);
         else selectedFicheDateNos.delete(ficheNo);
       });
+      updateFicheDateCountLabel();
       syncFicheDateUpdateButton();
     });
   }

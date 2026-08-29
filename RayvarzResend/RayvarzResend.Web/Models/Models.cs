@@ -515,6 +515,9 @@ public class FicheDateChangeSearchRequest
     /// <summary>شماره فیش یا BillID+PaymentID — همان منطق ارسال تکی.</summary>
     public string? IdentifierValue { get; set; }
     public List<int>? EumFicheStatuses { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 50;
+    /// <summary>سازگاری با نسخه قبلی — در صورت PageSize=0 از این مقدار استفاده می‌شود.</summary>
     public int MaxResults { get; set; } = 500;
 }
 
@@ -535,6 +538,10 @@ public class FicheDateChangeListItem
 public class FicheDateChangeSearchResult
 {
     public int Count { get; set; }
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
     public bool Truncated { get; set; }
     public string? Error { get; set; }
     public List<FicheDateChangeListItem> Items { get; set; } = new();

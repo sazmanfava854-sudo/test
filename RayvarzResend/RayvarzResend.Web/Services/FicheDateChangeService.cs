@@ -63,10 +63,23 @@ public sealed class FicheDateChangeService
         }
 
         var (whereSql, parameters) = BuildSearchWhere(req);
-        var maxResults = req.MaxResults is > 0 and <= 2000 ? req.MaxResults : 500;
+        var page = req.Page > 0 ? req.Page : 1;
+        var pageSize = req.PageSize is > 0 and <= 200
+            ? req.PageSize
+            : req.MaxResults is > 0 and <= 200
+                ? req.MaxResults
+                : 50;
+        var offset = (page - 1) * pageSize;
+
+        var countSql = $"""
+            SELECT COUNT(*)
+            FROM dbo.Income_Fiche f
+            INNER JOIN dbo.CI_IncomeAccountGroup g ON g.ID = f.CI_IncomeAccountGroup
+            WHERE {whereSql}
+            """;
+
         var sql = $"""
-            SELECT TOP ({maxResults})
-                   f.FicheNo,
+            SELECT f.FicheNo,
                    f.BillId,
                    f.PaymentId,
                    f.ExportPermanentDate,
@@ -79,13 +92,33 @@ public sealed class FicheDateChangeService
             INNER JOIN dbo.CI_IncomeAccountGroup g ON g.ID = f.CI_IncomeAccountGroup
             WHERE {whereSql}
             ORDER BY f.ExportPermanentDate DESC, f.FicheNo DESC
+            OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
             """;
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
+
+        var totalCount = 0;
+        await using (var countCmd = new SqlCommand(countSql, conn))
+        {
+            foreach (var (name, value) in parameters)
+                countCmd.Parameters.AddWithValue(name, value);
+            var scalar = await countCmd.ExecuteScalarAsync(ct);
+            totalCount = scalar == null || scalar == DBNull.Value ? 0 : Convert.ToInt32(scalar);
+        }
+
+        var totalPages = pageSize > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 0;
+        if (totalPages > 0 && page > totalPages)
+        {
+            page = totalPages;
+            offset = (page - 1) * pageSize;
+        }
+
         await using var cmd = new SqlCommand(sql, conn);
         foreach (var (name, value) in parameters)
             cmd.Parameters.AddWithValue(name, value);
+        cmd.Parameters.AddWithValue("@offset", offset);
+        cmd.Parameters.AddWithValue("@pageSize", pageSize);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -107,7 +140,11 @@ public sealed class FicheDateChangeService
         }
 
         result.Count = result.Items.Count;
-        result.Truncated = result.Count >= maxResults;
+        result.TotalCount = totalCount;
+        result.Page = page;
+        result.PageSize = pageSize;
+        result.TotalPages = totalPages;
+        result.Truncated = false;
         return result;
     }
 
