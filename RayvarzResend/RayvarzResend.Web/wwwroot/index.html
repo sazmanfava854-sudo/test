@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=35" />
+  <link rel="stylesheet" href="css/style.css?v=36" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -24,7 +24,6 @@
         <div class="hero-brand">
           <div>
             <p class="brand-name">Rayvarz Resend</p>
-            <h1>ارسال مجدد فیش به رایورز</h1>
           </div>
         </div>
         <div class="hero-user" id="heroUser" hidden>
@@ -43,7 +42,7 @@
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
-      <button type="button" class="main-tab perm-fiche-date" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>تایید استعلام بانک</button>
+      <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>تایید استعلام بانک</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
@@ -483,7 +482,7 @@
     </section>
     </div>
 
-    <div id="tabBankInquiry" class="tab-panel perm-fiche-date" role="tabpanel" hidden>
+    <div id="tabBankInquiry" class="tab-panel perm-bank-inquiry" role="tabpanel" hidden>
     <section class="card card-enter bank-inquiry-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">🏦</span>
@@ -494,7 +493,7 @@
         وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند؛ تاریخ تایید و کاربر تایید‌کننده خودکار پر می‌شود.
       </p>
       <div class="form-grid unsent-form-grid">
-        <label class="field">
+        <label class="field field-compact-date">
           <span class="field-label">تاریخ پرداخت (فیلتر جستجو)</span>
           <div class="date-input-wrap">
             <input id="bankInquirySearchPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
@@ -561,7 +560,7 @@
       <div class="subsection fiche-date-change-panel" id="bankInquiryApplySection" hidden>
         <h3>ثبت تایید استعلام بانک</h3>
         <div class="form-grid unsent-form-grid">
-          <label class="field field-required">
+          <label class="field field-required field-compact-date">
             <span class="field-label">تاریخ پرداخت جدید</span>
             <div class="date-input-wrap">
               <input id="bankInquiryNewPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
@@ -604,6 +603,13 @@
                 <span class="user-group-perm-hint">دسترسی به تب «تغییر تاریخ فیش» — نیاز به ورود و مجوز گروه</span>
               </span>
             </label>
+            <label class="user-group-perm-item user-group-perm-item-wide">
+              <input id="newGroupBankInquiry" type="checkbox" />
+              <span class="user-group-perm-content">
+                <span class="user-group-perm-text">تایید استعلام بانک</span>
+                <span class="user-group-perm-hint">دسترسی به تب «تایید استعلام بانک»</span>
+              </span>
+            </label>
             <label class="user-group-perm-item">
               <input id="newGroupUsers" type="checkbox" />
               <span class="user-group-perm-text">مدیریت کاربران</span>
@@ -623,6 +629,7 @@
                   <th>فیش جمعی</th>
                   <th>چک خزانه</th>
                   <th>تغییر تاریخ فیش</th>
+                  <th>تایید استعلام بانک</th>
                   <th>مدیریت کاربران</th>
                   <th>عملیات</th>
                 </tr>
@@ -733,6 +740,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=60"></script>
+  <script src="js/app.js?v=61"></script>
 </body>
 </html>

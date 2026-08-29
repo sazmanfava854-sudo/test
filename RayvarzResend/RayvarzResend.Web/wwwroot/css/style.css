@@ -1269,6 +1269,18 @@ tbody tr:last-child td {
   margin-right: 1.6rem;
 }
 
+.field-compact-date {
+  max-width: 11.5rem;
+}
+
+.field-compact-date .date-input-wrap {
+  max-width: 11.5rem;
+}
+
+.field-compact-date .date-input-wrap input {
+  min-width: 0;
+}
+
 .user-groups-form {
   display: flex;
   flex-direction: column;

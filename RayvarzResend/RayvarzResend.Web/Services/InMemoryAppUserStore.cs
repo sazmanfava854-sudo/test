@@ -75,6 +75,7 @@ public sealed class InMemoryAppUserStore
                 CanAccessUnsentFiches = g.CanAccessUnsentFiches,
                 CanAccessInstallment = g.CanAccessInstallment,
                 CanAccessFicheDateChange = g.CanAccessFicheDateChange,
+                CanAccessBankInquiryConfirm = g.CanAccessBankInquiryConfirm,
                 CanManageUsers = g.CanManageUsers,
                 CreatedAtUtc = g.CreatedAtUtc.ToString("O")
             })
@@ -95,6 +96,7 @@ public sealed class InMemoryAppUserStore
             CanAccessUnsentFiches = req.CanAccessUnsentFiches,
             CanAccessInstallment = req.CanAccessInstallment,
             CanAccessFicheDateChange = req.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
             CanManageUsers = req.CanManageUsers,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -106,6 +108,7 @@ public sealed class InMemoryAppUserStore
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -124,6 +127,7 @@ public sealed class InMemoryAppUserStore
         group.CanAccessUnsentFiches = req.CanAccessUnsentFiches;
         group.CanAccessInstallment = req.CanAccessInstallment;
         group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
+        group.CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm;
         group.CanManageUsers = req.CanManageUsers;
 
         return new AppUserGroupDto
@@ -133,6 +137,7 @@ public sealed class InMemoryAppUserStore
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };

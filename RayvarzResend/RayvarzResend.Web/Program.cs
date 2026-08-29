@@ -865,7 +865,7 @@ app.MapPost("/api/bank-inquiry/search", async (
     HttpContext http,
     CancellationToken ct) =>
 {
-    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
@@ -893,7 +893,7 @@ app.MapPost("/api/bank-inquiry/confirm", async (
     HttpContext http,
     CancellationToken ct) =>
 {
-    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
@@ -914,6 +914,14 @@ app.MapPost("/api/bank-inquiry/confirm", async (
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
+
+static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessBankInquiryConfirm))
+        return Results.Json(new { error = "دسترسی به تایید استعلام بانک مجاز نیست" }, statusCode: 403);
+    return null;
+}
 
 static async Task<IResult?> DenyUnlessManageUsers(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {

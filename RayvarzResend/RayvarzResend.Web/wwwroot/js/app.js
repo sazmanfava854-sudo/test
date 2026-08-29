@@ -1561,6 +1561,10 @@ function canAccessFicheDateChange() {
   return isAdminUser() || !!currentUser?.canAccessFicheDateChange;
 }
 
+function canAccessBankInquiryConfirm() {
+  return isAdminUser() || !!currentUser?.canAccessBankInquiryConfirm;
+}
+
 function canManageUsers() {
   return isAdminUser() || !!currentUser?.canManageUsers;
 }
@@ -1578,6 +1582,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-fiche-date').forEach((el) => {
     el.hidden = !canAccessFicheDateChange();
+  });
+  document.querySelectorAll('.perm-bank-inquiry').forEach((el) => {
+    el.hidden = !canAccessBankInquiryConfirm();
   });
   document.querySelectorAll('.perm-users').forEach((el) => {
     el.hidden = !canManageUsers();
@@ -1686,6 +1693,7 @@ async function loadGroupsTable() {
       <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td><button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button></td>
     `;
@@ -1705,6 +1713,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
+  if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   const btn = $('btnCreateGroup');
   if (btn) btn.textContent = 'بروزرسانی گروه';
@@ -1716,6 +1725,7 @@ function resetGroupForm() {
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
+  if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   const btn = $('btnCreateGroup');
   if (btn) btn.textContent = 'ثبت گروه';
@@ -1727,6 +1737,7 @@ async function saveGroupFromForm() {
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
+    canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');

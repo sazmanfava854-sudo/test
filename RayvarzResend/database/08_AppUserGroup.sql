@@ -7,6 +7,7 @@ BEGIN
         CanAccessUnsentFiches   BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Unsent DEFAULT (0),
         CanAccessInstallment    BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Installment DEFAULT (0),
         CanAccessFicheDateChange BIT             NOT NULL CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0),
+        CanAccessBankInquiryConfirm BIT          NOT NULL CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0),
         CanManageUsers          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Users DEFAULT (0),
         CreatedAtUtc            DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserGroup_Created DEFAULT (SYSUTCDATETIME())
     );
@@ -27,3 +28,7 @@ END
 IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
     ALTER TABLE dbo.AppUserGroup ADD CanAccessFicheDateChange BIT NOT NULL
         CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0);
+
+IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
+    ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
+        CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0);

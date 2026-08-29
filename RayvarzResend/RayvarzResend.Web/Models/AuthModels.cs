@@ -62,6 +62,7 @@ public sealed class AuthSessionDto
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
+    public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
     public List<Guid> GroupIds { get; set; } = [];
 }
@@ -72,6 +73,7 @@ public sealed class UserPermissionsDto
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
+    public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
     public List<Guid> GroupIds { get; set; } = [];
 
@@ -81,6 +83,7 @@ public sealed class UserPermissionsDto
         CanAccessUnsentFiches = true,
         CanAccessInstallment = true,
         CanAccessFicheDateChange = true,
+        CanAccessBankInquiryConfirm = true,
         CanManageUsers = true
     };
 }
@@ -92,6 +95,7 @@ public sealed class AppUserGroupDto
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
+    public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
     public string CreatedAtUtc { get; set; } = "";
 }
@@ -102,6 +106,7 @@ public sealed class CreateAppUserGroupRequest
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
+    public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
 }
 
@@ -111,6 +116,7 @@ public sealed class UpdateAppUserGroupRequest
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
+    public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
 }
 
