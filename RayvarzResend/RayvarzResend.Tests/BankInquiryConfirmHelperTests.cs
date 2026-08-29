@@ -47,6 +47,21 @@ public class BankInquiryConfirmHelperTests
     }
 
     [Fact]
+    public void BuildSearchWhere_fiche_no_takes_priority_over_bill_payment()
+    {
+        var (where, parameters) = BankInquiryConfirmHelper.BuildSearchWhere(new BankInquirySearchRequest
+        {
+            FicheNo = "101104/9881711",
+            BillId = "1234567890",
+            PaymentId = "9876543210"
+        });
+
+        Assert.Contains("FicheNo", where);
+        Assert.DoesNotContain("BillID", where);
+        Assert.Single(parameters);
+    }
+
+    [Fact]
     public void IncomeNosaziCodeSql_uses_base_nosazi_join_fields()
     {
         Assert.Contains("b.District", BankInquiryConfirmHelper.IncomeNosaziCodeSql);

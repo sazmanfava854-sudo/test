@@ -745,7 +745,7 @@ app.MapPost("/api/unsent/plan-batch", async (
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
-        return Results.Ok(await unsent.PlanBatchAsync(req, ct));
+        return Results.Ok(await unsent.PlanBatchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
@@ -766,7 +766,7 @@ app.MapPost("/api/unsent/send-batch", async (
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
-        return Results.Ok(await unsent.SendBatchAsync(req, ct));
+        return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
@@ -927,7 +927,7 @@ app.MapPost("/api/bank-inquiry/search", async (
         return Results.BadRequest(new { error = "درخواست خالی است" });
     try
     {
-        var result = await bankInquiry.SearchAsync(req, ct);
+        var result = await bankInquiry.SearchAsync(req, http.User, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error });
         return Results.Ok(result);
@@ -956,7 +956,7 @@ app.MapPost("/api/bank-inquiry/confirm", async (
     req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
     try
     {
-        var result = await bankInquiry.ConfirmAsync(req, ct);
+        var result = await bankInquiry.ConfirmAsync(req, http.User, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error, result });
         return Results.Ok(result);

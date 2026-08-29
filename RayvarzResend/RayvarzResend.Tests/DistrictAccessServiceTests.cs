@@ -69,6 +69,65 @@ public class DistrictAccessServiceTests
         Assert.False(DistrictAccessService.IsCenterUser(RegionalUser("2")));
     }
 
+    [Fact]
+    public void AppendIncomeFicheDistrictFilter_admin_adds_no_clause()
+    {
+        var admin = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(AuthClaimTypes.IsAdmin, "1")
+        }, "test"));
+        var clauses = new List<string> { "f.FicheNo = @ficheNo" };
+        var parameters = new List<(string, object)>();
+
+        DistrictAccessService.AppendIncomeFicheDistrictFilter(admin, clauses, parameters);
+
+        Assert.Single(clauses);
+        Assert.Empty(parameters);
+    }
+
+    [Fact]
+    public void AppendIncomeFicheDistrictFilter_regional_user_adds_district_clause()
+    {
+        var clauses = new List<string> { "f.FicheNo = @ficheNo" };
+        var parameters = new List<(string, object)>();
+
+        DistrictAccessService.AppendIncomeFicheDistrictFilter(RegionalUser("2"), clauses, parameters);
+
+        Assert.Equal(2, clauses.Count);
+        Assert.Contains("CAST(b.District AS nvarchar(20)) = @userDistrict", clauses[1]);
+        Assert.Contains(("@userDistrict", "2"), parameters);
+    }
+
+    [Fact]
+    public void AppendIncomeFicheDistrictFilter_center_user_limits_to_tahator_group()
+    {
+        var clauses = new List<string>();
+        var parameters = new List<(string, object)>();
+
+        DistrictAccessService.AppendIncomeFicheDistrictFilter(RegionalUser("102"), clauses, parameters);
+
+        Assert.Single(clauses);
+        Assert.Contains("f.CI_IncomeAccountGroup = @centerTahatorAg", clauses[0]);
+        Assert.Contains(("@centerTahatorAg", TahatorRowBuilder.IncomeAccountGroupTahatorAmount), parameters);
+    }
+
+    [Fact]
+    public void AppendIncomeFicheDistrictFilter_user_without_district_denies_all()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(AuthClaimTypes.IsAdmin, "0")
+        }, "test"));
+        var clauses = new List<string>();
+        var parameters = new List<(string, object)>();
+
+        DistrictAccessService.AppendIncomeFicheDistrictFilter(user, clauses, parameters);
+
+        Assert.Single(clauses);
+        Assert.Equal("1 = 0", clauses[0]);
+    }
+
     private static ClaimsPrincipal RegionalUser(string district) =>
         new(new ClaimsIdentity(new[]
         {
