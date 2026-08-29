@@ -38,7 +38,7 @@ public static class FicheDateChangeHelper
         var today = DateHelper.CurrentShamsiSlashDate();
         var user = (performedByUser ?? "").Trim();
         var actor = string.IsNullOrEmpty(user) ? "کاربر" : user;
-        return $"({today})تاریخ مهلت پرداخت و تاریخ صدور و وضعیت فیش توسط {actor} در مورخ {today} — ";
+        return $"تاریخ مهلت پرداخت و تاریخ صدور و وضعیت فیش توسط {actor} در مورخ {today} — ";
     }
 
     public static string BuildNewComments(string performedByUser, string? existingComments)

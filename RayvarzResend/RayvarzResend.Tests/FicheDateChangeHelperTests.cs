@@ -7,12 +7,16 @@ namespace RayvarzResend.Tests;
 public class FicheDateChangeHelperTests
 {
     [Fact]
-    public void BuildCommentPrefix_includes_today_and_user()
+    public void BuildCommentPrefix_includes_today_and_user_once()
     {
         var prefix = FicheDateChangeHelper.BuildCommentPrefix("karimi");
+        var today = DateHelper.CurrentShamsiSlashDate();
+
         Assert.Contains("karimi", prefix);
         Assert.Contains("تاریخ مهلت پرداخت و تاریخ صدور و وضعیت فیش", prefix);
-        Assert.StartsWith("(", prefix);
+        Assert.Contains($"در مورخ {today}", prefix);
+        Assert.Equal(1, prefix.Split(today, StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain($"({today})", prefix);
     }
 
     [Fact]
