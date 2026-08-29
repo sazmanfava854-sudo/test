@@ -767,6 +767,8 @@ app.MapPost("/api/installment/update", async (
 }).RequireAuthorization(authenticated);
 
 app.MapGet("/api/fiche-date/account-groups", async (
+    string? q,
+    int? limit,
     FicheDateChangeService ficheDate,
     AppPermissionService perms,
     HttpContext http,
@@ -776,7 +778,7 @@ app.MapGet("/api/fiche-date/account-groups", async (
     if (denied != null) return denied;
     try
     {
-        var titles = await ficheDate.ListAccountGroupTitlesAsync(ct);
+        var titles = await ficheDate.ListAccountGroupTitlesAsync(q, limit ?? 20, ct);
         return Results.Ok(new { titles });
     }
     catch (SqlException ex)

@@ -1063,8 +1063,8 @@ tbody tr:last-child td {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 1rem;
-  width: 100%;
+  gap: 12px;
+  width: auto;
 }
 
 .fiche-date-apply-toggle {
@@ -1075,7 +1075,6 @@ tbody tr:last-child td {
   cursor: pointer;
   user-select: none;
   flex: 0 0 auto;
-  max-width: 42%;
 }
 
 .fiche-date-apply-toggle input {
@@ -1091,16 +1090,23 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
-.fiche-date-apply-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  flex: 1 1 0;
-  min-width: 0;
+.fiche-date-apply-control {
+  flex: 0 0 auto;
 }
 
-.fiche-date-apply-field .field-label {
-  margin: 0;
+.fiche-date-apply-control-date {
+  width: 200px;
+  max-width: 220px;
+}
+
+.fiche-date-apply-control-status {
+  width: 220px;
+  max-width: 220px;
+}
+
+.fiche-date-apply-control.date-input-group {
+  width: 200px;
+  max-width: 220px;
 }
 
 .date-input-group {
@@ -1180,8 +1186,60 @@ tbody tr:last-child td {
 }
 
 .fiche-date-apply-actions {
-  margin-top: 1.25rem;
+  margin-top: 24px;
   justify-content: left;
+}
+
+.fiche-date-account-group-field {
+  position: relative;
+}
+
+.account-group-combobox {
+  position: relative;
+}
+
+.account-group-combobox-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 1200;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.account-group-combobox-option {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+}
+
+.account-group-combobox-option:last-child {
+  border-bottom: none;
+}
+
+.account-group-combobox-option:hover,
+.account-group-combobox-option:focus {
+  background: #eef3f9;
+  outline: none;
+}
+
+.account-group-combobox-empty {
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: right;
 }
 
 .fiche-date-change-panel {

@@ -589,24 +589,94 @@ function updateFicheDateIdentifierHint() {
   hint.textContent = `تشخیص: ${identifierTypeLabels[type] || type}`;
 }
 
-async function loadFicheDateAccountGroups() {
+async function searchFicheDateAccountGroups(query, limit = 20) {
+  const params = new URLSearchParams();
+  const trimmed = (query || '').trim();
+  if (trimmed) params.set('q', trimmed);
+  params.set('limit', String(limit));
+  const res = await apiFetch(`/api/fiche-date/account-groups?${params.toString()}`);
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  return data.titles || [];
+}
+
+let accountGroupSearchTimer = null;
+let accountGroupSearchSeq = 0;
+
+function closeFicheDateAccountGroupMenu() {
+  const input = $('ficheDateAccountGroup');
+  const menu = $('ficheDateAccountGroupMenu');
+  if (!input || !menu) return;
+  menu.hidden = true;
+  input.setAttribute('aria-expanded', 'false');
+}
+
+function renderFicheDateAccountGroupMenu(titles) {
+  const input = $('ficheDateAccountGroup');
+  const menu = $('ficheDateAccountGroupMenu');
+  if (!input || !menu) return;
+
+  menu.innerHTML = '';
+  if (!titles.length) {
+    const empty = document.createElement('div');
+    empty.className = 'account-group-combobox-empty';
+    empty.textContent = 'موردی یافت نشد';
+    menu.appendChild(empty);
+    menu.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    return;
+  }
+
+  titles.forEach((title) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'account-group-combobox-option';
+    btn.textContent = title;
+    btn.addEventListener('click', () => {
+      input.value = title;
+      closeFicheDateAccountGroupMenu();
+    });
+    menu.appendChild(btn);
+  });
+  menu.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+
+async function fetchFicheDateAccountGroupSuggestions(query) {
+  const seq = ++accountGroupSearchSeq;
+  try {
+    const titles = await searchFicheDateAccountGroups(query);
+    if (seq !== accountGroupSearchSeq) return;
+    renderFicheDateAccountGroupMenu(titles);
+  } catch {
+    if (seq !== accountGroupSearchSeq) return;
+    closeFicheDateAccountGroupMenu();
+  }
+}
+
+function setupFicheDateAccountGroupLazyLoad() {
   if (!canAccessFicheDateChange()) return;
   const input = $('ficheDateAccountGroup');
-  const datalist = $('ficheDateAccountGroupOptions');
-  if (!input || !datalist) return;
-  try {
-    const res = await apiFetch('/api/fiche-date/account-groups');
-    const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-    datalist.innerHTML = '';
-    (data.titles || []).forEach((title) => {
-      const opt = document.createElement('option');
-      opt.value = title;
-      datalist.appendChild(opt);
-    });
-  } catch {
-    // account groups optional — free-text search still works
-  }
+  const menu = $('ficheDateAccountGroupMenu');
+  if (!input || !menu || input.dataset.lazyBound === '1') return;
+  input.dataset.lazyBound = '1';
+
+  const scheduleSearch = () => {
+    clearTimeout(accountGroupSearchTimer);
+    accountGroupSearchTimer = setTimeout(() => {
+      fetchFicheDateAccountGroupSuggestions(input.value);
+    }, 300);
+  };
+
+  input.addEventListener('input', scheduleSearch);
+  input.addEventListener('focus', () => {
+    if (menu.hidden) scheduleSearch();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target === input || menu.contains(e.target)) return;
+    closeFicheDateAccountGroupMenu();
+  });
 }
 
 function getSelectedFicheDateStatuses() {
@@ -1618,7 +1688,7 @@ async function init() {
   ['ficheDateApplyPermanent', 'ficheDateApplyTemporary', 'ficheDateApplyBreak', 'ficheDateApplyStatus']
     .forEach((id) => $(id)?.addEventListener('change', syncFicheDateApplyFields));
   if (canAccessFicheDateChange()) {
-    await loadFicheDateAccountGroups();
+    setupFicheDateAccountGroupLazyLoad();
   }
   window.addEventListener('load', initDatePickers);
   if (canManageUsers()) {

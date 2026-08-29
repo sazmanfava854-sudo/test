@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=27" />
+  <link rel="stylesheet" href="css/style.css?v=28" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -374,10 +374,12 @@
             <button type="button" class="btn-date-icon" data-for="ficheDateTemporaryTo" title="تقویم" aria-label="تقویم">📅</button>
           </div>
         </label>
-        <label class="field">
+        <label class="field fiche-date-account-group-field">
           <span class="field-label">عنوان مالکیت</span>
-          <input id="ficheDateAccountGroup" type="text" list="ficheDateAccountGroupOptions" placeholder="انتخاب از لیست یا جستجو — مثلاً شهردار" autocomplete="off" />
-          <datalist id="ficheDateAccountGroupOptions"></datalist>
+          <div class="account-group-combobox">
+            <input id="ficheDateAccountGroup" type="text" placeholder="انتخاب از لیست یا جستجو — مثلاً شهردار" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="ficheDateAccountGroupMenu" aria-autocomplete="list" />
+            <div id="ficheDateAccountGroupMenu" class="account-group-combobox-menu" hidden role="listbox"></div>
+          </div>
           <span class="field-hint">از لیست انتخاب کنید یا بخشی از عنوان را تایپ کنید (Title LIKE N'%متن%')</span>
         </label>
         <div class="field">
@@ -431,12 +433,9 @@
               <input id="ficheDateApplyPermanent" type="checkbox" />
               <span class="fiche-date-apply-toggle-text">تغییر صدور دایم</span>
             </label>
-            <div class="fiche-date-apply-field">
-              <label class="field-label" for="ficheDateNewPermanent">تاریخ صدور دایم</label>
-              <div class="date-input-group">
-                <button type="button" class="date-input-adornment btn-date-icon" data-for="ficheDateNewPermanent" title="تقویم" aria-label="تقویم">📅</button>
-                <input id="ficheDateNewPermanent" data-jdp type="text" placeholder="1404/01/11" autocomplete="off" disabled />
-              </div>
+            <div class="date-input-group fiche-date-apply-control fiche-date-apply-control-date">
+              <button type="button" class="date-input-adornment btn-date-icon" data-for="ficheDateNewPermanent" title="تقویم" aria-label="تقویم">📅</button>
+              <input id="ficheDateNewPermanent" data-jdp type="text" placeholder="1404/01/11" autocomplete="off" disabled />
             </div>
           </div>
           <div class="fiche-date-apply-row">
@@ -444,12 +443,9 @@
               <input id="ficheDateApplyTemporary" type="checkbox" />
               <span class="fiche-date-apply-toggle-text">تغییر صدور موقت</span>
             </label>
-            <div class="fiche-date-apply-field">
-              <label class="field-label" for="ficheDateNewTemporary">تاریخ صدور موقت</label>
-              <div class="date-input-group">
-                <button type="button" class="date-input-adornment btn-date-icon" data-for="ficheDateNewTemporary" title="تقویم" aria-label="تقویم">📅</button>
-                <input id="ficheDateNewTemporary" data-jdp type="text" placeholder="1404/01/10" autocomplete="off" disabled />
-              </div>
+            <div class="date-input-group fiche-date-apply-control fiche-date-apply-control-date">
+              <button type="button" class="date-input-adornment btn-date-icon" data-for="ficheDateNewTemporary" title="تقویم" aria-label="تقویم">📅</button>
+              <input id="ficheDateNewTemporary" data-jdp type="text" placeholder="1404/01/10" autocomplete="off" disabled />
             </div>
           </div>
           <div class="fiche-date-apply-row">
@@ -457,12 +453,9 @@
               <input id="ficheDateApplyBreak" type="checkbox" />
               <span class="fiche-date-apply-toggle-text">تغییر مهلت پرداخت</span>
             </label>
-            <div class="fiche-date-apply-field">
-              <label class="field-label" for="ficheDateNewBreak">مهلت پرداخت</label>
-              <div class="date-input-group">
-                <button type="button" class="date-input-adornment btn-date-icon" data-for="ficheDateNewBreak" title="تقویم" aria-label="تقویم">📅</button>
-                <input id="ficheDateNewBreak" data-jdp type="text" placeholder="1404/01/20" autocomplete="off" disabled />
-              </div>
+            <div class="date-input-group fiche-date-apply-control fiche-date-apply-control-date">
+              <button type="button" class="date-input-adornment btn-date-icon" data-for="ficheDateNewBreak" title="تقویم" aria-label="تقویم">📅</button>
+              <input id="ficheDateNewBreak" data-jdp type="text" placeholder="1404/01/20" autocomplete="off" disabled />
             </div>
           </div>
           <div class="fiche-date-apply-row">
@@ -470,10 +463,7 @@
               <input id="ficheDateApplyStatus" type="checkbox" />
               <span class="fiche-date-apply-toggle-text">تغییر وضعیت</span>
             </label>
-            <div class="fiche-date-apply-field">
-              <label class="field-label" for="ficheDateNewStatus">وضعیت فیش</label>
-              <select id="ficheDateNewStatus" disabled></select>
-            </div>
+            <select id="ficheDateNewStatus" class="fiche-date-apply-control fiche-date-apply-control-status" disabled></select>
           </div>
         </div>
         <div class="actions fiche-date-apply-actions">
@@ -640,6 +630,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=51"></script>
+  <script src="js/app.js?v=52"></script>
 </body>
 </html>

@@ -19,19 +19,27 @@ public sealed class FicheDateChangeService
         _config.GetValue<bool?>("FicheDateChange:DryRun")
         ?? _config.GetValue("Rayvarz:DryRun", true);
 
-    public async Task<List<string>> ListAccountGroupTitlesAsync(CancellationToken ct = default)
+    public async Task<List<string>> ListAccountGroupTitlesAsync(
+        string? query = null,
+        int limit = 20,
+        CancellationToken ct = default)
     {
-        const string sql = """
-            SELECT DISTINCT Title
+        limit = Math.Clamp(limit, 1, 100);
+        var sql = $"""
+            SELECT DISTINCT TOP ({limit}) Title
             FROM dbo.CI_IncomeAccountGroup
             WHERE Title IS NOT NULL AND LTRIM(RTRIM(Title)) <> N''
-            ORDER BY Title
             """;
+        if (!string.IsNullOrWhiteSpace(query))
+            sql += " AND Title LIKE @pattern";
+        sql += " ORDER BY Title";
 
         var titles = new List<string>();
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
+        if (!string.IsNullOrWhiteSpace(query))
+            cmd.Parameters.AddWithValue("@pattern", $"%{query.Trim()}%");
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
