@@ -47,7 +47,7 @@ public class BankInquiryConfirmHelperTests
     }
 
     [Fact]
-    public void BuildSearchWhere_prefers_bill_payment_over_fiche_no()
+    public void BuildSearchWhere_fiche_no_takes_priority_over_bill_payment()
     {
         var (where, parameters) = BankInquiryConfirmHelper.BuildSearchWhere(new BankInquirySearchRequest
         {
@@ -56,10 +56,9 @@ public class BankInquiryConfirmHelperTests
             PaymentId = "9876543210"
         });
 
-        Assert.Contains("BillID", where);
-        Assert.Contains("PaymentID", where);
-        Assert.DoesNotContain("FicheNo", where);
-        Assert.Equal(2, parameters.Count);
+        Assert.Contains("FicheNo", where);
+        Assert.DoesNotContain("BillID", where);
+        Assert.Single(parameters);
     }
 
     [Fact]

@@ -4,7 +4,6 @@ let currentUser = null;
 let authMode = null;
 let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
-const unsentSelectedItems = new Map();
 const unsentSearchState = {
   page: 1,
   pageSize: 25,
@@ -191,40 +190,18 @@ function formatShamsiDisplay(yyyymmdd) {
 
 function clearGridSelection(selectionSet, cacheMap) {
   selectionSet.clear();
-  cacheMap.clear();
+  if (cacheMap) cacheMap.clear();
 }
 
 function setGridRowSelected(selectionSet, cacheMap, item, selected) {
   if (!item?.ficheNo) return;
   if (selected) {
     selectionSet.add(item.ficheNo);
-    cacheMap.set(item.ficheNo, item);
+    if (cacheMap) cacheMap.set(item.ficheNo, item);
   } else {
     selectionSet.delete(item.ficheNo);
-    cacheMap.delete(item.ficheNo);
+    if (cacheMap) cacheMap.delete(item.ficheNo);
   }
-}
-
-function getCachedGridItems(selectionSet, cacheMap) {
-  return Array.from(selectionSet)
-    .map((ficheNo) => cacheMap.get(ficheNo))
-    .filter(Boolean);
-}
-
-function uniqueNonEmptyDisplayValues(values, formatter = (v) => v) {
-  return [...new Set(
-    values
-      .map((v) => formatter(v))
-      .map((v) => String(v || '').trim())
-      .filter((v) => v && v !== '-')
-  )];
-}
-
-function prefillInputIfUniform(input, values, formatter = (v) => v) {
-  if (!input) return;
-  const unique = uniqueNonEmptyDisplayValues(values, formatter);
-  if (unique.length === 1) input.value = unique[0];
-  else if (unique.length !== 0) input.value = '';
 }
 
 function setupMainTabs() {
@@ -941,7 +918,6 @@ function renderFicheDateTable(items, meta = {}) {
         selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
       }
       updateFicheDateCountLabel();
-      prefillFicheDateApplyForm();
     });
   });
 
@@ -1030,14 +1006,6 @@ function getFicheDateUpdatePayload() {
     applyEumFicheStatus: applyStatus,
     newEumFicheStatus: applyStatus ? parseInt($('ficheDateNewStatus')?.value || '1', 10) : null
   };
-}
-
-function prefillFicheDateApplyForm() {
-  const items = getCachedGridItems(selectedFicheDateNos, ficheDateSelectedItems);
-  if (!items.length) return;
-  prefillInputIfUniform($('ficheDateNewPermanent'), items.map((i) => i.exportPermanentDate), formatShamsiDisplay);
-  prefillInputIfUniform($('ficheDateNewTemporary'), items.map((i) => i.exportTemporaryDate), formatShamsiDisplay);
-  prefillInputIfUniform($('ficheDateNewBreak'), items.map((i) => i.paymentBreakDate), formatShamsiDisplay);
 }
 
 function formatFicheDateUpdateResult(data) {
@@ -1176,7 +1144,6 @@ function renderBankInquiryTable(items, meta = {}) {
         selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
       }
       updateBankInquiryCountLabel();
-      prefillBankInquiryNewPaymentDate();
     });
   });
 
@@ -1187,12 +1154,6 @@ function renderBankInquiryTable(items, meta = {}) {
   }
   updateBankInquiryPaginationUi();
   syncBankInquiryConfirmButton();
-}
-
-function prefillBankInquiryNewPaymentDate() {
-  const input = $('bankInquiryNewPaymentDate');
-  const items = getCachedGridItems(selectedBankInquiryNos, bankInquirySelectedItems);
-  prefillInputIfUniform(input, items.map((i) => i.paymentDate), formatShamsiDisplay);
 }
 
 async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}) {
@@ -1472,8 +1433,8 @@ function renderUnsentTable(items, meta = {}) {
     cb.addEventListener('change', () => {
       const ficheNo = cb.dataset.ficheNo;
       if (!ficheNo) return;
-      const item = unsentItems.find((row) => row.ficheNo === ficheNo);
-      setGridRowSelected(selectedUnsentFicheNos, unsentSelectedItems, item || { ficheNo }, cb.checked);
+      if (cb.checked) selectedUnsentFicheNos.add(ficheNo);
+      else selectedUnsentFicheNos.delete(ficheNo);
 
       const all = document.querySelectorAll('.unsent-row-check');
       const checked = document.querySelectorAll('.unsent-row-check:checked');
@@ -1504,7 +1465,7 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
   const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
   unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
-  if (clearSelection) clearGridSelection(selectedUnsentFicheNos, unsentSelectedItems);
+  if (clearSelection) selectedUnsentFicheNos.clear();
 
   const btn = $('btnUnsentSearch');
   const prevBtn = $('btnUnsentPrevPage');
@@ -2392,7 +2353,8 @@ function setupEventHandlers() {
   if (selectAll) {
     selectAll.addEventListener('change', () => {
       unsentItems.forEach((item) => {
-        setGridRowSelected(selectedUnsentFicheNos, unsentSelectedItems, item, selectAll.checked);
+        if (selectAll.checked) selectedUnsentFicheNos.add(item.ficheNo);
+        else selectedUnsentFicheNos.delete(item.ficheNo);
       });
       document.querySelectorAll('.unsent-row-check').forEach((cb) => {
         cb.checked = selectAll.checked;
@@ -2415,19 +2377,19 @@ function setupEventHandlers() {
 
   bindClick('btnUnsentPrevPage', async () => {
     if (unsentSearchState.page <= 1) return;
-    await fetchUnsentResults(unsentSearchState.page - 1, { clearSelection: true });
+    await fetchUnsentResults(unsentSearchState.page - 1);
   });
 
   bindClick('btnUnsentNextPage', async () => {
     if (unsentSearchState.page >= unsentSearchState.totalPages) return;
-    await fetchUnsentResults(unsentSearchState.page + 1, { clearSelection: true });
+    await fetchUnsentResults(unsentSearchState.page + 1);
   });
 
   const pageSizeSel = $('unsentPageSize');
   if (pageSizeSel) {
     pageSizeSel.addEventListener('change', async () => {
       if (!unsentSearchState.filters) return;
-      await fetchUnsentResults(1, { clearSelection: true });
+      await fetchUnsentResults(1);
     });
   }
 
@@ -2519,7 +2481,7 @@ function setupEventHandlers() {
         showAppSuccess(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
       }
 
-      clearGridSelection(selectedUnsentFicheNos, unsentSelectedItems);
+      selectedUnsentFicheNos.clear();
       if (unsentSearchState.filters) {
         await fetchUnsentResults(unsentSearchState.page);
       }
@@ -2610,19 +2572,19 @@ function setupEventHandlers() {
 
   bindClick('btnFicheDatePrevPage', async () => {
     if (ficheDateSearchState.page <= 1) return;
-    await fetchFicheDateResults(ficheDateSearchState.page - 1, { clearSelection: true });
+    await fetchFicheDateResults(ficheDateSearchState.page - 1);
   });
 
   bindClick('btnFicheDateNextPage', async () => {
     if (ficheDateSearchState.page >= ficheDateSearchState.totalPages) return;
-    await fetchFicheDateResults(ficheDateSearchState.page + 1, { clearSelection: true });
+    await fetchFicheDateResults(ficheDateSearchState.page + 1);
   });
 
   const ficheDatePageSize = $('ficheDatePageSize');
   if (ficheDatePageSize) {
     ficheDatePageSize.addEventListener('change', async () => {
       if (ficheDateSearchState.totalCount > 0) {
-        await fetchFicheDateResults(1, { clearSelection: true });
+        await fetchFicheDateResults(1);
       }
     });
   }
@@ -2640,7 +2602,6 @@ function setupEventHandlers() {
       });
       updateFicheDateCountLabel();
       syncFicheDateUpdateButton();
-      prefillFicheDateApplyForm();
     });
   }
 
@@ -2697,16 +2658,16 @@ function setupEventHandlers() {
 
   bindClick('btnBankInquiryPrevPage', async () => {
     if (bankInquirySearchState.page <= 1) return;
-    await fetchBankInquiryResults(bankInquirySearchState.page - 1, { clearSelection: true });
+    await fetchBankInquiryResults(bankInquirySearchState.page - 1);
   });
 
   bindClick('btnBankInquiryNextPage', async () => {
     if (bankInquirySearchState.page >= bankInquirySearchState.totalPages) return;
-    await fetchBankInquiryResults(bankInquirySearchState.page + 1, { clearSelection: true });
+    await fetchBankInquiryResults(bankInquirySearchState.page + 1);
   });
 
   $('bankInquiryPageSize')?.addEventListener('change', async () => {
-    await fetchBankInquiryResults(1, { clearSelection: true });
+    await fetchBankInquiryResults(1);
   });
 
   $('bankInquirySelectAll')?.addEventListener('change', (e) => {
@@ -2721,7 +2682,6 @@ function setupEventHandlers() {
     });
     updateBankInquiryCountLabel();
     syncBankInquiryConfirmButton();
-    prefillBankInquiryNewPaymentDate();
   });
 
   bindClick('btnBankInquiryConfirm', async () => {
