@@ -490,15 +490,15 @@
         <h2>تایید استعلام بانک</h2>
       </div>
       <p class="field-hint form-intro">
-        پس از استعلام بانک، فیش درآمد با وضعیت <strong>تایید دستی/لحظه‌ای بانک (۳)</strong> و نوع تایید <strong>۴</strong> به‌روز می‌شود.
-        تاریخ تایید (<code>UserConfirmDate</code>) به‌صورت خودکار برابر امروز و کاربر تایید‌کننده از حساب فعلی پر می‌شود.
+        ابتدا فیش را با یکی از فیلترهای زیر جستجو کنید. پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و تایید استعلام بانک را ثبت کنید.
+        وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند؛ تاریخ تایید و کاربر تایید‌کننده خودکار پر می‌شود.
       </p>
       <div class="form-grid unsent-form-grid">
-        <label class="field field-required">
-          <span class="field-label">تاریخ پرداخت</span>
+        <label class="field">
+          <span class="field-label">تاریخ پرداخت (فیلتر جستجو)</span>
           <div class="date-input-wrap">
-            <input id="bankInquiryPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
-            <button type="button" class="btn-date-icon" data-for="bankInquiryPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+            <input id="bankInquirySearchPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="bankInquirySearchPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
           </div>
         </label>
         <label class="field">
@@ -507,16 +507,71 @@
         </label>
         <label class="field">
           <span class="field-label">شناسه قبض</span>
-          <input id="bankInquiryBillId" type="text" placeholder="در صورت نبود شماره فیش" autocomplete="off" />
+          <input id="bankInquiryBillId" type="text" placeholder="همراه با شناسه پرداخت" autocomplete="off" />
         </label>
         <label class="field">
           <span class="field-label">شناسه پرداخت</span>
           <input id="bankInquiryPaymentId" type="text" placeholder="همراه با شناسه قبض" autocomplete="off" />
         </label>
       </div>
-      <p class="field-hint">یکی از دو روش: <strong>شماره فیش</strong> یا <strong>هر دو</strong> شناسه قبض و شناسه پرداخت.</p>
+      <p class="field-hint">حداقل یکی از فیلترها: <strong>تاریخ پرداخت</strong>، <strong>شماره فیش</strong>، یا <strong>هر دو شناسه قبض و پرداخت</strong>.</p>
       <div class="actions">
-        <button id="btnBankInquiryConfirm" class="btn danger" type="button">ثبت تایید استعلام بانک</button>
+        <button id="btnBankInquirySearch" class="btn primary" type="button">جستجو</button>
+      </div>
+      <div class="subsection" id="bankInquiryResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="bankInquirySelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="bankInquiryCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="bankInquiryTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>شماره فیش</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+                <th>تاریخ پرداخت</th>
+                <th>تاریخ پرداخت بانک</th>
+                <th>وضعیت</th>
+                <th>تاریخ تایید</th>
+                <th>کاربر تایید</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="unsent-pagination" id="bankInquiryPagination" hidden>
+          <button id="btnBankInquiryPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
+          <span id="bankInquiryPageLabel" class="unsent-page-label"></span>
+          <button id="btnBankInquiryNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
+          <label class="unsent-page-size">
+            <span>در هر صفحه</span>
+            <select id="bankInquiryPageSize">
+              <option value="25" selected>۲۵</option>
+              <option value="50">۵۰</option>
+              <option value="100">۱۰۰</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="subsection fiche-date-change-panel" id="bankInquiryApplySection" hidden>
+        <h3>ثبت تایید استعلام بانک</h3>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">تاریخ پرداخت جدید</span>
+            <div class="date-input-wrap">
+              <input id="bankInquiryNewPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="bankInquiryNewPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+        </div>
+        <div class="actions fiche-date-apply-actions">
+          <button id="btnBankInquiryConfirm" class="btn danger" type="button" disabled>ثبت تایید استعلام بانک</button>
+        </div>
       </div>
       <pre id="bankInquiryResultBox" class="code-block" hidden></pre>
     </section>
@@ -678,6 +733,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=59"></script>
+  <script src="js/app.js?v=60"></script>
 </body>
 </html>

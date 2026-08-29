@@ -7,48 +7,75 @@ namespace RayvarzResend.Tests;
 public class BankInquiryConfirmHelperTests
 {
     [Fact]
-    public void ValidateRequest_requires_payment_date_and_identifier()
+    public void ValidateSearchRequest_requires_at_least_one_filter()
     {
-        Assert.Equal("تاریخ پرداخت نامعتبر است", BankInquiryConfirmHelper.ValidateRequest(new BankInquiryConfirmRequest()));
-        Assert.Equal("شماره فیش یا شناسه قبض و شناسه پرداخت را وارد کنید",
-            BankInquiryConfirmHelper.ValidateRequest(new BankInquiryConfirmRequest
-            {
-                PaymentDate = "1404/01/11"
-            }));
+        Assert.Equal(
+            "حداقل یکی از فیلترها را وارد کنید: تاریخ پرداخت، شماره فیش، یا شناسه قبض و شناسه پرداخت",
+            BankInquiryConfirmHelper.ValidateSearchRequest(new BankInquirySearchRequest()));
     }
 
     [Fact]
-    public void ValidateRequest_accepts_fiche_no()
+    public void ValidateSearchRequest_accepts_payment_date()
     {
-        Assert.Null(BankInquiryConfirmHelper.ValidateRequest(new BankInquiryConfirmRequest
+        Assert.Null(BankInquiryConfirmHelper.ValidateSearchRequest(new BankInquirySearchRequest
         {
-            PaymentDate = "1404/01/11",
+            PaymentDate = "1404/01/11"
+        }));
+    }
+
+    [Fact]
+    public void ValidateSearchRequest_accepts_fiche_no()
+    {
+        Assert.Null(BankInquiryConfirmHelper.ValidateSearchRequest(new BankInquirySearchRequest
+        {
             FicheNo = "101104/9881711"
         }));
     }
 
     [Fact]
-    public void ValidateRequest_accepts_bill_and_payment_ids()
+    public void ValidateSearchRequest_accepts_bill_and_payment_ids()
     {
-        Assert.Null(BankInquiryConfirmHelper.ValidateRequest(new BankInquiryConfirmRequest
+        Assert.Null(BankInquiryConfirmHelper.ValidateSearchRequest(new BankInquirySearchRequest
         {
-            PaymentDate = "14040111",
             BillId = "1234567890",
             PaymentId = "9876543210"
         }));
     }
 
     [Fact]
-    public void BuildWhereClause_uses_fiche_no_or_bill_payment()
+    public void BuildSearchWhere_combines_filters()
     {
-        var fiche = BankInquiryConfirmHelper.BuildWhereClause("101104/9881711", null, null, null);
-        Assert.NotNull(fiche);
-        Assert.Contains("FicheNo", fiche.Value.WhereClause);
+        var (where, parameters) = BankInquiryConfirmHelper.BuildSearchWhere(new BankInquirySearchRequest
+        {
+            PaymentDate = "1404/01/11",
+            FicheNo = "101104/9881711"
+        });
 
-        var bill = BankInquiryConfirmHelper.BuildWhereClause(null, "111", "222", null);
-        Assert.NotNull(bill);
-        Assert.Contains("BillID", bill.Value.WhereClause);
-        Assert.Contains("PaymentID", bill.Value.WhereClause);
+        Assert.Contains("PaymentDate", where);
+        Assert.Contains("FicheNo", where);
+        Assert.Equal(2, parameters.Count);
+    }
+
+    [Fact]
+    public void ValidateConfirmRequest_requires_selection_and_new_date()
+    {
+        Assert.Equal("حداقل یک فیش از نتایج انتخاب کنید",
+            BankInquiryConfirmHelper.ValidateConfirmRequest(new BankInquiryConfirmRequest()));
+        Assert.Equal("تاریخ پرداخت جدید نامعتبر است",
+            BankInquiryConfirmHelper.ValidateConfirmRequest(new BankInquiryConfirmRequest
+            {
+                FicheNos = ["101104/9881711"]
+            }));
+    }
+
+    [Fact]
+    public void ValidateConfirmRequest_accepts_valid_payload()
+    {
+        Assert.Null(BankInquiryConfirmHelper.ValidateConfirmRequest(new BankInquiryConfirmRequest
+        {
+            FicheNos = ["101104/9881711"],
+            NewPaymentDate = "1404/02/01"
+        }));
     }
 
     [Fact]

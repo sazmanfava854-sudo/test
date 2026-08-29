@@ -858,6 +858,34 @@ app.MapPost("/api/fiche-date/update", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/bank-inquiry/search", async (
+    BankInquirySearchRequest? req,
+    BankInquiryConfirmService bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessFicheDateChange(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await bankInquiry.SearchAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
 app.MapPost("/api/bank-inquiry/confirm", async (
     BankInquiryConfirmRequest? req,
     BankInquiryConfirmService bankInquiry,

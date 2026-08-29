@@ -1005,21 +1005,34 @@ function formatFicheDateUpdateResult(data) {
   ].join('\n');
 }
 
-function getBankInquiryConfirmPayload() {
+let bankInquiryItems = [];
+const selectedBankInquiryNos = new Set();
+const bankInquirySearchState = {
+  page: 1,
+  pageSize: 25,
+  totalCount: 0,
+  totalPages: 0
+};
+
+function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
+  const pageSize = parseInt($('bankInquiryPageSize')?.value || bankInquirySearchState.pageSize, 10) || 25;
+  bankInquirySearchState.pageSize = pageSize;
   return {
-    paymentDate: ($('bankInquiryPaymentDate')?.value || '').trim(),
+    paymentDate: ($('bankInquirySearchPaymentDate')?.value || '').trim(),
     ficheNo: ($('bankInquiryFicheNo')?.value || '').trim(),
     billId: ($('bankInquiryBillId')?.value || '').trim(),
-    paymentId: ($('bankInquiryPaymentId')?.value || '').trim()
+    paymentId: ($('bankInquiryPaymentId')?.value || '').trim(),
+    page,
+    pageSize
   };
 }
 
-function validateBankInquiryConfirmPayload(payload) {
-  if (!payload.paymentDate) return 'تاریخ پرداخت را وارد کنید';
+function validateBankInquirySearchPayload(payload) {
+  const hasDate = !!payload.paymentDate;
   const hasFicheNo = !!payload.ficheNo;
   const hasBillPayment = !!payload.billId && !!payload.paymentId;
-  if (!hasFicheNo && !hasBillPayment) {
-    return 'شماره فیش یا هر دو فیلد شناسه قبض و شناسه پرداخت را وارد کنید';
+  if (!hasDate && !hasFicheNo && !hasBillPayment) {
+    return 'حداقل یکی از فیلترها را وارد کنید: تاریخ پرداخت، شماره فیش، یا شناسه قبض و شناسه پرداخت';
   }
   if ((payload.billId && !payload.paymentId) || (!payload.billId && payload.paymentId)) {
     return 'هر دو فیلد شناسه قبض و شناسه پرداخت الزامی است';
@@ -1027,23 +1040,186 @@ function validateBankInquiryConfirmPayload(payload) {
   return null;
 }
 
+function updateBankInquiryPaginationUi() {
+  const bar = $('bankInquiryPagination');
+  const label = $('bankInquiryPageLabel');
+  const prevBtn = $('btnBankInquiryPrevPage');
+  const nextBtn = $('btnBankInquiryNextPage');
+  if (!bar || !label || !prevBtn || !nextBtn) return;
+
+  const { page, totalPages, totalCount } = bankInquirySearchState;
+  const show = totalCount > 0;
+  bar.hidden = !show;
+  if (!show) return;
+
+  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${Math.max(totalPages, 1).toLocaleString('fa-IR')}`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
+}
+
+function syncBankInquiryConfirmButton() {
+  const btn = $('btnBankInquiryConfirm');
+  if (!btn) return;
+  btn.disabled = selectedBankInquiryNos.size === 0;
+  const applySection = $('bankInquiryApplySection');
+  if (applySection) applySection.hidden = selectedBankInquiryNos.size === 0;
+}
+
+function updateBankInquiryCountLabel() {
+  const countLabel = $('bankInquiryCountLabel');
+  if (!countLabel) return;
+  const selectedTotal = selectedBankInquiryNos.size;
+  const pageInfo = `${bankInquiryItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${bankInquirySearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+  countLabel.textContent = selectedTotal > 0
+    ? `${pageInfo} — ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+    : pageInfo;
+}
+
+function renderBankInquiryTable(items, meta = {}) {
+  bankInquiryItems = items || [];
+  if (meta.page != null) bankInquirySearchState.page = meta.page;
+  if (meta.pageSize != null) bankInquirySearchState.pageSize = meta.pageSize;
+  if (meta.totalCount != null) bankInquirySearchState.totalCount = meta.totalCount;
+  if (meta.totalPages != null) bankInquirySearchState.totalPages = meta.totalPages;
+
+  const section = $('bankInquiryResultsSection');
+  const tbody = $('bankInquiryTable')?.querySelector('tbody');
+  const selectAll = $('bankInquirySelectAll');
+  if (!section || !tbody) return;
+
+  section.hidden = false;
+
+  if (bankInquiryItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">موردی یافت نشد</td></tr>';
+    updateBankInquiryCountLabel();
+    updateBankInquiryPaginationUi();
+    syncBankInquiryConfirmButton();
+    return;
+  }
+
+  tbody.innerHTML = bankInquiryItems.map((item) => {
+    const checked = selectedBankInquiryNos.has(item.ficheNo) ? ' checked' : '';
+    return `<tr>
+      <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
+      <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${toPersianDigits(item.billId || '-')}</td>
+      <td>${toPersianDigits(item.paymentId || '-')}</td>
+      <td>${formatShamsiDisplay(item.paymentDate)}</td>
+      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
+      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
+      <td>${formatShamsiDisplay(item.userConfirmDate)}</td>
+      <td>${item.usernameUserConfirm || '-'}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.bank-inquiry-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const ficheNo = cb.dataset.ficheNo;
+      if (cb.checked) selectedBankInquiryNos.add(ficheNo);
+      else selectedBankInquiryNos.delete(ficheNo);
+      syncBankInquiryConfirmButton();
+      if (selectAll) {
+        const all = tbody.querySelectorAll('.bank-inquiry-row-check');
+        selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
+      }
+      updateBankInquiryCountLabel();
+      prefillBankInquiryNewPaymentDate();
+    });
+  });
+
+  updateBankInquiryCountLabel();
+  if (selectAll) {
+    const selectedOnPage = bankInquiryItems.filter((item) => selectedBankInquiryNos.has(item.ficheNo)).length;
+    selectAll.checked = bankInquiryItems.length > 0 && selectedOnPage === bankInquiryItems.length;
+  }
+  updateBankInquiryPaginationUi();
+  syncBankInquiryConfirmButton();
+}
+
+function prefillBankInquiryNewPaymentDate() {
+  const input = $('bankInquiryNewPaymentDate');
+  if (!input || input.value.trim()) return;
+  const selected = bankInquiryItems.filter((item) => selectedBankInquiryNos.has(item.ficheNo));
+  if (selected.length === 1 && selected[0].paymentDate) {
+    input.value = formatShamsiDisplay(selected[0].paymentDate);
+  }
+}
+
+async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}) {
+  const payload = getBankInquirySearchPayload(page);
+  const validationError = validateBankInquirySearchPayload(payload);
+  if (validationError) return showAppWarning(validationError);
+
+  if (clearSelection) selectedBankInquiryNos.clear();
+  bankInquirySearchState.page = page;
+
+  const btn = $('btnBankInquirySearch');
+  const prevBtn = $('btnBankInquiryPrevPage');
+  const nextBtn = $('btnBankInquiryNextPage');
+  const box = $('bankInquiryResultBox');
+  if (btn) btn.disabled = true;
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+
+  try {
+    const res = await apiFetch('/api/bank-inquiry/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    renderBankInquiryTable(data.items || [], {
+      page: data.page,
+      pageSize: data.pageSize,
+      totalCount: data.totalCount,
+      totalPages: data.totalPages
+    });
+    if (box) box.hidden = true;
+  } catch (e) {
+    renderBankInquiryTable([], { page: 1, pageSize: payload.pageSize, totalCount: 0, totalPages: 0 });
+    if (box) {
+      box.hidden = false;
+      box.textContent = e.message;
+    }
+    showAppError(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    updateBankInquiryPaginationUi();
+  }
+}
+
+function getBankInquiryConfirmPayload() {
+  return {
+    ficheNos: Array.from(selectedBankInquiryNos),
+    newPaymentDate: ($('bankInquiryNewPaymentDate')?.value || '').trim()
+  };
+}
+
+function validateBankInquiryConfirmPayload(payload) {
+  if (!payload.ficheNos.length) return 'حداقل یک فیش از نتایج انتخاب کنید';
+  if (!payload.newPaymentDate) return 'تاریخ پرداخت جدید را وارد کنید';
+  return null;
+}
+
 function formatBankInquiryConfirmResult(data) {
+  const lines = (data.results || []).map((r) =>
+    `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}`
+  );
   return [
     '=== نتیجه UPDATE Income_Fiche (تایید استعلام بانک) ===',
     `DryRun: ${data.dryRun}`,
     data.dryRun
-      ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد`
-      : `به‌روز: ${data.updated || data.rowsAffected || 0}`,
-    `فیش: ${data.ficheNo || '-'}`,
-    `قبض/پرداخت: ${data.billId || '-'} / ${data.paymentId || '-'}`,
-    `وضعیت قبلی: ${data.previousEumFicheStatus ?? '-'}`,
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
+      : `به‌روز: ${data.updated || 0} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
     `PaymentDate جدید: ${data.paymentDate || '-'}`,
     `UserConfirmDate: ${data.userConfirmDate || '-'}`,
     `UsernameUserConfirm: ${data.usernameUserConfirm || '-'}`,
     `EumFicheStatus → ${data.newEumFicheStatus}`,
     `EumIncomePaymentType → ${data.newEumIncomePaymentType}`,
-    data.message || ''
-  ].filter(Boolean).join('\n');
+    '',
+    ...lines
+  ].join('\n');
 }
 
 /** همان منطق سرور IdentifierDetector — فقط برای نمایش راهنما */
@@ -2434,16 +2610,48 @@ function setupEventHandlers() {
     }
   });
 
+  bindClick('btnBankInquirySearch', async () => {
+    await fetchBankInquiryResults(1, { clearSelection: true });
+  });
+
+  bindClick('btnBankInquiryPrevPage', async () => {
+    if (bankInquirySearchState.page <= 1) return;
+    await fetchBankInquiryResults(bankInquirySearchState.page - 1);
+  });
+
+  bindClick('btnBankInquiryNextPage', async () => {
+    if (bankInquirySearchState.page >= bankInquirySearchState.totalPages) return;
+    await fetchBankInquiryResults(bankInquirySearchState.page + 1);
+  });
+
+  $('bankInquiryPageSize')?.addEventListener('change', async () => {
+    await fetchBankInquiryResults(1);
+  });
+
+  $('bankInquirySelectAll')?.addEventListener('change', (e) => {
+    const tbody = $('bankInquiryTable')?.querySelector('tbody');
+    const selectAll = e.target;
+    if (!tbody || !selectAll) return;
+    tbody.querySelectorAll('.bank-inquiry-row-check').forEach((cb) => {
+      cb.checked = selectAll.checked;
+      const ficheNo = cb.dataset.ficheNo;
+      if (selectAll.checked) selectedBankInquiryNos.add(ficheNo);
+      else selectedBankInquiryNos.delete(ficheNo);
+    });
+    updateBankInquiryCountLabel();
+    syncBankInquiryConfirmButton();
+    prefillBankInquiryNewPaymentDate();
+  });
+
   bindClick('btnBankInquiryConfirm', async () => {
     const payload = getBankInquiryConfirmPayload();
     const validationError = validateBankInquiryConfirmPayload(payload);
     if (validationError) return showAppWarning(validationError);
 
     const dry = config?.bankInquiryConfirm?.dryRun ?? config?.dryRun ?? true;
-    const target = payload.ficheNo || `${payload.billId}/${payload.paymentId}`;
     const warn = dry
-      ? `DryRun فعال — تایید استعلام بانک برای «${target}» فقط شبیه‌سازی می‌شود. ادامه؟`
-      : `تایید استعلام بانک برای «${target}» در Income_Fiche ثبت شود؟`;
+      ? `DryRun فعال — تایید استعلام بانک برای ${payload.ficheNos.length} فیش فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `تایید استعلام بانک برای ${payload.ficheNos.length} فیش با تاریخ پرداخت «${payload.newPaymentDate}» ثبت شود؟`;
     if (!confirm(warn)) return;
 
     const btn = $('btnBankInquiryConfirm');
@@ -2465,13 +2673,14 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('تایید استعلام بانک — تغییری روی سرور اعمال نشد (DryRun).');
       } else {
-        showAppSuccess(data.message || 'تایید استعلام بانک ثبت شد');
+        showAppSuccess(`تایید ثبت شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
+        await fetchBankInquiryResults(bankInquirySearchState.page);
       }
     } catch (e) {
       if (box) box.textContent = e.message;
       showAppError(e.message);
     } finally {
-      btn.disabled = false;
+      syncBankInquiryConfirmButton();
     }
   });
 }

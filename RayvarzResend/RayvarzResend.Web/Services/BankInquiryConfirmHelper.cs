@@ -21,58 +21,82 @@ public static class BankInquiryConfirmHelper
         return !string.IsNullOrEmpty(slashDate);
     }
 
-    public static (string WhereClause, List<(string Name, object Value)> Parameters)? BuildWhereClause(
-        string? ficheNo,
-        string? billId,
-        string? paymentId,
-        string? identifierValue)
+    public static bool HasAnySearchFilter(BankInquirySearchRequest req)
     {
-        var normalizedFicheNo = (ficheNo ?? "").Trim();
-        var normalizedBillId = (billId ?? "").Trim();
-        var normalizedPaymentId = (paymentId ?? "").Trim();
-        var normalizedIdentifier = (identifierValue ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(req.PaymentDate))
+            return TryNormalizeSlashDate(req.PaymentDate, out _);
+        if (!string.IsNullOrWhiteSpace(req.FicheNo)) return true;
+        if (!string.IsNullOrWhiteSpace(req.IdentifierValue)) return true;
+        return !string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId);
+    }
 
-        if (!string.IsNullOrEmpty(normalizedFicheNo))
-        {
-            return ("FicheNo = @ficheNo", [("@ficheNo", normalizedFicheNo)]);
-        }
+    public static string? ValidateSearchRequest(BankInquirySearchRequest req)
+    {
+        if (!HasAnySearchFilter(req))
+            return "حداقل یکی از فیلترها را وارد کنید: تاریخ پرداخت، شماره فیش، یا شناسه قبض و شناسه پرداخت";
 
-        if (!string.IsNullOrEmpty(normalizedBillId) && !string.IsNullOrEmpty(normalizedPaymentId))
-        {
-            return (
-                "BillID = @billId AND PaymentID = @paymentId",
-                [("@billId", normalizedBillId), ("@paymentId", normalizedPaymentId)]);
-        }
+        if (!string.IsNullOrWhiteSpace(req.PaymentDate)
+            && !TryNormalizeSlashDate(req.PaymentDate, out _))
+            return "تاریخ پرداخت نامعتبر است";
 
-        if (!string.IsNullOrEmpty(normalizedIdentifier))
-        {
-            var identifierFilter = FicheDateChangeHelper.BuildIdentifierFilter(normalizedIdentifier);
-            if (identifierFilter == null)
-                return null;
-
-            return (identifierFilter.Value.Clause, [(identifierFilter.Value.ParamName, identifierFilter.Value.Value)]);
-        }
+        var hasBill = !string.IsNullOrWhiteSpace(req.BillId);
+        var hasPayment = !string.IsNullOrWhiteSpace(req.PaymentId);
+        if (hasBill != hasPayment)
+            return "هر دو فیلد شناسه قبض و شناسه پرداخت الزامی است";
 
         return null;
     }
 
-    public static string? ValidateRequest(BankInquiryConfirmRequest req)
+    public static (string WhereSql, List<(string Name, object Value)> Parameters) BuildSearchWhere(
+        BankInquirySearchRequest req)
     {
-        if (!TryNormalizeSlashDate(req.PaymentDate, out _))
-            return "تاریخ پرداخت نامعتبر است";
+        var clauses = new List<string>();
+        var parameters = new List<(string, object)>();
 
-        var hasFicheNo = !string.IsNullOrWhiteSpace(req.FicheNo);
-        var hasBillPayment = !string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId);
-        var hasIdentifier = !string.IsNullOrWhiteSpace(req.IdentifierValue);
+        if (!string.IsNullOrWhiteSpace(req.PaymentDate)
+            && TryNormalizeSlashDate(req.PaymentDate, out var paymentDate))
+        {
+            clauses.Add("f.PaymentDate = @paymentDate");
+            parameters.Add(("@paymentDate", paymentDate));
+        }
 
-        if (!hasFicheNo && !hasBillPayment && !hasIdentifier)
-            return "شماره فیش یا شناسه قبض و شناسه پرداخت را وارد کنید";
+        if (!string.IsNullOrWhiteSpace(req.FicheNo))
+        {
+            clauses.Add("f.FicheNo = @ficheNo");
+            parameters.Add(("@ficheNo", req.FicheNo.Trim()));
+        }
+        else if (!string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId))
+        {
+            clauses.Add("f.BillID = @billId AND f.PaymentID = @paymentId");
+            parameters.Add(("@billId", req.BillId.Trim()));
+            parameters.Add(("@paymentId", req.PaymentId.Trim()));
+        }
+        else if (!string.IsNullOrWhiteSpace(req.IdentifierValue))
+        {
+            var identifierFilter = FicheDateChangeHelper.BuildIdentifierFilter(req.IdentifierValue);
+            if (identifierFilter != null)
+            {
+                clauses.Add(identifierFilter.Value.Clause);
+                parameters.Add((identifierFilter.Value.ParamName, identifierFilter.Value.Value));
+            }
+        }
 
-        if (hasBillPayment && (string.IsNullOrWhiteSpace(req.BillId) || string.IsNullOrWhiteSpace(req.PaymentId)))
-            return "هر دو فیلد شناسه قبض و شناسه پرداخت الزامی است";
+        return (string.Join(" AND ", clauses), parameters);
+    }
 
-        if (BuildWhereClause(req.FicheNo, req.BillId, req.PaymentId, req.IdentifierValue) == null)
-            return "شناسه فیش نامعتبر است";
+    public static string? ValidateConfirmRequest(BankInquiryConfirmRequest req)
+    {
+        var ficheNos = (req.FicheNos ?? [])
+            .Select(s => (s ?? "").Trim())
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ficheNos.Count == 0)
+            return "حداقل یک فیش از نتایج انتخاب کنید";
+
+        if (!TryNormalizeSlashDate(req.NewPaymentDate, out _))
+            return "تاریخ پرداخت جدید نامعتبر است";
 
         return null;
     }
