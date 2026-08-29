@@ -38,19 +38,75 @@
     </header>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active perm-unsent" data-tab="unsent" role="tab" aria-selected="true" hidden>فیش های جمعی</button>
-      <button type="button" class="main-tab" data-tab="single" role="tab" aria-selected="false">ارسال تکی</button>
+      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
-    <div id="tabUnsent" class="tab-panel active perm-unsent" role="tabpanel" hidden>
-    <section class="card unsent-card card-enter">
+    <div id="tabUnsent" class="tab-panel active" role="tabpanel">
+    <section class="card card-enter rayvarz-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📤</span>
-        <h2>فیش های جمعی</h2>
+        <h2>ارسال به رایورز</h2>
       </div>
+      <div class="installment-mode-tabs rayvarz-mode-tabs" role="tablist" aria-label="نوع ارسال">
+        <button type="button" class="installment-mode-tab active" data-rayvarz-mode="single" role="tab" aria-selected="true">تکی</button>
+        <button type="button" class="installment-mode-tab perm-unsent" data-rayvarz-mode="bulk" role="tab" aria-selected="false" hidden>جمعی</button>
+      </div>
+      <div id="rayvarzSinglePanel" class="installment-mode-panel">
+        <div id="singleRegularPanel">
+          <div class="form-grid unsent-form-grid">
+            <label class="field field-required">
+              <span class="field-label">نوع فیش</span>
+              <select id="singleFicheKind">
+                <option value="Income">درآمد</option>
+                <option value="Duty">نوسازی و صنفی</option>
+              </select>
+            </label>
+            <label class="field field-required">
+              <span class="field-label">شناسه فیش</span>
+              <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
+              <span id="identifierHint" class="field-hint" hidden></span>
+            </label>
+            <label class="field">
+              <span class="field-label">منطقه</span>
+              <select id="branch"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">کد منبع</span>
+              <select id="fund"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">تاریخ سند</span>
+              <div class="date-input-wrap">
+                <input id="docDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+                <button type="button" class="btn-date-icon" data-for="docDate" title="تقویم" aria-label="تقویم">📅</button>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">تاریخ عملیات</span>
+              <div class="date-input-wrap">
+                <input id="actDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+                <button type="button" class="btn-date-icon" data-for="actDate" title="تقویم" aria-label="تقویم">📅</button>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">تاریخ سررسید</span>
+              <div class="date-input-wrap">
+                <input id="dueDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
+                <button type="button" class="btn-date-icon" data-for="dueDate" title="تقویم" aria-label="تقویم">📅</button>
+              </div>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
+            <button id="btnPreview" class="btn secondary perm-unsent" type="button" disabled hidden>پیش‌نمایش XML</button>
+            <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
+          </div>
+        </div>
+      </div>
+      <div id="rayvarzBulkPanel" class="installment-mode-panel perm-unsent" hidden>
       <div class="form-grid unsent-form-grid">
         <label class="field field-required">
           <span class="field-label">نوع فیش</span>
@@ -138,64 +194,6 @@
         </div>
       </div>
       <pre id="unsentResultBox" class="code-block" hidden></pre>
-    </section>
-    </div>
-
-    <div id="tabSingle" class="tab-panel active" role="tabpanel">
-    <section class="card card-enter">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">📋</span>
-        <h2>ارسال تکی</h2>
-      </div>
-      <div id="singleRegularPanel">
-        <div class="form-grid unsent-form-grid">
-          <label class="field field-required">
-            <span class="field-label">نوع فیش</span>
-            <select id="singleFicheKind">
-              <option value="Income">درآمد</option>
-              <option value="Duty">نوسازی و صنفی</option>
-            </select>
-          </label>
-          <label class="field field-required">
-            <span class="field-label">شناسه فیش</span>
-            <input id="identifierValue" type="text" placeholder="شماره فیش یا BillID+PaymentID" autocomplete="off" />
-            <span id="identifierHint" class="field-hint" hidden></span>
-          </label>
-          <label class="field">
-            <span class="field-label">منطقه</span>
-            <select id="branch"></select>
-          </label>
-          <label class="field">
-            <span class="field-label">کد منبع</span>
-            <select id="fund"></select>
-          </label>
-          <label class="field">
-            <span class="field-label">تاریخ سند</span>
-            <div class="date-input-wrap">
-              <input id="docDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
-              <button type="button" class="btn-date-icon" data-for="docDate" title="تقویم" aria-label="تقویم">📅</button>
-            </div>
-          </label>
-          <label class="field">
-            <span class="field-label">تاریخ عملیات</span>
-            <div class="date-input-wrap">
-              <input id="actDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
-              <button type="button" class="btn-date-icon" data-for="actDate" title="تقویم" aria-label="تقویم">📅</button>
-            </div>
-          </label>
-          <label class="field">
-            <span class="field-label">تاریخ سررسید</span>
-            <div class="date-input-wrap">
-              <input id="dueDate" data-jdp type="text" placeholder="1404/05/05" autocomplete="off" />
-              <button type="button" class="btn-date-icon" data-for="dueDate" title="تقویم" aria-label="تقویم">📅</button>
-            </div>
-          </label>
-        </div>
-        <div class="actions">
-          <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
-          <button id="btnPreview" class="btn secondary perm-unsent" type="button" disabled hidden>پیش‌نمایش XML</button>
-          <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
-        </div>
       </div>
     </section>
 
@@ -638,6 +636,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=54"></script>
+  <script src="js/app.js?v=55"></script>
 </body>
 </html>

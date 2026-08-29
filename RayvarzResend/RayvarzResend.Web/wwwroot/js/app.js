@@ -133,7 +133,6 @@ function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
     unsent: $('tabUnsent'),
-    single: $('tabSingle'),
     installment: $('tabInstallment'),
     ficheDate: $('tabFicheDate'),
     users: $('tabUsers')
@@ -150,7 +149,6 @@ function setupMainTabs() {
 
 function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
   unsent: $('tabUnsent'),
-  single: $('tabSingle'),
   installment: $('tabInstallment'),
   ficheDate: $('tabFicheDate'),
   users: $('tabUsers')
@@ -170,6 +168,27 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
 
 function getSingleFicheKind() {
   return $('singleFicheKind')?.value || 'Income';
+}
+
+let rayvarzSendMode = 'single';
+
+function setRayvarzSendMode(mode) {
+  if (mode === 'bulk' && !canAccessUnsent()) mode = 'single';
+  rayvarzSendMode = mode === 'bulk' ? 'bulk' : 'single';
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    const active = btn.dataset.rayvarzMode === rayvarzSendMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  const singlePanel = $('rayvarzSinglePanel');
+  const bulkPanel = $('rayvarzBulkPanel');
+  if (singlePanel) singlePanel.hidden = rayvarzSendMode !== 'single';
+  if (bulkPanel) bulkPanel.hidden = rayvarzSendMode !== 'bulk';
+  if (rayvarzSendMode === 'bulk') {
+    $('ficheSection')?.setAttribute('hidden', '');
+    $('resultSection')?.setAttribute('hidden', '');
+    $('xmlSection')?.setAttribute('hidden', '');
+  }
 }
 
 const installmentLookupLabels = {
@@ -219,7 +238,7 @@ function syncInstallmentOdooatCheckboxes(source) {
 function setInstallmentMode(mode) {
   const prevMode = installmentMode;
   installmentMode = mode === 'excel' ? 'excel' : 'single';
-  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+  document.querySelectorAll('.installment-mode-tab[data-installment-mode]').forEach((btn) => {
     const active = btn.dataset.installmentMode === installmentMode;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -1286,11 +1305,17 @@ function applyPermissionUi() {
   document.querySelectorAll('.perm-users').forEach((el) => {
     el.hidden = !canManageUsers();
   });
+  if (!canAccessUnsent() && rayvarzSendMode === 'bulk') {
+    setRayvarzSendMode('single');
+  }
 }
 
 function defaultMainTabKey() {
-  if (canAccessUnsent()) return 'unsent';
-  return 'single';
+  return 'unsent';
+}
+
+function defaultRayvarzSendMode() {
+  return canAccessUnsent() ? 'bulk' : 'single';
 }
 
 function applyAuthUi() {
@@ -1310,6 +1335,7 @@ function applyAuthUi() {
   }
 
   activateMainTab(defaultMainTabKey());
+  setRayvarzSendMode(defaultRayvarzSendMode());
 }
 
 async function ensureAuthenticated() {
@@ -1786,8 +1812,14 @@ async function init() {
     });
   }
 
-  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+  document.querySelectorAll('.installment-mode-tab[data-installment-mode]').forEach((btn) => {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
+  });
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.hidden) return;
+      setRayvarzSendMode(btn.dataset.rayvarzMode);
+    });
   });
   $('installmentApplyEndState')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('single'));
   $('installmentApplyEndStateExcel')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('excel'));
