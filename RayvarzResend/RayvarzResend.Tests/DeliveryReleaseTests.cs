@@ -45,15 +45,19 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void appsettings_has_installment_dry_run_default_true()
+    public void appsettings_has_dry_run_default_false()
     {
         var path = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..",
             "RayvarzResend.Web", "appsettings.json"));
         Assert.True(File.Exists(path), path);
         var json = File.ReadAllText(path);
+        Assert.Contains("\"Rayvarz\"", json);
         Assert.Contains("\"Installment\"", json);
-        Assert.Contains("\"DryRun\": true", json);
+        Assert.Contains("\"FicheDateChange\"", json);
+        Assert.Contains("\"BankInquiryConfirm\"", json);
+        Assert.DoesNotContain("\"DryRun\": true", json);
+        Assert.Contains("\"DryRun\": false", json);
     }
 
     [Fact]
