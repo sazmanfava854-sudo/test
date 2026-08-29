@@ -462,19 +462,24 @@ function initFicheDateStatusControls() {
   if (filterHost) {
     filterHost.innerHTML = '';
     ficheDateStatusOrder.forEach((value) => {
-      const label = ficheDateStatusLabels[value];
+      const labelText = ficheDateStatusLabels[value];
       const labelEl = document.createElement('label');
-      labelEl.className = 'fiche-date-status-item';
-      labelEl.setAttribute('role', 'listitem');
+      labelEl.className = 'fiche-date-ms-option';
+      labelEl.setAttribute('role', 'option');
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.value = String(value);
       input.className = 'fiche-date-status-filter';
       if (value === 1) input.checked = true;
+      const text = document.createElement('span');
+      text.className = 'fiche-date-ms-option-text';
+      text.textContent = `${value} — ${labelText}`;
       labelEl.appendChild(input);
-      labelEl.appendChild(document.createTextNode(`${value} — ${label}`));
+      labelEl.appendChild(text);
       filterHost.appendChild(labelEl);
     });
+    setupFicheDateStatusDropdown();
+    updateFicheDateStatusTriggerLabel();
   }
   if (statusSelect) {
     statusSelect.innerHTML = '';
@@ -488,6 +493,64 @@ function initFicheDateStatusControls() {
     });
   }
   syncFicheDateApplyFields();
+}
+
+function updateFicheDateStatusTriggerLabel() {
+  const labelEl = $('ficheDateStatusTriggerLabel');
+  if (!labelEl) return;
+  const selected = getSelectedFicheDateStatuses();
+  if (selected.length === 0) {
+    labelEl.textContent = 'انتخاب وضعیت…';
+    return;
+  }
+  if (selected.length === 1) {
+    const value = selected[0];
+    labelEl.textContent = `${value} — ${ficheDateStatusLabels[value] || value}`;
+    return;
+  }
+  labelEl.textContent = `${selected.length.toLocaleString('fa-IR')} وضعیت انتخاب‌شده`;
+}
+
+function closeFicheDateStatusMenu() {
+  const menu = $('ficheDateStatusFilters');
+  const trigger = $('ficheDateStatusTrigger');
+  if (menu) menu.hidden = true;
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleFicheDateStatusMenu() {
+  const menu = $('ficheDateStatusFilters');
+  const trigger = $('ficheDateStatusTrigger');
+  if (!menu || !trigger) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function setupFicheDateStatusDropdown() {
+  const trigger = $('ficheDateStatusTrigger');
+  const menu = $('ficheDateStatusFilters');
+  if (!trigger || !menu || trigger.dataset.bound === '1') return;
+  trigger.dataset.bound = '1';
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFicheDateStatusMenu();
+  });
+
+  menu.querySelectorAll('.fiche-date-status-filter').forEach((input) => {
+    input.addEventListener('change', updateFicheDateStatusTriggerLabel);
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = $('ficheDateStatusMulti');
+    if (!wrap || wrap.contains(e.target)) return;
+    closeFicheDateStatusMenu();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeFicheDateStatusMenu();
+  });
 }
 
 function syncFicheDateApplyFields() {

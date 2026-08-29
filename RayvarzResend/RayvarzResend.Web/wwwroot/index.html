@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=23" />
+  <link rel="stylesheet" href="css/style.css?v=24" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -380,10 +380,16 @@
           <datalist id="ficheDateAccountGroupOptions"></datalist>
           <span class="field-hint">از لیست انتخاب کنید یا بخشی از عنوان را تایپ کنید (Title LIKE N'%متن%')</span>
         </label>
-        <label class="field field-span-all">
+        <div class="field">
           <span class="field-label">وضعیت فیش (فیلتر)</span>
-          <div id="ficheDateStatusFilters" class="fiche-date-status-list" role="list"></div>
-        </label>
+          <div class="fiche-date-ms" id="ficheDateStatusMulti">
+            <button type="button" class="fiche-date-ms-trigger" id="ficheDateStatusTrigger" aria-expanded="false" aria-haspopup="listbox">
+              <span id="ficheDateStatusTriggerLabel">صدوردایم (1)</span>
+              <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="fiche-date-ms-menu" id="ficheDateStatusFilters" hidden role="listbox" aria-multiselectable="true"></div>
+          </div>
+        </div>
       </div>
       <div class="actions">
         <button id="btnFicheDateSearch" class="btn primary" type="button">جستجو</button>
@@ -630,6 +636,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=50"></script>
+  <script src="js/app.js?v=51"></script>
 </body>
 </html>
