@@ -624,6 +624,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
                      f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
                      NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
                      {IncomeBnkAcntNoSelect}
               FROM dbo.Income_Fiche f WITH (NOLOCK)
@@ -646,6 +647,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
                      f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
                      '' AS District,
                      {IncomeBnkAcntNoSelect}
               FROM dbo.Income_Fiche f WITH (NOLOCK)
@@ -685,6 +687,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     '' AS NidWorkItem,
                      NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
                      {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
@@ -702,7 +705,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             : $"""
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
-                     d.PaymentDate, d.BankPaymentDate,                      d.EumDutyFicheStatus AS EumFicheStatus,
+                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     '' AS NidWorkItem,
                      '' AS District,
                      {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
@@ -763,6 +767,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             {
                 FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
                 NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
+                NidWorkItem = reader.IsDBNull(reader.GetOrdinal("NidWorkItem"))
+                    ? ""
+                    : reader.GetString(reader.GetOrdinal("NidWorkItem")).Trim(),
                 BillId = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
                 PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
                 Payable = ReadDecimal(reader, "Payable"),

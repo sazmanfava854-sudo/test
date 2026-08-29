@@ -51,6 +51,7 @@ public sealed class BankInquiryConfirmService
 
         var sql = $"""
             SELECT f.FicheNo,
+                   CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
                    f.BillID,
                    f.PaymentID,
                    f.PaymentDate,
@@ -98,6 +99,7 @@ public sealed class BankInquiryConfirmService
             result.Items.Add(new BankInquiryListItem
             {
                 FicheNo = reader["FicheNo"]?.ToString() ?? "",
+                NidWorkItem = reader["NidWorkItem"]?.ToString() ?? "",
                 BillId = reader["BillID"]?.ToString() ?? "",
                 PaymentId = reader["PaymentID"]?.ToString() ?? "",
                 PaymentDate = reader["PaymentDate"]?.ToString() ?? "",

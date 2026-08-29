@@ -1089,7 +1089,7 @@ function renderBankInquiryTable(items, meta = {}) {
   section.hidden = false;
 
   if (bankInquiryItems.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">موردی یافت نشد</td></tr>';
     updateBankInquiryCountLabel();
     updateBankInquiryPaginationUi();
     syncBankInquiryConfirmButton();
@@ -1101,6 +1101,7 @@ function renderBankInquiryTable(items, meta = {}) {
     return `<tr>
       <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
       <td>${formatNosaziCode(item.nosaziCode)}</td>
       <td>${toPersianDigits(item.billId || '-')}</td>
       <td>${toPersianDigits(item.paymentId || '-')}</td>
@@ -1206,10 +1207,15 @@ function formatBankInquiryConfirmResult(data) {
   const nosaziByFiche = new Map(
     bankInquiryItems.map((item) => [item.ficheNo, item.nosaziCode])
   );
+  const workItemByFiche = new Map(
+    bankInquiryItems.map((item) => [item.ficheNo, item.nidWorkItem])
+  );
   const lines = (data.results || []).map((r) => {
     const nosazi = nosaziByFiche.get(r.ficheNo);
+    const workItem = workItemByFiche.get(r.ficheNo);
     const nosaziPart = nosazi ? ` | کد نوسازی: ${formatNosaziCode(nosazi)}` : '';
-    return `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}${nosaziPart}`;
+    const workItemPart = workItem ? ` | شماره فرآیند: ${toPersianDigits(workItem)}` : '';
+    return `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}${workItemPart}${nosaziPart}`;
   });
   return [
     '=== نتیجه UPDATE Income_Fiche (خدمات الکترونیک) ===',
@@ -1375,7 +1381,7 @@ function renderUnsentTable(items, meta = {}) {
 
   if (!unsentItems.length) {
     section.hidden = false;
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
     if (countLabel) {
       countLabel.textContent = unsentSearchState.totalCount > 0
         ? `۰ مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
@@ -1394,6 +1400,7 @@ function renderUnsentTable(items, meta = {}) {
     <tr>
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
+      <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
       <td>${formatNosaziCode(item.bnkAcntNo)}</td>
       <td>${item.billId || '-'}</td>
       <td>${item.paymentId || '-'}</td>

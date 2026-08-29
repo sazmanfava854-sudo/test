@@ -247,6 +247,7 @@ public class UnsentFicheListItem
 {
     public string FicheNo { get; set; } = "";
     public Guid NidFiche { get; set; }
+    public string NidWorkItem { get; set; } = "";
     public string BnkAcntNo { get; set; } = "";
     public string BillId { get; set; } = "";
     public string PaymentId { get; set; } = "";
@@ -598,6 +599,7 @@ public class BankInquirySearchRequest
 public class BankInquiryListItem
 {
     public string FicheNo { get; set; } = "";
+    public string NidWorkItem { get; set; } = "";
     public string BillId { get; set; } = "";
     public string PaymentId { get; set; } = "";
     public string PaymentDate { get; set; } = "";

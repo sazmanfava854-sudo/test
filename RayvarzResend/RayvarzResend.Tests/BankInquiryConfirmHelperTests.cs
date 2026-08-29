@@ -52,6 +52,7 @@ public class BankInquiryConfirmHelperTests
         Assert.Contains("b.District", BankInquiryConfirmHelper.IncomeNosaziCodeSql);
         Assert.Contains("b.Shop", BankInquiryConfirmHelper.IncomeNosaziCodeSql);
         Assert.Contains("Base_NosaziCode", BankInquiryConfirmHelper.IncomeFicheNosaziJoins);
+        Assert.Contains("Sh_RequestInfo", BankInquiryConfirmHelper.IncomeFicheNosaziJoins);
     }
 
     [Fact]
