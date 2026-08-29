@@ -516,7 +516,7 @@ public class FicheDateChangeSearchRequest
     public string? IdentifierValue { get; set; }
     public List<int>? EumFicheStatuses { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 50;
+    public int PageSize { get; set; } = 25;
     /// <summary>سازگاری با نسخه قبلی — در صورت PageSize=0 از این مقدار استفاده می‌شود.</summary>
     public int MaxResults { get; set; } = 500;
 }

@@ -5,13 +5,71 @@ let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
 const unsentSearchState = {
   page: 1,
-  pageSize: 50,
+  pageSize: 25,
   totalCount: 0,
   totalPages: 0,
   filters: null
 };
 
 const $ = (id) => document.getElementById(id);
+
+let appToastTimer = null;
+
+function hideAppMessage() {
+  const host = $('appToastHost');
+  if (!host) return;
+  host.innerHTML = '';
+  if (appToastTimer) {
+    clearTimeout(appToastTimer);
+    appToastTimer = null;
+  }
+}
+
+function showAppMessage(message, type = 'info', { timeout = 9000 } = {}) {
+  const host = $('appToastHost');
+  if (!host || !message) return;
+
+  hideAppMessage();
+
+  const toast = document.createElement('div');
+  toast.className = `app-toast app-toast-${type}`;
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+  const text = document.createElement('span');
+  text.className = 'app-toast-text';
+  text.textContent = message;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'app-toast-close';
+  closeBtn.setAttribute('aria-label', 'بستن');
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', hideAppMessage);
+
+  toast.appendChild(text);
+  toast.appendChild(closeBtn);
+  host.appendChild(toast);
+
+  if (timeout > 0) {
+    appToastTimer = setTimeout(hideAppMessage, timeout);
+  }
+}
+
+function showAppSuccess(message, options) {
+  showAppMessage(message, 'success', options);
+}
+
+function showAppError(message, options) {
+  showAppMessage(message, 'error', { timeout: 12000, ...options });
+}
+
+function showAppWarning(message, options) {
+  showAppMessage(message, 'warning', options);
+}
+
+function showAppInfo(message, options) {
+  showAppMessage(message, 'info', options);
+}
 
 const categoryLabels = {
   Income: 'درآمد',
@@ -214,7 +272,7 @@ let ficheDateItems = [];
 const selectedFicheDateNos = new Set();
 const ficheDateSearchState = {
   page: 1,
-  pageSize: 50,
+  pageSize: 25,
   totalCount: 0,
   totalPages: 0
 };
@@ -732,7 +790,7 @@ function getSelectedFicheDateStatuses() {
 }
 
 function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
-  const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 50;
+  const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 25;
   ficheDateSearchState.pageSize = pageSize;
   return {
     identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
@@ -1164,11 +1222,11 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
   const filters = getUnsentSearchFilters();
   const validationError = validateUnsentSearchFilters(filters);
   if (validationError) {
-    alert(validationError);
+    showAppWarning(validationError);
     return false;
   }
 
-  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 50;
+  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
   unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
   if (clearSelection) selectedUnsentFicheNos.clear();
@@ -1206,7 +1264,7 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
     });
     return true;
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
     renderUnsentTable([], { page: 1, pageSize, totalCount: 0, totalPages: 0 });
     return false;
   } finally {
@@ -1887,7 +1945,7 @@ function setupEventHandlers() {
   bindClick('btnLoad', async () => {
   const kind = getSingleFicheKind();
   const value = $('identifierValue').value.trim();
-  if (!value) return alert('شناسه فیش را وارد کنید');
+  if (!value) return showAppWarning('شناسه فیش را وارد کنید');
 
   $('btnLoad').disabled = true;
   try {
@@ -1919,7 +1977,7 @@ function setupEventHandlers() {
     $('resultSection').hidden = true;
     $('xmlSection').hidden = true;
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
     currentFiche = null;
     $('ficheSection').hidden = true;
     $('btnPreview').disabled = true;
@@ -1932,7 +1990,7 @@ function setupEventHandlers() {
   bindClick('btnPreview', async () => {
   if (!currentFiche) return;
   if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
-    return alert(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل پیش‌نمایش نیست');
+    return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل پیش‌نمایش نیست');
   }
   $('btnPreview').disabled = true;
   try {
@@ -1947,7 +2005,7 @@ function setupEventHandlers() {
     $('xmlBox').textContent = data.xml;
     $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
   } finally {
     $('btnPreview').disabled = false;
   }
@@ -1956,7 +2014,7 @@ function setupEventHandlers() {
   bindClick('btnSend', async () => {
   if (!currentFiche) return;
   if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
-    return alert(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
+    return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
   }
 
   if (isTahatorIncomeFiche(currentFiche)) {
@@ -1980,12 +2038,12 @@ function setupEventHandlers() {
         $('xmlSection').hidden = false;
         $('xmlBox').textContent = data.soapResponse || data.previewXml;
       }
-      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else if (data.skipped) alert(data.message);
-      else if (data.success) alert(data.message || 'ارسال تهاتر موفق');
-      else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      if (data.dryRun) showAppInfo('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      else if (data.skipped) showAppWarning(data.message);
+      else if (data.success) showAppSuccess(data.message || 'ارسال تهاتر موفق');
+      else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
     } catch (e) {
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       $('btnSend').disabled = false;
       updateSendButton(currentFiche);
@@ -2009,13 +2067,13 @@ function setupEventHandlers() {
     showSendResult(data);
 
     if (data.dryRun) {
-      alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
+      showAppInfo('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
     } else if (data.success && data.verifiedInRayvarz === false) {
-      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+      showAppWarning('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
     } else if (!data.success) {
-      alert(data.message || data.docNotSentError || 'ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
+      showAppError(data.message || data.docNotSentError || 'ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz) {
-      alert('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
+      showAppSuccess('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
     }
 
     if (data.previewXml || data.soapResponse) {
@@ -2024,7 +2082,7 @@ function setupEventHandlers() {
     }
     $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
   } finally {
     $('btnSend').disabled = false;
     updateSendButton(currentFiche);
@@ -2077,7 +2135,7 @@ function setupEventHandlers() {
 
   bindClick('btnUnsentPlan', async () => {
     const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
+    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const btn = $('btnUnsentPlan');
     btn.disabled = true;
@@ -2109,7 +2167,7 @@ function setupEventHandlers() {
       ].join('\n');
     } catch (e) {
       box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       updateUnsentSendButton();
     }
@@ -2117,7 +2175,7 @@ function setupEventHandlers() {
 
   bindClick('btnUnsentSend', async () => {
     const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
+    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const dry = config?.dryRun;
     const kind = $('unsentFicheKind').value;
@@ -2156,8 +2214,12 @@ function setupEventHandlers() {
         ...lines
       ].join('\n');
 
-      if (data.dryRun) alert('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else alert(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      else if (data.failed > 0) {
+        showAppWarning(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      } else {
+        showAppSuccess(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      }
 
       selectedUnsentFicheNos.clear();
       if (unsentSearchState.filters) {
@@ -2165,7 +2227,7 @@ function setupEventHandlers() {
       }
     } catch (e) {
       box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       updateUnsentSendButton();
     }

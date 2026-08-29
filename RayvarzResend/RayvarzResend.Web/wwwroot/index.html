@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=33" />
+  <link rel="stylesheet" href="css/style.css?v=35" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -36,6 +36,8 @@
         </div>
       </div>
     </header>
+
+    <div id="appToastHost" class="app-toast-host" aria-live="polite"></div>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
@@ -186,8 +188,8 @@
           <label class="unsent-page-size">
             <span>در هر صفحه</span>
             <select id="unsentPageSize">
-              <option value="25">۲۵</option>
-              <option value="50" selected>۵۰</option>
+              <option value="25" selected>۲۵</option>
+              <option value="50">۵۰</option>
               <option value="100">۱۰۰</option>
             </select>
           </label>
@@ -431,8 +433,8 @@
           <label class="unsent-page-size">
             <span>در هر صفحه</span>
             <select id="ficheDatePageSize">
-              <option value="25">۲۵</option>
-              <option value="50" selected>۵۰</option>
+              <option value="25" selected>۲۵</option>
+              <option value="50">۵۰</option>
               <option value="100">۱۰۰</option>
             </select>
           </label>
@@ -636,6 +638,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=55"></script>
+  <script src="js/app.js?v=57"></script>
 </body>
 </html>
