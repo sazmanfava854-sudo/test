@@ -1052,31 +1052,27 @@ tbody tr:last-child td {
 }
 
 .fiche-date-apply-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 16px max-content 200px;
+  column-gap: 12px;
+  row-gap: 16px;
+  align-items: center;
   margin-top: 0.5rem;
 }
 
 .fiche-date-apply-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-  width: fit-content;
-  max-width: 100%;
+  display: contents;
 }
 
 .fiche-date-apply-check {
-  flex: 0 0 auto;
+  justify-self: start;
   width: 16px;
   height: 16px;
   margin: 0;
 }
 
 .fiche-date-apply-label {
-  flex: 0 0 auto;
+  justify-self: start;
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.4;
@@ -1086,7 +1082,7 @@ tbody tr:last-child td {
 }
 
 .fiche-date-apply-control {
-  flex: 0 0 auto;
+  justify-self: start;
   width: 200px;
   max-width: 200px;
 }
