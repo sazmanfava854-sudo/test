@@ -924,7 +924,7 @@ function updateFicheDateCountLabel() {
 async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) {
   const payload = getFicheDateSearchPayload(page);
   if (!hasFicheDateSearchFilter(payload)) {
-    alert('حداقل یک فیلتر وارد کنید');
+    showAppWarning('حداقل یک فیلتر وارد کنید');
     return false;
   }
 
@@ -961,7 +961,7 @@ async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) 
     });
     return true;
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
     renderFicheDateTable([], { page: 1, pageSize: payload.pageSize, totalCount: 0, totalPages: 0 });
     return false;
   } finally {
@@ -1904,7 +1904,7 @@ async function init() {
       } catch (e) {
         if (status) status.textContent = e.message;
         excelInput.value = '';
-        alert(e.message);
+        showAppError(e.message);
       }
     });
   }
@@ -2236,9 +2236,9 @@ function setupEventHandlers() {
   bindClick('btnInstallmentPreview', async () => {
     const payload = getInstallmentPayload();
     if (installmentMode === 'excel') {
-      if (!payload.excelRows?.length) return alert('فایل اکسل را انتخاب کنید');
+      if (!payload.excelRows?.length) return showAppWarning('فایل اکسل را انتخاب کنید');
     } else if (!payload.valuesText) {
-      return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+      return showAppWarning('حداقل یک شماره سند یا کد پیگیری وارد کنید');
     }
 
     const btn = $('btnInstallmentPreview');
@@ -2255,7 +2255,7 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       renderInstallmentPreview(data);
     } catch (e) {
-      alert(e.message);
+      showAppError(e.message);
       $('installmentPreviewSection').hidden = true;
       if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
     } finally {
@@ -2266,9 +2266,9 @@ function setupEventHandlers() {
   bindClick('btnInstallmentUpdate', async () => {
     const payload = getInstallmentPayload();
     if (installmentMode === 'excel') {
-      if (!payload.excelRows?.length) return alert('فایل اکسل را انتخاب کنید');
+      if (!payload.excelRows?.length) return showAppWarning('فایل اکسل را انتخاب کنید');
     } else if (!payload.valuesText) {
-      return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+      return showAppWarning('حداقل یک شماره سند یا کد پیگیری وارد کنید');
     }
 
     const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
@@ -2293,14 +2293,14 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       if (box) box.textContent = formatInstallmentUpdateResult(data);
       if (data.dryRun) {
-        alert(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
+        showAppInfo(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
       } else {
-        alert(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+        showAppSuccess(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
       }
       $('btnInstallmentPreview').click();
     } catch (e) {
       if (box) box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       btn.disabled = false;
     }
@@ -2347,12 +2347,12 @@ function setupEventHandlers() {
 
   bindClick('btnFicheDateUpdate', async () => {
     const payload = getFicheDateUpdatePayload();
-    if (!payload.ficheNos.length) return alert('حداقل یک فیش انتخاب کنید');
+    if (!payload.ficheNos.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
     const hasChange = (payload.applyExportPermanentDate && payload.newExportPermanentDate)
       || (payload.applyExportTemporaryDate && payload.newExportTemporaryDate)
       || (payload.applyPaymentBreakDate && payload.newPaymentBreakDate)
       || (payload.applyEumFicheStatus && payload.newEumFicheStatus != null);
-    if (!hasChange) return alert('حداقل یک فیلد برای تغییر مشخص کنید');
+    if (!hasChange) return showAppWarning('حداقل یک فیلد برای تغییر مشخص کنید');
 
     const dry = config?.ficheDateChange?.dryRun ?? config?.dryRun ?? true;
     const warn = dry
@@ -2377,14 +2377,14 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       if (box) box.textContent = formatFicheDateUpdateResult(data);
       if (data.dryRun) {
-        alert(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
+        showAppInfo(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
       } else {
-        alert(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
+        showAppSuccess(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
         $('btnFicheDateSearch').click();
       }
     } catch (e) {
       if (box) box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       btn.disabled = false;
       syncFicheDateUpdateButton();
