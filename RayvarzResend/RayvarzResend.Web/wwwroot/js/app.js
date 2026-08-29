@@ -200,7 +200,24 @@ const ficheDateSearchState = {
   totalPages: 0
 };
 
+function getInstallmentApplyEndState() {
+  if (installmentMode === 'excel') {
+    return !!$('installmentApplyEndStateExcel')?.checked;
+  }
+  return !!$('installmentApplyEndState')?.checked;
+}
+
+function syncInstallmentOdooatCheckboxes(source) {
+  const single = $('installmentApplyEndState');
+  const excel = $('installmentApplyEndStateExcel');
+  if (!single || !excel) return;
+  const checked = source === 'excel' ? excel.checked : single.checked;
+  single.checked = checked;
+  excel.checked = checked;
+}
+
 function setInstallmentMode(mode) {
+  const prevMode = installmentMode;
   installmentMode = mode === 'excel' ? 'excel' : 'single';
   document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
     const active = btn.dataset.installmentMode === installmentMode;
@@ -211,6 +228,10 @@ function setInstallmentMode(mode) {
   const excelPanel = $('installmentExcelPanel');
   if (singlePanel) singlePanel.hidden = installmentMode !== 'single';
   if (excelPanel) excelPanel.hidden = installmentMode !== 'excel';
+
+  if (prevMode !== installmentMode) {
+    syncInstallmentOdooatCheckboxes(prevMode === 'excel' ? 'excel' : 'single');
+  }
 
   $('installmentPreviewSection').hidden = true;
   if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
@@ -344,7 +365,7 @@ function parseInstallmentExcelFile(file) {
 
 function getInstallmentPayload() {
   const base = {
-    applyEndState: !!$('installmentApplyEndState')?.checked
+    applyEndState: getInstallmentApplyEndState()
   };
   if (installmentMode === 'excel') {
     return {
@@ -1768,6 +1789,8 @@ async function init() {
   document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
+  $('installmentApplyEndState')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('single'));
+  $('installmentApplyEndStateExcel')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('excel'));
   setInstallmentMode('single');
 
   const excelInput = $('installmentExcelFile');

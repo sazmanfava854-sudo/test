@@ -823,6 +823,25 @@ tbody tr:last-child td {
   font-weight: 600;
 }
 
+.installment-single-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.installment-single-row .installment-values-field {
+  flex: 0 1 22rem;
+  max-width: 100%;
+  min-width: 14rem;
+}
+
+.installment-odooat-check {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 .installment-values-field input {
   width: 100%;
   padding: 10px 12px;
@@ -955,8 +974,16 @@ tbody tr:last-child td {
 }
 
 .installment-template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
   margin-top: 0;
   margin-bottom: 12px;
+}
+
+.installment-template-actions .installment-odooat-check {
+  padding-top: 0;
 }
 
 .fiche-date-ms {

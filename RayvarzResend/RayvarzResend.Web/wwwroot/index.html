@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=31" />
+  <link rel="stylesheet" href="css/style.css?v=33" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -251,16 +251,15 @@
         <button type="button" class="installment-mode-tab active" data-installment-mode="single" role="tab" aria-selected="true">تکی</button>
         <button type="button" class="installment-mode-tab" data-installment-mode="excel" role="tab" aria-selected="false">اکسل</button>
       </div>
-      <label class="field installment-endstate-field check-field" id="installmentEndStateWrap">
-        <input id="installmentApplyEndState" type="checkbox" />
-        <span>عودت</span>
-        <span class="field-hint">اختیاری — در صورت تیک، EndStateDesc=عودت و EndStateCode=17 برای همه ردیف‌ها</span>
-      </label>
       <div id="installmentSinglePanel" class="installment-mode-panel">
-        <div class="form-grid unsent-form-grid">
+        <div class="installment-single-row">
           <label class="field field-required installment-values-field">
             <span class="field-label">شماره سند / کد پیگیری</span>
             <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+          </label>
+          <label class="field installment-odooat-check check-field" id="installmentEndStateWrap">
+            <input id="installmentApplyEndState" type="checkbox" />
+            <span>عودت</span>
           </label>
         </div>
       </div>
@@ -296,6 +295,10 @@
         </div>
         <div class="actions installment-template-actions">
           <a id="installmentTemplateDownload" class="btn secondary" href="templates/installment-check-template.xlsx" download="installment-check-template.xlsx">دانلود تمپلیت اکسل</a>
+          <label class="field installment-odooat-check check-field" id="installmentEndStateWrapExcel">
+            <input id="installmentApplyEndStateExcel" type="checkbox" />
+            <span>عودت</span>
+          </label>
         </div>
       </div>
       <div class="actions">
@@ -635,6 +638,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=53"></script>
+  <script src="js/app.js?v=54"></script>
 </body>
 </html>
