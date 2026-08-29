@@ -12,6 +12,33 @@ public class FicheRepository
         ISNULL(NULLIF(CAST(b.Shop AS varchar), ''), '0')
         """;
 
+    private static string IncomeBnkAcntNoSelect => $"""
+        ISNULL(
+          NULLIF(LTRIM(RTRIM({NosaziNickSql})), '-'),
+          ''
+        ) AS BnkAcntNo
+        """;
+
+    private const string IncomeNosaziJoins = """
+        LEFT JOIN dbo.Income i WITH (NOLOCK) ON i.NidIncome = f.NidIncome
+        LEFT JOIN dbo.Sh_RequestInfo r WITH (NOLOCK) ON r.NidProc = i.NidProc
+        LEFT JOIN dbo.Base_NosaziCode b WITH (NOLOCK) ON b.NidNosaziCode = r.NidNosaziCode
+        """;
+
+    private const string DutyBnkAcntNoSelect = """
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
+            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""حوزه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""بلوک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ساختمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""آپارتمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""واحد صنفی""]/Value)[1]', 'nvarchar(20)'))), ''), '0')
+        ) AS BnkAcntNo
+        """;
+
     private readonly string _saraCs;
     private readonly string _rayCs;
 
@@ -597,8 +624,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
                      f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
                      NULLIF(LTRIM(RTRIM(CAST(b.District AS nvarchar(20)))), '') AS District,
-                     '' AS BnkAcntNo
+                     {IncomeBnkAcntNoSelect}
               FROM dbo.Income_Fiche f WITH (NOLOCK)
               INNER JOIN dbo.Income i WITH (NOLOCK) ON i.NidIncome = f.NidIncome
               INNER JOIN dbo.Sh_RequestInfo r WITH (NOLOCK) ON r.NidProc = i.NidProc
@@ -619,8 +647,11 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
                      f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
                      f.CI_IncomeAccountGroup AS IncomeAccountGroup,
-                     '' AS District, '' AS BnkAcntNo
+                     CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
+                     '' AS District,
+                     {IncomeBnkAcntNoSelect}
               FROM dbo.Income_Fiche f WITH (NOLOCK)
+              {IncomeNosaziJoins}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
@@ -656,8 +687,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     '' AS NidWorkItem,
                      NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
-                     '' AS BnkAcntNo
+                     {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
@@ -674,7 +706,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
-                     '' AS District, '' AS BnkAcntNo
+                     '' AS NidWorkItem,
+                     '' AS District,
+                     {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
@@ -733,6 +767,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             {
                 FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
                 NidFiche = reader.GetGuid(reader.GetOrdinal("NidFiche")),
+                NidWorkItem = reader.IsDBNull(reader.GetOrdinal("NidWorkItem"))
+                    ? ""
+                    : reader.GetString(reader.GetOrdinal("NidWorkItem")).Trim(),
                 BillId = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
                 PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
                 Payable = ReadDecimal(reader, "Payable"),

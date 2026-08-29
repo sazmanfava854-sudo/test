@@ -23,6 +23,37 @@ async function checkExistingSession() {
   return false;
 }
 
+async function initLoginPage() {
+  if (await checkExistingSession()) return;
+
+  try {
+    const res = await fetch('/api/auth/mode');
+    if (res.ok) {
+      const mode = await res.json();
+      if (mode.preferSsoLogin) {
+        window.location.href = mode.loginPath || '/auth/login';
+        return;
+      }
+      if (!mode.localLoginAvailable) {
+        const errEl = $('loginError');
+        errEl.textContent = 'ورود محلی غیرفعال است';
+        errEl.hidden = false;
+        $('loginForm').hidden = true;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const error = params.get('error');
+  if (error) {
+    const errEl = $('loginError');
+    errEl.textContent = decodeURIComponent(error);
+    errEl.hidden = false;
+  }
+}
+
 $('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errEl = $('loginError');
@@ -52,4 +83,4 @@ $('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
-checkExistingSession();
+initLoginPage();

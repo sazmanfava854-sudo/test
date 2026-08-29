@@ -23,6 +23,7 @@ public sealed class AppPermissionService
             CanAccessUnsentFiches = memberGroups.Any(g => g.CanAccessUnsentFiches),
             CanAccessInstallment = memberGroups.Any(g => g.CanAccessInstallment),
             CanAccessFicheDateChange = memberGroups.Any(g => g.CanAccessFicheDateChange),
+            CanAccessBankInquiryConfirm = memberGroups.Any(g => g.CanAccessBankInquiryConfirm),
             CanManageUsers = memberGroups.Any(g => g.CanManageUsers),
             GroupIds = groupIds
         };

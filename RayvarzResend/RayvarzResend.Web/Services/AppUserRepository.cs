@@ -61,6 +61,7 @@ public sealed class AppUserRepository
                     CanAccessUnsentFiches   BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Unsent DEFAULT (0),
                     CanAccessInstallment    BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Installment DEFAULT (0),
                     CanAccessFicheDateChange BIT             NOT NULL CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0),
+                    CanAccessBankInquiryConfirm BIT          NOT NULL CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0),
                     CanManageUsers          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Users DEFAULT (0),
                     CreatedAtUtc            DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserGroup_Created DEFAULT (SYSUTCDATETIME())
                 );
@@ -81,6 +82,10 @@ public sealed class AppUserRepository
             IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
                 ALTER TABLE dbo.AppUserGroup ADD CanAccessFicheDateChange BIT NOT NULL
                     CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0);
+
+            IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
+                ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0);
             """;
         await using var cmd = new SqlCommand(sql, conn);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -197,7 +202,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanManageUsers, CreatedAtUtc
+            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanManageUsers, CreatedAtUtc
             FROM dbo.AppUserGroup
             ORDER BY Name
             """;
@@ -221,8 +226,8 @@ public sealed class AppUserRepository
         var group = NewGroupRecord(req);
         const string sql = """
             INSERT INTO dbo.AppUserGroup
-                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanManageUsers, CreatedAtUtc)
-            VALUES (@id, @name, @unsent, @installment, @ficheDate, @users, @created)
+                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanManageUsers, CreatedAtUtc)
+            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry, @users, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -232,6 +237,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@unsent", group.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@installment", group.CanAccessInstallment);
         cmd.Parameters.AddWithValue("@ficheDate", group.CanAccessFicheDateChange);
+        cmd.Parameters.AddWithValue("@bankInquiry", group.CanAccessBankInquiryConfirm);
         cmd.Parameters.AddWithValue("@users", group.CanManageUsers);
         cmd.Parameters.AddWithValue("@created", group.CreatedAtUtc);
         try
@@ -259,6 +265,7 @@ public sealed class AppUserRepository
                 CanAccessUnsentFiches = @unsent,
                 CanAccessInstallment = @installment,
                 CanAccessFicheDateChange = @ficheDate,
+                CanAccessBankInquiryConfirm = @bankInquiry,
                 CanManageUsers = @users
             WHERE Id = @id
             """;
@@ -270,6 +277,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@unsent", req.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@installment", req.CanAccessInstallment);
         cmd.Parameters.AddWithValue("@ficheDate", req.CanAccessFicheDateChange);
+        cmd.Parameters.AddWithValue("@bankInquiry", req.CanAccessBankInquiryConfirm);
         cmd.Parameters.AddWithValue("@users", req.CanManageUsers);
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
@@ -409,6 +417,7 @@ public sealed class AppUserRepository
         CanAccessUnsentFiches = req.CanAccessUnsentFiches,
         CanAccessInstallment = req.CanAccessInstallment,
         CanAccessFicheDateChange = req.CanAccessFicheDateChange,
+        CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
         CanManageUsers = req.CanManageUsers,
         CreatedAtUtc = DateTime.UtcNow
     };
@@ -420,6 +429,7 @@ public sealed class AppUserRepository
         CanAccessUnsentFiches = group.CanAccessUnsentFiches,
         CanAccessInstallment = group.CanAccessInstallment,
         CanAccessFicheDateChange = group.CanAccessFicheDateChange,
+        CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
         CanManageUsers = group.CanManageUsers,
         CreatedAtUtc = group.CreatedAtUtc.ToString("O")
     };
@@ -431,6 +441,7 @@ public sealed class AppUserRepository
         CanAccessUnsentFiches = reader.GetBoolean(reader.GetOrdinal("CanAccessUnsentFiches")),
         CanAccessInstallment = reader.GetBoolean(reader.GetOrdinal("CanAccessInstallment")),
         CanAccessFicheDateChange = ReadOptionalBoolean(reader, "CanAccessFicheDateChange"),
+        CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "CanAccessBankInquiryConfirm"),
         CanManageUsers = reader.GetBoolean(reader.GetOrdinal("CanManageUsers")),
         CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O")
     };
@@ -485,6 +496,65 @@ public sealed class AppUserRepository
         catch (SqlException ex) when (ex.Number is 2627 or 2601)
         {
             throw new InvalidOperationException("کاربر با این کد ملی قبلاً ثبت شده است");
+        }
+
+        return user;
+    }
+
+    public async Task<AppUserRecord> CreateSsoUserAsync(ShimasUserProfile profile, CancellationToken ct = default)
+    {
+        var username = (profile.Username ?? "").Trim();
+        if (username.Length == 0)
+            throw new ArgumentException("username الزامی است");
+
+        var normalized = SsoUserProvisioningHelper.NormalizeProfile(profile);
+        if (_useInMemory)
+            return _memory.CreateSsoUser(username, normalized);
+
+        await EnsureSchemaAsync(ct);
+        var user = new AppUserRecord
+        {
+            Id = Guid.NewGuid(),
+            Username = username,
+            PasswordHash = PasswordHasherUtil.Hash(Guid.NewGuid().ToString("N")),
+            FirstName = normalized.FirstName,
+            LastName = normalized.LastName,
+            NationalId = normalized.NationalId,
+            Position = normalized.Position,
+            District = normalized.District,
+            IsAdmin = false,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        const string sql = """
+            INSERT INTO dbo.AppUser
+                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, IsAdmin, IsActive, CreatedAtUtc)
+            VALUES
+                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, 0, 1, @created)
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", user.Id);
+        cmd.Parameters.AddWithValue("@u", user.Username);
+        cmd.Parameters.AddWithValue("@hash", user.PasswordHash);
+        cmd.Parameters.AddWithValue("@fn", user.FirstName);
+        cmd.Parameters.AddWithValue("@ln", user.LastName);
+        cmd.Parameters.AddWithValue("@nid", user.NationalId);
+        cmd.Parameters.AddWithValue("@pos", user.Position);
+        cmd.Parameters.AddWithValue("@dist", user.District);
+        cmd.Parameters.AddWithValue("@created", user.CreatedAtUtc);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex) when (ex.Number is 2627 or 2601)
+        {
+            var existing = await FindByUsernameAsync(username, ct);
+            if (existing != null)
+                return existing;
+            throw;
         }
 
         return user;

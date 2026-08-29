@@ -1269,6 +1269,43 @@ tbody tr:last-child td {
   margin-right: 1.6rem;
 }
 
+.field-compact-date {
+  width: fit-content;
+  max-width: 11.5rem;
+  justify-self: start;
+}
+
+.bank-inquiry-search-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(12rem, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.bank-inquiry-search-grid .field-compact-date {
+  max-width: 11.5rem;
+}
+
+@media (max-width: 900px) {
+  .bank-inquiry-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bank-inquiry-search-grid .field-compact-date {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
+.field-compact-date .date-input-wrap {
+  max-width: 11.5rem;
+}
+
+.field-compact-date .date-input-wrap input {
+  min-width: 0;
+}
+
 .user-groups-form {
   display: flex;
   flex-direction: column;

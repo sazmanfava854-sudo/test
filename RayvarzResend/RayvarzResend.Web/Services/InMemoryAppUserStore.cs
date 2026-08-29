@@ -75,6 +75,7 @@ public sealed class InMemoryAppUserStore
                 CanAccessUnsentFiches = g.CanAccessUnsentFiches,
                 CanAccessInstallment = g.CanAccessInstallment,
                 CanAccessFicheDateChange = g.CanAccessFicheDateChange,
+                CanAccessBankInquiryConfirm = g.CanAccessBankInquiryConfirm,
                 CanManageUsers = g.CanManageUsers,
                 CreatedAtUtc = g.CreatedAtUtc.ToString("O")
             })
@@ -95,6 +96,7 @@ public sealed class InMemoryAppUserStore
             CanAccessUnsentFiches = req.CanAccessUnsentFiches,
             CanAccessInstallment = req.CanAccessInstallment,
             CanAccessFicheDateChange = req.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
             CanManageUsers = req.CanManageUsers,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -106,6 +108,7 @@ public sealed class InMemoryAppUserStore
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -124,6 +127,7 @@ public sealed class InMemoryAppUserStore
         group.CanAccessUnsentFiches = req.CanAccessUnsentFiches;
         group.CanAccessInstallment = req.CanAccessInstallment;
         group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
+        group.CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm;
         group.CanManageUsers = req.CanManageUsers;
 
         return new AppUserGroupDto
@@ -133,6 +137,7 @@ public sealed class InMemoryAppUserStore
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -171,5 +176,32 @@ public sealed class InMemoryAppUserStore
         if (!_byId.TryGetValue(id, out var user))
             throw new InvalidOperationException("کاربر یافت نشد");
         user.PasswordHash = PasswordHasherUtil.Hash(password);
+    }
+
+    public AppUserRecord CreateSsoUser(
+        string username,
+        (string FirstName, string LastName, string NationalId, string Position, string District) normalized)
+    {
+        if (_byUsername.ContainsKey(username))
+            return _byUsername[username];
+
+        var user = new AppUserRecord
+        {
+            Id = Guid.NewGuid(),
+            Username = username,
+            PasswordHash = PasswordHasherUtil.Hash(Guid.NewGuid().ToString("N")),
+            FirstName = normalized.FirstName,
+            LastName = normalized.LastName,
+            NationalId = normalized.NationalId,
+            Position = normalized.Position,
+            District = normalized.District,
+            IsAdmin = false,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        _byUsername[user.Username] = user;
+        _byId[user.Id] = user;
+        _userGroups[user.Id] = [];
+        return user;
     }
 }

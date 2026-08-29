@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=35" />
+  <link rel="stylesheet" href="css/style.css?v=37" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -24,7 +24,6 @@
         <div class="hero-brand">
           <div>
             <p class="brand-name">Rayvarz Resend</p>
-            <h1>ارسال مجدد فیش به رایورز</h1>
           </div>
         </div>
         <div class="hero-user" id="heroUser" hidden>
@@ -43,6 +42,7 @@
       <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
+      <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
@@ -169,6 +169,7 @@
               <tr>
                 <th class="col-check"></th>
                 <th>نوع</th>
+                <th>شماره فرآیند</th>
                 <th>کد نوسازی</th>
                 <th>شناسه قبض</th>
                 <th>شناسه پرداخت</th>
@@ -482,6 +483,95 @@
     </section>
     </div>
 
+    <div id="tabBankInquiry" class="tab-panel perm-bank-inquiry" role="tabpanel" hidden>
+    <section class="card card-enter bank-inquiry-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">🏦</span>
+        <h2>خدمات الکترونیک</h2>
+      </div>
+      <p class="field-hint form-intro">
+        ابتدا فیش را با یکی از فیلترهای زیر جستجو کنید. پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و ثبت کنید.
+        وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند؛ تاریخ تایید و کاربر تایید‌کننده خودکار پر می‌شود.
+      </p>
+      <div class="bank-inquiry-search-grid unsent-form-grid">
+        <label class="field">
+          <span class="field-label">شماره فیش</span>
+          <input id="bankInquiryFicheNo" type="text" placeholder="101104/9881711" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">شناسه قبض</span>
+          <input id="bankInquiryBillId" type="text" placeholder="همراه با شناسه پرداخت" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">شناسه پرداخت</span>
+          <input id="bankInquiryPaymentId" type="text" placeholder="همراه با شناسه قبض" autocomplete="off" />
+        </label>
+      </div>
+      <p class="field-hint">حداقل یکی از فیلترها: <strong>شماره فیش</strong>، یا <strong>هر دو شناسه قبض و پرداخت</strong>.</p>
+      <div class="actions">
+        <button id="btnBankInquirySearch" class="btn primary" type="button">جستجو</button>
+      </div>
+      <div class="subsection" id="bankInquiryResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="bankInquirySelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="bankInquiryCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="bankInquiryTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>شماره فیش</th>
+                <th>شماره فرآیند</th>
+                <th>کد نوسازی</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+                <th>تاریخ پرداخت</th>
+                <th>تاریخ پرداخت بانک</th>
+                <th>وضعیت</th>
+                <th>تاریخ تایید</th>
+                <th>کاربر تایید</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="unsent-pagination" id="bankInquiryPagination" hidden>
+          <button id="btnBankInquiryPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
+          <span id="bankInquiryPageLabel" class="unsent-page-label"></span>
+          <button id="btnBankInquiryNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
+          <label class="unsent-page-size">
+            <span>در هر صفحه</span>
+            <select id="bankInquiryPageSize">
+              <option value="25" selected>۲۵</option>
+              <option value="50">۵۰</option>
+              <option value="100">۱۰۰</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="subsection fiche-date-change-panel" id="bankInquiryApplySection" hidden>
+        <h3>تغییر تاریخ پرداخت</h3>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required field-compact-date">
+            <span class="field-label">تاریخ پرداخت جدید</span>
+            <div class="date-input-wrap">
+              <input id="bankInquiryNewPaymentDate" data-jdp type="text" placeholder="1405/01/15" autocomplete="off" />
+              <button type="button" class="btn-date-icon" data-for="bankInquiryNewPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+            </div>
+          </label>
+        </div>
+        <div class="actions fiche-date-apply-actions">
+          <button id="btnBankInquiryConfirm" class="btn danger" type="button" disabled>ثبت تغییر تاریخ</button>
+        </div>
+      </div>
+      <pre id="bankInquiryResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
     <div id="tabUsers" class="tab-panel perm-users" role="tabpanel" hidden>
       <section class="card card-enter">
         <div class="card-head">
@@ -502,6 +592,10 @@
               <input id="newGroupInstallment" type="checkbox" />
               <span class="user-group-perm-text">چک خزانه</span>
             </label>
+            <label class="user-group-perm-item">
+              <input id="newGroupUsers" type="checkbox" />
+              <span class="user-group-perm-text">مدیریت کاربران</span>
+            </label>
             <label class="user-group-perm-item user-group-perm-item-wide">
               <input id="newGroupFicheDate" type="checkbox" />
               <span class="user-group-perm-content">
@@ -509,9 +603,12 @@
                 <span class="user-group-perm-hint">دسترسی به تب «تغییر تاریخ فیش» — نیاز به ورود و مجوز گروه</span>
               </span>
             </label>
-            <label class="user-group-perm-item">
-              <input id="newGroupUsers" type="checkbox" />
-              <span class="user-group-perm-text">مدیریت کاربران</span>
+            <label class="user-group-perm-item user-group-perm-item-wide">
+              <input id="newGroupBankInquiry" type="checkbox" />
+              <span class="user-group-perm-content">
+                <span class="user-group-perm-text">خدمات الکترونیک</span>
+                <span class="user-group-perm-hint">دسترسی به تب «خدمات الکترونیک»</span>
+              </span>
             </label>
           </div>
           <div class="actions user-groups-actions">
@@ -527,8 +624,9 @@
                   <th>نام گروه</th>
                   <th>فیش جمعی</th>
                   <th>چک خزانه</th>
-                  <th>تغییر تاریخ فیش</th>
                   <th>مدیریت کاربران</th>
+                  <th>تغییر تاریخ فیش</th>
+                  <th>خدمات الکترونیک</th>
                   <th>عملیات</th>
                 </tr>
               </thead>
@@ -638,6 +736,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=58"></script>
+  <script src="js/app.js?v=62"></script>
 </body>
 </html>

@@ -247,6 +247,7 @@ public class UnsentFicheListItem
 {
     public string FicheNo { get; set; } = "";
     public Guid NidFiche { get; set; }
+    public string NidWorkItem { get; set; } = "";
     public string BnkAcntNo { get; set; } = "";
     public string BillId { get; set; } = "";
     public string PaymentId { get; set; } = "";
@@ -581,6 +582,82 @@ public class FicheDateChangeUpdateResult
     public int Failed { get; set; }
     public string? Error { get; set; }
     public List<FicheDateChangeUpdateItemResult> Results { get; set; } = new();
+}
+
+/// <summary>تب خدمات الکترونیک — جستجو.</summary>
+public class BankInquirySearchRequest
+{
+    public string? FicheNo { get; set; }
+    public string? BillId { get; set; }
+    public string? PaymentId { get; set; }
+    /// <summary>شماره فیش یا BillID+PaymentID ادغام‌شده.</summary>
+    public string? IdentifierValue { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 25;
+}
+
+public class BankInquiryListItem
+{
+    public string FicheNo { get; set; } = "";
+    public string NidWorkItem { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public string PaymentDate { get; set; } = "";
+    public string BankPaymentDate { get; set; } = "";
+    public string NosaziCode { get; set; } = "";
+    public int EumFicheStatus { get; set; }
+    public string EumFicheStatusLabel { get; set; } = "";
+    public string UserConfirmDate { get; set; } = "";
+    public string UsernameUserConfirm { get; set; } = "";
+}
+
+public class BankInquirySearchResult
+{
+    public int Count { get; set; }
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+    public string? Error { get; set; }
+    public List<BankInquiryListItem> Items { get; set; } = new();
+}
+
+/// <summary>تب تایید استعلام بانک — ثبت تایید.</summary>
+public class BankInquiryConfirmRequest
+{
+    public List<string>? FicheNos { get; set; }
+    /// <summary>تاریخ پرداخت جدید — از کاربر پس از انتخاب فیش.</summary>
+    public string? NewPaymentDate { get; set; }
+    public string PerformedByUser { get; set; } = "";
+}
+
+public class BankInquiryConfirmItemResult
+{
+    public string FicheNo { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Found { get; set; }
+    public int RowsAffected { get; set; }
+    public int WouldUpdate { get; set; }
+    public string? Message { get; set; }
+}
+
+public class BankInquiryConfirmResult
+{
+    public bool DryRun { get; set; }
+    public bool Success { get; set; }
+    public int Total { get; set; }
+    public int Updated { get; set; }
+    public int WouldUpdate { get; set; }
+    public int NotFound { get; set; }
+    public int Failed { get; set; }
+    public string? Error { get; set; }
+    public string? Message { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string UserConfirmDate { get; set; } = "";
+    public string UsernameUserConfirm { get; set; } = "";
+    public int NewEumFicheStatus { get; set; }
+    public int NewEumIncomePaymentType { get; set; }
+    public List<BankInquiryConfirmItemResult> Results { get; set; } = new();
 }
 
 public class TahatorSendResult

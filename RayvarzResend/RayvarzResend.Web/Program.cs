@@ -15,6 +15,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 builder.Services.AddHttpClient();
+builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -31,7 +32,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 return Task.CompletedTask;
             }
 
-            ctx.Response.Redirect("/login.html");
+            var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
             return Task.CompletedTask;
         };
         options.Events.OnRedirectToAccessDenied = ctx =>
@@ -42,7 +44,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 return Task.CompletedTask;
             }
 
-            ctx.Response.Redirect("/login.html");
+            var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
             return Task.CompletedTask;
         };
     });
@@ -56,6 +59,7 @@ builder.Services.AddSingleton<InMemoryAppUserStore>();
 builder.Services.AddSingleton<AppUserRepository>();
 builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
+builder.Services.AddSingleton<ShimasAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<FicheSendService>();
 builder.Services.AddSingleton<UnsentFicheService>();
@@ -67,6 +71,7 @@ builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
+builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
 
@@ -109,7 +114,8 @@ app.Use(async (context, next) =>
     {
         if (context.User?.Identity?.IsAuthenticated != true)
         {
-            context.Response.Redirect("/login.html");
+            var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+            context.Response.Redirect(shimas.ResolveLoginRedirectPath());
             return;
         }
     }
@@ -123,8 +129,58 @@ app.UseStaticFiles();
 var authenticated = AuthPolicies.Authenticated;
 var adminOnly = AuthPolicies.AdminOnly;
 
-app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, HttpContext http, CancellationToken ct) =>
+app.MapGet("/api/auth/mode", (ShimasAuthService shimas) =>
+    Results.Ok(shimas.GetStatus())).AllowAnonymous();
+
+app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
 {
+    if (!shimas.Options.PreferSsoLogin)
+        return Results.Redirect("/login.html");
+
+    if (!shimas.Options.SsoReady)
+    {
+        if (shimas.Options.AllowLocalLoginFallback)
+            return Results.Redirect("/login.html");
+        return Results.Content("SSO پیکربندی نشده — lkey را در appsettings تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
+    }
+
+    var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
+    var loginUrl = shimas.BuildExternalLoginUrl(callbackUrl);
+    return Results.Redirect(loginUrl);
+}).AllowAnonymous();
+
+app.MapGet("/auth/callback", async (
+    HttpContext http,
+    ShimasAuthService shimas,
+    AppAuthService auth,
+    CancellationToken ct) =>
+{
+    var username = http.Request.Query["username"].ToString();
+    var refreshToken = http.Request.Query["refresh_token"].ToString();
+
+    var validation = await shimas.ValidateAsync(username, refreshToken, ct);
+    if (!validation.Success)
+    {
+        var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
+        return Results.Redirect($"/login.html?error={error}");
+    }
+
+    var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
+    if (user == null)
+    {
+        var error = Uri.EscapeDataString("کاربر مجاز نیست — با مدیر سیستم تماس بگیرید");
+        return Results.Redirect($"/login.html?error={error}");
+    }
+
+    await auth.SignInAsync(http, user, ct);
+    return Results.Redirect("/");
+}).AllowAnonymous();
+
+app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
+{
+    if (!shimas.Options.LocalLoginAvailable)
+        return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
+
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest(new { error = "نام کاربری و رمز عبور الزامی است" });
 
@@ -311,7 +367,7 @@ app.MapPut("/api/admin/groups/{id:guid}", async (
     }
 }).RequireAuthorization(authenticated);
 
-app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
+app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthService shimas) => new
 {
     releaseVersion = ReleaseInfo.Number,
     releaseLabel = ReleaseInfo.Label,
@@ -331,9 +387,10 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
     auth = new
     {
         enabled = true,
-        isAdmin = AppAuthService.IsAdmin(http.User)
+        isAdmin = AppAuthService.IsAdmin(http.User),
+        shimas = shimas.GetStatus()
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
@@ -355,6 +412,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http) => new
         table = "dbo.Income_Fiche",
         defaultStatus = 1,
         statusLabels = FicheDateChangeHelper.FicheStatusLabels
+    },
+    bankInquiryConfirm = new
+    {
+        dryRun = config.GetValue<bool?>("BankInquiryConfirm:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Income_Fiche",
+        ficheStatus = BankInquiryConfirmHelper.ConfirmedFicheStatus,
+        incomePaymentType = BankInquiryConfirmHelper.ConfirmedIncomePaymentType
     },
     ruleEngine = new
     {
@@ -847,6 +913,71 @@ app.MapPost("/api/fiche-date/update", async (
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
+
+app.MapPost("/api/bank-inquiry/search", async (
+    BankInquirySearchRequest? req,
+    BankInquiryConfirmService bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await bankInquiry.SearchAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/bank-inquiry/confirm", async (
+    BankInquiryConfirmRequest? req,
+    BankInquiryConfirmService bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
+    try
+    {
+        var result = await bankInquiry.ConfirmAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error, result });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessBankInquiryConfirm))
+        return Results.Json(new { error = "دسترسی به خدمات الکترونیک مجاز نیست" }, statusCode: 403);
+    return null;
+}
 
 static async Task<IResult?> DenyUnlessManageUsers(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {

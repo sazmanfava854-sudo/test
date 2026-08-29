@@ -84,6 +84,7 @@ public sealed class AppAuthService
             CanAccessUnsentFiches = perms.CanAccessUnsentFiches,
             CanAccessInstallment = perms.CanAccessInstallment,
             CanAccessFicheDateChange = perms.CanAccessFicheDateChange,
+            CanAccessBankInquiryConfirm = perms.CanAccessBankInquiryConfirm,
             CanManageUsers = perms.CanManageUsers,
             GroupIds = perms.GroupIds
         };
@@ -149,5 +150,13 @@ public sealed class AppAuthService
 
         var user = await _users.FindByIdAsync(id.Value, ct);
         return user is { IsActive: true } ? await ToSessionAsync(user, ct) : null;
+    }
+
+    public Task SignInAsync(HttpContext http, AppUserRecord user, CancellationToken ct = default)
+    {
+        return http.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            BuildPrincipal(user),
+            CreateAuthProperties(persistent: true));
     }
 }
