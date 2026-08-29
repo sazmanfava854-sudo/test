@@ -61,6 +61,7 @@ public sealed class AuthSessionDto
     public bool IsAdmin { get; set; }
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
+    public bool CanAccessFicheDateChange { get; set; }
     public bool CanManageUsers { get; set; }
     public List<Guid> GroupIds { get; set; } = [];
 }
@@ -70,6 +71,7 @@ public sealed class UserPermissionsDto
     public bool IsAdmin { get; set; }
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
+    public bool CanAccessFicheDateChange { get; set; }
     public bool CanManageUsers { get; set; }
     public List<Guid> GroupIds { get; set; } = [];
 
@@ -78,6 +80,7 @@ public sealed class UserPermissionsDto
         IsAdmin = true,
         CanAccessUnsentFiches = true,
         CanAccessInstallment = true,
+        CanAccessFicheDateChange = true,
         CanManageUsers = true
     };
 }
@@ -88,6 +91,7 @@ public sealed class AppUserGroupDto
     public string Name { get; set; } = "";
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
+    public bool CanAccessFicheDateChange { get; set; }
     public bool CanManageUsers { get; set; }
     public string CreatedAtUtc { get; set; } = "";
 }
@@ -97,6 +101,7 @@ public sealed class CreateAppUserGroupRequest
     public string? Name { get; set; }
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
+    public bool CanAccessFicheDateChange { get; set; }
     public bool CanManageUsers { get; set; }
 }
 
@@ -105,6 +110,7 @@ public sealed class UpdateAppUserGroupRequest
     public string? Name { get; set; }
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
+    public bool CanAccessFicheDateChange { get; set; }
     public bool CanManageUsers { get; set; }
 }
 

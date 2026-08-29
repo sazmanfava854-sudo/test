@@ -5,13 +5,71 @@ let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
 const unsentSearchState = {
   page: 1,
-  pageSize: 50,
+  pageSize: 25,
   totalCount: 0,
   totalPages: 0,
   filters: null
 };
 
 const $ = (id) => document.getElementById(id);
+
+let appToastTimer = null;
+
+function hideAppMessage() {
+  const host = $('appToastHost');
+  if (!host) return;
+  host.innerHTML = '';
+  if (appToastTimer) {
+    clearTimeout(appToastTimer);
+    appToastTimer = null;
+  }
+}
+
+function showAppMessage(message, type = 'info', { timeout = 9000 } = {}) {
+  const host = $('appToastHost');
+  if (!host || !message) return;
+
+  hideAppMessage();
+
+  const toast = document.createElement('div');
+  toast.className = `app-toast app-toast-${type}`;
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+  const text = document.createElement('span');
+  text.className = 'app-toast-text';
+  text.textContent = message;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'app-toast-close';
+  closeBtn.setAttribute('aria-label', 'بستن');
+  closeBtn.textContent = '×';
+  closeBtn.addEventListener('click', hideAppMessage);
+
+  toast.appendChild(text);
+  toast.appendChild(closeBtn);
+  host.appendChild(toast);
+
+  if (timeout > 0) {
+    appToastTimer = setTimeout(hideAppMessage, timeout);
+  }
+}
+
+function showAppSuccess(message, options) {
+  showAppMessage(message, 'success', options);
+}
+
+function showAppError(message, options) {
+  showAppMessage(message, 'error', { timeout: 12000, ...options });
+}
+
+function showAppWarning(message, options) {
+  showAppMessage(message, 'warning', options);
+}
+
+function showAppInfo(message, options) {
+  showAppMessage(message, 'info', options);
+}
 
 const categoryLabels = {
   Income: 'درآمد',
@@ -133,8 +191,8 @@ function setupMainTabs() {
   const tabs = document.querySelectorAll('.main-tab');
   const panels = {
     unsent: $('tabUnsent'),
-    single: $('tabSingle'),
     installment: $('tabInstallment'),
+    ficheDate: $('tabFicheDate'),
     users: $('tabUsers')
   };
 
@@ -149,8 +207,8 @@ function setupMainTabs() {
 
 function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
   unsent: $('tabUnsent'),
-  single: $('tabSingle'),
   installment: $('tabInstallment'),
+  ficheDate: $('tabFicheDate'),
   users: $('tabUsers')
 }) {
   tabs.forEach((t) => {
@@ -170,6 +228,27 @@ function getSingleFicheKind() {
   return $('singleFicheKind')?.value || 'Income';
 }
 
+let rayvarzSendMode = 'single';
+
+function setRayvarzSendMode(mode) {
+  if (mode === 'bulk' && !canAccessUnsent()) mode = 'single';
+  rayvarzSendMode = mode === 'bulk' ? 'bulk' : 'single';
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    const active = btn.dataset.rayvarzMode === rayvarzSendMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  const singlePanel = $('rayvarzSinglePanel');
+  const bulkPanel = $('rayvarzBulkPanel');
+  if (singlePanel) singlePanel.hidden = rayvarzSendMode !== 'single';
+  if (bulkPanel) bulkPanel.hidden = rayvarzSendMode !== 'bulk';
+  if (rayvarzSendMode === 'bulk') {
+    $('ficheSection')?.setAttribute('hidden', '');
+    $('resultSection')?.setAttribute('hidden', '');
+    $('xmlSection')?.setAttribute('hidden', '');
+  }
+}
+
 const installmentLookupLabels = {
   NoDocument: 'شماره سند',
   TrackingNo: 'کد پیگیری'
@@ -178,9 +257,46 @@ const installmentLookupLabels = {
 let installmentMode = 'single';
 let installmentExcelRows = [];
 
+const ficheDateStatusLabels = {
+  0: 'صدورموقت',
+  1: 'صدوردایم',
+  2: 'چاپ',
+  3: 'تایید دستی/لحظه‌ای بانک',
+  4: 'ابطال',
+  5: 'تایید بانک'
+};
+
+const ficheDateStatusOrder = [0, 1, 2, 3, 4, 5];
+
+let ficheDateItems = [];
+const selectedFicheDateNos = new Set();
+const ficheDateSearchState = {
+  page: 1,
+  pageSize: 25,
+  totalCount: 0,
+  totalPages: 0
+};
+
+function getInstallmentApplyEndState() {
+  if (installmentMode === 'excel') {
+    return !!$('installmentApplyEndStateExcel')?.checked;
+  }
+  return !!$('installmentApplyEndState')?.checked;
+}
+
+function syncInstallmentOdooatCheckboxes(source) {
+  const single = $('installmentApplyEndState');
+  const excel = $('installmentApplyEndStateExcel');
+  if (!single || !excel) return;
+  const checked = source === 'excel' ? excel.checked : single.checked;
+  single.checked = checked;
+  excel.checked = checked;
+}
+
 function setInstallmentMode(mode) {
+  const prevMode = installmentMode;
   installmentMode = mode === 'excel' ? 'excel' : 'single';
-  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+  document.querySelectorAll('.installment-mode-tab[data-installment-mode]').forEach((btn) => {
     const active = btn.dataset.installmentMode === installmentMode;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -189,6 +305,10 @@ function setInstallmentMode(mode) {
   const excelPanel = $('installmentExcelPanel');
   if (singlePanel) singlePanel.hidden = installmentMode !== 'single';
   if (excelPanel) excelPanel.hidden = installmentMode !== 'excel';
+
+  if (prevMode !== installmentMode) {
+    syncInstallmentOdooatCheckboxes(prevMode === 'excel' ? 'excel' : 'single');
+  }
 
   $('installmentPreviewSection').hidden = true;
   if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
@@ -322,7 +442,7 @@ function parseInstallmentExcelFile(file) {
 
 function getInstallmentPayload() {
   const base = {
-    applyEndState: !!$('installmentApplyEndState')?.checked
+    applyEndState: getInstallmentApplyEndState()
   };
   if (installmentMode === 'excel') {
     return {
@@ -435,6 +555,449 @@ function formatInstallmentUpdateResult(data) {
     data.dryRun
       ? `شبیه‌سازی — ${data.wouldUpdate || 0} ردیف UPDATE می‌شد | بدون نتیجه: ${data.notFound}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`
       : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}${data.skippedMismatch ? ` | عدم تطابق: ${data.skippedMismatch}` : ''}`,
+    '',
+    ...lines
+  ].join('\n');
+}
+
+function initFicheDateStatusControls() {
+  const filterHost = $('ficheDateStatusFilters');
+  const statusSelect = $('ficheDateNewStatus');
+  if (filterHost) {
+    filterHost.innerHTML = '';
+    ficheDateStatusOrder.forEach((value) => {
+      const labelText = ficheDateStatusLabels[value];
+      const labelEl = document.createElement('label');
+      labelEl.className = 'fiche-date-ms-option';
+      labelEl.setAttribute('role', 'option');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = String(value);
+      input.className = 'fiche-date-status-filter';
+      if (value === 1) input.checked = true;
+      const text = document.createElement('span');
+      text.className = 'fiche-date-ms-option-text';
+      text.textContent = `${value} — ${labelText}`;
+      labelEl.appendChild(input);
+      labelEl.appendChild(text);
+      filterHost.appendChild(labelEl);
+    });
+    setupFicheDateStatusDropdown();
+    updateFicheDateStatusTriggerLabel();
+  }
+  if (statusSelect) {
+    statusSelect.innerHTML = '';
+    ficheDateStatusOrder.forEach((value) => {
+      const label = ficheDateStatusLabels[value];
+      const opt = document.createElement('option');
+      opt.value = String(value);
+      opt.textContent = `${value} — ${label}`;
+      if (value === 1) opt.selected = true;
+      statusSelect.appendChild(opt);
+    });
+  }
+  syncFicheDateApplyFields();
+}
+
+function updateFicheDateStatusTriggerLabel() {
+  const labelEl = $('ficheDateStatusTriggerLabel');
+  if (!labelEl) return;
+  const selected = getSelectedFicheDateStatuses();
+  if (selected.length === 0) {
+    labelEl.textContent = 'انتخاب وضعیت…';
+    return;
+  }
+  if (selected.length === 1) {
+    const value = selected[0];
+    labelEl.textContent = `${value} — ${ficheDateStatusLabels[value] || value}`;
+    return;
+  }
+  labelEl.textContent = `${selected.length.toLocaleString('fa-IR')} وضعیت انتخاب‌شده`;
+}
+
+function closeFicheDateStatusMenu() {
+  const menu = $('ficheDateStatusFilters');
+  const trigger = $('ficheDateStatusTrigger');
+  if (menu) menu.hidden = true;
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleFicheDateStatusMenu() {
+  const menu = $('ficheDateStatusFilters');
+  const trigger = $('ficheDateStatusTrigger');
+  if (!menu || !trigger) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function setupFicheDateStatusDropdown() {
+  const trigger = $('ficheDateStatusTrigger');
+  const menu = $('ficheDateStatusFilters');
+  if (!trigger || !menu || trigger.dataset.bound === '1') return;
+  trigger.dataset.bound = '1';
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFicheDateStatusMenu();
+  });
+
+  menu.querySelectorAll('.fiche-date-status-filter').forEach((input) => {
+    input.addEventListener('change', updateFicheDateStatusTriggerLabel);
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = $('ficheDateStatusMulti');
+    if (!wrap || wrap.contains(e.target)) return;
+    closeFicheDateStatusMenu();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeFicheDateStatusMenu();
+  });
+}
+
+function syncFicheDateApplyFields() {
+  const pairs = [
+    ['ficheDateApplyPermanent', 'ficheDateNewPermanent'],
+    ['ficheDateApplyTemporary', 'ficheDateNewTemporary'],
+    ['ficheDateApplyBreak', 'ficheDateNewBreak']
+  ];
+  pairs.forEach(([chkId, inputId]) => {
+    const chk = $(chkId);
+    const input = $(inputId);
+    if (!chk || !input) return;
+    input.disabled = !chk.checked;
+  });
+  const statusChk = $('ficheDateApplyStatus');
+  const statusSel = $('ficheDateNewStatus');
+  if (statusChk && statusSel) statusSel.disabled = !statusChk.checked;
+}
+
+function updateFicheDateIdentifierHint() {
+  const input = $('ficheDateIdentifier');
+  const hint = $('ficheDateIdentifierHint');
+  if (!input || !hint) return;
+  const value = (input.value || '').trim();
+  if (!value) {
+    hint.hidden = true;
+    hint.textContent = '';
+    return;
+  }
+  const type = detectIdentifierType(value);
+  if (!type) {
+    hint.hidden = true;
+    return;
+  }
+  hint.hidden = false;
+  hint.textContent = `تشخیص: ${identifierTypeLabels[type] || type}`;
+}
+
+async function searchFicheDateAccountGroups(query, limit = 20) {
+  const params = new URLSearchParams();
+  const trimmed = (query || '').trim();
+  if (trimmed) params.set('q', trimmed);
+  params.set('limit', String(limit));
+  const res = await apiFetch(`/api/fiche-date/account-groups?${params.toString()}`);
+  const data = await parseJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  return data.titles || [];
+}
+
+let accountGroupSearchTimer = null;
+let accountGroupSearchSeq = 0;
+
+function closeFicheDateAccountGroupMenu() {
+  const input = $('ficheDateAccountGroup');
+  const menu = $('ficheDateAccountGroupMenu');
+  if (!input || !menu) return;
+  menu.hidden = true;
+  input.setAttribute('aria-expanded', 'false');
+}
+
+function renderFicheDateAccountGroupMenu(titles) {
+  const input = $('ficheDateAccountGroup');
+  const menu = $('ficheDateAccountGroupMenu');
+  if (!input || !menu) return;
+
+  menu.innerHTML = '';
+  if (!titles.length) {
+    const empty = document.createElement('div');
+    empty.className = 'account-group-combobox-empty';
+    empty.textContent = 'موردی یافت نشد';
+    menu.appendChild(empty);
+    menu.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    return;
+  }
+
+  titles.forEach((title) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'account-group-combobox-option';
+    btn.textContent = title;
+    btn.addEventListener('click', () => {
+      input.value = title;
+      closeFicheDateAccountGroupMenu();
+    });
+    menu.appendChild(btn);
+  });
+  menu.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+
+async function fetchFicheDateAccountGroupSuggestions(query) {
+  const seq = ++accountGroupSearchSeq;
+  try {
+    const titles = await searchFicheDateAccountGroups(query);
+    if (seq !== accountGroupSearchSeq) return;
+    renderFicheDateAccountGroupMenu(titles);
+  } catch {
+    if (seq !== accountGroupSearchSeq) return;
+    closeFicheDateAccountGroupMenu();
+  }
+}
+
+function setupFicheDateAccountGroupLazyLoad() {
+  if (!canAccessFicheDateChange()) return;
+  const input = $('ficheDateAccountGroup');
+  const menu = $('ficheDateAccountGroupMenu');
+  if (!input || !menu || input.dataset.lazyBound === '1') return;
+  input.dataset.lazyBound = '1';
+
+  const scheduleSearch = () => {
+    clearTimeout(accountGroupSearchTimer);
+    accountGroupSearchTimer = setTimeout(() => {
+      fetchFicheDateAccountGroupSuggestions(input.value);
+    }, 300);
+  };
+
+  input.addEventListener('input', scheduleSearch);
+  input.addEventListener('focus', () => {
+    if (menu.hidden) scheduleSearch();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target === input || menu.contains(e.target)) return;
+    closeFicheDateAccountGroupMenu();
+  });
+}
+
+function getSelectedFicheDateStatuses() {
+  return Array.from(document.querySelectorAll('.fiche-date-status-filter:checked'))
+    .map((el) => parseInt(el.value, 10))
+    .filter((n) => !Number.isNaN(n));
+}
+
+function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
+  const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 25;
+  ficheDateSearchState.pageSize = pageSize;
+  return {
+    identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
+    permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
+    permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
+    temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
+    temporaryToDate: ($('ficheDateTemporaryTo')?.value || '').trim(),
+    accountGroupTitle: ($('ficheDateAccountGroup')?.value || '').trim(),
+    eumFicheStatuses: getSelectedFicheDateStatuses(),
+    page,
+    pageSize
+  };
+}
+
+function hasFicheDateSearchFilter(payload = getFicheDateSearchPayload()) {
+  return !!(payload.identifierValue
+    || payload.permanentFromDate || payload.permanentToDate
+    || payload.temporaryFromDate || payload.temporaryToDate
+    || payload.accountGroupTitle
+    || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0));
+}
+
+function updateFicheDatePaginationUi() {
+  const bar = $('ficheDatePagination');
+  const label = $('ficheDatePageLabel');
+  const prevBtn = $('btnFicheDatePrevPage');
+  const nextBtn = $('btnFicheDateNextPage');
+  if (!bar || !label || !prevBtn || !nextBtn) return;
+
+  const { page, totalPages, totalCount } = ficheDateSearchState;
+  const hasResults = totalCount > 0;
+  bar.hidden = !hasResults;
+
+  if (!hasResults) {
+    label.textContent = '';
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+
+  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${totalPages.toLocaleString('fa-IR')} — ${totalCount.toLocaleString('fa-IR')} مورد`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
+}
+
+function syncFicheDateUpdateButton() {
+  const btn = $('btnFicheDateUpdate');
+  if (!btn) return;
+  btn.disabled = selectedFicheDateNos.size === 0;
+}
+
+function renderFicheDateTable(items, meta = {}) {
+  ficheDateItems = items || [];
+  if (meta.page != null) ficheDateSearchState.page = meta.page;
+  if (meta.pageSize != null) ficheDateSearchState.pageSize = meta.pageSize;
+  if (meta.totalCount != null) ficheDateSearchState.totalCount = meta.totalCount;
+  if (meta.totalPages != null) ficheDateSearchState.totalPages = meta.totalPages;
+
+  const section = $('ficheDateResultsSection');
+  const tbody = $('ficheDateTable')?.querySelector('tbody');
+  const countLabel = $('ficheDateCountLabel');
+  const selectAll = $('ficheDateSelectAll');
+  if (!section || !tbody) return;
+
+  tbody.innerHTML = '';
+  if (ficheDateItems.length === 0) {
+    section.hidden = false;
+    if (countLabel) {
+      countLabel.textContent = ficheDateSearchState.totalCount > 0
+        ? `۰ مورد در این صفحه — ${ficheDateSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
+        : 'نتیجه‌ای یافت نشد';
+    }
+    if (selectAll) selectAll.checked = false;
+    updateFicheDatePaginationUi();
+    syncFicheDateUpdateButton();
+    return;
+  }
+
+  ficheDateItems.forEach((item) => {
+    const checked = selectedFicheDateNos.has(item.ficheNo) ? ' checked' : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
+      <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${toPersianDigits(item.billId || '-')}</td>
+      <td>${toPersianDigits(item.paymentId || '-')}</td>
+      <td>${item.accountGroupTitle || '-'}</td>
+      <td>${toPersianDigits(item.exportTemporaryDate || '-')}</td>
+      <td>${toPersianDigits(item.exportPermanentDate || '-')}</td>
+      <td>${toPersianDigits(item.paymentBreakDate || '-')}</td>
+      <td>${toPersianDigits(item.paymentDate || '-')}</td>
+      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.fiche-date-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const ficheNo = cb.dataset.ficheNo;
+      if (cb.checked) selectedFicheDateNos.add(ficheNo);
+      else selectedFicheDateNos.delete(ficheNo);
+      syncFicheDateUpdateButton();
+      if (selectAll) {
+        const all = tbody.querySelectorAll('.fiche-date-row-check');
+        selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
+      }
+      updateFicheDateCountLabel();
+    });
+  });
+
+  section.hidden = false;
+  updateFicheDateCountLabel();
+  if (selectAll) {
+    const selectedOnPage = ficheDateItems.filter((item) => selectedFicheDateNos.has(item.ficheNo)).length;
+    selectAll.checked = ficheDateItems.length > 0 && selectedOnPage === ficheDateItems.length;
+  }
+  updateFicheDatePaginationUi();
+  syncFicheDateUpdateButton();
+}
+
+function updateFicheDateCountLabel() {
+  const countLabel = $('ficheDateCountLabel');
+  if (!countLabel) return;
+  const selectedTotal = selectedFicheDateNos.size;
+  const pageInfo = `${ficheDateItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${ficheDateSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+  countLabel.textContent = selectedTotal > 0
+    ? `${pageInfo} | ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+    : pageInfo;
+}
+
+async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) {
+  const payload = getFicheDateSearchPayload(page);
+  if (!hasFicheDateSearchFilter(payload)) {
+    showAppWarning('حداقل یک فیلتر وارد کنید');
+    return false;
+  }
+
+  if (clearSelection) selectedFicheDateNos.clear();
+  ficheDateSearchState.page = page;
+
+  const btn = $('btnFicheDateSearch');
+  const prevBtn = $('btnFicheDatePrevPage');
+  const nextBtn = $('btnFicheDateNextPage');
+  const box = $('ficheDateResultBox');
+  if (btn) btn.disabled = true;
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+  const prevLabel = btn?.textContent;
+  if (btn) btn.textContent = 'در حال جستجو…';
+  if (box) box.hidden = true;
+
+  try {
+    const res = await apiFetch('/api/fiche-date/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+    const totalCount = data.totalCount ?? data.count ?? 0;
+    const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
+    renderFicheDateTable(data.items || [], {
+      page: data.page ?? page,
+      pageSize: data.pageSize ?? payload.pageSize,
+      totalCount,
+      totalPages
+    });
+    return true;
+  } catch (e) {
+    showAppError(e.message);
+    renderFicheDateTable([], { page: 1, pageSize: payload.pageSize, totalCount: 0, totalPages: 0 });
+    return false;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevLabel || 'جستجو';
+    }
+    updateFicheDatePaginationUi();
+  }
+}
+
+function getFicheDateUpdatePayload() {
+  const applyStatus = !!$('ficheDateApplyStatus')?.checked;
+  return {
+    ficheNos: Array.from(selectedFicheDateNos),
+    applyExportPermanentDate: !!$('ficheDateApplyPermanent')?.checked,
+    newExportPermanentDate: ($('ficheDateNewPermanent')?.value || '').trim(),
+    applyExportTemporaryDate: !!$('ficheDateApplyTemporary')?.checked,
+    newExportTemporaryDate: ($('ficheDateNewTemporary')?.value || '').trim(),
+    applyPaymentBreakDate: !!$('ficheDateApplyBreak')?.checked,
+    newPaymentBreakDate: ($('ficheDateNewBreak')?.value || '').trim(),
+    applyEumFicheStatus: applyStatus,
+    newEumFicheStatus: applyStatus ? parseInt($('ficheDateNewStatus')?.value || '1', 10) : null
+  };
+}
+
+function formatFicheDateUpdateResult(data) {
+  const lines = (data.results || []).map((r) =>
+    `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}`
+  );
+  return [
+    '=== نتیجه UPDATE Income_Fiche ===',
+    `DryRun: ${data.dryRun}`,
+    data.dryRun
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
+      : `به‌روز: ${data.updated} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
     '',
     ...lines
   ].join('\n');
@@ -659,11 +1222,11 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
   const filters = getUnsentSearchFilters();
   const validationError = validateUnsentSearchFilters(filters);
   if (validationError) {
-    alert(validationError);
+    showAppWarning(validationError);
     return false;
   }
 
-  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 50;
+  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
   unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
   if (clearSelection) selectedUnsentFicheNos.clear();
@@ -701,7 +1264,7 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
     });
     return true;
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
     renderUnsentTable([], { page: 1, pageSize, totalCount: 0, totalPages: 0 });
     return false;
   } finally {
@@ -775,6 +1338,10 @@ function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
 }
 
+function canAccessFicheDateChange() {
+  return isAdminUser() || !!currentUser?.canAccessFicheDateChange;
+}
+
 function canManageUsers() {
   return isAdminUser() || !!currentUser?.canManageUsers;
 }
@@ -790,14 +1357,23 @@ function applyPermissionUi() {
   document.querySelectorAll('.perm-installment').forEach((el) => {
     el.hidden = !canAccessInstallment();
   });
+  document.querySelectorAll('.perm-fiche-date').forEach((el) => {
+    el.hidden = !canAccessFicheDateChange();
+  });
   document.querySelectorAll('.perm-users').forEach((el) => {
     el.hidden = !canManageUsers();
   });
+  if (!canAccessUnsent() && rayvarzSendMode === 'bulk') {
+    setRayvarzSendMode('single');
+  }
 }
 
 function defaultMainTabKey() {
-  if (canAccessUnsent()) return 'unsent';
-  return 'single';
+  return 'unsent';
+}
+
+function defaultRayvarzSendMode() {
+  return canAccessUnsent() ? 'bulk' : 'single';
 }
 
 function applyAuthUi() {
@@ -817,6 +1393,7 @@ function applyAuthUi() {
   }
 
   activateMainTab(defaultMainTabKey());
+  setRayvarzSendMode(defaultRayvarzSendMode());
 }
 
 async function ensureAuthenticated() {
@@ -889,6 +1466,7 @@ async function loadGroupsTable() {
       <td>${g.name}</td>
       <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td><button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button></td>
     `;
@@ -907,6 +1485,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
+  if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   const btn = $('btnCreateGroup');
   if (btn) btn.textContent = 'بروزرسانی گروه';
@@ -917,6 +1496,7 @@ function resetGroupForm() {
   if ($('newGroupName')) $('newGroupName').value = '';
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
+  if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   const btn = $('btnCreateGroup');
   if (btn) btn.textContent = 'ثبت گروه';
@@ -927,6 +1507,7 @@ async function saveGroupFromForm() {
     name: ($('newGroupName')?.value || '').trim(),
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
@@ -1289,9 +1870,17 @@ async function init() {
     });
   }
 
-  document.querySelectorAll('.installment-mode-tab').forEach((btn) => {
+  document.querySelectorAll('.installment-mode-tab[data-installment-mode]').forEach((btn) => {
     btn.addEventListener('click', () => setInstallmentMode(btn.dataset.installmentMode));
   });
+  document.querySelectorAll('[data-rayvarz-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.hidden) return;
+      setRayvarzSendMode(btn.dataset.rayvarzMode);
+    });
+  });
+  $('installmentApplyEndState')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('single'));
+  $('installmentApplyEndStateExcel')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('excel'));
   setInstallmentMode('single');
 
   const excelInput = $('installmentExcelFile');
@@ -1315,13 +1904,20 @@ async function init() {
       } catch (e) {
         if (status) status.textContent = e.message;
         excelInput.value = '';
-        alert(e.message);
+        showAppError(e.message);
       }
     });
   }
   syncFundFromBranch();
   setupMainTabs();
   initDatePickers();
+  initFicheDateStatusControls();
+  $('ficheDateIdentifier')?.addEventListener('input', updateFicheDateIdentifierHint);
+  ['ficheDateApplyPermanent', 'ficheDateApplyTemporary', 'ficheDateApplyBreak', 'ficheDateApplyStatus']
+    .forEach((id) => $(id)?.addEventListener('change', syncFicheDateApplyFields));
+  if (canAccessFicheDateChange()) {
+    setupFicheDateAccountGroupLazyLoad();
+  }
   window.addEventListener('load', initDatePickers);
   if (canManageUsers()) {
     await loadGroupsTable();
@@ -1349,7 +1945,7 @@ function setupEventHandlers() {
   bindClick('btnLoad', async () => {
   const kind = getSingleFicheKind();
   const value = $('identifierValue').value.trim();
-  if (!value) return alert('شناسه فیش را وارد کنید');
+  if (!value) return showAppWarning('شناسه فیش را وارد کنید');
 
   $('btnLoad').disabled = true;
   try {
@@ -1381,7 +1977,7 @@ function setupEventHandlers() {
     $('resultSection').hidden = true;
     $('xmlSection').hidden = true;
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
     currentFiche = null;
     $('ficheSection').hidden = true;
     $('btnPreview').disabled = true;
@@ -1394,7 +1990,7 @@ function setupEventHandlers() {
   bindClick('btnPreview', async () => {
   if (!currentFiche) return;
   if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
-    return alert(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل پیش‌نمایش نیست');
+    return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل پیش‌نمایش نیست');
   }
   $('btnPreview').disabled = true;
   try {
@@ -1409,7 +2005,7 @@ function setupEventHandlers() {
     $('xmlBox').textContent = data.xml;
     $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
   } finally {
     $('btnPreview').disabled = false;
   }
@@ -1418,7 +2014,7 @@ function setupEventHandlers() {
   bindClick('btnSend', async () => {
   if (!currentFiche) return;
   if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
-    return alert(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
+    return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
   }
 
   if (isTahatorIncomeFiche(currentFiche)) {
@@ -1442,12 +2038,12 @@ function setupEventHandlers() {
         $('xmlSection').hidden = false;
         $('xmlBox').textContent = data.soapResponse || data.previewXml;
       }
-      if (data.dryRun) alert('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else if (data.skipped) alert(data.message);
-      else if (data.success) alert(data.message || 'ارسال تهاتر موفق');
-      else alert(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      if (data.dryRun) showAppInfo('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      else if (data.skipped) showAppWarning(data.message);
+      else if (data.success) showAppSuccess(data.message || 'ارسال تهاتر موفق');
+      else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
     } catch (e) {
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       $('btnSend').disabled = false;
       updateSendButton(currentFiche);
@@ -1471,13 +2067,13 @@ function setupEventHandlers() {
     showSendResult(data);
 
     if (data.dryRun) {
-      alert('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
+      showAppInfo('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
     } else if (data.success && data.verifiedInRayvarz === false) {
-      alert('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+      showAppWarning('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
     } else if (!data.success) {
-      alert(data.message || data.docNotSentError || 'ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
+      showAppError(data.message || data.docNotSentError || 'ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz) {
-      alert('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
+      showAppSuccess('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
     }
 
     if (data.previewXml || data.soapResponse) {
@@ -1486,7 +2082,7 @@ function setupEventHandlers() {
     }
     $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
-    alert(e.message);
+    showAppError(e.message);
   } finally {
     $('btnSend').disabled = false;
     updateSendButton(currentFiche);
@@ -1539,7 +2135,7 @@ function setupEventHandlers() {
 
   bindClick('btnUnsentPlan', async () => {
     const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
+    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const btn = $('btnUnsentPlan');
     btn.disabled = true;
@@ -1571,7 +2167,7 @@ function setupEventHandlers() {
       ].join('\n');
     } catch (e) {
       box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       updateUnsentSendButton();
     }
@@ -1579,7 +2175,7 @@ function setupEventHandlers() {
 
   bindClick('btnUnsentSend', async () => {
     const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return alert('حداقل یک فیش انتخاب کنید');
+    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const dry = config?.dryRun;
     const kind = $('unsentFicheKind').value;
@@ -1618,8 +2214,12 @@ function setupEventHandlers() {
         ...lines
       ].join('\n');
 
-      if (data.dryRun) alert('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else alert(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      else if (data.failed > 0) {
+        showAppWarning(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      } else {
+        showAppSuccess(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
+      }
 
       selectedUnsentFicheNos.clear();
       if (unsentSearchState.filters) {
@@ -1627,7 +2227,7 @@ function setupEventHandlers() {
       }
     } catch (e) {
       box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       updateUnsentSendButton();
     }
@@ -1636,9 +2236,9 @@ function setupEventHandlers() {
   bindClick('btnInstallmentPreview', async () => {
     const payload = getInstallmentPayload();
     if (installmentMode === 'excel') {
-      if (!payload.excelRows?.length) return alert('فایل اکسل را انتخاب کنید');
+      if (!payload.excelRows?.length) return showAppWarning('فایل اکسل را انتخاب کنید');
     } else if (!payload.valuesText) {
-      return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+      return showAppWarning('حداقل یک شماره سند یا کد پیگیری وارد کنید');
     }
 
     const btn = $('btnInstallmentPreview');
@@ -1655,7 +2255,7 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       renderInstallmentPreview(data);
     } catch (e) {
-      alert(e.message);
+      showAppError(e.message);
       $('installmentPreviewSection').hidden = true;
       if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
     } finally {
@@ -1666,9 +2266,9 @@ function setupEventHandlers() {
   bindClick('btnInstallmentUpdate', async () => {
     const payload = getInstallmentPayload();
     if (installmentMode === 'excel') {
-      if (!payload.excelRows?.length) return alert('فایل اکسل را انتخاب کنید');
+      if (!payload.excelRows?.length) return showAppWarning('فایل اکسل را انتخاب کنید');
     } else if (!payload.valuesText) {
-      return alert('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+      return showAppWarning('حداقل یک شماره سند یا کد پیگیری وارد کنید');
     }
 
     const dry = config?.installment?.dryRun ?? config?.dryRun ?? true;
@@ -1693,16 +2293,101 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       if (box) box.textContent = formatInstallmentUpdateResult(data);
       if (data.dryRun) {
-        alert(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
+        showAppInfo(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
       } else {
-        alert(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+        showAppSuccess(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
       }
       $('btnInstallmentPreview').click();
     } catch (e) {
       if (box) box.textContent = e.message;
-      alert(e.message);
+      showAppError(e.message);
     } finally {
       btn.disabled = false;
+    }
+  });
+
+  bindClick('btnFicheDateSearch', async () => {
+    await fetchFicheDateResults(1, { clearSelection: true });
+  });
+
+  bindClick('btnFicheDatePrevPage', async () => {
+    if (ficheDateSearchState.page <= 1) return;
+    await fetchFicheDateResults(ficheDateSearchState.page - 1);
+  });
+
+  bindClick('btnFicheDateNextPage', async () => {
+    if (ficheDateSearchState.page >= ficheDateSearchState.totalPages) return;
+    await fetchFicheDateResults(ficheDateSearchState.page + 1);
+  });
+
+  const ficheDatePageSize = $('ficheDatePageSize');
+  if (ficheDatePageSize) {
+    ficheDatePageSize.addEventListener('change', async () => {
+      if (ficheDateSearchState.totalCount > 0) {
+        await fetchFicheDateResults(1);
+      }
+    });
+  }
+
+  const ficheDateSelectAll = $('ficheDateSelectAll');
+  if (ficheDateSelectAll) {
+    ficheDateSelectAll.addEventListener('change', () => {
+      const tbody = $('ficheDateTable')?.querySelector('tbody');
+      if (!tbody) return;
+      tbody.querySelectorAll('.fiche-date-row-check').forEach((cb) => {
+        cb.checked = ficheDateSelectAll.checked;
+        const ficheNo = cb.dataset.ficheNo;
+        if (ficheDateSelectAll.checked) selectedFicheDateNos.add(ficheNo);
+        else selectedFicheDateNos.delete(ficheNo);
+      });
+      updateFicheDateCountLabel();
+      syncFicheDateUpdateButton();
+    });
+  }
+
+  bindClick('btnFicheDateUpdate', async () => {
+    const payload = getFicheDateUpdatePayload();
+    if (!payload.ficheNos.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
+    const hasChange = (payload.applyExportPermanentDate && payload.newExportPermanentDate)
+      || (payload.applyExportTemporaryDate && payload.newExportTemporaryDate)
+      || (payload.applyPaymentBreakDate && payload.newPaymentBreakDate)
+      || (payload.applyEumFicheStatus && payload.newEumFicheStatus != null);
+    if (!hasChange) return showAppWarning('حداقل یک فیلد برای تغییر مشخص کنید');
+
+    const dry = config?.ficheDateChange?.dryRun ?? config?.dryRun ?? true;
+    const warn = dry
+      ? `DryRun فعال — ${payload.ficheNos.length} فیش فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `تغییر تاریخ/وضعیت ${payload.ficheNos.length} فیش در Income_Fiche؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnFicheDateUpdate');
+    const box = $('ficheDateResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال اعمال…';
+    }
+    try {
+      const res = await apiFetch('/api/fiche-date/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) box.textContent = formatFicheDateUpdateResult(data);
+      if (data.dryRun) {
+        showAppInfo(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
+      } else {
+        showAppSuccess(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
+        $('btnFicheDateSearch').click();
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+      syncFicheDateUpdateButton();
     }
   });
 }

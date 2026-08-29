@@ -503,6 +503,86 @@ public class InstallmentCheckUpdateResult
     public List<InstallmentCheckUpdateItemResult> Results { get; set; } = new();
 }
 
+/// <summary>تب تغییر تاریخ فیش — dbo.Income_Fiche.</summary>
+public class FicheDateChangeSearchRequest
+{
+    public string? PermanentFromDate { get; set; }
+    public string? PermanentToDate { get; set; }
+    public string? TemporaryFromDate { get; set; }
+    public string? TemporaryToDate { get; set; }
+    /// <summary>LIKE روی CI_IncomeAccountGroup.Title</summary>
+    public string? AccountGroupTitle { get; set; }
+    /// <summary>شماره فیش یا BillID+PaymentID — همان منطق ارسال تکی.</summary>
+    public string? IdentifierValue { get; set; }
+    public List<int>? EumFicheStatuses { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 25;
+    /// <summary>سازگاری با نسخه قبلی — در صورت PageSize=0 از این مقدار استفاده می‌شود.</summary>
+    public int MaxResults { get; set; } = 500;
+}
+
+public class FicheDateChangeListItem
+{
+    public string FicheNo { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public string ExportPermanentDate { get; set; } = "";
+    public string ExportTemporaryDate { get; set; } = "";
+    public string PaymentBreakDate { get; set; } = "";
+    public string PaymentDate { get; set; } = "";
+    public int EumFicheStatus { get; set; }
+    public string EumFicheStatusLabel { get; set; } = "";
+    public string AccountGroupTitle { get; set; } = "";
+}
+
+public class FicheDateChangeSearchResult
+{
+    public int Count { get; set; }
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+    public bool Truncated { get; set; }
+    public string? Error { get; set; }
+    public List<FicheDateChangeListItem> Items { get; set; } = new();
+}
+
+public class FicheDateChangeUpdateRequest
+{
+    public List<string>? FicheNos { get; set; }
+    public bool ApplyExportPermanentDate { get; set; }
+    public string? NewExportPermanentDate { get; set; }
+    public bool ApplyExportTemporaryDate { get; set; }
+    public string? NewExportTemporaryDate { get; set; }
+    public bool ApplyPaymentBreakDate { get; set; }
+    public string? NewPaymentBreakDate { get; set; }
+    public bool ApplyEumFicheStatus { get; set; }
+    public int? NewEumFicheStatus { get; set; } = 1;
+    public string PerformedByUser { get; set; } = "";
+}
+
+public class FicheDateChangeUpdateItemResult
+{
+    public string FicheNo { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Found { get; set; }
+    public int RowsAffected { get; set; }
+    public int WouldUpdate { get; set; }
+    public string? Message { get; set; }
+}
+
+public class FicheDateChangeUpdateResult
+{
+    public bool DryRun { get; set; }
+    public int Total { get; set; }
+    public int Updated { get; set; }
+    public int WouldUpdate { get; set; }
+    public int NotFound { get; set; }
+    public int Failed { get; set; }
+    public string? Error { get; set; }
+    public List<FicheDateChangeUpdateItemResult> Results { get; set; } = new();
+}
+
 public class TahatorSendResult
 {
     public bool Success { get; set; }

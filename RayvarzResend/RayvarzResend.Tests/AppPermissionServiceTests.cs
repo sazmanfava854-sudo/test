@@ -31,7 +31,41 @@ public class AppPermissionServiceTests
         Assert.True(resolved.IsAdmin);
         Assert.True(resolved.CanAccessUnsentFiches);
         Assert.True(resolved.CanAccessInstallment);
+        Assert.True(resolved.CanAccessFicheDateChange);
         Assert.True(resolved.CanManageUsers);
+    }
+
+    [Fact]
+    public async Task Group_membership_grants_fiche_date_only()
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
+        config["Auth:UseInMemoryStore"] = "true";
+        var memory = new InMemoryAppUserStore();
+        var repo = new AppUserRepository(config, memory, Microsoft.Extensions.Logging.Abstractions.NullLogger<AppUserRepository>.Instance);
+        var perms = new AppPermissionService(repo);
+
+        var group = await repo.CreateGroupAsync(new CreateAppUserGroupRequest
+        {
+            Name = "تاریخ فیش",
+            CanAccessFicheDateChange = true
+        });
+        var user = await repo.CreateUserAsync(new CreateAppUserRequest
+        {
+            Username = "2234567890",
+            Password = "Secret@123",
+            FirstName = "کاربر",
+            LastName = "تاریخ",
+            NationalId = "2234567890",
+            District = "1",
+            IsAdmin = false
+        });
+        await repo.SetUserGroupsAsync(user.Id, [group.Id]);
+
+        var resolved = await perms.ResolveAsync(user);
+        Assert.False(resolved.CanAccessUnsentFiches);
+        Assert.False(resolved.CanAccessInstallment);
+        Assert.True(resolved.CanAccessFicheDateChange);
+        Assert.False(resolved.CanManageUsers);
     }
 
     [Fact]
@@ -63,6 +97,7 @@ public class AppPermissionServiceTests
         var resolved = await perms.ResolveAsync(user);
         Assert.False(resolved.CanAccessUnsentFiches);
         Assert.True(resolved.CanAccessInstallment);
+        Assert.False(resolved.CanAccessFicheDateChange);
         Assert.False(resolved.CanManageUsers);
     }
 }

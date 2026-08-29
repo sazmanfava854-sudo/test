@@ -74,6 +74,7 @@ public sealed class InMemoryAppUserStore
                 Name = g.Name,
                 CanAccessUnsentFiches = g.CanAccessUnsentFiches,
                 CanAccessInstallment = g.CanAccessInstallment,
+                CanAccessFicheDateChange = g.CanAccessFicheDateChange,
                 CanManageUsers = g.CanManageUsers,
                 CreatedAtUtc = g.CreatedAtUtc.ToString("O")
             })
@@ -93,6 +94,7 @@ public sealed class InMemoryAppUserStore
             Name = name,
             CanAccessUnsentFiches = req.CanAccessUnsentFiches,
             CanAccessInstallment = req.CanAccessInstallment,
+            CanAccessFicheDateChange = req.CanAccessFicheDateChange,
             CanManageUsers = req.CanManageUsers,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -103,6 +105,7 @@ public sealed class InMemoryAppUserStore
             Name = group.Name,
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
+            CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -120,6 +123,7 @@ public sealed class InMemoryAppUserStore
         group.Name = name;
         group.CanAccessUnsentFiches = req.CanAccessUnsentFiches;
         group.CanAccessInstallment = req.CanAccessInstallment;
+        group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
         group.CanManageUsers = req.CanManageUsers;
 
         return new AppUserGroupDto
@@ -128,6 +132,7 @@ public sealed class InMemoryAppUserStore
             Name = group.Name,
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
+            CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };

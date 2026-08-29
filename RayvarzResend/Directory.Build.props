@@ -1,0 +1,6 @@
+<Project>
+  <!-- NU1900: vulnerability audit needs nuget.org — often blocked on intranet/VPN -->
+  <PropertyGroup>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

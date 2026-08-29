@@ -40,6 +40,7 @@ public sealed class AppAuthService
         var password = _config["Auth:BootstrapAdmin:Password"] ?? "Admin@1234";
         var firstName = _config["Auth:BootstrapAdmin:FirstName"] ?? "مدیر";
         var lastName = _config["Auth:BootstrapAdmin:LastName"] ?? "سیستم";
+        var nationalId = _config["Auth:BootstrapAdmin:NationalId"] ?? "1234567890";
 
         await _users.CreateUserAsync(new CreateAppUserRequest
         {
@@ -47,6 +48,7 @@ public sealed class AppAuthService
             Password = password,
             FirstName = firstName,
             LastName = lastName,
+            NationalId = nationalId,
             Position = "مدیر سیستم",
             IsAdmin = true
         }, ct);
@@ -81,6 +83,7 @@ public sealed class AppAuthService
             IsAdmin = user.IsAdmin,
             CanAccessUnsentFiches = perms.CanAccessUnsentFiches,
             CanAccessInstallment = perms.CanAccessInstallment,
+            CanAccessFicheDateChange = perms.CanAccessFicheDateChange,
             CanManageUsers = perms.CanManageUsers,
             GroupIds = perms.GroupIds
         };
