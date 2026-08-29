@@ -1394,7 +1394,7 @@ function renderUnsentTable(items, meta = {}) {
     <tr>
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
-      <td>${item.bnkAcntNo || '-'}</td>
+      <td>${formatNosaziCode(item.bnkAcntNo)}</td>
       <td>${item.billId || '-'}</td>
       <td>${item.paymentId || '-'}</td>
       <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
@@ -2679,8 +2679,8 @@ function setupEventHandlers() {
 
     const dry = config?.bankInquiryConfirm?.dryRun ?? config?.dryRun ?? true;
     const warn = dry
-      ? `DryRun فعال — تایید استعلام بانک برای ${payload.ficheNos.length} فیش فقط شبیه‌سازی می‌شود. ادامه؟`
-      : `تایید استعلام بانک برای ${payload.ficheNos.length} فیش با تاریخ پرداخت «${payload.newPaymentDate}» ثبت شود؟`;
+      ? `DryRun فعال — تغییر تاریخ پرداخت برای ${payload.ficheNos.length} فیش فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `تغییر تاریخ پرداخت برای ${payload.ficheNos.length} فیش با تاریخ «${payload.newPaymentDate}» ثبت شود؟`;
     if (!confirm(warn)) return;
 
     const btn = $('btnBankInquiryConfirm');
@@ -2700,7 +2700,7 @@ function setupEventHandlers() {
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       if (box) box.textContent = formatBankInquiryConfirmResult(data);
       if (data.dryRun) {
-        showAppInfo('تایید استعلام بانک — تغییری روی سرور اعمال نشد (DryRun).');
+        showAppInfo('تغییر تاریخ پرداخت — تغییری روی سرور اعمال نشد (DryRun).');
       } else {
         showAppSuccess(`تایید ثبت شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
         await fetchBankInquiryResults(bankInquirySearchState.page);
