@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=26" />
+  <link rel="stylesheet" href="css/style.css?v=27" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -490,36 +490,40 @@
           <span class="card-icon" aria-hidden="true">👥</span>
           <h2>گروه‌های کاربری</h2>
         </div>
-        <div class="form-grid unsent-form-grid">
-          <label class="field field-required">
+        <div class="user-groups-form" dir="rtl">
+          <label class="field user-groups-name field-required">
             <span class="field-label">نام گروه</span>
             <input id="newGroupName" type="text" autocomplete="off" />
           </label>
-          <label class="field check-field">
-            <input id="newGroupUnsent" type="checkbox" />
-            <span>فیش‌های جمعی</span>
-          </label>
-          <label class="field check-field">
-            <input id="newGroupInstallment" type="checkbox" />
-            <span>چک خزانه</span>
-          </label>
-          <label class="field check-field perm-fiche-date-group">
-            <input id="newGroupFicheDate" type="checkbox" />
-            <span>تغییر تاریخ فیش</span>
-            <span class="field-hint">دسترسی به تب «تغییر تاریخ فیش» — نیاز به ورود و مجوز گروه</span>
-          </label>
-          <label class="field check-field">
-            <input id="newGroupUsers" type="checkbox" />
-            <span>مدیریت کاربران</span>
-          </label>
+          <div class="user-groups-perms">
+            <label class="user-group-perm-item">
+              <input id="newGroupUnsent" type="checkbox" />
+              <span class="user-group-perm-text">فیش‌های جمعی</span>
+            </label>
+            <label class="user-group-perm-item">
+              <input id="newGroupInstallment" type="checkbox" />
+              <span class="user-group-perm-text">چک خزانه</span>
+            </label>
+            <label class="user-group-perm-item user-group-perm-item-wide">
+              <input id="newGroupFicheDate" type="checkbox" />
+              <span class="user-group-perm-content">
+                <span class="user-group-perm-text">تغییر تاریخ فیش</span>
+                <span class="user-group-perm-hint">دسترسی به تب «تغییر تاریخ فیش» — نیاز به ورود و مجوز گروه</span>
+              </span>
+            </label>
+            <label class="user-group-perm-item">
+              <input id="newGroupUsers" type="checkbox" />
+              <span class="user-group-perm-text">مدیریت کاربران</span>
+            </label>
+          </div>
+          <div class="actions user-groups-actions">
+            <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
+            <button id="btnRefreshGroups" class="btn secondary" type="button">بروزرسانی گروه‌ها</button>
+          </div>
         </div>
-        <div class="actions">
-          <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
-          <button id="btnRefreshGroups" class="btn secondary" type="button">بروزرسانی گروه‌ها</button>
-        </div>
-        <div class="subsection">
+        <div class="subsection user-groups-list">
           <div class="table-wrap">
-            <table id="groupsTable">
+            <table id="groupsTable" class="groups-table">
               <thead>
                 <tr>
                   <th>نام گروه</th>
