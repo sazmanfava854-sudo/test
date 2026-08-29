@@ -842,18 +842,6 @@ tbody tr:last-child td {
   margin: 0;
 }
 
-.installment-template-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-.installment-template-actions .installment-odooat-check {
-  padding-top: 0;
-  margin-inline-start: auto;
-}
-
 .installment-values-field input {
   width: 100%;
   padding: 10px 12px;
