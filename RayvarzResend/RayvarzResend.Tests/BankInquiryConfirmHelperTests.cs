@@ -7,6 +7,13 @@ namespace RayvarzResend.Tests;
 public class BankInquiryConfirmHelperTests
 {
     [Fact]
+    public void NormalizeBillOrPayId_strips_persian_digits_and_non_digits()
+    {
+        Assert.Equal("9000152552362", BankInquiryConfirmHelper.NormalizeBillOrPayId("۹۰۰۰۱۵۲۵۵۲۳۶۲"));
+        Assert.Equal("4172333232581", BankInquiryConfirmHelper.NormalizeBillOrPayId(" 4172333232581 "));
+    }
+
+    [Fact]
     public void ValidateSearchRequest_requires_at_least_one_filter()
     {
         Assert.Equal(

@@ -211,6 +211,7 @@ public sealed class BankInquiryConfirmService
             {
                 item.Success = false;
                 item.Message = inquiry.ServiceError
+                    || BankInquiryResponseParser.LooksLikeServiceFailure(inquiry.Message)
                     ? inquiry.Message
                     : BankInquiryConfirmHelper.UnpaidFicheMessage;
                 AppendConfirmItemResult(result, item);
@@ -304,8 +305,8 @@ public sealed class BankInquiryConfirmService
             return item;
         }
 
-        var billId = (fiche.BillIdRaw ?? fiche.BillId ?? "").Trim();
-        var paymentId = (fiche.PaymentIdRaw ?? fiche.PaymentId ?? "").Trim();
+        var billId = BankInquiryConfirmHelper.NormalizeBillOrPayId(fiche.BillIdRaw ?? fiche.BillId);
+        var paymentId = BankInquiryConfirmHelper.NormalizeBillOrPayId(fiche.PaymentIdRaw ?? fiche.PaymentId);
         item.BillId = billId;
         item.PaymentId = paymentId;
 

@@ -36,8 +36,8 @@ public sealed class BankInquiryApiClient
         string payId,
         CancellationToken ct = default)
     {
-        billId = (billId ?? "").Trim();
-        payId = (payId ?? "").Trim();
+        billId = BankInquiryConfirmHelper.NormalizeBillOrPayId(billId);
+        payId = BankInquiryConfirmHelper.NormalizeBillOrPayId(payId);
 
         if (string.IsNullOrWhiteSpace(billId) || string.IsNullOrWhiteSpace(payId))
             return BankInquiryApiResult.Failed("شناسه قبض و شناسه پرداخت برای استعلام بانک الزامی است");
@@ -49,10 +49,9 @@ public sealed class BankInquiryApiClient
         var userName = _options.UserName.Trim();
         var password = _options.Password;
 
-        var lookupEnvelope = BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId);
-        var lookupStep = await CallAndParseAsync(
+        var lookupStep = await CallWithJsonFormatFallbackAsync(
+            usePascalCase => BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId, usePascalCase),
             _options.FicheLookupServiceUrl.Trim(),
-            lookupEnvelope,
             billId,
             BankInquiryResponseParser.ParseFicheLookupStep,
             BankInquiryResponseParser.FicheLookupSourceLabel,
@@ -67,8 +66,8 @@ public sealed class BankInquiryApiClient
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
             case BankInquiryStepKind.RecordNotFound:
                 _logger.LogInformation(
-                    "Fiche lookup record not found for billId={BillId}, trying online bank. message={Message}",
-                    billId, lookupStep.Message);
+                    "Fiche lookup record not found for billId={BillId} payId={PayId}, trying online bank. message={Message}",
+                    billId, payId, lookupStep.Message);
                 break;
             default:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
@@ -78,24 +77,21 @@ public sealed class BankInquiryApiClient
             ? "در استعلام قبوض ثبت نشد"
             : $"استعلام قبوض: {lookupStep.Message}";
 
-        var onlineEnvelope = BankInquiryRequestBuilder.BuildEnvelope(
-            userName,
-            password,
-            billId,
-            payId,
-            _options.BankCode);
-
         var onlineUrls = BuildOnlineServiceUrls();
         BankInquiryParsedStep? onlineStep = null;
         foreach (var serviceUrl in onlineUrls)
         {
-            onlineStep = await CallAndParseAsync(
+            onlineStep = await CallWithJsonFormatFallbackAsync(
+                usePascalCase => BankInquiryRequestBuilder.BuildEnvelope(
+                    userName, password, billId, payId, _options.BankCode, usePascalCase),
                 serviceUrl,
-                onlineEnvelope,
                 billId,
                 BankInquiryResponseParser.ParseOnlineBankStep,
                 BankInquiryResponseParser.OnlineBankSourceLabel,
                 ct);
+
+            if (onlineStep.Kind == BankInquiryStepKind.Paid)
+                break;
 
             if (onlineStep.Kind != BankInquiryStepKind.ServiceError || serviceUrl == onlineUrls[^1])
                 break;
@@ -107,17 +103,65 @@ public sealed class BankInquiryApiClient
 
         return onlineStep.Kind switch
         {
+            BankInquiryStepKind.Paid => WithLookupNote(
+                onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote),
+            BankInquiryStepKind.NotPaid when BankInquiryResponseParser.LooksLikeServiceFailure(onlineStep.Message) =>
+                BankInquiryApiResult.Failed(
+                    $"{lookupNote} → {onlineStep.Message}",
+                    onlineStep.RawResponse,
+                    BankInquiryResponseParser.OnlineBankSourceLabel),
+            BankInquiryStepKind.ServiceError => BankInquiryApiResult.Failed(
+                $"{lookupNote} → {onlineStep.Message}",
+                onlineStep.RawResponse,
+                BankInquiryResponseParser.OnlineBankSourceLabel),
             BankInquiryStepKind.RecordNotFound => BankInquiryApiResult.NotPaid(
                 BankInquiryConfirmHelper.UnpaidFicheMessage,
                 BankInquiryResponseParser.OnlineBankSourceLabel),
             BankInquiryStepKind.NotPaid => WithLookupNote(
                 onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote),
-            BankInquiryStepKind.Paid => WithLookupNote(
-                onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote),
             _ => WithLookupNote(
                 onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote)
         };
     }
+
+    private async Task<BankInquiryParsedStep> CallWithJsonFormatFallbackAsync(
+        Func<bool, object> buildEnvelope,
+        string serviceUrl,
+        string billId,
+        Func<string?, int, BankInquiryParsedStep> parser,
+        string serviceLabel,
+        CancellationToken ct)
+    {
+        BankInquiryParsedStep? lastStep = null;
+
+        foreach (var usePascalCase in new[] { false, true })
+        {
+            var step = await CallAndParseAsync(
+                serviceUrl,
+                buildEnvelope(usePascalCase),
+                billId,
+                parser,
+                serviceLabel,
+                ct);
+            lastStep = step;
+
+            if (step.Kind is BankInquiryStepKind.Paid or BankInquiryStepKind.NotPaid)
+                return step;
+
+            if (!ShouldTryAlternateJsonFormat(step, usePascalCase))
+                return step;
+        }
+
+        return lastStep ?? ServiceUnavailableStep(serviceLabel, $"خطا در ارتباط با {serviceLabel}");
+    }
+
+    private static bool ShouldTryAlternateJsonFormat(BankInquiryParsedStep step, bool usedPascalCase) =>
+        !usedPascalCase
+        && (step.Kind == BankInquiryStepKind.RecordNotFound
+            || (step.Kind == BankInquiryStepKind.ServiceError
+                && (step.Message.Contains("400", StringComparison.Ordinal)
+                    || step.Message.Contains("PayId", StringComparison.OrdinalIgnoreCase)
+                    || step.Message.Contains("نامعتبر", StringComparison.Ordinal))));
 
     private static BankInquiryApiResult WithLookupNote(BankInquiryApiResult result, string lookupNote)
     {
@@ -154,14 +198,11 @@ public sealed class BankInquiryApiClient
                         "Bank inquiry gateway error {Status} service={Service} url={Url} attempt={Attempt} body={Body}",
                         statusCode, serviceLabel, serviceUrl, attempt, Truncate(raw, 500));
 
-                    lastStep = BankInquiryResponseParser.ParseHttpError(statusCode, raw, serviceLabel) switch
+                    lastStep = new BankInquiryParsedStep
                     {
-                        var failed => new BankInquiryParsedStep
-                        {
-                            Kind = BankInquiryStepKind.ServiceError,
-                            Message = failed.Message,
-                            RawResponse = raw
-                        }
+                        Kind = BankInquiryStepKind.ServiceError,
+                        Message = BankInquiryResponseParser.ParseHttpError(statusCode, raw, serviceLabel).Message,
+                        RawResponse = raw
                     };
 
                     if (attempt < maxAttempts && _options.RetryCount > 0)
@@ -237,6 +278,8 @@ public sealed class BankInquiryApiClient
         client.Timeout = TimeSpan.FromSeconds(Math.Max(10, _options.TimeoutSeconds));
 
         var json = JsonSerializer.Serialize(envelope, JsonOptions);
+        _logger.LogDebug("Bank inquiry request url={Url} body={Body}", serviceUrl, RedactPassword(json));
+
         using var request = new HttpRequestMessage(HttpMethod.Post, serviceUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.TryAddWithoutValidation("User-Agent", "RayvarzResend/FinancialAssistant");
@@ -248,6 +291,13 @@ public sealed class BankInquiryApiClient
         var raw = await response.Content.ReadAsStringAsync(ct);
         return ((int)response.StatusCode, raw);
     }
+
+    private static string RedactPassword(string json) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            json,
+            """"(password|Password)"\s*:\s*"[^"]*"""",
+            """"$1":"***"""",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     public static string BuildUserErrorMessage(Exception ex, string? serviceLabel = null)
     {
@@ -262,6 +312,9 @@ public sealed class BankInquiryApiClient
                    + "در appsettings مقدار BankInquiryConfirm:UseSystemProxy=true یا ProxyUrl را تنظیم کنید؛ "
                    + "در صورت نیاز BankInquiryConfirm:AllowInvalidSsl=true (فقط برای تست).";
         }
+
+        if (BankInquiryResponseParser.LooksLikeServiceFailure(ex.Message))
+            return $"خطا در ارتباط با {serviceName}: {ex.Message}";
 
         return $"خطا در ارتباط با {serviceName}: {ex.Message}";
     }

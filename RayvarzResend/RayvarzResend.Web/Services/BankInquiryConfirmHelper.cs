@@ -91,8 +91,20 @@ public static class BankInquiryConfirmHelper
         return (string.Join(" AND ", clauses), parameters);
     }
 
-    public static string? ValidateConfirmRequest(BankInquiryConfirmRequest req)
+    public static string NormalizeBillOrPayId(string? value)
     {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        var digits = NumericHelper.NormalizeDigits(value.Trim());
+        return new string(digits.Where(char.IsDigit).ToArray());
+    }
+
+    public static string? ValidateConfirmRequest(BankInquiryConfirmRequest? req)
+    {
+        if (req == null)
+            return "درخواست نامعتبر است";
+
         var ficheNos = (req.FicheNos ?? [])
             .Select(s => (s ?? "").Trim())
             .Where(s => s.Length > 0)

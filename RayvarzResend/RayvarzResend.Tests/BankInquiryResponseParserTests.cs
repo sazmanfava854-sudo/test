@@ -121,6 +121,25 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
+    public void Parse_fiche_lookup_no_data_message_is_record_not_found()
+    {
+        var raw = """{"intResult":1,"strResult":"عدم وجود اطلاعات بر اساس پارامترهای ورودی","isPay":0,"fichesId":0}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.RecordNotFound, step.Kind);
+    }
+
+    [Fact]
+    public void Parse_online_bank_service_failure_is_service_error()
+    {
+        var raw = """{"intResualt":1,"strResualt":"خطا در ارتباط با سرویس بانک شهر: contract mismatch","pay":0}""";
+        var step = BankInquiryResponseParser.ParseOnlineBankStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.ServiceError, step.Kind);
+        Assert.Contains("سرویس بانک", step.Message);
+    }
+
+    [Fact]
     public void Parse_fiche_lookup_isPay_1_means_paid()
     {
         var raw = """{"intResult":0,"strResult":"OK","isPay":1,"fichesId":12345,"registerDate":"1405/06/10"}""";

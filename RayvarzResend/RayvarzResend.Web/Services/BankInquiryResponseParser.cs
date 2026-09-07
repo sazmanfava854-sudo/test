@@ -12,10 +12,24 @@ public static class BankInquiryResponseParser
     [
         "یافت نشد",
         "وجود ندارد",
+        "عدم وجود",
         "not found",
         "no record",
         "record not found"
     ];
+
+    private static readonly string[] ServiceFailureHints =
+    [
+        "meaningful reply",
+        "contract mismatch",
+        "premature session shutdown",
+        "internal server error",
+        "خطا در ارتباط",
+        "سرویس بانک",
+        "در دسترس نیست"
+    ];
+
+    public static bool LooksLikeServiceFailure(string? message) => ContainsAny(message, ServiceFailureHints);
     private static readonly string[] PaidMessageHints =
     [
         "پرداخت شده",
@@ -61,16 +75,16 @@ public static class BankInquiryResponseParser
 
             if (HasFicheLookupRecord(root, intResult, fichesId, isPay, paymentDate))
             {
-                if (!string.IsNullOrWhiteSpace(paymentDate) && isPay != 0)
+                if (isPay == 0)
+                    return NotPaidStep(message);
+
+                if (!string.IsNullOrWhiteSpace(paymentDate))
                     return PaidStep(paymentDate, message);
 
                 return NotPaidStep(message);
             }
 
             if (IsRecordNotFound(message, intResult, fichesId, isPay))
-                return RecordNotFoundStep(message);
-
-            if (intResult == 0)
                 return RecordNotFoundStep(message);
 
             return RecordNotFoundStep(
@@ -99,6 +113,9 @@ public static class BankInquiryResponseParser
             var intResult = ReadInt(root, "intResualt", "IntResualt", "intResult", "IntResult");
             var pay = ReadInt(root, "pay", "Pay");
             var paymentDate = ReadPaymentDate(root, "payDate", "PayDate");
+
+            if (LooksLikeServiceFailure(message))
+                return ServiceErrorStep(message, rawJson);
 
             if (pay == 1)
                 return PaidStep(paymentDate, message);

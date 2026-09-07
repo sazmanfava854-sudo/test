@@ -49,6 +49,17 @@ public class BankInquiryRequestBuilderTests
     }
 
     [Fact]
+    public void BuildBillPayEnvelope_supports_pascal_case()
+    {
+        var json = JsonSerializer.Serialize(BankInquiryRequestBuilder.BuildBillPayEnvelope(
+            "FinancialAssistant", "secret", "9000152552362", "4172333232581", pascalCase: true));
+
+        Assert.Equal(
+            """{"UserName":"FinancialAssistant","Password":"secret","BillId":"9000152552362","PayId":"4172333232581"}""",
+            json);
+    }
+
+    [Fact]
     public void BuildBillPayEnvelope_uses_flat_body_without_request_wrapper()
     {
         var envelope = BankInquiryRequestBuilder.BuildBillPayEnvelope(
