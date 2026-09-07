@@ -21,7 +21,7 @@ public static class BankInquiryRequestBuilder
         };
 
     /// <summary>
-    /// epay_EstelamOnLineBank — داخل request + bankCode.
+    /// epay_EstelamOnLineBank — بدنه تخت (بدون request) + bankCode.
     /// </summary>
     public static object BuildEnvelope(
         string userName,
@@ -31,14 +31,11 @@ public static class BankInquiryRequestBuilder
         int bankCode) =>
         new Dictionary<string, object>
         {
-            ["request"] = new Dictionary<string, object>
-            {
-                ["userName"] = userName,
-                ["password"] = password,
-                ["billId"] = billId,
-                ["payId"] = payId,
-                ["bankCode"] = bankCode
-            }
+            ["userName"] = userName,
+            ["password"] = password,
+            ["billId"] = billId,
+            ["payId"] = payId,
+            ["bankCode"] = bankCode
         };
 
     public static string SerializeEnvelope(

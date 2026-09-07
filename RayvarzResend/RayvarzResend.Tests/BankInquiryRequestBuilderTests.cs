@@ -7,7 +7,7 @@ namespace RayvarzResend.Tests;
 public class BankInquiryRequestBuilderTests
 {
     [Fact]
-    public void SerializeEnvelope_wraps_fields_in_request_object()
+    public void SerializeEnvelope_uses_flat_body_with_bank_code()
     {
         var json = BankInquiryRequestBuilder.SerializeEnvelope(
             "FinancialAssistant",
@@ -18,12 +18,12 @@ public class BankInquiryRequestBuilderTests
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
-        Assert.True(root.TryGetProperty("request", out var request));
-        Assert.Equal("FinancialAssistant", request.GetProperty("userName").GetString());
-        Assert.Equal("secret", request.GetProperty("password").GetString());
-        Assert.Equal("1169619842101", request.GetProperty("billId").GetString());
-        Assert.Equal("0000000010158", request.GetProperty("payId").GetString());
-        Assert.Equal(18, request.GetProperty("bankCode").GetInt32());
+        Assert.False(root.TryGetProperty("request", out _));
+        Assert.Equal("FinancialAssistant", root.GetProperty("userName").GetString());
+        Assert.Equal("secret", root.GetProperty("password").GetString());
+        Assert.Equal("1169619842101", root.GetProperty("billId").GetString());
+        Assert.Equal("0000000010158", root.GetProperty("payId").GetString());
+        Assert.Equal(18, root.GetProperty("bankCode").GetInt32());
     }
 
     [Fact]

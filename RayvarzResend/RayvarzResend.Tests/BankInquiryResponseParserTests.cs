@@ -92,6 +92,35 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
+    public void Parse_fiche_lookup_portal_style_paid_response()
+    {
+        var raw = """
+            {
+              "intResult": 1,
+              "strResult": "قبض با شناسه قبض و شناسه پرداخت وارد شده به شرح زیر یافت شد",
+              "isPay": 1,
+              "fichesId": 7021215,
+              "registerDate": "1405/04/24",
+              "forgeDate": "1405/04/23",
+              "payAmount": 41723332
+            }
+            """;
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+        Assert.Equal("1405/04/24", step.PaymentDate);
+    }
+
+    [Fact]
+    public void Parse_fiche_lookup_record_with_dates_but_missing_isPay_is_paid()
+    {
+        var raw = """{"intResult":1,"strResult":"OK","fichesId":7021215,"registerDate":"1405/04/24"}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+    }
+
+    [Fact]
     public void Parse_fiche_lookup_isPay_1_means_paid()
     {
         var raw = """{"intResult":0,"strResult":"OK","isPay":1,"fichesId":12345,"registerDate":"1405/06/10"}""";

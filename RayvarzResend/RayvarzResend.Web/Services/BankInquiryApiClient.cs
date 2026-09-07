@@ -66,10 +66,17 @@ public sealed class BankInquiryApiClient
             case BankInquiryStepKind.ServiceError:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
             case BankInquiryStepKind.RecordNotFound:
+                _logger.LogInformation(
+                    "Fiche lookup record not found for billId={BillId}, trying online bank. message={Message}",
+                    billId, lookupStep.Message);
                 break;
             default:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
         }
+
+        var lookupNote = string.IsNullOrWhiteSpace(lookupStep.Message)
+            ? "در استعلام قبوض ثبت نشد"
+            : $"استعلام قبوض: {lookupStep.Message}";
 
         var onlineEnvelope = BankInquiryRequestBuilder.BuildEnvelope(
             userName,
@@ -103,10 +110,22 @@ public sealed class BankInquiryApiClient
             BankInquiryStepKind.RecordNotFound => BankInquiryApiResult.NotPaid(
                 BankInquiryConfirmHelper.UnpaidFicheMessage,
                 BankInquiryResponseParser.OnlineBankSourceLabel),
-            BankInquiryStepKind.NotPaid => onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel),
-            BankInquiryStepKind.Paid => onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel),
-            _ => onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel)
+            BankInquiryStepKind.NotPaid => WithLookupNote(
+                onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote),
+            BankInquiryStepKind.Paid => WithLookupNote(
+                onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote),
+            _ => WithLookupNote(
+                onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote)
         };
+    }
+
+    private static BankInquiryApiResult WithLookupNote(BankInquiryApiResult result, string lookupNote)
+    {
+        if (string.IsNullOrWhiteSpace(lookupNote))
+            return result;
+
+        result.Message = $"{lookupNote} → {result.Message}";
+        return result;
     }
 
     private async Task<BankInquiryParsedStep> CallAndParseAsync(

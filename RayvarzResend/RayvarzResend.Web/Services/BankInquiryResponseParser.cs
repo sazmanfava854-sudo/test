@@ -41,7 +41,7 @@ public static class BankInquiryResponseParser
     public static BankInquiryParsedStep ParseFicheLookupStep(string? rawJson, int httpStatusCode)
     {
         if (httpStatusCode < 200 || httpStatusCode >= 300)
-            return ToServiceErrorStep(ParseHttpError(httpStatusCode, rawJson));
+            return ToServiceErrorStep(ParseHttpError(httpStatusCode, rawJson, FicheLookupSourceLabel));
 
         if (string.IsNullOrWhiteSpace(rawJson))
             return ServiceErrorStep("پاسخ خالی از سرویس استعلام قبوض", rawJson);
@@ -52,23 +52,29 @@ public static class BankInquiryResponseParser
             var root = UnwrapResponseRoot(doc.RootElement);
             var message = ReadMessage(root, "strResult", "StrResult");
             var intResult = ReadInt(root, "intResult", "IntResult");
-            var isPay = ReadInt(root, "isPay", "IsPay");
+            var isPay = ReadInt(root, "isPay", "IsPay", "pay", "Pay");
             var fichesId = ReadInt(root, "fichesId", "FichesId");
             var paymentDate = ReadPaymentDate(root, "registerDate", "RegisterDate", "forgeDate", "ForgeDate");
 
             if (isPay == 1)
                 return PaidStep(paymentDate, message);
 
-            if (IsRecordFoundInFicheLookup(root, intResult, fichesId, isPay))
+            if (HasFicheLookupRecord(root, intResult, fichesId, isPay, paymentDate))
+            {
+                if (!string.IsNullOrWhiteSpace(paymentDate) && isPay != 0)
+                    return PaidStep(paymentDate, message);
+
                 return NotPaidStep(message);
+            }
 
             if (IsRecordNotFound(message, intResult, fichesId, isPay))
                 return RecordNotFoundStep(message);
 
-            if (intResult.HasValue && intResult.Value != 0)
+            if (intResult == 0)
                 return RecordNotFoundStep(message);
 
-            return NotPaidStep(message);
+            return RecordNotFoundStep(
+                string.IsNullOrWhiteSpace(message) ? "فیش در استعلام قبوض یافت نشد" : message);
         }
         catch (JsonException)
         {
@@ -168,7 +174,7 @@ public static class BankInquiryResponseParser
             503 => $"{serviceName} موقتاً در دسترس نیست (HTTP 503).",
             504 => $"زمان پاسخ {serviceName} تمام شد (HTTP 504).",
             400 => $"درخواست {serviceName} نامعتبر است (HTTP 400). "
-                   + (serviceName == FicheLookupSourceLabel
+                   + (serviceName == FicheLookupSourceLabel || serviceName == OnlineBankSourceLabel
                        ? "فرمت JSON یا فیلدهای userName/password/billId/payId را در بدنه اصلی (بدون request) بررسی کنید."
                        : "فرمت JSON یا فیلدهای userName/password/billId/payId/bankCode را بررسی کنید."),
             401 or 403 => $"احراز هویت {serviceName} رد شد — UserName/Password را بررسی کنید.",
@@ -227,6 +233,28 @@ public static class BankInquiryResponseParser
             return data;
 
         return root;
+    }
+
+    private static bool HasFicheLookupRecord(
+        JsonElement root,
+        int? intResult,
+        int? fichesId,
+        int? isPay,
+        string? paymentDate)
+    {
+        if (fichesId is > 0)
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(paymentDate))
+            return true;
+
+        if (ReadInt(root, "payAmount", "PayAmount") is > 0)
+            return true;
+
+        if (isPay == 0 && intResult == 0)
+            return true;
+
+        return IsRecordFoundInFicheLookup(root, intResult, fichesId, isPay);
     }
 
     private static bool IsRecordFoundInFicheLookup(
