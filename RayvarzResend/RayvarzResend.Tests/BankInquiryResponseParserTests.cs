@@ -121,6 +121,27 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
+    public void Real_epay_fiche_lookup_not_found_response_intResult_2()
+    {
+        var raw = """{"intResult":2,"strResult":"عدم وجود اطلاعات بر اساس پارامترهای ورودی","isPay":0,"fichesId":0,"subAvarezId":0,"registerDate":null,"payAmount":0,"nosaziCode":null,"forgeDate":null,"description":null,"fName":null,"lName":null,"idCode":null,"telNo":null,"taxAmount":0,"insertUserID":0,"insertDate":null,"numberCheck":null,"dateCheck":null,"finCheck":0,"zoneCode":null}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.RecordNotFound, step.Kind);
+        Assert.Equal("عدم وجود اطلاعات بر اساس پارامترهای ورودی", step.Message);
+    }
+
+    [Fact]
+    public void Real_epay_online_bank_shahr_outage_intResualt_6_is_service_error_not_unpaid()
+    {
+        var raw = """{"intResualt":6,"strResualt":"خطا در ارتباط با سرویس بانک شهر: The server did not provide a meaningful reply; this might be caused by a contract mismatch, a premature session shutdown or an internal server error.","billId":"9000152552362","payId":"4172333232581","payChannel":0,"payDate":"2026-09-07T12:40:31.4409992+03:30","pay":0,"refrenceId":"","pigiri":"","codeShobeh":"","pigiriEpay":38737551}""";
+        var step = BankInquiryResponseParser.ParseOnlineBankStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.ServiceError, step.Kind);
+        Assert.Contains("سرویس بانک شهر", step.Message);
+        Assert.Null(step.PaymentDate);
+    }
+
+    [Fact]
     public void Parse_fiche_lookup_no_data_message_is_record_not_found()
     {
         var raw = """{"intResult":1,"strResult":"عدم وجود اطلاعات بر اساس پارامترهای ورودی","isPay":0,"fichesId":0}""";
