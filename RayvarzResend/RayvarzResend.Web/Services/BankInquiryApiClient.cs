@@ -45,14 +45,12 @@ public sealed class BankInquiryApiClient
         if (!IsConfigured)
             return BankInquiryApiResult.Failed("پیکربندی سرویس استعلام بانک ناقص است (ServiceUrl / UserName / Password)");
 
-        var payload = new Dictionary<string, object>
-        {
-            ["userName"] = _options.UserName.Trim(),
-            ["password"] = _options.Password,
-            ["billId"] = billId,
-            ["payId"] = payId,
-            ["bankCode"] = _options.BankCode
-        };
+        var envelope = BankInquiryRequestBuilder.BuildEnvelope(
+            _options.UserName.Trim(),
+            _options.Password,
+            billId,
+            payId,
+            _options.BankCode);
 
         var urls = BuildServiceUrls();
         var maxAttempts = Math.Max(1, _options.RetryCount + 1);
@@ -65,7 +63,7 @@ public sealed class BankInquiryApiClient
             {
                 try
                 {
-                    var (statusCode, raw) = await PostJsonAsync(serviceUrl, payload, ct);
+                    var (statusCode, raw) = await PostJsonAsync(serviceUrl, envelope, ct);
                     _logger.LogInformation(
                         "Bank inquiry HTTP {Status} url={Url} attempt={Attempt}/{MaxAttempts} billId={BillId}",
                         statusCode, serviceUrl, attempt, maxAttempts, billId);
@@ -131,13 +129,13 @@ public sealed class BankInquiryApiClient
 
     private async Task<(int StatusCode, string Raw)> PostJsonAsync(
         string serviceUrl,
-        Dictionary<string, object> payload,
+        object envelope,
         CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient(HttpClientName);
         client.Timeout = TimeSpan.FromSeconds(Math.Max(10, _options.TimeoutSeconds));
 
-        var json = JsonSerializer.Serialize(payload, JsonOptions);
+        var json = JsonSerializer.Serialize(envelope, JsonOptions);
         using var request = new HttpRequestMessage(HttpMethod.Post, serviceUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.TryAddWithoutValidation("User-Agent", "RayvarzResend/FinancialAssistant");

@@ -37,7 +37,18 @@ public static class BankInquiryResponseParser
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
-            return ParseElement(doc.RootElement, rawJson);
+            var root = doc.RootElement;
+            if (TryGetPropertyIgnoreCase(root, "response", out var response)
+                && response.ValueKind == JsonValueKind.Object)
+                return ParseElement(response, rawJson);
+            if (TryGetPropertyIgnoreCase(root, "result", out var result)
+                && result.ValueKind == JsonValueKind.Object)
+                return ParseElement(result, rawJson);
+            if (TryGetPropertyIgnoreCase(root, "data", out var data)
+                && data.ValueKind == JsonValueKind.Object)
+                return ParseElement(data, rawJson);
+
+            return ParseElement(root, rawJson);
         }
         catch (JsonException)
         {
@@ -55,6 +66,7 @@ public static class BankInquiryResponseParser
                    + "UseSystemProxy=true را امتحان کنید؛ با IT دسترسی به epayws.mashhad.ir را بررسی کنید.",
             503 => "سرویس استعلام بانک موقتاً در دسترس نیست (HTTP 503).",
             504 => "زمان پاسخ سرویس استعلام بانک تمام شد (HTTP 504).",
+            400 => "درخواست استعلام بانک نامعتبر است (HTTP 400). فرمت JSON یا فیلدهای userName/password/billId/payId را بررسی کنید.",
             401 or 403 => "احراز هویت سرویس استعلام بانک رد شد — UserName/Password را بررسی کنید.",
             _ => $"خطای HTTP {httpStatusCode} از سرویس استعلام بانک"
         };
