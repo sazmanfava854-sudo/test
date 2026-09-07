@@ -14,11 +14,11 @@ public static class BankInquiryRequestBuilder
         {
             ["request"] = new Dictionary<string, object>
             {
-                ["userName"] = userName,
-                ["password"] = password,
-                ["billId"] = billId,
-                ["payId"] = payId,
-                ["bankCode"] = bankCode
+                ["UserName"] = userName,
+                ["Password"] = password,
+                ["BillId"] = billId,
+                ["PayId"] = payId,
+                ["BankCode"] = bankCode
             }
         };
 
