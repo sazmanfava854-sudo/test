@@ -27,6 +27,28 @@ public class BankInquiryRequestBuilderTests
     }
 
     [Fact]
+    public void Swagger_offline_request_matches_epay_FindEpayFichesByBillIdPayId()
+    {
+        var json = JsonSerializer.Serialize(BankInquiryRequestBuilder.BuildBillPayEnvelope(
+            "FinancialAssistant", "secret", "9000152552362", "4172333232581"));
+
+        Assert.Equal(
+            """{"userName":"FinancialAssistant","password":"secret","billId":"9000152552362","payId":"4172333232581"}""",
+            json);
+    }
+
+    [Fact]
+    public void Swagger_online_request_matches_epay_EstelamOnLineBank()
+    {
+        var json = BankInquiryRequestBuilder.SerializeEnvelope(
+            "FinancialAssistant", "secret", "9000152552362", "4172333232581", 18);
+
+        Assert.Equal(
+            """{"userName":"FinancialAssistant","password":"secret","billId":"9000152552362","payId":"4172333232581","bankCode":18}""",
+            json);
+    }
+
+    [Fact]
     public void BuildBillPayEnvelope_uses_flat_body_without_request_wrapper()
     {
         var envelope = BankInquiryRequestBuilder.BuildBillPayEnvelope(
