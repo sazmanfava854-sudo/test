@@ -2729,13 +2729,15 @@ function setupEventHandlers() {
       if (box) box.textContent = formatBankInquiryConfirmResult(data);
       if (data.dryRun) {
         showAppInfo('تغییر تاریخ پرداخت — تغییری روی سرور اعمال نشد (DryRun).');
-      } else if ((data.updated || 0) > 0) {
+      } else if (data.success && (data.updated || 0) > 0) {
         showAppSuccess(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
         clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
         if ($('bankInquiryNewPaymentDate')) $('bankInquiryNewPaymentDate').value = '';
         await fetchBankInquiryResults(bankInquirySearchState.page);
       } else {
-        showAppError(data.message || `به‌روزرسانی انجام نشد — خطا: ${data.failed || 0}`);
+        const firstFail = (data.results || []).find((r) => !r.success);
+        const detail = data.message || firstFail?.message || firstFail?.bankInquiryMessage || 'استعلام بانک یا به‌روزرسانی ناموفق بود';
+        showAppError(detail);
       }
     } catch (e) {
       if (box) box.textContent = e.message;
