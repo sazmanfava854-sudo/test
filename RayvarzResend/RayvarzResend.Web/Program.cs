@@ -988,6 +988,37 @@ app.MapPost("/api/bank-inquiry/confirm", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/bank-inquiry/test", async (
+    BankInquiryTestRequest? req,
+    BankInquiryApiClient bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null || string.IsNullOrWhiteSpace(req.BillId) || string.IsNullOrWhiteSpace(req.PaymentId))
+        return Results.BadRequest(new { error = "billId و paymentId الزامی است" });
+
+    try
+    {
+        var result = await bankInquiry.InquireAsync(req.BillId.Trim(), req.PaymentId.Trim(), ct);
+        return Results.Ok(new
+        {
+            configured = bankInquiry.IsConfigured,
+            isPaid = result.IsPaid,
+            serviceError = result.ServiceError,
+            message = result.Message,
+            paymentDate = result.PaymentDate,
+            rawResponse = result.RawResponse
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
 static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);

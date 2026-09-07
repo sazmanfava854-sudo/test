@@ -21,6 +21,14 @@ public sealed class BankInquiryConfirmOptions
 
     public string? ProxyUrl { get; set; }
 
+    public string? FallbackServiceUrl { get; set; }
+
+    public int RetryCount { get; set; } = 2;
+
+    public int RetryDelayMs { get; set; } = 1000;
+
+    public int TimeoutSeconds { get; set; } = 60;
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ServiceUrl)
         && !string.IsNullOrWhiteSpace(UserName)

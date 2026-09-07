@@ -28,11 +28,11 @@ public static class BankInquiryResponseParser
 
     public static BankInquiryApiResult Parse(string? rawJson, int httpStatusCode)
     {
+        if (httpStatusCode < 200 || httpStatusCode >= 300)
+            return ParseHttpError(httpStatusCode, rawJson);
+
         if (string.IsNullOrWhiteSpace(rawJson))
             return BankInquiryApiResult.Failed("پاسخ خالی از سرویس استعلام بانک", rawJson);
-
-        if (httpStatusCode < 200 || httpStatusCode >= 300)
-            return BankInquiryApiResult.Failed($"خطای HTTP {httpStatusCode} از سرویس استعلام بانک", rawJson);
 
         try
         {
@@ -43,6 +43,59 @@ public static class BankInquiryResponseParser
         {
             return BankInquiryApiResult.Failed("پاسخ سرویس استعلام بانک JSON معتبر نیست", rawJson);
         }
+    }
+
+    public static BankInquiryApiResult ParseHttpError(int httpStatusCode, string? rawBody)
+    {
+        var detail = ExtractErrorDetail(rawBody);
+        var message = httpStatusCode switch
+        {
+            502 => "خطای HTTP 502 از درگاه سرویس استعلام بانک (Bad Gateway). "
+                   + "معمولاً یعنی درگاه epay به سرویس پشتی وصل نشده یا UserName/Password/IP مجاز نیست. "
+                   + "UseSystemProxy=true را امتحان کنید؛ با IT دسترسی به epayws.mashhad.ir را بررسی کنید.",
+            503 => "سرویس استعلام بانک موقتاً در دسترس نیست (HTTP 503).",
+            504 => "زمان پاسخ سرویس استعلام بانک تمام شد (HTTP 504).",
+            401 or 403 => "احراز هویت سرویس استعلام بانک رد شد — UserName/Password را بررسی کنید.",
+            _ => $"خطای HTTP {httpStatusCode} از سرویس استعلام بانک"
+        };
+
+        if (!string.IsNullOrWhiteSpace(detail))
+            message += $" — {detail}";
+
+        return BankInquiryApiResult.Failed(message, rawBody);
+    }
+
+    private static string ExtractErrorDetail(string? rawBody)
+    {
+        if (string.IsNullOrWhiteSpace(rawBody))
+            return "";
+
+        var trimmed = rawBody.Trim();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var message = ReadMessage(doc.RootElement);
+                if (!string.IsNullOrWhiteSpace(message))
+                    return message;
+            }
+            catch (JsonException)
+            {
+                // ignore HTML/non-JSON gateway pages
+            }
+        }
+
+        var plain = trimmed
+            .Replace("<br>", " ", StringComparison.OrdinalIgnoreCase)
+            .Replace("<br/>", " ", StringComparison.OrdinalIgnoreCase)
+            .Replace("<br />", " ", StringComparison.OrdinalIgnoreCase);
+        if (plain.Contains('<') && plain.Contains('>'))
+            plain = System.Text.RegularExpressions.Regex.Replace(plain, "<[^>]+>", " ");
+        plain = System.Text.RegularExpressions.Regex.Replace(plain, "\\s+", " ").Trim();
+        if (plain.Length > 180)
+            plain = plain[..180] + "...";
+        return plain;
     }
 
     internal static BankInquiryApiResult ParseElement(JsonElement root, string? rawJson = null)

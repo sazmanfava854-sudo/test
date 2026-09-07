@@ -71,6 +71,17 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
+    public void Parse_http_error_502_includes_gateway_hint()
+    {
+        var result = BankInquiryResponseParser.ParseHttpError(502, "<html>Bad Gateway</html>");
+
+        Assert.False(result.IsPaid);
+        Assert.True(result.ServiceError);
+        Assert.Contains("502", result.Message);
+        Assert.Contains("Bad Gateway", result.Message);
+    }
+
+    [Fact]
     public void BuildUserErrorMessage_ssl_includes_network_hint()
     {
         var message = BankInquiryApiClient.BuildUserErrorMessage(

@@ -631,6 +631,12 @@ public class BankInquiryConfirmRequest
     public string PerformedByUser { get; set; } = "";
 }
 
+public class BankInquiryTestRequest
+{
+    public string? BillId { get; set; }
+    public string? PaymentId { get; set; }
+}
+
 public class BankInquiryConfirmItemResult
 {
     public string FicheNo { get; set; } = "";
