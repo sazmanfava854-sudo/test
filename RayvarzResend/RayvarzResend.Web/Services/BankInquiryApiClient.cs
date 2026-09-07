@@ -140,8 +140,7 @@ public sealed class BankInquiryApiClient
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.TryAddWithoutValidation("User-Agent", "RayvarzResend/FinancialAssistant");
 
-        var content = new StringContent(json, Encoding.UTF8);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        var content = new StringContent(json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "application/json");
         request.Content = content;
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
