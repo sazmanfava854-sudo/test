@@ -90,4 +90,61 @@ public class BankInquiryResponseParserTests
         Assert.Contains("SSL", message);
         Assert.Contains("UseSystemProxy", message);
     }
+
+    [Fact]
+    public void Parse_fiche_lookup_isPay_1_means_paid()
+    {
+        var raw = """{"intResult":0,"strResult":"OK","isPay":1,"fichesId":12345,"registerDate":"1405/06/10"}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+        Assert.Equal("1405/06/10", step.PaymentDate);
+    }
+
+    [Fact]
+    public void Parse_fiche_lookup_isPay_0_with_fiche_means_not_paid()
+    {
+        var raw = """{"intResult":0,"strResult":"پرداخت نشده","isPay":0,"fichesId":12345}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.NotPaid, step.Kind);
+    }
+
+    [Fact]
+    public void Parse_fiche_lookup_not_found_goes_to_record_not_found()
+    {
+        var raw = """{"intResult":1,"strResult":"فیش یافت نشد","isPay":0,"fichesId":0}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.RecordNotFound, step.Kind);
+    }
+
+    [Fact]
+    public void Parse_online_bank_pay_1_means_paid()
+    {
+        var raw = """{"intResualt":0,"strResualt":"OK","pay":1,"payDate":"1405/06/11"}""";
+        var step = BankInquiryResponseParser.ParseOnlineBankStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+        Assert.Equal("1405/06/11", step.PaymentDate);
+    }
+
+    [Fact]
+    public void Parse_online_bank_pay_0_means_not_paid()
+    {
+        var raw = """{"intResualt":0,"strResualt":"پرداخت نشده","pay":0}""";
+        var step = BankInquiryResponseParser.ParseOnlineBankStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.NotPaid, step.Kind);
+    }
+
+    [Fact]
+    public void Parse_online_bank_http_503_is_service_error()
+    {
+        var step = BankInquiryResponseParser.ParseOnlineBankStep("""{"message":"down"}""", 503);
+
+        Assert.Equal(BankInquiryStepKind.ServiceError, step.Kind);
+        Assert.Contains("503", step.Message);
+        Assert.Contains(BankInquiryResponseParser.OnlineBankSourceLabel, step.Message);
+    }
 }

@@ -43,80 +43,162 @@ public sealed class BankInquiryApiClient
             return BankInquiryApiResult.Failed("شناسه قبض و شناسه پرداخت برای استعلام بانک الزامی است");
 
         if (!IsConfigured)
-            return BankInquiryApiResult.Failed("پیکربندی سرویس استعلام بانک ناقص است (ServiceUrl / UserName / Password)");
+            return BankInquiryApiResult.Failed(
+                "پیکربندی سرویس استعلام بانک ناقص است (FicheLookupServiceUrl / ServiceUrl / UserName / Password)");
 
-        var envelope = BankInquiryRequestBuilder.BuildEnvelope(
-            _options.UserName.Trim(),
-            _options.Password,
+        var userName = _options.UserName.Trim();
+        var password = _options.Password;
+
+        var lookupEnvelope = BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId);
+        var lookupStep = await CallAndParseAsync(
+            _options.FicheLookupServiceUrl.Trim(),
+            lookupEnvelope,
+            billId,
+            BankInquiryResponseParser.ParseFicheLookupStep,
+            BankInquiryResponseParser.FicheLookupSourceLabel,
+            ct);
+
+        switch (lookupStep.Kind)
+        {
+            case BankInquiryStepKind.Paid:
+            case BankInquiryStepKind.NotPaid:
+                return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
+            case BankInquiryStepKind.ServiceError:
+                return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
+            case BankInquiryStepKind.RecordNotFound:
+                break;
+            default:
+                return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
+        }
+
+        var onlineEnvelope = BankInquiryRequestBuilder.BuildEnvelope(
+            userName,
+            password,
             billId,
             payId,
             _options.BankCode);
 
-        var urls = BuildServiceUrls();
-        var maxAttempts = Math.Max(1, _options.RetryCount + 1);
-        BankInquiryApiResult? lastResult = null;
-
-        for (var urlIndex = 0; urlIndex < urls.Count; urlIndex++)
+        var onlineUrls = BuildOnlineServiceUrls();
+        BankInquiryParsedStep? onlineStep = null;
+        foreach (var serviceUrl in onlineUrls)
         {
-            var serviceUrl = urls[urlIndex];
-            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            onlineStep = await CallAndParseAsync(
+                serviceUrl,
+                onlineEnvelope,
+                billId,
+                BankInquiryResponseParser.ParseOnlineBankStep,
+                BankInquiryResponseParser.OnlineBankSourceLabel,
+                ct);
+
+            if (onlineStep.Kind != BankInquiryStepKind.ServiceError || serviceUrl == onlineUrls[^1])
+                break;
+        }
+
+        onlineStep ??= ServiceUnavailableStep(
+            BankInquiryResponseParser.OnlineBankSourceLabel,
+            "سرویس استعلام آنی بانک در دسترس نیست");
+
+        return onlineStep.Kind switch
+        {
+            BankInquiryStepKind.RecordNotFound => BankInquiryApiResult.NotPaid(
+                BankInquiryConfirmHelper.UnpaidFicheMessage,
+                BankInquiryResponseParser.OnlineBankSourceLabel),
+            BankInquiryStepKind.NotPaid => onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel),
+            BankInquiryStepKind.Paid => onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel),
+            _ => onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel)
+        };
+    }
+
+    private async Task<BankInquiryParsedStep> CallAndParseAsync(
+        string serviceUrl,
+        object envelope,
+        string billId,
+        Func<string?, int, BankInquiryParsedStep> parser,
+        string serviceLabel,
+        CancellationToken ct)
+    {
+        var maxAttempts = Math.Max(1, _options.RetryCount + 1);
+        BankInquiryParsedStep? lastStep = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
             {
-                try
-                {
-                    var (statusCode, raw) = await PostJsonAsync(serviceUrl, envelope, ct);
-                    _logger.LogInformation(
-                        "Bank inquiry HTTP {Status} url={Url} attempt={Attempt}/{MaxAttempts} billId={BillId}",
-                        statusCode, serviceUrl, attempt, maxAttempts, billId);
+                var (statusCode, raw) = await PostJsonAsync(serviceUrl, envelope, ct);
+                _logger.LogInformation(
+                    "Bank inquiry HTTP {Status} service={Service} url={Url} attempt={Attempt}/{MaxAttempts} billId={BillId}",
+                    statusCode, serviceLabel, serviceUrl, attempt, maxAttempts, billId);
 
-                    if (statusCode is 502 or 503 or 504)
+                if (statusCode is 502 or 503 or 504)
+                {
+                    _logger.LogWarning(
+                        "Bank inquiry gateway error {Status} service={Service} url={Url} attempt={Attempt} body={Body}",
+                        statusCode, serviceLabel, serviceUrl, attempt, Truncate(raw, 500));
+
+                    lastStep = BankInquiryResponseParser.ParseHttpError(statusCode, raw, serviceLabel) switch
                     {
-                        _logger.LogWarning(
-                            "Bank inquiry gateway error {Status} url={Url} attempt={Attempt} body={Body}",
-                            statusCode, serviceUrl, attempt, Truncate(raw, 500));
-
-                        lastResult = BankInquiryResponseParser.ParseHttpError(statusCode, raw);
-                        if (attempt < maxAttempts && _options.RetryCount > 0)
+                        var failed => new BankInquiryParsedStep
                         {
-                            await Task.Delay(_options.RetryDelayMs, ct);
-                            continue;
+                            Kind = BankInquiryStepKind.ServiceError,
+                            Message = failed.Message,
+                            RawResponse = raw
                         }
+                    };
 
-                        if (urlIndex < urls.Count - 1)
-                            break;
-
-                        return lastResult;
-                    }
-
-                    var parsed = BankInquiryResponseParser.Parse(raw, statusCode);
-                    parsed.RawResponse ??= raw;
-                    return parsed;
-                }
-                catch (TaskCanceledException)
-                {
-                    return BankInquiryApiResult.Failed("زمان انتظار سرویس استعلام بانک به پایان رسید");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Bank inquiry call failed for billId={BillId} url={Url}", billId, serviceUrl);
-                    lastResult = BankInquiryApiResult.Failed(BuildUserErrorMessage(ex));
                     if (attempt < maxAttempts && _options.RetryCount > 0)
                     {
                         await Task.Delay(_options.RetryDelayMs, ct);
                         continue;
                     }
 
-                    if (urlIndex < urls.Count - 1)
-                        break;
-
-                    return lastResult;
+                    return lastStep;
                 }
+
+                var parsed = parser(raw, statusCode);
+                if (parsed.RawResponse == null)
+                {
+                    return new BankInquiryParsedStep
+                    {
+                        Kind = parsed.Kind,
+                        PaymentDate = parsed.PaymentDate,
+                        Message = parsed.Message,
+                        RawResponse = raw
+                    };
+                }
+
+                return parsed;
+            }
+            catch (TaskCanceledException)
+            {
+                return ServiceUnavailableStep(serviceLabel, $"زمان انتظار {serviceLabel} به پایان رسید");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Bank inquiry call failed service={Service} billId={BillId} url={Url}",
+                    serviceLabel, billId, serviceUrl);
+
+                lastStep = ServiceUnavailableStep(serviceLabel, BuildUserErrorMessage(ex, serviceLabel));
+                if (attempt < maxAttempts && _options.RetryCount > 0)
+                {
+                    await Task.Delay(_options.RetryDelayMs, ct);
+                    continue;
+                }
+
+                return lastStep;
             }
         }
 
-        return lastResult ?? BankInquiryApiResult.Failed("خطا در ارتباط با سرویس استعلام بانک");
+        return lastStep ?? ServiceUnavailableStep(serviceLabel, $"خطا در ارتباط با {serviceLabel}");
     }
 
-    private List<string> BuildServiceUrls()
+    private static BankInquiryParsedStep ServiceUnavailableStep(string serviceLabel, string message) => new()
+    {
+        Kind = BankInquiryStepKind.ServiceError,
+        Message = message,
+        RawResponse = null
+    };
+
+    private List<string> BuildOnlineServiceUrls()
     {
         var urls = new List<string>();
         if (!string.IsNullOrWhiteSpace(_options.ServiceUrl))
@@ -148,20 +230,21 @@ public sealed class BankInquiryApiClient
         return ((int)response.StatusCode, raw);
     }
 
-    public static string BuildUserErrorMessage(Exception ex)
+    public static string BuildUserErrorMessage(Exception ex, string? serviceLabel = null)
     {
+        var serviceName = string.IsNullOrWhiteSpace(serviceLabel) ? "سرویس استعلام بانک" : serviceLabel.Trim();
         var msg = (ex.Message + " " + (ex.InnerException?.Message ?? "")).ToLowerInvariant();
         if (msg.Contains("ssl connection could not be established")
             || msg.Contains("forcibly closed")
             || msg.Contains("certificate")
             || msg.Contains("tls"))
         {
-            return "خطا در ارتباط SSL با سرویس استعلام بانک. برنامه را از همان سرور/شبکه سازمان اجرا کنید؛ VPN را فعال کنید؛ "
+            return $"خطا در ارتباط SSL با {serviceName}. برنامه را از همان سرور/شبکه سازمان اجرا کنید؛ VPN را فعال کنید؛ "
                    + "در appsettings مقدار BankInquiryConfirm:UseSystemProxy=true یا ProxyUrl را تنظیم کنید؛ "
                    + "در صورت نیاز BankInquiryConfirm:AllowInvalidSsl=true (فقط برای تست).";
         }
 
-        return $"خطا در ارتباط با سرویس استعلام بانک: {ex.Message}";
+        return $"خطا در ارتباط با {serviceName}: {ex.Message}";
     }
 
     private static string Truncate(string? text, int maxLength)

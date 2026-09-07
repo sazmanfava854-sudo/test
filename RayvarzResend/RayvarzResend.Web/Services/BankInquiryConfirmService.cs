@@ -205,6 +205,7 @@ public sealed class BankInquiryConfirmService
             item.BankInquiryMessage = inquiry.Message;
             item.BankPaymentDate = inquiry.PaymentDate;
             item.BankInquiryVerified = inquiry.IsPaid;
+            item.BankInquirySource = inquiry.InquirySource;
 
             if (!inquiry.IsPaid)
             {
@@ -231,7 +232,7 @@ public sealed class BankInquiryConfirmService
                 item.Found = affected > 0;
                 item.Success = affected > 0;
                 item.Message = affected > 0
-                    ? $"تایید استعلام بانک ثبت شد — {inquiry.Message}"
+                    ? $"تایید استعلام بانک ثبت شد — {inquiry.InquirySource}: {inquiry.Message}"
                     : "یافت نشد";
             }
             catch (Exception ex)

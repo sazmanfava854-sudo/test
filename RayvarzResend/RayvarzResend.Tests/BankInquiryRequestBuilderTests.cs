@@ -27,6 +27,24 @@ public class BankInquiryRequestBuilderTests
     }
 
     [Fact]
+    public void BuildBillPayEnvelope_omits_bank_code()
+    {
+        var envelope = BankInquiryRequestBuilder.BuildBillPayEnvelope(
+            "FinancialAssistant",
+            "secret",
+            "1000390578001",
+            "0253504010350");
+
+        var json = JsonSerializer.Serialize(envelope);
+        using var doc = JsonDocument.Parse(json);
+        var request = doc.RootElement.GetProperty("request");
+        Assert.Equal("FinancialAssistant", request.GetProperty("userName").GetString());
+        Assert.Equal("1000390578001", request.GetProperty("billId").GetString());
+        Assert.Equal("0253504010350", request.GetProperty("payId").GetString());
+        Assert.False(request.TryGetProperty("bankCode", out _));
+    }
+
+    [Fact]
     public void Parse_unwraps_response_object()
     {
         var raw = """{"response":{"success":true,"paymentDate":"1404/02/01"}}""";

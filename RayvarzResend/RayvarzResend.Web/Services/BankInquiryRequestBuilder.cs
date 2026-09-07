@@ -4,6 +4,22 @@ namespace RayvarzResend.Web.Services;
 
 public static class BankInquiryRequestBuilder
 {
+    public static object BuildBillPayEnvelope(
+        string userName,
+        string password,
+        string billId,
+        string payId) =>
+        new Dictionary<string, object>
+        {
+            ["request"] = new Dictionary<string, object>
+            {
+                ["userName"] = userName,
+                ["password"] = password,
+                ["billId"] = billId,
+                ["payId"] = payId
+            }
+        };
+
     public static object BuildEnvelope(
         string userName,
         string password,

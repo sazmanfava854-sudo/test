@@ -426,8 +426,11 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     {
         dryRun = config.GetValue<bool?>("BankInquiryConfirm:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
         serviceConfigured = !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:ServiceUrl"])
+            && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:FicheLookupServiceUrl"])
             && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:UserName"])
             && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:Password"]),
+        ficheLookupServiceUrl = config["BankInquiryConfirm:FicheLookupServiceUrl"],
+        onlineBankServiceUrl = config["BankInquiryConfirm:ServiceUrl"],
         bankCode = config.GetValue("BankInquiryConfirm:BankCode", 18),
         allowInvalidSsl = config.GetValue<bool?>("BankInquiryConfirm:AllowInvalidSsl")
             ?? config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
@@ -1010,6 +1013,7 @@ app.MapPost("/api/bank-inquiry/test", async (
             serviceError = result.ServiceError,
             message = result.Message,
             paymentDate = result.PaymentDate,
+            inquirySource = result.InquirySource,
             rawResponse = result.RawResponse
         });
     }

@@ -650,6 +650,7 @@ public class BankInquiryConfirmItemResult
     public string? Message { get; set; }
     public string? BankInquiryMessage { get; set; }
     public string? BankPaymentDate { get; set; }
+    public string? BankInquirySource { get; set; }
 }
 
 public class BankInquiryConfirmResult

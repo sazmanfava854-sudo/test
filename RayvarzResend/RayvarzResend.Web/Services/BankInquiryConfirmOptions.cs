@@ -9,6 +9,9 @@ public sealed class BankInquiryConfirmOptions
     public string ServiceUrl { get; set; } =
         "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank";
 
+    public string FicheLookupServiceUrl { get; set; } =
+        "https://epayws.mashhad.ir/api/Proxy/epay_FindEpayFichesByBillIdPayId";
+
     public string UserName { get; set; } = "FinancialAssistant";
 
     public string Password { get; set; } = "";
@@ -31,6 +34,7 @@ public sealed class BankInquiryConfirmOptions
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ServiceUrl)
+        && !string.IsNullOrWhiteSpace(FicheLookupServiceUrl)
         && !string.IsNullOrWhiteSpace(UserName)
         && !string.IsNullOrWhiteSpace(Password);
 }
