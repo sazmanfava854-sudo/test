@@ -7,7 +7,7 @@ public sealed class BankInquiryConfirmOptions
     public bool DryRun { get; set; }
 
     public string ServiceUrl { get; set; } =
-        "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank";
+        "https://epay.mashhad.ir/api/Proxy/epay_EstelamOnLineBank";
 
     public string UserName { get; set; } = "FinancialAssistant";
 

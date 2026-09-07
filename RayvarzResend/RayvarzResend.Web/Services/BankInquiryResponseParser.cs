@@ -63,7 +63,7 @@ public static class BankInquiryResponseParser
         {
             502 => "خطای HTTP 502 از درگاه سرویس استعلام بانک (Bad Gateway). "
                    + "معمولاً یعنی درگاه epay به سرویس پشتی وصل نشده یا UserName/Password/IP مجاز نیست. "
-                   + "UseSystemProxy=true را امتحان کنید؛ با IT دسترسی به epayws.mashhad.ir را بررسی کنید.",
+                   + "UseSystemProxy=true را امتحان کنید؛ با IT دسترسی به epay.mashhad.ir را بررسی کنید.",
             503 => "سرویس استعلام بانک موقتاً در دسترس نیست (HTTP 503).",
             504 => "زمان پاسخ سرویس استعلام بانک تمام شد (HTTP 504).",
             400 => "درخواست استعلام بانک نامعتبر است (HTTP 400). فرمت JSON یا فیلدهای userName/password/billId/payId را بررسی کنید.",
