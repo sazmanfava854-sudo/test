@@ -32,6 +32,29 @@ public sealed class BankInquiryConfirmOptions
 
     public int TimeoutSeconds { get; set; } = 60;
 
+    /// <summary>epayws فقط روی HTTPS پاسخ می‌دهد؛ http:// به 404 IIS می‌رسد. (loopback برای تست محلی مستثنی است)</summary>
+    public static string EnforceHttps(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return "";
+
+        var trimmed = url.Trim();
+        if (!trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return trimmed;
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) && uri.IsLoopback)
+            return trimmed;
+
+        return "https://" + trimmed["http://".Length..];
+    }
+
+    public string EffectiveServiceUrl => EnforceHttps(ServiceUrl);
+
+    public string EffectiveFicheLookupServiceUrl => EnforceHttps(FicheLookupServiceUrl);
+
+    public string? EffectiveFallbackServiceUrl =>
+        string.IsNullOrWhiteSpace(FallbackServiceUrl) ? null : EnforceHttps(FallbackServiceUrl);
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ServiceUrl)
         && !string.IsNullOrWhiteSpace(FicheLookupServiceUrl)

@@ -1246,6 +1246,83 @@ function formatBankInquiryConfirmResult(data) {
   ].join('\n');
 }
 
+function formatBankInquiryDiagnoseStep(step) {
+  if (!step) return ['  (فراخوانی نشد)'];
+  const lines = [
+    `  URL: ${step.url}`,
+    `  درخواست: ${step.requestBody}`,
+    `  HTTP: ${step.httpStatus ?? '-'} | زمان: ${step.elapsedMs} ms`,
+    `  نتیجه: ${step.kind} — ${step.message || ''}`
+  ];
+  if (step.paymentDate) lines.push(`  تاریخ پرداخت: ${step.paymentDate}`);
+  if (step.exception) lines.push(`  خطا: ${step.exception}`);
+  lines.push(`  پاسخ خام: ${step.rawResponse || '(خالی)'}`);
+  return lines;
+}
+
+function formatBankInquiryDiagnoseResult(data) {
+  return [
+    '=== تست مستقیم سرویس‌های استعلام epay (بدون تغییر در دیتابیس) ===',
+    `شناسه قبض: ${data.billId} | شناسه پرداخت: ${data.payId}`,
+    `کاربر: ${data.userName} | رمز: ${data.passwordConfigured ? 'تنظیم شده' : 'خالی!'} | پیکربندی: ${data.configured ? 'کامل' : 'ناقص'}`,
+    ...(data.error ? [`خطا: ${data.error}`] : []),
+    '',
+    '--- مرحله ۱: استعلام قبوض (epay_FindEpayFichesByBillIdPayId) ---',
+    ...formatBankInquiryDiagnoseStep(data.ficheLookup),
+    '',
+    '--- مرحله ۲: استعلام آنی بانک (epay_EstelamOnLineBank) ---',
+    ...formatBankInquiryDiagnoseStep(data.onlineBank)
+  ].join('\n');
+}
+
+function getBankInquiryDiagnoseIds() {
+  const billId = ($('bankInquiryBillId')?.value || '').trim();
+  const paymentId = ($('bankInquiryPaymentId')?.value || '').trim();
+  if (billId && paymentId) return { billId, paymentId };
+
+  const firstSelected = Array.from(selectedBankInquiryNos)
+    .map((no) => bankInquirySelectedItems.get(no))
+    .find((item) => item?.billId && item?.paymentId);
+  if (firstSelected) return { billId: firstSelected.billId, paymentId: firstSelected.paymentId };
+
+  const firstRow = (bankInquiryItems || []).find((item) => item?.billId && item?.paymentId);
+  if (firstRow) return { billId: firstRow.billId, paymentId: firstRow.paymentId };
+  return null;
+}
+
+function setupBankInquiryDiagnoseHandler() {
+  bindClick('btnBankInquiryDiagnose', async () => {
+    const ids = getBankInquiryDiagnoseIds();
+    if (!ids) return showAppWarning('شناسه قبض و شناسه پرداخت را وارد کنید یا یک فیش را از نتایج جستجو انتخاب کنید');
+
+    const btn = $('btnBankInquiryDiagnose');
+    const box = $('bankInquiryDiagnoseBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال فراخوانی سرویس‌های استعلام…';
+    }
+    try {
+      const res = await apiFetch('/api/bank-inquiry/diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ids)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) box.textContent = formatBankInquiryDiagnoseResult(data);
+      const paid = data.ficheLookup?.kind === 'Paid' || data.onlineBank?.kind === 'Paid';
+      if (paid) showAppSuccess('فیش در استعلام بانک پرداخت‌شده است');
+      else showAppInfo('نتیجه تست سرویس‌ها در کادر زیر نمایش داده شد');
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 /** همان منطق سرور IdentifierDetector — فقط برای نمایش راهنما */
 function detectIdentifierType(value) {
   const v = (value || '').trim();
@@ -2848,5 +2925,6 @@ function formatTahatorSend(d) {
 }
 
 setupEventHandlers();
+setupBankInquiryDiagnoseHandler();
 setupAuthAndAdminHandlers();
 init();

@@ -7,6 +7,18 @@ namespace RayvarzResend.Tests;
 public class BankInquiryConfirmHelperTests
 {
     [Fact]
+    public void EnforceHttps_upgrades_remote_http_but_keeps_loopback()
+    {
+        Assert.Equal(
+            "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank",
+            BankInquiryConfirmOptions.EnforceHttps("http://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank"));
+        Assert.Equal(
+            "http://127.0.0.1:9123/api/Proxy/epay_EstelamOnLineBank",
+            BankInquiryConfirmOptions.EnforceHttps("http://127.0.0.1:9123/api/Proxy/epay_EstelamOnLineBank"));
+        Assert.Equal("", BankInquiryConfirmOptions.EnforceHttps("  "));
+    }
+
+    [Fact]
     public void NormalizeBillOrPayId_strips_persian_digits_and_non_digits()
     {
         Assert.Equal("9000152552362", BankInquiryConfirmHelper.NormalizeBillOrPayId("۹۰۰۰۱۵۲۵۵۲۳۶۲"));

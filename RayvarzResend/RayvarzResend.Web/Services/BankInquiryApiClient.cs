@@ -31,6 +31,98 @@ public sealed class BankInquiryApiClient
 
     public bool IsConfigured => _options.IsConfigured;
 
+    /// <summary>هر سرویس را یک‌بار (بدون fallback) فراخوانی می‌کند تا درخواست/پاسخ خام برای رفع مشکل دیده شود.</summary>
+    public async Task<BankInquiryDiagnosticsResult> DiagnoseAsync(
+        string billId,
+        string payId,
+        CancellationToken ct = default)
+    {
+        var result = new BankInquiryDiagnosticsResult
+        {
+            BillId = BankInquiryConfirmHelper.NormalizeBillOrPayId(billId),
+            PayId = BankInquiryConfirmHelper.NormalizeBillOrPayId(payId),
+            Configured = IsConfigured,
+            UserName = _options.UserName.Trim(),
+            PasswordConfigured = !string.IsNullOrWhiteSpace(_options.Password)
+        };
+
+        if (string.IsNullOrWhiteSpace(result.BillId) || string.IsNullOrWhiteSpace(result.PayId))
+        {
+            result.Error = "شناسه قبض و شناسه پرداخت الزامی است";
+            return result;
+        }
+
+        if (!IsConfigured)
+        {
+            result.Error = "پیکربندی سرویس استعلام بانک ناقص است (UserName / Password / URL)";
+            return result;
+        }
+
+        var userName = _options.UserName.Trim();
+        var password = _options.Password;
+
+        result.FicheLookup = await DiagnoseOneAsync(
+            _options.EffectiveFicheLookupServiceUrl,
+            BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, result.BillId, result.PayId),
+            BankInquiryResponseParser.ParseFicheLookupStep,
+            BankInquiryResponseParser.FicheLookupSourceLabel,
+            ct);
+
+        result.OnlineBank = await DiagnoseOneAsync(
+            _options.EffectiveServiceUrl,
+            BankInquiryRequestBuilder.BuildEnvelope(userName, password, result.BillId, result.PayId, _options.BankCode),
+            BankInquiryResponseParser.ParseOnlineBankStep,
+            BankInquiryResponseParser.OnlineBankSourceLabel,
+            ct);
+
+        return result;
+    }
+
+    private async Task<BankInquiryDiagnosticsStep> DiagnoseOneAsync(
+        string serviceUrl,
+        object envelope,
+        Func<string?, int, BankInquiryParsedStep> parser,
+        string serviceLabel,
+        CancellationToken ct)
+    {
+        var step = new BankInquiryDiagnosticsStep
+        {
+            Service = serviceLabel,
+            Url = serviceUrl,
+            RequestBody = RedactPassword(JsonSerializer.Serialize(envelope, JsonOptions))
+        };
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var (statusCode, raw) = await PostJsonAsync(serviceUrl, envelope, ct);
+            step.HttpStatus = statusCode;
+            step.RawResponse = Truncate(raw, 4000);
+            var parsed = parser(raw, statusCode);
+            step.Kind = parsed.Kind.ToString();
+            step.Message = parsed.Message;
+            step.PaymentDate = parsed.PaymentDate;
+        }
+        catch (TaskCanceledException)
+        {
+            step.Kind = BankInquiryStepKind.ServiceError.ToString();
+            step.Message = $"زمان انتظار {serviceLabel} به پایان رسید";
+        }
+        catch (Exception ex)
+        {
+            step.Kind = BankInquiryStepKind.ServiceError.ToString();
+            step.Message = BuildUserErrorMessage(ex, serviceLabel);
+            step.Exception = ex.GetType().Name + ": " + ex.Message
+                + (ex.InnerException != null ? " | " + ex.InnerException.Message : "");
+        }
+        finally
+        {
+            step.ElapsedMs = sw.ElapsedMilliseconds;
+        }
+
+        return step;
+    }
+
     public async Task<BankInquiryApiResult> InquireAsync(
         string billId,
         string payId,
@@ -51,7 +143,7 @@ public sealed class BankInquiryApiClient
 
         var lookupStep = await CallWithJsonFormatFallbackAsync(
             usePascalCase => BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId, usePascalCase),
-            _options.FicheLookupServiceUrl.Trim(),
+            _options.EffectiveFicheLookupServiceUrl,
             billId,
             BankInquiryResponseParser.ParseFicheLookupStep,
             BankInquiryResponseParser.FicheLookupSourceLabel,
@@ -261,11 +353,13 @@ public sealed class BankInquiryApiClient
     private List<string> BuildOnlineServiceUrls()
     {
         var urls = new List<string>();
-        if (!string.IsNullOrWhiteSpace(_options.ServiceUrl))
-            urls.Add(_options.ServiceUrl.Trim());
-        if (!string.IsNullOrWhiteSpace(_options.FallbackServiceUrl)
-            && !urls.Contains(_options.FallbackServiceUrl.Trim(), StringComparer.OrdinalIgnoreCase))
-            urls.Add(_options.FallbackServiceUrl.Trim());
+        var primary = _options.EffectiveServiceUrl;
+        if (!string.IsNullOrWhiteSpace(primary))
+            urls.Add(primary);
+        var fallback = _options.EffectiveFallbackServiceUrl;
+        if (!string.IsNullOrWhiteSpace(fallback)
+            && !urls.Contains(fallback, StringComparer.OrdinalIgnoreCase))
+            urls.Add(fallback);
         return urls;
     }
 

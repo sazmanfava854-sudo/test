@@ -1023,6 +1023,28 @@ app.MapPost("/api/bank-inquiry/test", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/bank-inquiry/diagnose", async (
+    BankInquiryTestRequest? req,
+    BankInquiryApiClient bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null || string.IsNullOrWhiteSpace(req.BillId) || string.IsNullOrWhiteSpace(req.PaymentId))
+        return Results.BadRequest(new { error = "شناسه قبض و شناسه پرداخت الزامی است" });
+
+    try
+    {
+        return Results.Ok(await bankInquiry.DiagnoseAsync(req.BillId, req.PaymentId, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
 static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
