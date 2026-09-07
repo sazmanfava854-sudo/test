@@ -25,5 +25,12 @@
   },
   "Installment": {
     "DryRun": true
+  },
+  "BankInquiryConfirm": {
+    "DryRun": true,
+    "ServiceUrl": "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank",
+    "UserName": "FinancialAssistant",
+    "Password": "YOUR_EPAY_PASSWORD",
+    "BankCode": 18
   }
 }

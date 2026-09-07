@@ -16,6 +16,7 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
+builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -71,6 +72,7 @@ builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
+builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
@@ -416,6 +418,10 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     bankInquiryConfirm = new
     {
         dryRun = config.GetValue<bool?>("BankInquiryConfirm:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        serviceConfigured = !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:ServiceUrl"])
+            && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:UserName"])
+            && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:Password"]),
+        bankCode = config.GetValue("BankInquiryConfirm:BankCode", 18),
         connection = "ConnectionStrings:Sara",
         database = "Sara8M03",
         table = "dbo.Income_Fiche",

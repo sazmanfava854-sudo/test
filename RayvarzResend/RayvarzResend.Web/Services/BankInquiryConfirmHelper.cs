@@ -7,6 +7,7 @@ public static class BankInquiryConfirmHelper
 {
     public const int ConfirmedFicheStatus = 3;
     public const int ConfirmedIncomePaymentType = 4;
+    public const string UnpaidFicheMessage = "فیش پرداخت نشده";
 
     /// <summary>همان فرمول FicheRepository برای Income_Fiche → Base_NosaziCode.</summary>
     public const string IncomeNosaziCodeSql = """

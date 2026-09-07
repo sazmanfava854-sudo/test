@@ -1220,7 +1220,10 @@ function formatBankInquiryConfirmResult(data) {
     const workItem = cached?.nidWorkItem;
     const nosaziPart = nosazi ? ` | کد نوسازی: ${formatNosaziCode(nosazi)}` : '';
     const workItemPart = workItem ? ` | شماره فرآیند: ${toPersianDigits(workItem)}` : '';
-    return `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}${workItemPart}${nosaziPart}`;
+    const inquiryPart = r.bankInquiryMessage ? ` | استعلام: ${r.bankInquiryMessage}` : '';
+    const billPart = r.billId ? ` | قبض: ${toPersianDigits(r.billId)}` : '';
+    const payPart = r.paymentId ? ` | پرداخت: ${toPersianDigits(r.paymentId)}` : '';
+    return `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}${billPart}${payPart}${inquiryPart}${workItemPart}${nosaziPart}`;
   });
   return [
     '=== نتیجه UPDATE Income_Fiche (خدمات الکترونیک) ===',
@@ -1228,6 +1231,7 @@ function formatBankInquiryConfirmResult(data) {
     data.dryRun
       ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
       : `به‌روز: ${data.updated || 0} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
+    `استعلام بانک: ${config?.bankInquiryConfirm?.serviceConfigured ? 'پیکربندی شده' : 'نیاز به UserName/Password'}`,
     `PaymentDate جدید: ${data.paymentDate || '-'}`,
     `UserConfirmDate: ${data.userConfirmDate || '-'}`,
     `UsernameUserConfirm: ${data.usernameUserConfirm || '-'}`,

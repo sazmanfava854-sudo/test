@@ -8,12 +8,17 @@ public sealed class BankInquiryConfirmService
 {
     private readonly IConfiguration _config;
     private readonly FicheRepository _repo;
+    private readonly BankInquiryApiClient _bankInquiryApi;
     private readonly string _saraCs;
 
-    public BankInquiryConfirmService(IConfiguration config, FicheRepository repo)
+    public BankInquiryConfirmService(
+        IConfiguration config,
+        FicheRepository repo,
+        BankInquiryApiClient bankInquiryApi)
     {
         _config = config;
         _repo = repo;
+        _bankInquiryApi = bankInquiryApi;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara not set");
     }
@@ -166,7 +171,7 @@ public sealed class BankInquiryConfirmService
             {
                 var item = await BuildConfirmItemPreviewAsync(ficheNo, user, ct);
                 if (item.Success && item.WouldUpdate > 0)
-                    item.Message = "DryRun — UPDATE نمی‌شود (BankInquiryConfirm:DryRun=true)";
+                    item.Message = "DryRun — استعلام بانک واقعی و UPDATE انجام نمی‌شود (BankInquiryConfirm:DryRun=true)";
                 AppendConfirmItemResult(result, item);
             }
 
@@ -195,6 +200,21 @@ public sealed class BankInquiryConfirmService
                 continue;
             }
 
+            var inquiry = await _bankInquiryApi.InquireAsync(item.BillId, item.PaymentId, ct);
+            item.BankInquiryMessage = inquiry.Message;
+            item.BankPaymentDate = inquiry.PaymentDate;
+            item.BankInquiryVerified = inquiry.IsPaid;
+
+            if (!inquiry.IsPaid)
+            {
+                item.Success = false;
+                item.Message = inquiry.ServiceError
+                    ? inquiry.Message
+                    : BankInquiryConfirmHelper.UnpaidFicheMessage;
+                AppendConfirmItemResult(result, item);
+                continue;
+            }
+
             try
             {
                 await using var cmd = new SqlCommand(sql, conn);
@@ -209,7 +229,9 @@ public sealed class BankInquiryConfirmService
                 item.RowsAffected = affected;
                 item.Found = affected > 0;
                 item.Success = affected > 0;
-                item.Message = affected > 0 ? "تایید استعلام بانک ثبت شد" : "یافت نشد";
+                item.Message = affected > 0
+                    ? $"تایید استعلام بانک ثبت شد — {inquiry.Message}"
+                    : "یافت نشد";
             }
             catch (Exception ex)
             {
@@ -245,6 +267,19 @@ public sealed class BankInquiryConfirmService
             item.Found = true;
             item.Success = false;
             item.Message = districtDenied;
+            return item;
+        }
+
+        var billId = (fiche.BillIdRaw ?? fiche.BillId ?? "").Trim();
+        var paymentId = (fiche.PaymentIdRaw ?? fiche.PaymentId ?? "").Trim();
+        item.BillId = billId;
+        item.PaymentId = paymentId;
+
+        if (string.IsNullOrWhiteSpace(billId) || string.IsNullOrWhiteSpace(paymentId))
+        {
+            item.Found = true;
+            item.Success = false;
+            item.Message = "شناسه قبض یا شناسه پرداخت در فیش موجود نیست";
             return item;
         }
 

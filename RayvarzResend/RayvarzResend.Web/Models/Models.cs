@@ -634,11 +634,16 @@ public class BankInquiryConfirmRequest
 public class BankInquiryConfirmItemResult
 {
     public string FicheNo { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
     public bool Success { get; set; }
     public bool Found { get; set; }
+    public bool BankInquiryVerified { get; set; }
     public int RowsAffected { get; set; }
     public int WouldUpdate { get; set; }
     public string? Message { get; set; }
+    public string? BankInquiryMessage { get; set; }
+    public string? BankPaymentDate { get; set; }
 }
 
 public class BankInquiryConfirmResult
