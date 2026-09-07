@@ -27,21 +27,23 @@ public class BankInquiryRequestBuilderTests
     }
 
     [Fact]
-    public void BuildBillPayEnvelope_omits_bank_code()
+    public void BuildBillPayEnvelope_uses_flat_body_without_request_wrapper()
     {
         var envelope = BankInquiryRequestBuilder.BuildBillPayEnvelope(
             "FinancialAssistant",
             "secret",
-            "1000390578001",
-            "0253504010350");
+            "9000152552362",
+            "4172333232581");
 
         var json = JsonSerializer.Serialize(envelope);
         using var doc = JsonDocument.Parse(json);
-        var request = doc.RootElement.GetProperty("request");
-        Assert.Equal("FinancialAssistant", request.GetProperty("userName").GetString());
-        Assert.Equal("1000390578001", request.GetProperty("billId").GetString());
-        Assert.Equal("0253504010350", request.GetProperty("payId").GetString());
-        Assert.False(request.TryGetProperty("bankCode", out _));
+        var root = doc.RootElement;
+        Assert.False(root.TryGetProperty("request", out _));
+        Assert.Equal("FinancialAssistant", root.GetProperty("userName").GetString());
+        Assert.Equal("secret", root.GetProperty("password").GetString());
+        Assert.Equal("9000152552362", root.GetProperty("billId").GetString());
+        Assert.Equal("4172333232581", root.GetProperty("payId").GetString());
+        Assert.False(root.TryGetProperty("bankCode", out _));
     }
 
     [Fact]

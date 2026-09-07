@@ -4,6 +4,9 @@ namespace RayvarzResend.Web.Services;
 
 public static class BankInquiryRequestBuilder
 {
+    /// <summary>
+    /// epay_FindEpayFichesByBillIdPayId — بدنه تخت (بدون request)، فقط userName/password/billId/payId.
+    /// </summary>
     public static object BuildBillPayEnvelope(
         string userName,
         string password,
@@ -11,15 +14,15 @@ public static class BankInquiryRequestBuilder
         string payId) =>
         new Dictionary<string, object>
         {
-            ["request"] = new Dictionary<string, object>
-            {
-                ["userName"] = userName,
-                ["password"] = password,
-                ["billId"] = billId,
-                ["payId"] = payId
-            }
+            ["userName"] = userName,
+            ["password"] = password,
+            ["billId"] = billId,
+            ["payId"] = payId
         };
 
+    /// <summary>
+    /// epay_EstelamOnLineBank — داخل request + bankCode.
+    /// </summary>
     public static object BuildEnvelope(
         string userName,
         string password,

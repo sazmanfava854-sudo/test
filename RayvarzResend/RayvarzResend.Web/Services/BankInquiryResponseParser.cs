@@ -167,7 +167,10 @@ public static class BankInquiryResponseParser
                    + "UseSystemProxy=true را امتحان کنید؛ با IT دسترسی به epayws.mashhad.ir را بررسی کنید.",
             503 => $"{serviceName} موقتاً در دسترس نیست (HTTP 503).",
             504 => $"زمان پاسخ {serviceName} تمام شد (HTTP 504).",
-            400 => $"درخواست {serviceName} نامعتبر است (HTTP 400). فرمت JSON یا فیلدهای userName/password/billId/payId را بررسی کنید.",
+            400 => $"درخواست {serviceName} نامعتبر است (HTTP 400). "
+                   + (serviceName == FicheLookupSourceLabel
+                       ? "فرمت JSON یا فیلدهای userName/password/billId/payId را در بدنه اصلی (بدون request) بررسی کنید."
+                       : "فرمت JSON یا فیلدهای userName/password/billId/payId/bankCode را بررسی کنید."),
             401 or 403 => $"احراز هویت {serviceName} رد شد — UserName/Password را بررسی کنید.",
             _ => $"خطای HTTP {httpStatusCode} از {serviceName}"
         };
