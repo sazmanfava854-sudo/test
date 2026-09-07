@@ -69,4 +69,14 @@ public class BankInquiryResponseParserTests
     {
         Assert.Equal("فیش پرداخت نشده", BankInquiryConfirmHelper.UnpaidFicheMessage);
     }
+
+    [Fact]
+    public void BuildUserErrorMessage_ssl_includes_network_hint()
+    {
+        var message = BankInquiryApiClient.BuildUserErrorMessage(
+            new HttpRequestException("The SSL connection could not be established"));
+
+        Assert.Contains("SSL", message);
+        Assert.Contains("UseSystemProxy", message);
+    }
 }

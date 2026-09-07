@@ -31,6 +31,9 @@
     "ServiceUrl": "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank",
     "UserName": "FinancialAssistant",
     "Password": "YOUR_EPAY_PASSWORD",
-    "BankCode": 18
+    "BankCode": 18,
+    "AllowInvalidSsl": false,
+    "UseSystemProxy": true,
+    "ProxyUrl": ""
   }
 }

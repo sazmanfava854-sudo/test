@@ -17,6 +17,13 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services.AddHttpClient();
 builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
+builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(sp =>
+    {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BankInquiryConfirmOptions>>().Value;
+        return BankInquiryHttpHandlerFactory.Create(config, options);
+    });
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -422,6 +429,10 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
             && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:UserName"])
             && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:Password"]),
         bankCode = config.GetValue("BankInquiryConfirm:BankCode", 18),
+        allowInvalidSsl = config.GetValue<bool?>("BankInquiryConfirm:AllowInvalidSsl")
+            ?? config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
+        useSystemProxy = config.GetValue<bool?>("BankInquiryConfirm:UseSystemProxy")
+            ?? config.GetValue<bool>("Rayvarz:UseSystemProxy"),
         connection = "ConnectionStrings:Sara",
         database = "Sara8M03",
         table = "dbo.Income_Fiche",

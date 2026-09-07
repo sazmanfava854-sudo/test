@@ -175,6 +175,7 @@ public sealed class BankInquiryConfirmService
                 AppendConfirmItemResult(result, item);
             }
 
+            FinalizeConfirmResult(result);
             return result;
         }
 
@@ -242,7 +243,39 @@ public sealed class BankInquiryConfirmService
             AppendConfirmItemResult(result, item);
         }
 
+        FinalizeConfirmResult(result);
         return result;
+    }
+
+    private static void FinalizeConfirmResult(BankInquiryConfirmResult result)
+    {
+        if (result.DryRun)
+        {
+            result.Success = result.WouldUpdate > 0;
+            result.Message = result.WouldUpdate > 0
+                ? $"شبیه‌سازی — {result.WouldUpdate} فیش UPDATE می‌شد"
+                : "شبیه‌سازی — هیچ فیشی به‌روز نمی‌شد";
+            return;
+        }
+
+        result.Success = result.Updated > 0;
+        if (result.Updated > 0)
+        {
+            result.Message = $"{result.Updated} فیش به‌روز شد";
+            return;
+        }
+
+        if (result.Failed > 0)
+        {
+            var firstFailure = result.Results.FirstOrDefault(r => !r.Success && r.Found);
+            result.Message = firstFailure?.Message
+                ?? $"به‌روزرسانی انجام نشد — خطا: {result.Failed}";
+            return;
+        }
+
+        result.Message = result.NotFound > 0
+            ? "فیش انتخاب‌شده یافت نشد"
+            : "هیچ فیشی به‌روز نشد";
     }
 
     private async Task<BankInquiryConfirmItemResult> BuildConfirmItemPreviewAsync(

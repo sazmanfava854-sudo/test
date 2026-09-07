@@ -6,6 +6,8 @@ namespace RayvarzResend.Web.Services;
 
 public sealed class BankInquiryApiClient
 {
+    public const string HttpClientName = nameof(BankInquiryApiClient);
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
@@ -53,7 +55,7 @@ public sealed class BankInquiryApiClient
 
         try
         {
-            var client = _httpClientFactory.CreateClient(nameof(BankInquiryApiClient));
+            var client = _httpClientFactory.CreateClient(HttpClientName);
             client.Timeout = TimeSpan.FromSeconds(60);
 
             using var response = await client.PostAsJsonAsync(_options.ServiceUrl.Trim(), payload, JsonOptions, ct);
@@ -71,7 +73,23 @@ public sealed class BankInquiryApiClient
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Bank inquiry call failed for billId={BillId}", billId);
-            return BankInquiryApiResult.Failed($"خطا در ارتباط با سرویس استعلام بانک: {ex.Message}");
+            return BankInquiryApiResult.Failed(BuildUserErrorMessage(ex));
         }
+    }
+
+    public static string BuildUserErrorMessage(Exception ex)
+    {
+        var msg = (ex.Message + " " + (ex.InnerException?.Message ?? "")).ToLowerInvariant();
+        if (msg.Contains("ssl connection could not be established")
+            || msg.Contains("forcibly closed")
+            || msg.Contains("certificate")
+            || msg.Contains("tls"))
+        {
+            return "خطا در ارتباط SSL با سرویس استعلام بانک. برنامه را از همان سرور/شبکه سازمان اجرا کنید؛ VPN را فعال کنید؛ "
+                   + "در appsettings مقدار BankInquiryConfirm:UseSystemProxy=true یا ProxyUrl را تنظیم کنید؛ "
+                   + "در صورت نیاز BankInquiryConfirm:AllowInvalidSsl=true (فقط برای تست).";
+        }
+
+        return $"خطا در ارتباط با سرویس استعلام بانک: {ex.Message}";
     }
 }

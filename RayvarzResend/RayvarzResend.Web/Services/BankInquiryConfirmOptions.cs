@@ -15,6 +15,12 @@ public sealed class BankInquiryConfirmOptions
 
     public int BankCode { get; set; } = 18;
 
+    public bool AllowInvalidSsl { get; set; }
+
+    public bool UseSystemProxy { get; set; }
+
+    public string? ProxyUrl { get; set; }
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ServiceUrl)
         && !string.IsNullOrWhiteSpace(UserName)
