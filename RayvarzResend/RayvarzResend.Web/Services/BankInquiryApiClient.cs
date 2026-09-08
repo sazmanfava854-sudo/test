@@ -154,20 +154,23 @@ public sealed class BankInquiryApiClient
             case BankInquiryStepKind.Paid:
             case BankInquiryStepKind.NotPaid:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
-            case BankInquiryStepKind.ServiceError:
-                return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
             case BankInquiryStepKind.RecordNotFound:
+            case BankInquiryStepKind.ServiceError:
                 _logger.LogInformation(
-                    "Fiche lookup record not found for billId={BillId} payId={PayId}, trying online bank. message={Message}",
-                    billId, payId, lookupStep.Message);
+                    "Fiche lookup did not confirm payment for billId={BillId} payId={PayId} ({Kind}), trying online bank. message={Message}",
+                    billId, payId, lookupStep.Kind, lookupStep.Message);
                 break;
             default:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
         }
 
-        var lookupNote = string.IsNullOrWhiteSpace(lookupStep.Message)
-            ? "در استعلام قبوض ثبت نشد"
-            : $"استعلام قبوض: {lookupStep.Message}";
+        var lookupNote = lookupStep.Kind == BankInquiryStepKind.ServiceError
+            ? (string.IsNullOrWhiteSpace(lookupStep.Message)
+                ? "خطا در استعلام قبوض"
+                : $"استعلام قبوض: {lookupStep.Message}")
+            : (string.IsNullOrWhiteSpace(lookupStep.Message)
+                ? "در استعلام قبوض ثبت نشد"
+                : $"استعلام قبوض: {lookupStep.Message}");
 
         var onlineUrls = BuildOnlineServiceUrls();
         BankInquiryParsedStep? onlineStep = null;
@@ -197,11 +200,25 @@ public sealed class BankInquiryApiClient
         {
             BankInquiryStepKind.Paid => WithLookupNote(
                 onlineStep.ToApiResult(BankInquiryResponseParser.OnlineBankSourceLabel), lookupNote),
+            BankInquiryStepKind.NotPaid when BankInquiryResponseParser.LooksLikePaidMessage(onlineStep.Message) =>
+                WithLookupNote(
+                    BankInquiryApiResult.Paid(
+                        onlineStep.PaymentDate,
+                        onlineStep.Message,
+                        BankInquiryResponseParser.OnlineBankSourceLabel),
+                    lookupNote),
             BankInquiryStepKind.NotPaid when BankInquiryResponseParser.LooksLikeServiceFailure(onlineStep.Message) =>
                 BankInquiryApiResult.Failed(
                     $"{lookupNote} → {onlineStep.Message}",
                     onlineStep.RawResponse,
                     BankInquiryResponseParser.OnlineBankSourceLabel),
+            BankInquiryStepKind.ServiceError when BankInquiryResponseParser.LooksLikePaidMessage(onlineStep.Message) =>
+                WithLookupNote(
+                    BankInquiryApiResult.Paid(
+                        onlineStep.PaymentDate,
+                        onlineStep.Message,
+                        BankInquiryResponseParser.OnlineBankSourceLabel),
+                    lookupNote),
             BankInquiryStepKind.ServiceError => BankInquiryApiResult.Failed(
                 $"{lookupNote} → {onlineStep.Message}",
                 onlineStep.RawResponse,

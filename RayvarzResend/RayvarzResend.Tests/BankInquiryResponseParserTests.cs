@@ -208,6 +208,42 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
+    public void Parse_online_bank_paid_message_with_pay_zero_is_paid()
+    {
+        var raw = """{"intResualt":0,"strResualt":"قبض مورد نظر پرداخت شده است","pay":0,"payDate":"1405/04/23"}""";
+        var step = BankInquiryResponseParser.ParseOnlineBankStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+        Assert.Equal("1405/04/23", step.PaymentDate);
+    }
+
+    [Fact]
+    public void Parse_online_bank_paid_message_with_nonzero_intResult_is_paid()
+    {
+        var raw = """{"intResualt":1,"strResualt":"قبض مورد نظر پرداخت شده است","pay":0}""";
+        var step = BankInquiryResponseParser.ParseOnlineBankStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+    }
+
+    [Fact]
+    public void Parse_fiche_lookup_permission_denied_continues_to_online_bank()
+    {
+        var raw = """{"intResult":3,"strResult":"مجوز دسترسی به سرویس را ندارید","isPay":0,"fichesId":0}""";
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.RecordNotFound, step.Kind);
+        Assert.Contains("مجوز دسترسی", step.Message);
+    }
+
+    [Fact]
+    public void LooksLikePaidMessage_detects_persian_paid_text()
+    {
+        Assert.True(BankInquiryResponseParser.LooksLikePaidMessage("قبض مورد نظر پرداخت شده است"));
+        Assert.False(BankInquiryResponseParser.LooksLikePaidMessage("فیش پرداخت نشده"));
+    }
+
+    [Fact]
     public void Parse_online_bank_http_503_is_service_error()
     {
         var step = BankInquiryResponseParser.ParseOnlineBankStep("""{"message":"down"}""", 503);

@@ -29,7 +29,22 @@ public static class BankInquiryResponseParser
         "در دسترس نیست"
     ];
 
+    private static readonly string[] PermissionDeniedHints =
+    [
+        "مجوز دسترسی",
+        "دسترسی به سرویس",
+        "عدم دسترسی",
+        "access denied",
+        "unauthorized",
+        "forbidden"
+    ];
+
     public static bool LooksLikeServiceFailure(string? message) => ContainsAny(message, ServiceFailureHints);
+
+    public static bool LooksLikePaidMessage(string? message) => ContainsAny(message, PaidMessageHints);
+
+    public static bool LooksLikePermissionDenied(string? message) =>
+        ContainsAny(message, PermissionDeniedHints);
     private static readonly string[] PaidMessageHints =
     [
         "پرداخت شده",
@@ -81,6 +96,9 @@ public static class BankInquiryResponseParser
             if (isPay == 1)
                 return PaidStep(paymentDate, message);
 
+            if (LooksLikePaidMessage(message))
+                return PaidStep(paymentDate, message);
+
             if (intResult == 0 && !string.IsNullOrWhiteSpace(paymentDate))
                 return PaidStep(paymentDate, message);
 
@@ -101,6 +119,9 @@ public static class BankInquiryResponseParser
             }
 
             if (IsRecordNotFound(message, intResult, fichesId, isPay))
+                return RecordNotFoundStep(message);
+
+            if (LooksLikePermissionDenied(message))
                 return RecordNotFoundStep(message);
 
             return RecordNotFoundStep(
@@ -133,6 +154,9 @@ public static class BankInquiryResponseParser
             if (LooksLikeServiceFailure(message))
                 return ServiceErrorStep(message, rawJson);
 
+            if (LooksLikePaidMessage(message))
+                return PaidStep(paymentDate, message);
+
             if (pay == 1)
                 return PaidStep(paymentDate, message);
 
@@ -146,6 +170,9 @@ public static class BankInquiryResponseParser
             {
                 if (ContainsAny(message, RecordNotFoundHints))
                     return NotPaidStep(message);
+
+                if (LooksLikePaidMessage(message))
+                    return PaidStep(paymentDate, message);
 
                 return ServiceErrorStep(
                     string.IsNullOrWhiteSpace(message)
