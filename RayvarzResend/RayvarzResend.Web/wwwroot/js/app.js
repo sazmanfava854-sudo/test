@@ -1267,7 +1267,7 @@ function formatBankInquiryDiagnoseResult(data) {
     `کاربر: ${data.userName} | رمز: ${data.passwordConfigured ? 'تنظیم شده' : 'خالی!'} | پیکربندی: ${data.configured ? 'کامل' : 'ناقص'}`,
     ...(data.error ? [`خطا: ${data.error}`] : []),
     '',
-    '--- مرحله ۱: استعلام قبوض (epay_FindEpayFichesByBillIdPayId) ---',
+    '--- مرحله ۱: استعلام قبوض (epay_FindFichesByBillIDPayID) ---',
     ...formatBankInquiryDiagnoseStep(data.ficheLookup),
     '',
     '--- مرحله ۲: استعلام آنی بانک (epay_EstelamOnLineBank) ---',

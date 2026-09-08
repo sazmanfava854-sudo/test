@@ -26,6 +26,14 @@ public class BankInquiryConfirmHelperTests
     }
 
     [Fact]
+    public void NormalizeBillOrPayId_pads_to_13_digits_with_leading_zeros()
+    {
+        Assert.Equal("0000060510574", BankInquiryConfirmHelper.NormalizeBillOrPayId("60510574"));
+        Assert.Equal("0000060510574", BankInquiryConfirmHelper.NormalizeBillOrPayId("0000060510574"));
+        Assert.Equal("2059120578008", BankInquiryConfirmHelper.NormalizeBillOrPayId("2059120578008"));
+    }
+
+    [Fact]
     public void ValidateSearchRequest_requires_at_least_one_filter()
     {
         Assert.Equal(

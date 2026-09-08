@@ -91,13 +91,22 @@ public static class BankInquiryConfirmHelper
         return (string.Join(" AND ", clauses), parameters);
     }
 
+    /// <summary>شناسه قبض/پرداخت epay — فقط رقم، با صفر پیشرو تا ۱۳ رقم.</summary>
+    public const int EpayBillPayIdLength = 13;
+
     public static string NormalizeBillOrPayId(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return "";
 
         var digits = NumericHelper.NormalizeDigits(value.Trim());
-        return new string(digits.Where(char.IsDigit).ToArray());
+        var onlyDigits = new string(digits.Where(char.IsDigit).ToArray());
+        if (onlyDigits.Length == 0)
+            return "";
+
+        return onlyDigits.Length < EpayBillPayIdLength
+            ? onlyDigits.PadLeft(EpayBillPayIdLength, '0')
+            : onlyDigits;
     }
 
     public static string? ValidateConfirmRequest(BankInquiryConfirmRequest? req)

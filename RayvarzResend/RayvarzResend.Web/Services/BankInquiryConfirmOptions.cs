@@ -10,7 +10,7 @@ public sealed class BankInquiryConfirmOptions
         "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank";
 
     public string FicheLookupServiceUrl { get; set; } =
-        "https://epayws.mashhad.ir/api/Proxy/epay_FindEpayFichesByBillIdPayId";
+        "https://epayws.mashhad.ir/api/Proxy/epay_FindFichesByBillIDPayID";
 
     public string UserName { get; set; } = "FinancialAssistant";
 

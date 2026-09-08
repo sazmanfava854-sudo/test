@@ -51,7 +51,7 @@ public static class BankInquiryResponseParser
         "unpaid"
     ];
 
-    /// <summary>epay_FindEpayFichesByBillIdPayId — ثبت فیش با تأخیر ~۱ روز.</summary>
+    /// <summary>epay_FindFichesByBillIDPayID — ثبت فیش با تأخیر ~۱ روز.</summary>
     public static BankInquiryParsedStep ParseFicheLookupStep(string? rawJson, int httpStatusCode)
     {
         if (httpStatusCode < 200 || httpStatusCode >= 300)
@@ -63,14 +63,30 @@ public static class BankInquiryResponseParser
         try
         {
             using var doc = JsonDocument.Parse(rawJson);
-            var root = UnwrapResponseRoot(doc.RootElement);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() == 0)
+                return RecordNotFoundStep("فیش در استعلام قبوض یافت نشد");
+
+            var root = UnwrapFicheLookupRoot(doc.RootElement);
             var message = ReadMessage(root, "strResult", "StrResult");
             var intResult = ReadInt(root, "intResult", "IntResult");
             var isPay = ReadInt(root, "isPay", "IsPay", "pay", "Pay");
-            var fichesId = ReadInt(root, "fichesId", "FichesId");
-            var paymentDate = ReadPaymentDate(root, "registerDate", "RegisterDate", "forgeDate", "ForgeDate");
+            var fichesId = ReadInt(root, "fichesId", "FichesId", "epayRef", "EpayRef");
+            var paymentDate = ReadPaymentDate(
+                root,
+                "payDate", "PayDate",
+                "registerDate", "RegisterDate",
+                "forgeDate", "ForgeDate",
+                "insertDate", "InsertDate");
 
             if (isPay == 1)
+                return PaidStep(paymentDate, message);
+
+            if (intResult == 0 && !string.IsNullOrWhiteSpace(paymentDate))
+                return PaidStep(paymentDate, message);
+
+            if (intResult == 0
+                && ContainsAny(message, ["یافت شد", "found"])
+                && (ReadInt(root, "amount", "Amount") is > 0 || HasBillOrPayId(root)))
                 return PaidStep(paymentDate, message);
 
             if (HasFicheLookupRecord(root, intResult, fichesId, isPay, paymentDate))
@@ -252,6 +268,37 @@ public static class BankInquiryResponseParser
         return root;
     }
 
+    private static JsonElement UnwrapFicheLookupRoot(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            if (root.GetArrayLength() == 0)
+                return root;
+
+            return UnwrapResponseRoot(root[0]);
+        }
+
+        return UnwrapResponseRoot(root);
+    }
+
+    private static bool HasBillOrPayId(JsonElement root)
+    {
+        foreach (var name in new[]
+                 {
+                     "billId", "BillId", "billID", "BillID",
+                     "payId", "PayId", "payID", "PayID"
+                 })
+        {
+            if (!TryGetPropertyIgnoreCase(root, name, out var value))
+                continue;
+
+            if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool HasFicheLookupRecord(
         JsonElement root,
         int? intResult,
@@ -265,7 +312,13 @@ public static class BankInquiryResponseParser
         if (!string.IsNullOrWhiteSpace(paymentDate))
             return true;
 
-        if (ReadInt(root, "payAmount", "PayAmount") is > 0)
+        if (ReadInt(root, "payAmount", "PayAmount", "amount", "Amount") is > 0)
+            return true;
+
+        if (ReadInt(root, "epayRef", "EpayRef") is > 0)
+            return true;
+
+        if (HasBillOrPayId(root))
             return true;
 
         if (isPay == 0 && intResult == 0)
@@ -286,7 +339,12 @@ public static class BankInquiryResponseParser
         if (isPay == 0 && intResult == 0)
             return true;
 
-        foreach (var name in new[] { "billId", "BillId", "payId", "PayId", "payAmount", "PayAmount" })
+        foreach (var name in new[]
+                 {
+                     "billId", "BillId", "billID", "BillID",
+                     "payId", "PayId", "payID", "PayID",
+                     "payAmount", "PayAmount", "amount", "Amount"
+                 })
         {
             if (!TryGetPropertyIgnoreCase(root, name, out var value))
                 continue;

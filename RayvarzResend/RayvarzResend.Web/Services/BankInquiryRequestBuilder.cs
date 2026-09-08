@@ -5,7 +5,7 @@ namespace RayvarzResend.Web.Services;
 public static class BankInquiryRequestBuilder
 {
     /// <summary>
-    /// epay_FindEpayFichesByBillIdPayId — بدنه تخت (بدون request)، فقط userName/password/billId/payId.
+    /// epay_FindFichesByBillIDPayID — بدنه تخت (بدون request)، فقط userName/password/billId/payId.
     /// </summary>
     public static object BuildBillPayEnvelope(
         string userName,

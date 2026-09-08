@@ -27,7 +27,31 @@ public class BankInquiryRequestBuilderTests
     }
 
     [Fact]
-    public void Swagger_offline_request_matches_epay_FindEpayFichesByBillIdPayId()
+    public void Parse_fiche_lookup_epay_FindFichesByBillIDPayID_array_response_paid()
+    {
+        var raw = """
+            [{
+              "intResult": 0,
+              "strResult": "قبض مورد نظر یافت شد",
+              "billID": "2059120578008",
+              "payID": "0000060510574",
+              "payDate": "1405/06/15",
+              "insertDate": "1405/06/16",
+              "amount": 605000,
+              "refCode": "052809170335",
+              "branchCode": "0",
+              "epayRef": 1963118
+            }]
+            """;
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+        Assert.Equal("1405/06/15", step.PaymentDate);
+        Assert.Equal("قبض مورد نظر یافت شد", step.Message);
+    }
+
+    [Fact]
+    public void Swagger_offline_request_matches_epay_FindFichesByBillIDPayID()
     {
         var json = JsonSerializer.Serialize(BankInquiryRequestBuilder.BuildBillPayEnvelope(
             "FinancialAssistant", "secret", "9000152552362", "4172333232581"));
