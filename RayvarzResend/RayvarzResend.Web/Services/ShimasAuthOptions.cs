@@ -5,6 +5,8 @@ public sealed class ShimasAuthOptions
     public const string SectionName = "Auth:Shimas";
 
     public bool Enabled { get; set; }
+    /// <summary>آدرس عمومی سایت — برای callback سامزان/شیماس روی سرور پشت IIS یا IP:Port.</summary>
+    public string PublicBaseUrl { get; set; } = "";
     public string LoginUrl { get; set; } = "https://login.mashhad.ir/Authentication/Login.aspx";
     public string LKey { get; set; } = "";
     public string CallbackPath { get; set; } = "/auth/callback";

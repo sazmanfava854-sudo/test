@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ارسال مجدد به رایورز</title>
+  <title>دستیار مالی</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -23,7 +23,7 @@
       <div class="hero-top">
         <div class="hero-brand">
           <div>
-            <p class="brand-name">Rayvarz Resend</p>
+            <p class="brand-name">دستیار مالی</p>
           </div>
         </div>
         <div class="hero-user" id="heroUser" hidden>
@@ -490,8 +490,10 @@
         <h2>خدمات الکترونیک</h2>
       </div>
       <p class="field-hint form-intro">
-        ابتدا فیش را با یکی از فیلترهای زیر جستجو کنید. پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و ثبت کنید.
-        وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند؛ تاریخ تایید و کاربر تایید‌کننده خودکار پر می‌شود.
+        ابتدا فیش را با <strong>شماره فیش</strong> یا <strong>شناسه قبض و شناسه پرداخت</strong> جستجو کنید.
+        پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و ثبت کنید.
+        قبل از هر به‌روزرسانی، ابتدا فیش در سرویس «استعلام قبوض» بررسی می‌شود؛ اگر ثبت نشده باشد، «استعلام آنی بانک» برای پرداخت آنلاین امتحان می‌شود. در صورت عدم پرداخت، پیام «فیش پرداخت نشده» نمایش داده می‌شود. اگر سرویس قطع باشد، پیام خطای مناسب نشان داده می‌شود.
+        وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند.
       </p>
       <div class="bank-inquiry-search-grid unsent-form-grid">
         <label class="field">
@@ -510,7 +512,9 @@
       <p class="field-hint">حداقل یکی از فیلترها: <strong>شماره فیش</strong>، یا <strong>هر دو شناسه قبض و پرداخت</strong>.</p>
       <div class="actions">
         <button id="btnBankInquirySearch" class="btn primary" type="button">جستجو</button>
+        <button id="btnBankInquiryDiagnose" class="btn secondary" type="button" title="فراخوانی مستقیم هر دو سرویس epay و نمایش درخواست/پاسخ خام (بدون تغییر در دیتابیس)">تست سرویس‌های استعلام</button>
       </div>
+      <pre id="bankInquiryDiagnoseBox" class="code-block" hidden></pre>
       <div class="subsection" id="bankInquiryResultsSection" hidden>
         <div class="unsent-toolbar">
           <label class="check-all-label">
@@ -586,7 +590,7 @@
           <div class="user-groups-perms">
             <label class="user-group-perm-item">
               <input id="newGroupUnsent" type="checkbox" />
-              <span class="user-group-perm-text">فیش‌های جمعی</span>
+              <span class="user-group-perm-text">ارسال به رایورز</span>
             </label>
             <label class="user-group-perm-item">
               <input id="newGroupInstallment" type="checkbox" />
@@ -622,7 +626,7 @@
               <thead>
                 <tr>
                   <th>نام گروه</th>
-                  <th>فیش جمعی</th>
+                  <th>ارسال به رایورز</th>
                   <th>چک خزانه</th>
                   <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
@@ -708,16 +712,18 @@
           <p id="userEditTitle" class="field-hint"></p>
           <div class="form-grid unsent-form-grid">
             <label class="field check-field">
-              <input id="editUserIsAdmin" type="checkbox" />
-              <span>دسترسی ادمین</span>
-            </label>
-            <label class="field check-field">
               <input id="editUserIsActive" type="checkbox" />
               <span>فعال</span>
             </label>
+            <label class="field check-field">
+              <input id="editUserIsAdmin" type="checkbox" />
+              <span>دسترسی ادمین</span>
+            </label>
             <label class="field field-required">
-              <span class="field-label">گروه‌های کاربری</span>
-              <div id="editUserGroups" class="checkbox-list"></div>
+              <span class="field-label">گروه کاربری</span>
+              <select id="editUserGroupSelect">
+                <option value="">— انتخاب گروه —</option>
+              </select>
             </label>
             <label class="field">
               <span class="field-label">رمز عبور جدید</span>
@@ -736,6 +742,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=62"></script>
+  <script src="js/app.js?v=70"></script>
 </body>
 </html>

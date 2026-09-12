@@ -7,6 +7,33 @@ namespace RayvarzResend.Tests;
 public class BankInquiryConfirmHelperTests
 {
     [Fact]
+    public void EnforceHttps_upgrades_remote_http_but_keeps_loopback()
+    {
+        Assert.Equal(
+            "https://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank",
+            BankInquiryConfirmOptions.EnforceHttps("http://epayws.mashhad.ir/api/Proxy/epay_EstelamOnLineBank"));
+        Assert.Equal(
+            "http://127.0.0.1:9123/api/Proxy/epay_EstelamOnLineBank",
+            BankInquiryConfirmOptions.EnforceHttps("http://127.0.0.1:9123/api/Proxy/epay_EstelamOnLineBank"));
+        Assert.Equal("", BankInquiryConfirmOptions.EnforceHttps("  "));
+    }
+
+    [Fact]
+    public void NormalizeBillOrPayId_strips_persian_digits_and_non_digits()
+    {
+        Assert.Equal("9000152552362", BankInquiryConfirmHelper.NormalizeBillOrPayId("۹۰۰۰۱۵۲۵۵۲۳۶۲"));
+        Assert.Equal("4172333232581", BankInquiryConfirmHelper.NormalizeBillOrPayId(" 4172333232581 "));
+    }
+
+    [Fact]
+    public void NormalizeBillOrPayId_pads_to_13_digits_with_leading_zeros()
+    {
+        Assert.Equal("0000060510574", BankInquiryConfirmHelper.NormalizeBillOrPayId("60510574"));
+        Assert.Equal("0000060510574", BankInquiryConfirmHelper.NormalizeBillOrPayId("0000060510574"));
+        Assert.Equal("2059120578008", BankInquiryConfirmHelper.NormalizeBillOrPayId("2059120578008"));
+    }
+
+    [Fact]
     public void ValidateSearchRequest_requires_at_least_one_filter()
     {
         Assert.Equal(
@@ -43,6 +70,21 @@ public class BankInquiryConfirmHelperTests
 
         Assert.Contains("FicheNo", where);
         Assert.DoesNotContain("PaymentDate", where);
+        Assert.Single(parameters);
+    }
+
+    [Fact]
+    public void BuildSearchWhere_fiche_no_takes_priority_over_bill_payment()
+    {
+        var (where, parameters) = BankInquiryConfirmHelper.BuildSearchWhere(new BankInquirySearchRequest
+        {
+            FicheNo = "101104/9881711",
+            BillId = "1234567890",
+            PaymentId = "9876543210"
+        });
+
+        Assert.Contains("FicheNo", where);
+        Assert.DoesNotContain("BillID", where);
         Assert.Single(parameters);
     }
 

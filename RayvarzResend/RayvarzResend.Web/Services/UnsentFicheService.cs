@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using RayvarzResend.Web.Models;
 
 namespace RayvarzResend.Web.Services;
@@ -26,10 +27,16 @@ public class UnsentFicheService
             ? _repo.SearchUnsentDutyAsync(req, ct)
             : _repo.SearchUnsentIncomeAsync(req, ct);
 
-    public Task<UnsentBatchPlanResult> PlanBatchAsync(UnsentBatchSendRequest req, CancellationToken ct = default) =>
-        BuildPlanAsync(req, ct);
+    public Task<UnsentBatchPlanResult> PlanBatchAsync(
+        UnsentBatchSendRequest req,
+        ClaimsPrincipal user,
+        CancellationToken ct = default) =>
+        BuildPlanAsync(req, user, ct);
 
-    public async Task<UnsentBatchSendResult> SendBatchAsync(UnsentBatchSendRequest req, CancellationToken ct = default)
+    public async Task<UnsentBatchSendResult> SendBatchAsync(
+        UnsentBatchSendRequest req,
+        ClaimsPrincipal user,
+        CancellationToken ct = default)
     {
         var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
         var delayMs = _config.GetValue("Rayvarz:SendDelayMs", 2000);
@@ -60,7 +67,7 @@ public class UnsentFicheService
 
             try
             {
-                var outcome = await ProcessOneAsync(req, ficheNo, processedTahatorPairs, ct);
+                var outcome = await ProcessOneAsync(req, ficheNo, processedTahatorPairs, user, ct);
                 item.SendPath = outcome.SendPath;
                 item.Success = outcome.Success;
                 item.Skipped = outcome.Skipped;
@@ -86,7 +93,10 @@ public class UnsentFicheService
         return result;
     }
 
-    private async Task<UnsentBatchPlanResult> BuildPlanAsync(UnsentBatchSendRequest req, CancellationToken ct)
+    private async Task<UnsentBatchPlanResult> BuildPlanAsync(
+        UnsentBatchSendRequest req,
+        ClaimsPrincipal user,
+        CancellationToken ct)
     {
         var plan = new UnsentBatchPlanResult { Total = req.FicheNos?.Count ?? 0 };
         if (req.FicheNos == null || req.FicheNos.Count == 0)
@@ -100,7 +110,7 @@ public class UnsentFicheService
             if (string.IsNullOrWhiteSpace(ficheNo))
                 continue;
 
-            plan.Items.Add(await PlanOneAsync(req, ficheNo, processedTahatorPairs, ct));
+            plan.Items.Add(await PlanOneAsync(req, ficheNo, processedTahatorPairs, user, ct));
         }
 
         return plan;
@@ -110,6 +120,7 @@ public class UnsentFicheService
         UnsentBatchSendRequest req,
         string ficheNo,
         HashSet<Guid> processedTahatorPairs,
+        ClaimsPrincipal user,
         CancellationToken ct)
     {
         var item = new UnsentBatchPlanItem { FicheNo = ficheNo };
@@ -127,6 +138,14 @@ public class UnsentFicheService
         {
             item.SendPath = "Skip";
             item.BlockReason = "فیش یافت نشد";
+            return item;
+        }
+
+        var districtDenied = DistrictAccessService.GetAccessDeniedMessage(user, fiche);
+        if (districtDenied != null)
+        {
+            item.SendPath = "Skip";
+            item.BlockReason = districtDenied;
             return item;
         }
 
@@ -208,9 +227,10 @@ public class UnsentFicheService
         UnsentBatchSendRequest req,
         string ficheNo,
         HashSet<Guid> processedTahatorPairs,
+        ClaimsPrincipal user,
         CancellationToken ct)
     {
-        var plan = await PlanOneAsync(req, ficheNo, processedTahatorPairs, ct);
+        var plan = await PlanOneAsync(req, ficheNo, processedTahatorPairs, user, ct);
         if (!plan.CanSend)
         {
             return new ProcessOutcome(

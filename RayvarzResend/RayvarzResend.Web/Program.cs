@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web;
@@ -16,6 +17,14 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 builder.Services.AddHttpClient();
 builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
+builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
+builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(sp =>
+    {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BankInquiryConfirmOptions>>().Value;
+        return BankInquiryHttpHandlerFactory.Create(config, options);
+    });
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -71,9 +80,15 @@ builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
+builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+});
 
 app.Services.GetRequiredService<RayvarzPayloadBuilder>();
 
@@ -129,8 +144,8 @@ app.UseStaticFiles();
 var authenticated = AuthPolicies.Authenticated;
 var adminOnly = AuthPolicies.AdminOnly;
 
-app.MapGet("/api/auth/mode", (ShimasAuthService shimas) =>
-    Results.Ok(shimas.GetStatus())).AllowAnonymous();
+app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
+    Results.Ok(shimas.GetStatus(http.Request))).AllowAnonymous();
 
 app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
 {
@@ -155,10 +170,8 @@ app.MapGet("/auth/callback", async (
     AppAuthService auth,
     CancellationToken ct) =>
 {
-    var username = http.Request.Query["username"].ToString();
-    var refreshToken = http.Request.Query["refresh_token"].ToString();
-
-    var validation = await shimas.ValidateAsync(username, refreshToken, ct);
+    var callback = shimas.ParseCallbackQuery(http.Request.Query);
+    var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
     if (!validation.Success)
     {
         var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
@@ -416,6 +429,17 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     bankInquiryConfirm = new
     {
         dryRun = config.GetValue<bool?>("BankInquiryConfirm:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        serviceConfigured = !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:ServiceUrl"])
+            && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:FicheLookupServiceUrl"])
+            && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:UserName"])
+            && !string.IsNullOrWhiteSpace(config["BankInquiryConfirm:Password"]),
+        ficheLookupServiceUrl = config["BankInquiryConfirm:FicheLookupServiceUrl"],
+        onlineBankServiceUrl = config["BankInquiryConfirm:ServiceUrl"],
+        bankCode = config.GetValue("BankInquiryConfirm:BankCode", 18),
+        allowInvalidSsl = config.GetValue<bool?>("BankInquiryConfirm:AllowInvalidSsl")
+            ?? config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
+        useSystemProxy = config.GetValue<bool?>("BankInquiryConfirm:UseSystemProxy")
+            ?? config.GetValue<bool>("Rayvarz:UseSystemProxy"),
         connection = "ConnectionStrings:Sara",
         database = "Sara8M03",
         table = "dbo.Income_Fiche",
@@ -745,7 +769,7 @@ app.MapPost("/api/unsent/plan-batch", async (
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
-        return Results.Ok(await unsent.PlanBatchAsync(req, ct));
+        return Results.Ok(await unsent.PlanBatchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
@@ -766,7 +790,7 @@ app.MapPost("/api/unsent/send-batch", async (
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
-        return Results.Ok(await unsent.SendBatchAsync(req, ct));
+        return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
@@ -927,7 +951,7 @@ app.MapPost("/api/bank-inquiry/search", async (
         return Results.BadRequest(new { error = "درخواست خالی است" });
     try
     {
-        var result = await bankInquiry.SearchAsync(req, ct);
+        var result = await bankInquiry.SearchAsync(req, http.User, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error });
         return Results.Ok(result);
@@ -956,7 +980,7 @@ app.MapPost("/api/bank-inquiry/confirm", async (
     req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
     try
     {
-        var result = await bankInquiry.ConfirmAsync(req, ct);
+        var result = await bankInquiry.ConfirmAsync(req, http.User, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error, result });
         return Results.Ok(result);
@@ -964,6 +988,60 @@ app.MapPost("/api/bank-inquiry/confirm", async (
     catch (SqlException ex)
     {
         return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/bank-inquiry/test", async (
+    BankInquiryTestRequest? req,
+    BankInquiryApiClient bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null || string.IsNullOrWhiteSpace(req.BillId) || string.IsNullOrWhiteSpace(req.PaymentId))
+        return Results.BadRequest(new { error = "billId و paymentId الزامی است" });
+
+    try
+    {
+        var result = await bankInquiry.InquireAsync(req.BillId.Trim(), req.PaymentId.Trim(), ct);
+        return Results.Ok(new
+        {
+            configured = bankInquiry.IsConfigured,
+            isPaid = result.IsPaid,
+            serviceError = result.ServiceError,
+            message = result.Message,
+            paymentDate = result.PaymentDate,
+            inquirySource = result.InquirySource,
+            rawResponse = result.RawResponse
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/bank-inquiry/diagnose", async (
+    BankInquiryTestRequest? req,
+    BankInquiryApiClient bankInquiry,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessBankInquiryConfirm(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null || string.IsNullOrWhiteSpace(req.BillId) || string.IsNullOrWhiteSpace(req.PaymentId))
+        return Results.BadRequest(new { error = "شناسه قبض و شناسه پرداخت الزامی است" });
+
+    try
+    {
+        return Results.Ok(await bankInquiry.DiagnoseAsync(req.BillId, req.PaymentId, ct));
     }
     catch (Exception ex)
     {

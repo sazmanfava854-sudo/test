@@ -99,6 +99,36 @@ public static class DistrictAccessService
         };
     }
 
+    /// <summary>
+    /// محدودیت منطقه برای جستجوی Income_Fiche — JOIN با Base_NosaziCode با alias «b» الزامی است.
+    /// ادمین بدون فیلتر؛ کاربر منطقه‌ای فقط District خود؛ شعبه مرکز فقط تهاتر ۱۵۷.
+    /// </summary>
+    public static void AppendIncomeFicheDistrictFilter(
+        ClaimsPrincipal? user,
+        ICollection<string> clauses,
+        ICollection<(string Name, object Value)> parameters)
+    {
+        if (AppAuthService.IsAdmin(user))
+            return;
+
+        var userDistrict = NormalizeDistrict(GetUserDistrict(user));
+        if (string.IsNullOrEmpty(userDistrict))
+        {
+            clauses.Add("1 = 0");
+            return;
+        }
+
+        if (userDistrict == CenterDistrictCode)
+        {
+            parameters.Add(("@centerTahatorAg", TahatorRowBuilder.IncomeAccountGroupTahatorAmount));
+            clauses.Add("f.CI_IncomeAccountGroup = @centerTahatorAg");
+            return;
+        }
+
+        parameters.Add(("@userDistrict", userDistrict));
+        clauses.Add("CAST(b.District AS nvarchar(20)) = @userDistrict");
+    }
+
     public static string? GetAccessDeniedMessage(ClaimsPrincipal? user, FicheHeaderDto fiche)
     {
         if (CanAccessFiche(user, fiche))

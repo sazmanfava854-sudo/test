@@ -1397,6 +1397,14 @@ tbody tr:last-child td {
   border-bottom: none;
 }
 
+.group-actions-cell {
+  white-space: nowrap;
+}
+
+.group-actions-cell .btn + .btn {
+  margin-inline-start: 0.35rem;
+}
+
 .checkbox-list {
   display: flex;
   flex-wrap: wrap;

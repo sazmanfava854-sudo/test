@@ -7,6 +7,7 @@ public static class BankInquiryConfirmHelper
 {
     public const int ConfirmedFicheStatus = 3;
     public const int ConfirmedIncomePaymentType = 4;
+    public const string UnpaidFicheMessage = "فیش پرداخت نشده";
 
     /// <summary>همان فرمول FicheRepository برای Income_Fiche → Base_NosaziCode.</summary>
     public const string IncomeNosaziCodeSql = """
@@ -90,8 +91,29 @@ public static class BankInquiryConfirmHelper
         return (string.Join(" AND ", clauses), parameters);
     }
 
-    public static string? ValidateConfirmRequest(BankInquiryConfirmRequest req)
+    /// <summary>شناسه قبض/پرداخت epay — فقط رقم، با صفر پیشرو تا ۱۳ رقم.</summary>
+    public const int EpayBillPayIdLength = 13;
+
+    public static string NormalizeBillOrPayId(string? value)
     {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        var digits = NumericHelper.NormalizeDigits(value.Trim());
+        var onlyDigits = new string(digits.Where(char.IsDigit).ToArray());
+        if (onlyDigits.Length == 0)
+            return "";
+
+        return onlyDigits.Length < EpayBillPayIdLength
+            ? onlyDigits.PadLeft(EpayBillPayIdLength, '0')
+            : onlyDigits;
+    }
+
+    public static string? ValidateConfirmRequest(BankInquiryConfirmRequest? req)
+    {
+        if (req == null)
+            return "درخواست نامعتبر است";
+
         var ficheNos = (req.FicheNos ?? [])
             .Select(s => (s ?? "").Trim())
             .Where(s => s.Length > 0)

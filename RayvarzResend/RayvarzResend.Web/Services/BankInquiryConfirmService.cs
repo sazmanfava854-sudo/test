@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web.Models;
 
@@ -6,11 +7,18 @@ namespace RayvarzResend.Web.Services;
 public sealed class BankInquiryConfirmService
 {
     private readonly IConfiguration _config;
+    private readonly FicheRepository _repo;
+    private readonly BankInquiryApiClient _bankInquiryApi;
     private readonly string _saraCs;
 
-    public BankInquiryConfirmService(IConfiguration config)
+    public BankInquiryConfirmService(
+        IConfiguration config,
+        FicheRepository repo,
+        BankInquiryApiClient bankInquiryApi)
     {
         _config = config;
+        _repo = repo;
+        _bankInquiryApi = bankInquiryApi;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara not set");
     }
@@ -21,6 +29,7 @@ public sealed class BankInquiryConfirmService
 
     public async Task<BankInquirySearchResult> SearchAsync(
         BankInquirySearchRequest req,
+        ClaimsPrincipal user,
         CancellationToken ct = default)
     {
         var result = new BankInquirySearchResult();
@@ -37,6 +46,10 @@ public sealed class BankInquiryConfirmService
             result.Error = "فیلتر جستجو نامعتبر است";
             return result;
         }
+
+        var whereClauses = new List<string> { whereSql };
+        DistrictAccessService.AppendIncomeFicheDistrictFilter(user, whereClauses, parameters);
+        whereSql = string.Join(" AND ", whereClauses);
 
         var page = req.Page > 0 ? req.Page : 1;
         var pageSize = req.PageSize is > 0 and <= 200 ? req.PageSize : 25;
@@ -122,6 +135,7 @@ public sealed class BankInquiryConfirmService
 
     public async Task<BankInquiryConfirmResult> ConfirmAsync(
         BankInquiryConfirmRequest req,
+        ClaimsPrincipal user,
         CancellationToken ct = default)
     {
         var result = new BankInquiryConfirmResult { DryRun = IsDryRun };
@@ -153,20 +167,15 @@ public sealed class BankInquiryConfirmService
 
         if (result.DryRun)
         {
-            result.Total = ficheNos.Count;
-            result.WouldUpdate = ficheNos.Count;
             foreach (var ficheNo in ficheNos)
             {
-                result.Results.Add(new BankInquiryConfirmItemResult
-                {
-                    FicheNo = ficheNo,
-                    Success = true,
-                    Found = true,
-                    WouldUpdate = 1,
-                    Message = "DryRun — UPDATE نمی‌شود (BankInquiryConfirm:DryRun=true)"
-                });
+                var item = await BuildConfirmItemPreviewAsync(ficheNo, user, ct);
+                if (item.Success && item.WouldUpdate > 0)
+                    item.Message = "DryRun — استعلام بانک واقعی و UPDATE انجام نمی‌شود (BankInquiryConfirm:DryRun=true)";
+                AppendConfirmItemResult(result, item);
             }
 
+            FinalizeConfirmResult(result);
             return result;
         }
 
@@ -185,7 +194,31 @@ public sealed class BankInquiryConfirmService
 
         foreach (var ficheNo in ficheNos)
         {
-            var item = new BankInquiryConfirmItemResult { FicheNo = ficheNo };
+            var item = await BuildConfirmItemPreviewAsync(ficheNo, user, ct);
+            if (!item.Success)
+            {
+                AppendConfirmItemResult(result, item);
+                continue;
+            }
+
+            var inquiry = await _bankInquiryApi.InquireAsync(item.BillId, item.PaymentId, ct);
+            item.BankInquiryMessage = inquiry.Message;
+            item.BankPaymentDate = inquiry.PaymentDate;
+            item.BankInquiryVerified = inquiry.IsPaid
+                || BankInquiryResponseParser.LooksLikePaidMessage(inquiry.Message);
+            item.BankInquirySource = inquiry.InquirySource;
+
+            if (!item.BankInquiryVerified)
+            {
+                item.Success = false;
+                item.Message = inquiry.ServiceError
+                    || BankInquiryResponseParser.LooksLikeServiceFailure(inquiry.Message)
+                    ? inquiry.Message
+                    : BankInquiryConfirmHelper.UnpaidFicheMessage;
+                AppendConfirmItemResult(result, item);
+                continue;
+            }
+
             try
             {
                 await using var cmd = new SqlCommand(sql, conn);
@@ -200,7 +233,9 @@ public sealed class BankInquiryConfirmService
                 item.RowsAffected = affected;
                 item.Found = affected > 0;
                 item.Success = affected > 0;
-                item.Message = affected > 0 ? "تایید استعلام بانک ثبت شد" : "یافت نشد";
+                item.Message = affected > 0
+                    ? $"تایید استعلام بانک ثبت شد — {inquiry.InquirySource}: {inquiry.Message}"
+                    : "یافت نشد";
             }
             catch (Exception ex)
             {
@@ -211,7 +246,83 @@ public sealed class BankInquiryConfirmService
             AppendConfirmItemResult(result, item);
         }
 
+        FinalizeConfirmResult(result);
         return result;
+    }
+
+    private static void FinalizeConfirmResult(BankInquiryConfirmResult result)
+    {
+        if (result.DryRun)
+        {
+            result.Success = result.WouldUpdate > 0;
+            result.Message = result.WouldUpdate > 0
+                ? $"شبیه‌سازی — {result.WouldUpdate} فیش UPDATE می‌شد"
+                : "شبیه‌سازی — هیچ فیشی به‌روز نمی‌شد";
+            return;
+        }
+
+        result.Success = result.Updated > 0;
+        if (result.Updated > 0)
+        {
+            result.Message = $"{result.Updated} فیش به‌روز شد";
+            return;
+        }
+
+        if (result.Failed > 0)
+        {
+            var firstFailure = result.Results.FirstOrDefault(r => !r.Success && r.Found);
+            result.Message = firstFailure?.Message
+                ?? $"به‌روزرسانی انجام نشد — خطا: {result.Failed}";
+            return;
+        }
+
+        result.Message = result.NotFound > 0
+            ? "فیش انتخاب‌شده یافت نشد"
+            : "هیچ فیشی به‌روز نشد";
+    }
+
+    private async Task<BankInquiryConfirmItemResult> BuildConfirmItemPreviewAsync(
+        string ficheNo,
+        ClaimsPrincipal user,
+        CancellationToken ct)
+    {
+        var item = new BankInquiryConfirmItemResult { FicheNo = ficheNo };
+
+        var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
+        if (fiche == null)
+        {
+            item.Found = false;
+            item.Success = false;
+            item.Message = "یافت نشد";
+            return item;
+        }
+
+        var districtDenied = DistrictAccessService.GetAccessDeniedMessage(user, fiche);
+        if (districtDenied != null)
+        {
+            item.Found = true;
+            item.Success = false;
+            item.Message = districtDenied;
+            return item;
+        }
+
+        var billId = BankInquiryConfirmHelper.NormalizeBillOrPayId(fiche.BillIdRaw ?? fiche.BillId);
+        var paymentId = BankInquiryConfirmHelper.NormalizeBillOrPayId(fiche.PaymentIdRaw ?? fiche.PaymentId);
+        item.BillId = billId;
+        item.PaymentId = paymentId;
+
+        if (string.IsNullOrWhiteSpace(billId) || string.IsNullOrWhiteSpace(paymentId))
+        {
+            item.Found = true;
+            item.Success = false;
+            item.Message = "شناسه قبض یا شناسه پرداخت در فیش موجود نیست";
+            return item;
+        }
+
+        item.Found = true;
+        item.Success = true;
+        item.WouldUpdate = 1;
+        return item;
     }
 
     private static void AppendConfirmItemResult(BankInquiryConfirmResult result, BankInquiryConfirmItemResult item)
