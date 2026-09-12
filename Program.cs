@@ -182,13 +182,9 @@ namespace RuleTrace
 
         private static void SetupConnections()
         {
-            string ruleEngine = ConfigurationManager.ConnectionStrings["RuleEngine"]?.ConnectionString;
-            if (string.IsNullOrWhiteSpace(ruleEngine))
-                throw new InvalidOperationException("connectionStrings:RuleEngine is missing in App.config");
+            Console.WriteLine("Config file : {0}", AppDomain.CurrentDomain.SetupInformation.ConfigurationFile);
+            ConnectionBootstrap.Apply(_dllPath);
 
-            FormulaClsCommon.CnRuleString = ruleEngine;
-
-            // FormulaEncryptionCode — used by ClsFormula / ClsConnection wrappers
             string rootGuid = ConfigurationManager.AppSettings["RootGUID"] ?? Guid.Empty.ToString();
             TrySetStaticString("BIZ.SC.ClsConnection", "FormulaEncryptionCode", rootGuid);
             TrySetStaticString("BIZ.SC.ClsProxyHelper", "FormulaEncryptionCode", rootGuid);

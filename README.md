@@ -1,87 +1,63 @@
-# RuleTrace — Formula Debugger for Sara Urban Planning
+# RuleTrace
 
-Standalone console tool to run `RuleClass` formulas (Solh, Rule, Income, ...) without opening the Sara UI.
-Replaces the `Logfilefj` → `Info8.AddError` → search in UI workflow.
+Standalone Sara formula debugger — `C:\Users\sadathoseini-sh\Downloads\ruletrace`
 
-## Requirements
-
-- Windows + Visual Studio 2019/2022
-- .NET Framework 4.7.2
-- Sara DLL folder (e.g. `C:\Users\sadathoseini-sh\Desktop\dll10`)
-- Network access to `DbRuleEngein` and `Sara8M03`
-
-## Setup
-
-1. Open `RuleTrace.sln` in Visual Studio.
-2. Edit `App.config`:
-   - Set `connectionStrings:RuleEngine` and `Sara` passwords.
-   - Set `appSettings:RootGUID` from Sara `web.config` (`RootGUID` key).
-   - Set `appSettings:DllPath` to your `dll10` folder.
-3. Build (Release | Any CPU).
-4. Copy **all** DLLs from `dll10` next to `RuleTrace.exe` **or** keep `DllPath` correct (AssemblyResolve loads from there).
-
-If build fails on missing references, ensure these exist in `DllPath`:
-
-- `SafaClassDesingerNew.dll`
-- `BIZ.SC.DLL`
-- `BIZ.SA.DLL`
-- `Microsoft.CodeAnalysis.dll`
-- `Microsoft.CodeAnalysis.VisualBasic.dll`
-
-## Usage
-
-```cmd
-RuleTrace.exe --nidproc <GUID> --formula Solh --watch Calc_Chandganeh --recompile
-```
-
-### Find NidProc
-
-```sql
-SELECT TOP 5 r.NidProc, nc.NosaziCode, r.ModifyDate
-FROM Sara8M03.dbo.Sh_Request r
-JOIN Sara8M03.dbo.Base_NosaziCode nc ON nc.NidNosaziCode = r.NidNosaziCode
-WHERE nc.NosaziCode LIKE '%1234567890%'
-ORDER BY r.ModifyDate DESC;
-```
-
-### Parameters
-
-| Flag | Description |
-|------|-------------|
-| `--nidproc` | Required for Solh — `Sh_Request.NidProc` |
-| `--formula` | `Solh`, `Rule`, `Income`, ... (default: `Solh`) |
-| `--watch` | Filter `BizErrors` (replaces Logfilefj filter) |
-| `--recompile` | Force `ClsCommon.RunRule(..., true)` |
-| `--param K=V` | `ClsRunRuleResult.SetParam` |
-| `--district` | `ClsObjectFactory._District` |
-
-## Architecture
+## Structure
 
 ```
-ClsCommon.RunRule(NidRuleClass, RootGUID, reCompile)
-  → ClsRunRuleResult (compile XmlBody from DbRuleEngein)
-  → SetMyInfo(ClsObjectFactory)   // Info8
-  → Run("Map_Function")
-  → ClsObjectFactory.ErrorResult.BizErrors   // trace output
+ruletrace/
+  RuleTrace.sln
+  RuleTrace.csproj
+  Program.cs
+  ConnectionBootstrap.cs   ← forces debugger login (not hService)
+  App.config
+  build.ps1
+  bin/
+    RuleTrace.exe
+    RuleTrace.exe.config   ← connection strings (debugger)
+    BIZ.SC.DLL
+    SafaClassDesingerNew.dll
+    ...
 ```
 
-## Formula → NidRuleClass
+## Build
 
-| Formula | NidRuleClass |
-|---------|--------------|
-| Rule | 336 |
-| Income | 337 |
-| Takhalofat | 338 |
-| Solh | 344 |
-| Tavafogh | 345 |
-| CommissionFine | 335 |
+```powershell
+cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+.\build.ps1 -DllPath "C:\Users\sadathoseini-sh\Desktop\dll10"
+```
 
-## Troubleshooting
+Or manually:
 
-| Error | Fix |
-|-------|-----|
-| `DllPath not found` | Set `DllPath` in App.config |
-| `RunRule returned null` | Check RuleEngine connection string |
-| `پارامترهای ورودی برای صلحنامه درست نیست` | Set `--nidproc` |
-| COMPILE errors | Run with `--recompile`, check XmlBody in RuleClass |
-| Missing assembly at runtime | Copy full `dll10` folder beside exe |
+```powershell
+$msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+& $msbuild "RuleTrace.sln" /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:DllPath="C:\Users\sadathoseini-sh\Desktop\dll10"
+```
+
+MSBuild copies DLLs into `bin\` and **deletes `*.dll.config`** (those files often contain `hService`).
+
+## Run
+
+```powershell
+cd .\bin
+.\RuleTrace.exe --nidproc "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28" --formula Solh --watch Calc_Chandganeh --recompile
+```
+
+## Config (`App.config` → `bin\RuleTrace.exe.config`)
+
+```xml
+<connectionStrings>
+  <add name="RuleEngine" connectionString="Server=tcp:172.16.10.232;Database=DbRuleEngein;User Id=debugger;Password=Ra@123456;..." />
+  <add name="Sara"       connectionString="Server=tcp:172.16.10.232;Database=Sara8M03;User Id=debugger;Password=Ra@123456;..." />
+</connectionStrings>
+```
+
+Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
+
+## hService login error
+
+If you still see `Login failed for user 'hService'`:
+
+1. Rebuild with `build.ps1` (removes sidecar `*.dll.config` from `bin\`).
+2. Confirm `bin\RuleTrace.exe.config` has `User Id=debugger` (not `hService`).
+3. On first run, ConnectionBootstrap renames any remaining `*.dll.config` to `*.dll.config.hService.bak`.
