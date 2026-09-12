@@ -54,14 +54,6 @@
       <HintPath>$(DllPath)\SafaClassDesingerNew.dll</HintPath>
       <Private>true</Private>
     </Reference>
-    <Reference Include="Microsoft.CodeAnalysis">
-      <HintPath>$(DllPath)\Microsoft.CodeAnalysis.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-    <Reference Include="Microsoft.CodeAnalysis.VisualBasic">
-      <HintPath>$(DllPath)\Microsoft.CodeAnalysis.VisualBasic.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />

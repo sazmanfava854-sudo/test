@@ -7,8 +7,8 @@ using System.Linq;
 using System.Reflection;
 using BIZ.SC;
 using BIZ.SA;
-using Microsoft.CodeAnalysis;
 using SafaClassDesingerNew;
+using FormulaClsCommon = SafaClassDesingerNew.ClsCommon;
 
 namespace RuleTrace
 {
@@ -76,7 +76,7 @@ namespace RuleTrace
             Console.WriteLine("ReCompile   : {0}", options.ReCompile);
 
             // ── 1. Compile / cache formula assembly ──
-            ClsRunRuleResult result = ClsCommon.RunRule(nidRuleClass, rootGuid, options.ReCompile);
+            ClsRunRuleResult result = FormulaClsCommon.RunRule(nidRuleClass, rootGuid, options.ReCompile);
 
             if (result == null)
             {
@@ -87,7 +87,7 @@ namespace RuleTrace
             if (result.CompilerErrors != null && result.CompilerErrors.HasErrors)
             {
                 Console.Error.WriteLine("=== COMPILE ERRORS ===");
-                foreach (CompilerError err in result.CompilerErrors)
+                foreach (var err in result.CompilerErrors)
                     Console.Error.WriteLine("  {0}", err);
                 return 4;
             }
@@ -186,7 +186,7 @@ namespace RuleTrace
             if (string.IsNullOrWhiteSpace(ruleEngine))
                 throw new InvalidOperationException("connectionStrings:RuleEngine is missing in App.config");
 
-            ClsCommon.CnRuleString = ruleEngine;
+            FormulaClsCommon.CnRuleString = ruleEngine;
 
             // FormulaEncryptionCode — used by ClsFormula / ClsConnection wrappers
             string rootGuid = ConfigurationManager.AppSettings["RootGUID"] ?? Guid.Empty.ToString();
