@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web;
@@ -84,6 +85,11 @@ builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+});
+
 app.Services.GetRequiredService<RayvarzPayloadBuilder>();
 
 using (var scope = app.Services.CreateScope())
@@ -138,8 +144,8 @@ app.UseStaticFiles();
 var authenticated = AuthPolicies.Authenticated;
 var adminOnly = AuthPolicies.AdminOnly;
 
-app.MapGet("/api/auth/mode", (ShimasAuthService shimas) =>
-    Results.Ok(shimas.GetStatus())).AllowAnonymous();
+app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
+    Results.Ok(shimas.GetStatus(http.Request))).AllowAnonymous();
 
 app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
 {
@@ -164,10 +170,8 @@ app.MapGet("/auth/callback", async (
     AppAuthService auth,
     CancellationToken ct) =>
 {
-    var username = http.Request.Query["username"].ToString();
-    var refreshToken = http.Request.Query["refresh_token"].ToString();
-
-    var validation = await shimas.ValidateAsync(username, refreshToken, ct);
+    var callback = shimas.ParseCallbackQuery(http.Request.Query);
+    var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
     if (!validation.Success)
     {
         var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");

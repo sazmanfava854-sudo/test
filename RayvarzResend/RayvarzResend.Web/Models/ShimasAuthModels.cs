@@ -26,4 +26,12 @@ public sealed class ShimasAuthStatusDto
     public bool LocalLoginAvailable { get; set; }
     public string LoginPath { get; set; } = "/auth/login";
     public string CallbackPath { get; set; } = "/auth/callback";
+    /// <summary>آدرس callback ثبت‌شده در سامزان — برای بررسی پیکربندی.</summary>
+    public string? RegisteredCallbackUrl { get; set; }
+}
+
+public sealed class ShimasCallbackPayload
+{
+    public string Username { get; set; } = "";
+    public string RefreshToken { get; set; } = "";
 }

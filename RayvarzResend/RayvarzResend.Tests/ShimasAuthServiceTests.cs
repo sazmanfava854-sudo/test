@@ -180,6 +180,50 @@ public class ShimasAuthServiceTests
         Assert.Equal("https://app.example.com/auth/callback", callback);
     }
 
+    [Fact]
+    public void BuildCallbackAbsoluteUrl_uses_public_base_url_when_configured()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            PublicBaseUrl = "http://5.252.216.140:8070"
+        });
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost:5000");
+
+        var callback = service.BuildCallbackAbsoluteUrl(context.Request);
+
+        Assert.Equal("http://5.252.216.140:8070/auth/callback", callback);
+    }
+
+    [Fact]
+    public void ParseCallbackQuery_reads_username_and_refresh_token_aliases()
+    {
+        var service = CreateService();
+        var context = new DefaultHttpContext();
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        var payload = service.ParseCallbackQuery(context.Request.Query);
+
+        Assert.Equal("1234567890", payload.Username);
+        Assert.Equal("abc-token-xyz", payload.RefreshToken);
+    }
+
+    [Fact]
+    public void GetStatus_includes_registered_callback_from_public_base_url()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            LKey = "key",
+            PublicBaseUrl = "http://5.252.216.140:8070"
+        });
+
+        var status = service.GetStatus();
+
+        Assert.Equal("http://5.252.216.140:8070/auth/callback", status.RegisteredCallbackUrl);
+    }
+
     private sealed class TestHttpClientFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new();

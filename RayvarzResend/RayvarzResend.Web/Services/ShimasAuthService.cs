@@ -32,15 +32,25 @@ public sealed class ShimasAuthService
 
     public ShimasAuthOptions Options => _options;
 
-    public ShimasAuthStatusDto GetStatus() => new()
+    public ShimasAuthStatusDto GetStatus(HttpRequest? request = null) => new()
     {
         Enabled = _options.Enabled,
         SsoReady = _options.SsoReady,
         PreferSsoLogin = _options.PreferSsoLogin,
         LocalLoginAvailable = _options.LocalLoginAvailable,
         LoginPath = "/auth/login",
-        CallbackPath = NormalizeCallbackPath(_options.CallbackPath)
+        CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
+        RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl()
     };
+
+    public string? ResolvePublicCallbackUrl()
+    {
+        var baseUrl = NormalizePublicBaseUrl(_options.PublicBaseUrl);
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            return null;
+
+        return $"{baseUrl}{NormalizeCallbackPath(_options.CallbackPath)}";
+    }
 
     public string ResolveLoginRedirectPath()
     {
@@ -64,7 +74,28 @@ public sealed class ShimasAuthService
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
     {
         var path = NormalizeCallbackPath(_options.CallbackPath);
+        var configured = NormalizePublicBaseUrl(_options.PublicBaseUrl);
+        if (!string.IsNullOrWhiteSpace(configured))
+            return $"{configured}{path}";
+
         return $"{request.Scheme}://{request.Host}{path}";
+    }
+
+    /// <summary>پارامترهای بازگشت از login.mashhad.ir / سامزان: username + refresh_token.</summary>
+    public ShimasCallbackPayload ParseCallbackQuery(IQueryCollection query)
+    {
+        var username = ReadQuery(query,
+            "username", "userName", "UserName",
+            "nationalId", "NationalId", "nationalCode", "NationalCode", "code");
+        var refreshToken = ReadQuery(query,
+            "refresh_token", "refreshToken", "RefreshToken",
+            "token", "Token", "access_token", "accessToken");
+
+        return new ShimasCallbackPayload
+        {
+            Username = username,
+            RefreshToken = refreshToken
+        };
     }
 
     public async Task<ShimasValidationResult> ValidateAsync(
@@ -231,6 +262,30 @@ public sealed class ShimasAuthService
     {
         var value = (path ?? "/auth/callback").Trim();
         return value.StartsWith('/') ? value : "/" + value;
+    }
+
+    private static string NormalizePublicBaseUrl(string? value)
+    {
+        var trimmed = (value ?? "").Trim();
+        if (trimmed.Length == 0)
+            return "";
+
+        return trimmed.EndsWith('/') ? trimmed[..^1] : trimmed;
+    }
+
+    private static string ReadQuery(IQueryCollection query, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!query.TryGetValue(key, out var values))
+                continue;
+
+            var text = values.ToString().Trim();
+            if (!string.IsNullOrEmpty(text))
+                return text;
+        }
+
+        return "";
     }
 
     private static string? ReadJsonString(JsonElement root, params string[] names)
