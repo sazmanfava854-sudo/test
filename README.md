@@ -11,6 +11,7 @@ ruletrace/
   Program.cs
   ConnectionBootstrap.cs   ← forces debugger login (not hService)
   App.config
+  build.cmd                ← use this (no PowerShell policy needed)
   build.ps1
   bin/
     RuleTrace.exe
@@ -22,8 +23,23 @@ ruletrace/
 
 ## Build
 
+**Recommended** (works even when PowerShell scripts are blocked):
+
+```cmd
+cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+build.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
+```
+
+Or in PowerShell without changing execution policy:
+
 ```powershell
 cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+cmd /c build.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
+```
+
+Optional — only if scripts are allowed on your machine:
+
+```powershell
 .\build.ps1 -DllPath "C:\Users\sadathoseini-sh\Desktop\dll10"
 ```
 
@@ -58,6 +74,6 @@ Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
 If you still see `Login failed for user 'hService'`:
 
-1. Rebuild with `build.ps1` (removes sidecar `*.dll.config` from `bin\`).
+1. Rebuild with `build.cmd` (removes sidecar `*.dll.config` from `bin\`).
 2. Confirm `bin\RuleTrace.exe.config` has `User Id=debugger` (not `hService`).
 3. On first run, ConnectionBootstrap renames any remaining `*.dll.config` to `*.dll.config.hService.bak`.
