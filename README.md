@@ -54,8 +54,24 @@ MSBuild copies DLLs into `bin\` and **deletes `*.dll.config`** (those files ofte
 
 ## Run
 
+**Step 1 — test SQL only:**
+
 ```powershell
 cd .\bin
+.\RuleTrace.exe --test-db
+```
+
+Expected:
+
+```
+[RuleEngine] OK — db=DbRuleEngein, login=debugger
+[Sara] OK — db=Sara8M03, login=debugger
+OK — both databases reachable with debugger login.
+```
+
+**Step 2 — full formula trace:**
+
+```powershell
 .\RuleTrace.exe --nidproc "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28" --formula Solh --watch Calc_Chandganeh --recompile
 ```
 

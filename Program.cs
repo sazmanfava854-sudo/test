@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -40,6 +41,9 @@ namespace RuleTrace
                     PrintHelp();
                     return 0;
                 }
+
+                if (HasFlag(args, "--test-db"))
+                    return TestDatabaseConnections(args);
 
                 _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
                 if (string.IsNullOrWhiteSpace(_dllPath) || !Directory.Exists(_dllPath))
@@ -178,6 +182,75 @@ namespace RuleTrace
             }
 
             return factory;
+        }
+
+        private static int TestDatabaseConnections(string[] args)
+        {
+            Console.WriteLine("=== RuleTrace DB test ===");
+            Console.WriteLine("Config file : {0}", AppDomain.CurrentDomain.SetupInformation.ConfigurationFile);
+
+            _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
+            if (!string.IsNullOrWhiteSpace(_dllPath) && Directory.Exists(_dllPath))
+            {
+                AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+                ConnectionBootstrap.Apply(_dllPath);
+            }
+            else
+            {
+                Console.WriteLine("DllPath     : (skipped — testing App.config only)");
+            }
+
+            int failures = 0;
+            failures += TestSqlConnection("RuleEngine", ConfigurationManager.ConnectionStrings["RuleEngine"]?.ConnectionString);
+            failures += TestSqlConnection("Sara", ConfigurationManager.ConnectionStrings["Sara"]?.ConnectionString);
+
+            if (failures == 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("OK — both databases reachable with debugger login.");
+                return 0;
+            }
+
+            Console.WriteLine();
+            Console.Error.WriteLine("FAILED — {0} connection(s) could not open.", failures);
+            return 5;
+        }
+
+        private static int TestSqlConnection(string name, string connectionString)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                Console.Error.WriteLine("[{0}] MISSING connection string in config", name);
+                return 1;
+            }
+
+            if (connectionString.IndexOf("hService", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("[{0}] FAIL — config still uses hService", name);
+                return 1;
+            }
+
+            try
+            {
+                using (var conn = new SqlConnection(connectionString))
+                {
+                    conn.Open();
+                    using (var cmd = new SqlCommand("SELECT DB_NAME(), SUSER_SNAME()", conn))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                            Console.WriteLine("[{0}] OK — db={1}, login={2}", name, reader.GetString(0), reader.GetString(1));
+                        else
+                            Console.WriteLine("[{0}] OK — connected", name);
+                    }
+                }
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("[{0}] FAIL — {1}", name, ex.Message);
+                return 1;
+            }
         }
 
         private static void SetupConnections()
@@ -347,6 +420,7 @@ OPTIONS:
   --factory-param K=V     ClsObjectFactory.ParameterList entry
   --all-params            Print all ParametersValue after run
   --dll-path <folder>     Override appSettings:DllPath
+  --test-db               Test RuleEngine + Sara SQL login only (no formula run)
 
 CONFIG (App.config):
   connectionStrings:RuleEngine  → ClsCommon.CnRuleString
@@ -355,6 +429,7 @@ CONFIG (App.config):
   appSettings:DllPath           → folder with BIZ.SC.DLL, SafaClassDesingerNew.dll, ...
 
 EXAMPLE:
+  RuleTrace.exe --test-db
   RuleTrace.exe --nidproc a1b2c3d4-.... --formula Solh --watch Calc_Chandganeh --recompile
 
 SQL to find NidProc:
