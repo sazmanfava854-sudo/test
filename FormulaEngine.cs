@@ -44,6 +44,8 @@ namespace RuleTrace
         public string Name;
         public string Meta;
         public string Code;
+        public int Version;
+        public bool IsActive;
         public override string ToString() { return NidMember + "  " + Name + "  " + Meta; }
     }
 
@@ -584,6 +586,7 @@ namespace RuleTrace
             }
 
             Guid cityGuid = ResolveCityGuid();
+            _log(BuildInfo.Banner);
             _log("Formula      : " + r.Formula + " (NidRuleClass=" + nid + ")");
             _log("CityGuid     : " + cityGuid);
             _log("ReCompile    : " + r.ReCompile);
@@ -1052,13 +1055,15 @@ namespace RuleTrace
                                 string name;
                                 m.Code = ExtractCode(xml, out name);
                                 m.Name = name ?? "";
-                                m.Meta = "v" + Str(r, 3) + " active=" + Str(r, 2) + " type=" + Str(r, 1) + " " + Str(r, 4).Trim() + "→" + Str(r, 5).Trim()
+                                m.Version = ParseInt(Str(r, 3));
+                                m.IsActive = ParseActive(Str(r, 2));
+                                m.Meta = "v" + m.Version + " active=" + m.IsActive + " type=" + Str(r, 1) + " " + Str(r, 4).Trim() + "→" + Str(r, 5).Trim()
                                          + " (" + (m.Code.Length / 1024) + " KB)";
                                 list.Add(m);
                             }
                         }
                     }
-                    return list;
+                    return DedupeMemberSources(list);
                 }
                 catch (Exception ex) { last = ex; list.Clear(); }
             }
@@ -1068,6 +1073,35 @@ namespace RuleTrace
         private static string Str(IDataRecord r, int i)
         {
             try { return r.IsDBNull(i) ? "" : Convert.ToString(r.GetValue(i)); } catch { return ""; }
+        }
+
+        private static int ParseInt(string s)
+        {
+            int n;
+            return int.TryParse(s, out n) ? n : 0;
+        }
+
+        private static bool ParseActive(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            s = s.Trim();
+            return s == "1" || s.Equals("true", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("yes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>One row per NidMember — prefer active, then highest Version, then largest Body.</summary>
+        private static List<MemberSource> DedupeMemberSources(List<MemberSource> rows)
+        {
+            if (rows == null || rows.Count == 0) return rows ?? new List<MemberSource>();
+            return rows
+                .GroupBy(m => m.NidMember)
+                .Select(g => g
+                    .OrderByDescending(m => m.IsActive)
+                    .ThenByDescending(m => m.Version)
+                    .ThenByDescending(m => m.Code == null ? 0 : m.Code.Length)
+                    .First())
+                .OrderBy(m => m.NidMember)
+                .ToList();
         }
 
         /// <summary>Largest text node in the member XML is the VB body; the first short Name/Title-like element is the member name.</summary>

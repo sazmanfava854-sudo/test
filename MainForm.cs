@@ -71,7 +71,7 @@ namespace RuleTrace
 
         private void BuildUi()
         {
-            Text = "RuleTrace — Sara Formula Debugger";
+            Text = BuildInfo.Banner;
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(1180, 880);
             MinimumSize = new Size(980, 680);
@@ -292,6 +292,7 @@ namespace RuleTrace
             _txtWatch.Text = _settings.LastWatch;
             _cboFormula.Text = string.IsNullOrWhiteSpace(_settings.LastFormula) ? "Solh" : _settings.LastFormula;
 
+            Log(BuildInfo.Banner);
             Log("RuleTrace ready. Settings: " + UserSettings.IniPath);
             if (!FormulaEngine.IsDllFolder(_settings.DllPath))
                 Log("WARN: پوشه DLL معتبر نیست — «پیدا کردن خودکار» یا «انتخاب پوشه» را بزنید.");

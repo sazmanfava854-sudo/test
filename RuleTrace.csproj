@@ -45,6 +45,7 @@
     <Reference Include="Microsoft.VisualBasic" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BuildInfo.cs" />
     <Compile Include="DebugPanel.cs">
       <SubType>UserControl</SubType>
     </Compile>

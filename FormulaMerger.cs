@@ -119,10 +119,30 @@ namespace RuleTrace
             if (shell.Length < 500)
                 throw new InvalidOperationException("class shell too short — ToString1 / GetStrOutClass empty");
 
+            string shellSource = shell.Length > 5000 ? "ToString1" : (shell.Length > 1500 ? "mixed" : "GetStrOutClass");
             int shellMOut = CountOccurrences(shell, "M_Out");
-            log("Merge shell  : len=" + shell.Length + ", M_Out=" + shellMOut + " (from ToString1 if len>5KB)");
+            log("Merge shell  : " + shellSource + " len=" + shell.Length + ", M_Out=" + shellMOut);
 
-            int cap = shell.Length + (int)Math.Min(sources.Sum(s => (long)s.Code.Length), int.MaxValue - shell.Length - 4096) + 4096;
+            shell = StripMethodsFromShell(shell);
+            int shellMOutAfter = CountOccurrences(shell, "M_Out");
+            log("Merge shell  : after stripping stub methods, M_Out=" + shellMOutAfter);
+
+            var methodMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            int methodCount = 0;
+            foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
+            {
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                foreach (string block in ExtractMethodBlocks(StripDuplicateClassShell(src.Code)))
+                {
+                    string key = MethodKey(block);
+                    if (string.IsNullOrEmpty(key)) continue;
+                    methodMap[key] = block;
+                    methodCount++;
+                }
+            }
+            log("Merge methods: " + methodMap.Count + " unique Sub/Function from " + methodCount + " block(s)");
+
+            int cap = shell.Length + (int)Math.Min(methodMap.Values.Sum(b => (long)b.Length), int.MaxValue - shell.Length - 4096) + 4096;
             var sb = new StringBuilder(cap);
             int endClass = shell.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
             if (endClass < 0) endClass = shell.LastIndexOf("EndClass", StringComparison.OrdinalIgnoreCase);
@@ -131,22 +151,17 @@ namespace RuleTrace
             sb.Append(shell.Substring(0, endClass));
             sb.AppendLine();
             sb.AppendLine("' --- RuleTrace: Member XmlBody methods (class shells stripped) ---");
-            foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
+            foreach (var kv in methodMap.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(src.Code)) continue;
-                string body = StripDuplicateClassShell(src.Code);
-                if (body.Length < 20) continue;
-                sb.AppendLine("#Region \"NidFunction " + src.NidMember + " " + src.Name + "\"");
-                sb.AppendLine(body);
-                sb.AppendLine("#End Region");
+                sb.AppendLine(kv.Value);
                 sb.AppendLine();
             }
             sb.AppendLine(shell.Substring(endClass));
-            string merged = sb.ToString();
+            string merged = RemoveDuplicateMOutDeclarations(sb.ToString());
             int totalMOut = CountOccurrences(merged, "M_Out");
             log("Merged VB    : " + merged.Length + " chars, M_Out=" + totalMOut + " (expect 1–2)");
             if (totalMOut > 3)
-                log("WARN merge   : still " + totalMOut + " M_Out — member bodies may contain nested shells");
+                log("WARN merge   : still " + totalMOut + " M_Out — send RuleTrace_merged.vb");
             return merged;
         }
 
@@ -171,40 +186,18 @@ namespace RuleTrace
             return InvokeString(o, name);
         }
 
-        /// <summary>Keep only Sub/Function/#Region blocks; drop duplicate M_Out/Out/Namespace/Class from member XML bodies.</summary>
+        /// <summary>Keep only Sub/Function blocks; drop duplicate class shells (M_Out/Out/Namespace/Class) from member XML bodies.</summary>
         public static string StripDuplicateClassShell(string code)
         {
             if (string.IsNullOrWhiteSpace(code)) return string.Empty;
-            string norm = code.Replace("\r\n", "\n");
+            string norm = NormalizeNewlines(code);
+            norm = UnwrapEmbeddedClass(norm);
+            norm = RemoveMOutPropertyBlocks(norm);
 
-            var parts = new List<string>();
-            var methodRx = new Regex(
-                @"(?ms)^\s*((?:Public|Private|Protected|Friend|Partial)?\s*(?:Overrides\s+)?(?:Sub|Function)\s+\w+.+?^End\s+(?:Sub|Function)\s*)",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            foreach (Match m in methodRx.Matches(norm))
-            {
-                string block = m.Groups[1].Value.Trim();
-                if (block.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                parts.Add(block.Replace("\n", "\r\n"));
-            }
+            var methods = ExtractMethodBlocks(norm);
+            if (methods.Count > 0)
+                return string.Join("\r\n\r\n", methods);
 
-            if (parts.Count > 0)
-                return string.Join("\r\n\r\n", parts);
-
-            var regionRx = new Regex(@"(?ms)^\s*(#Region\b.+?^#End Region)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            foreach (Match m in regionRx.Matches(norm))
-            {
-                string block = m.Groups[1].Value;
-                if (block.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0
-                    || block.IndexOf("Property Out As", StringComparison.OrdinalIgnoreCase) >= 0)
-                    continue;
-                parts.Add(block.Trim().Replace("\n", "\r\n"));
-            }
-            if (parts.Count > 0)
-                return string.Join("\r\n\r\n", parts);
-
-            norm = Regex.Replace(norm, @"(?ms)^\s*Private\s+M_Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            norm = Regex.Replace(norm, @"(?ms)^\s*Public\s+Property\s+Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             var kept = new List<string>();
             foreach (string line in norm.Split('\n'))
             {
@@ -214,6 +207,135 @@ namespace RuleTrace
                 kept.Add(line);
             }
             return string.Join("\r\n", kept).Trim();
+        }
+
+        /// <summary>Remove empty/stub Sub/Function from ToString1 shell so member bodies do not duplicate signatures.</summary>
+        private static string StripMethodsFromShell(string shell)
+        {
+            if (string.IsNullOrWhiteSpace(shell)) return shell;
+            string norm = NormalizeNewlines(shell);
+            var methods = ExtractMethodBlocks(norm);
+            if (methods.Count == 0) return shell.Replace("\n", "\r\n");
+            foreach (string block in methods)
+                norm = norm.Replace(block, string.Empty);
+            norm = RemoveMOutPropertyBlocks(norm);
+            return norm.Replace("\n", "\r\n").Trim();
+        }
+
+        private static string NormalizeNewlines(string code)
+        {
+            return (code ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n");
+        }
+
+        private static string UnwrapEmbeddedClass(string norm)
+        {
+            int classIdx = IndexOfLineMatch(norm, @"^\s*(?:Public\s+|Partial\s+)*Class\s+\w+");
+            int endIdx = norm.LastIndexOf("\nEnd Class", StringComparison.OrdinalIgnoreCase);
+            if (classIdx < 0 || endIdx < classIdx) return norm;
+            int bodyStart = norm.IndexOf('\n', classIdx);
+            if (bodyStart < 0) return norm;
+            bodyStart++;
+            string inner = norm.Substring(bodyStart, endIdx - bodyStart);
+            return inner.Trim();
+        }
+
+        private static string RemoveMOutPropertyBlocks(string norm)
+        {
+            norm = Regex.Replace(norm, @"(?ms)^\s*Private\s+M_Out\b[^\n]*\n?", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            norm = Regex.Replace(norm, @"(?ms)^\s*Public\s+Property\s+Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            norm = Regex.Replace(norm, @"(?ms)^\s*Private\s+Property\s+Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            return norm;
+        }
+
+        /// <summary>Last resort: keep first Private M_Out + first Public Property Out only.</summary>
+        private static string RemoveDuplicateMOutDeclarations(string merged)
+        {
+            string norm = NormalizeNewlines(merged);
+            norm = KeepFirstMatch(norm, @"(?ms)^\s*Private\s+M_Out\b[^\n]*\n");
+            norm = KeepFirstMatch(norm, @"(?ms)^\s*Public\s+Property\s+Out\b.*?^End\s+Property\s*");
+            return norm.Replace("\n", "\r\n");
+        }
+
+        private static string KeepFirstMatch(string text, string pattern)
+        {
+            var rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            Match first = rx.Match(text);
+            if (!first.Success) return text;
+            string kept = first.Value;
+            text = rx.Replace(text, string.Empty);
+            int insertAt = text.IndexOf("End Class", StringComparison.OrdinalIgnoreCase);
+            if (insertAt < 0) return kept + text;
+            return text.Insert(insertAt, kept);
+        }
+
+        private static List<string> ExtractMethodBlocks(string norm)
+        {
+            var blocks = new List<string>();
+            if (string.IsNullOrWhiteSpace(norm)) return blocks;
+            string[] lines = norm.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!IsMethodStartLine(lines[i])) continue;
+                int depth = 0;
+                var sb = new StringBuilder();
+                for (int j = i; j < lines.Length; j++)
+                {
+                    sb.Append(lines[j]).Append('\n');
+                    if (IsMethodStartLine(lines[j]))
+                        depth++;
+                    else if (IsMethodEndLine(lines[j]))
+                    {
+                        depth--;
+                        if (depth <= 0)
+                        {
+                            string block = sb.ToString().Trim();
+                            if (block.Length > 10 && !IsMOutPropertyShell(block))
+                                blocks.Add(block.Replace("\n", "\r\n"));
+                            i = j;
+                            break;
+                        }
+                    }
+                }
+            }
+            return blocks;
+        }
+
+        private static bool IsMethodStartLine(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return false;
+            string t = line.TrimStart();
+            return Regex.IsMatch(t, @"^(?:(?:Public|Private|Protected|Friend|Partial)\s+)*(?:Overrides\s+)?(?:Sub|Function)\s+\w+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static bool IsMethodEndLine(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return false;
+            return Regex.IsMatch(line.Trim(), @"^End\s+(?:Sub|Function)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static bool IsMOutPropertyShell(string block)
+        {
+            string t = block.TrimStart();
+            return t.StartsWith("Private M_Out", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Public Property Out", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Private Property Out", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string MethodKey(string block)
+        {
+            if (string.IsNullOrWhiteSpace(block)) return string.Empty;
+            var m = Regex.Match(block, @"(?:Sub|Function)\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            return m.Success ? m.Groups[1].Value : string.Empty;
+        }
+
+        private static int IndexOfLineMatch(string text, string pattern)
+        {
+            var rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            foreach (Match m in rx.Matches(text))
+            {
+                if (m.Index == 0 || text[m.Index - 1] == '\n') return m.Index;
+            }
+            return -1;
         }
 
         private static bool IsShellLine(string t)
