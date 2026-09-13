@@ -2,8 +2,6 @@ using System;
 using System.Configuration;
 using System.IO;
 using System.Reflection;
-using BIZ.SA;
-using BIZ.SC;
 using FormulaClsCommon = SafaClassDesingerNew.ClsCommon;
 
 namespace RuleTrace
@@ -48,14 +46,15 @@ namespace RuleTrace
 
             // Force-load Sara assemblies (static ctors may reset fields) then patch again
             TouchType("BIZ.SA.ClsCNManagment", "BIZ.SA");
+            TouchType("BIZ.SA.ClsCNManagement", "BIZ.SA");
             TouchType("BIZ.SA.ClsCommon", "BIZ.SA");
             TouchType("BIZ.SC.ClsConnection", "BIZ.SC");
             TouchType("SafaClassDesingerNew.ClsClass", "SafaClassDesingerNew");
 
             PatchStaticConnectionFields(ruleEngine, sara);
             PatchAssemblySettings(typeof(FormulaClsCommon).Assembly, ruleEngine, sara);
-            PatchAssemblySettings(typeof(BIZ.SA.ClsCNManagment).Assembly, ruleEngine, sara);
-            PatchAssemblySettings(typeof(BIZ.SC.ClsObjectFactory).Assembly, ruleEngine, sara);
+            PatchAssemblySettings(LoadAssembly("BIZ.SA"), ruleEngine, sara);
+            PatchAssemblySettings(LoadAssembly("BIZ.SC"), ruleEngine, sara);
 
             // Re-apply after static constructors
             FormulaClsCommon.CnRuleString = ruleEngine;
@@ -121,7 +120,7 @@ namespace RuleTrace
             string[] types =
             {
                 "SafaClassDesingerNew.ClsCommon", "SafaClassDesingerNew.ClsClass", "SafaClassDesingerNew.ClsConnection",
-                "BIZ.SA.ClsCNManagment", "BIZ.SA.ClsCommon", "BIZ.SA.ClsConnection",
+                "BIZ.SA.ClsCNManagment", "BIZ.SA.ClsCNManagement", "BIZ.SA.ClsCommon", "BIZ.SA.ClsConnection",
                 "BIZ.SC.ClsConnection", "BIZ.SC.ClsCommon",
             };
 
@@ -204,6 +203,38 @@ namespace RuleTrace
             {
                 // optional
             }
+        }
+
+        private static Assembly LoadAssembly(string assemblyName)
+        {
+            try
+            {
+                Assembly loaded = Assembly.Load(assemblyName);
+                if (loaded != null)
+                    return loaded;
+            }
+            catch
+            {
+                // try LoadFrom next to RuleTrace.exe
+            }
+
+            try
+            {
+                string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+                foreach (string file in Directory.GetFiles(dir, assemblyName + ".*"))
+                {
+                    if (!file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                        && !file.EndsWith(".DLL", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    return Assembly.LoadFrom(file);
+                }
+            }
+            catch
+            {
+                // optional
+            }
+
+            return null;
         }
 
         /// <summary>
