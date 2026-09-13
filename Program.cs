@@ -48,6 +48,9 @@ namespace RuleTrace
                 if (HasFlag(args, "--print-city-guid"))
                     return PrintCityGuidOnly(args);
 
+                if (HasFlag(args, "--dump-engine-config"))
+                    return DumpEngineConfig(args);
+
                 _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
                 if (string.IsNullOrWhiteSpace(_dllPath) || !Directory.Exists(_dllPath))
                 {
@@ -82,6 +85,7 @@ namespace RuleTrace
             Console.WriteLine("RunRuleGuid : {0}", runRuleGuid);
             Console.WriteLine("ReCompile   : {0}", options.ReCompile);
             PrintFormulaMemberStats(nidRuleClass, options.ReCompile);
+            FormulaCacheSync.Apply(nidRuleClass, runRuleGuid);
 
             // ── 1. Compile / cache formula assembly ──
             if (options.ReCompile)
@@ -251,6 +255,24 @@ namespace RuleTrace
             return (bytes / (1024.0 * 1024.0)).ToString("0.#") + " MB";
         }
 
+        private static int DumpEngineConfig(string[] args)
+        {
+            _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
+            if (string.IsNullOrWhiteSpace(_dllPath) || !Directory.Exists(_dllPath))
+            {
+                Console.Error.WriteLine("ERROR: DllPath not found.");
+                return 2;
+            }
+
+            AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+            SetupConnections();
+            FormulaCacheSync.DumpEnginePaths();
+            Console.WriteLine();
+            Console.WriteLine("Compare paths with Sara app server (run same command there via RDP).");
+            Console.WriteLine("Copy that cache folder to FormulaCacheSource in App.config.");
+            return 0;
+        }
+
         private static int PrintCityGuidOnly(string[] args)
         {
             _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
@@ -286,8 +308,10 @@ namespace RuleTrace
             Console.Error.WriteLine("  1) Set CityGuid (NidCity for Mashhad):  RuleTrace.exe --print-city-guid");
             Console.Error.WriteLine("     Then in RuleTrace.exe.config:  <add key=\"CityGuid\" value=\"...\" />");
             Console.Error.WriteLine("  2) Do NOT use --recompile on your PC");
-            Console.Error.WriteLine("  3) Copy formula cache from Sara app server (ask DBA) — folder often near c:\\dll10");
-            Console.Error.WriteLine("  4) Inspect merged VB:  dir %TEMP%\\*.vb  (largest recent file)");
+            Console.Error.WriteLine("  3) BEST: run RuleTrace.exe on Sara app server (RDP) where cache already exists");
+            Console.Error.WriteLine("  4) Or copy server formula cache -> FormulaCacheSource in App.config");
+            Console.Error.WriteLine("  5) RuleTrace.exe --dump-engine-config  (on server vs PC — compare paths)");
+            Console.Error.WriteLine("  6) Ensure dll10 is exact copy FROM server (not old desktop copy)");
             if (runRuleGuid == Guid.Empty)
                 Console.Error.WriteLine(">> RunRuleGuid is EMPTY — this is the most likely cause.");
             if (reCompile)
@@ -624,6 +648,7 @@ OPTIONS:
   --dll-path <folder>     Override appSettings:DllPath
   --test-db               Test RuleEngine + Sara SQL login only (no formula run)
   --print-city-guid       Print NidCity GUID for App.config (RunRule 2nd parameter)
+  --dump-engine-config    Show formula cache paths from SafaClassDesingerNew (run on server too)
 
 CONFIG (App.config):
   connectionStrings:RuleEngine  → ClsCommon.CnRuleString

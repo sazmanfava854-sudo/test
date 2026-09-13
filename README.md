@@ -91,14 +91,36 @@ Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
 ## BC30269: M_Out / Out duplicate (20 Member XML)
 
-Local compile merges all `DbRuleEngein.dbo.Member` rows for Solh (344) into one `.vb` file — duplicate `M_Out` errors are common on a PC.
+`CityGuid` is correct but your **PC has no formula compile cache**. Without cache, RunRule merges all 20 `Member` XML files locally and fails — even without `--recompile`.
 
-**Fix (in order):**
+**Fix (pick one):**
 
-1. Get city GUID: `RuleTrace.exe --print-city-guid` → put in `CityGuid` in config
-2. Run **without** `--recompile`
-3. Copy **pre-built formula cache** from the Sara app server (same machine as `c:\dll10`) — ask DBA
-4. Do not expect local recompile to work like the server unless CityGuid matches production
+### A) Run on Sara app server (recommended)
+
+1. RDP to the Sara application server (same machine as `c:\dll10`)
+2. Copy `RuleTrace` + `bin` there
+3. Run the same command — uses existing server cache (seconds, not minutes)
+
+### B) Copy server cache to your PC
+
+1. On server: `RuleTrace.exe --dump-engine-config` → note cache path
+2. Copy that folder to your PC
+3. In `App.config`:
+
+```xml
+<add key="FormulaCacheSource" value="D:\copied-from-server\SafaFormulaCache" />
+<add key="FormulaCachePath" value="C:\SafaFormulaCache" />
+```
+
+4. Also copy `dll10` **from server** (not an old desktop copy)
+
+### C) SQL to find cache metadata (DBA)
+
+```sql
+SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='RuleClass'
+  AND (COLUMN_NAME LIKE '%ssembl%' OR COLUMN_NAME LIKE '%Cache%' OR COLUMN_NAME LIKE '%Compile%');
+```
 
 ## BC2017: could not find library c:\dll10\BIZ.SC.DLL
 
