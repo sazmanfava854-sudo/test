@@ -40,7 +40,12 @@ if not defined MSBUILD (
 echo MSBuild: %MSBUILD%
 echo.
 
-%MSBUILD% RuleTrace.sln /nologo /v:m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU"
+REM Quote path when it contains spaces (e.g. C:\Program Files\...)
+if exist "%MSBUILD%" (
+  "%MSBUILD%" RuleTrace.sln /nologo /v:m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU"
+) else (
+  %MSBUILD% RuleTrace.sln /nologo /v:m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU"
+)
 if errorlevel 1 (
   echo.
   echo BUILD FAILED
