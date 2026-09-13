@@ -57,6 +57,8 @@
   <ItemGroup>
     <Compile Include="CompileDllPathSync.cs" />
     <Compile Include="FormulaCacheSync.cs" />
+    <Compile Include="LocalFormulaCache.cs" />
+    <Compile Include="MemberAnalyzer.cs" />
     <Compile Include="ConnectionBootstrap.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

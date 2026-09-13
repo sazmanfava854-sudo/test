@@ -89,38 +89,39 @@ Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–
 
 Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
+## Local formula cache (on your PC)
+
+RuleTrace builds cache under:
+
+```
+C:\SafaFormulaCache\{CityGuid}\344\
+```
+
+(or `FormulaCachePath` in config)
+
+**First successful compile** writes cache locally. Next runs are fast (no `--recompile`).
+
 ## BC30269: M_Out / Out duplicate (20 Member XML)
 
-`CityGuid` is correct but your **PC has no formula compile cache**. Without cache, RunRule merges all 20 `Member` XML files locally and fails — even without `--recompile`.
+Local compile fails when `SafaClassDesingerNew.dll` cannot merge 20 `Member` XML rows.
 
-**Fix (pick one):**
+**Fix (on your PC):**
 
-### A) Run on Sara app server (recommended)
+1. Replace `dll10` with **exact copy from Sara app server** (especially `SafaClassDesingerNew.dll`)
+2. `RuleTrace.exe --analyze-members --formula Solh` — check Member rows / NidCity
+3. One-time build cache:
 
-1. RDP to the Sara application server (same machine as `c:\dll10`)
-2. Copy `RuleTrace` + `bin` there
-3. Run the same command — uses existing server cache (seconds, not minutes)
-
-### B) Copy server cache to your PC
-
-1. On server: `RuleTrace.exe --dump-engine-config` → note cache path
-2. Copy that folder to your PC
-3. In `App.config`:
-
-```xml
-<add key="FormulaCacheSource" value="D:\copied-from-server\SafaFormulaCache" />
-<add key="FormulaCachePath" value="C:\SafaFormulaCache" />
+```powershell
+.\RuleTrace.exe --clear-formula-cache --nidproc "..." --formula Solh --recompile
 ```
 
-4. Also copy `dll10` **from server** (not an old desktop copy)
+4. Daily debug (uses local cache):
 
-### C) SQL to find cache metadata (DBA)
-
-```sql
-SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='RuleClass'
-  AND (COLUMN_NAME LIKE '%ssembl%' OR COLUMN_NAME LIKE '%Cache%' OR COLUMN_NAME LIKE '%Compile%');
+```powershell
+.\RuleTrace.exe --nidproc "..." --formula Solh --watch Calc_Chandganeh
 ```
+
+If compile still fails, send output of `--analyze-members` and ensure `CityGuid` matches your `NidCity` group.
 
 ## BC2017: could not find library c:\dll10\BIZ.SC.DLL
 

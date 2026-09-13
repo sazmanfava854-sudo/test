@@ -51,6 +51,9 @@ namespace RuleTrace
                 if (HasFlag(args, "--dump-engine-config"))
                     return DumpEngineConfig(args);
 
+                if (HasFlag(args, "--analyze-members"))
+                    return AnalyzeMembers(args);
+
                 _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
                 if (string.IsNullOrWhiteSpace(_dllPath) || !Directory.Exists(_dllPath))
                 {
@@ -85,6 +88,8 @@ namespace RuleTrace
             Console.WriteLine("RunRuleGuid : {0}", runRuleGuid);
             Console.WriteLine("ReCompile   : {0}", options.ReCompile);
             PrintFormulaMemberStats(nidRuleClass, options.ReCompile);
+            LocalFormulaCache.Prepare(nidRuleClass, runRuleGuid, options.ClearFormulaCache);
+            LocalFormulaCache.TrySeedFromDatabase(nidRuleClass, runRuleGuid);
             FormulaCacheSync.Apply(nidRuleClass, runRuleGuid);
 
             // ── 1. Compile / cache formula assembly ──
@@ -107,6 +112,7 @@ namespace RuleTrace
                 Console.Error.WriteLine("=== COMPILE ERRORS ===");
                 foreach (var err in result.CompilerErrors)
                     Console.Error.WriteLine("  {0}", err);
+                LocalFormulaCache.SaveCompileArtifacts(result.CompilerErrors);
                 PrintCompileErrorHelp(nidRuleClass, runRuleGuid, options.ReCompile);
                 return 4;
             }
@@ -255,6 +261,26 @@ namespace RuleTrace
             return (bytes / (1024.0 * 1024.0)).ToString("0.#") + " MB";
         }
 
+        private static int AnalyzeMembers(string[] args)
+        {
+            _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
+            if (!string.IsNullOrWhiteSpace(_dllPath) && Directory.Exists(_dllPath))
+            {
+                AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+                ConnectionBootstrap.Apply(_dllPath);
+            }
+
+            string formula = GetArg(args, "--formula") ?? "Solh";
+            if (!FormulaMap.TryGetValue(formula, out int nidRuleClass))
+            {
+                Console.Error.WriteLine("ERROR: unknown formula {0}", formula);
+                return 2;
+            }
+
+            MemberAnalyzer.Print(nidRuleClass);
+            return 0;
+        }
+
         private static int DumpEngineConfig(string[] args)
         {
             _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
@@ -308,10 +334,10 @@ namespace RuleTrace
             Console.Error.WriteLine("  1) Set CityGuid (NidCity for Mashhad):  RuleTrace.exe --print-city-guid");
             Console.Error.WriteLine("     Then in RuleTrace.exe.config:  <add key=\"CityGuid\" value=\"...\" />");
             Console.Error.WriteLine("  2) Do NOT use --recompile on your PC");
-            Console.Error.WriteLine("  3) BEST: run RuleTrace.exe on Sara app server (RDP) where cache already exists");
-            Console.Error.WriteLine("  4) Or copy server formula cache -> FormulaCacheSource in App.config");
-            Console.Error.WriteLine("  5) RuleTrace.exe --dump-engine-config  (on server vs PC — compare paths)");
-            Console.Error.WriteLine("  6) Ensure dll10 is exact copy FROM server (not old desktop copy)");
+            Console.Error.WriteLine("  3) Local cache folder: {0}", LocalFormulaCache.GetCacheKeyFolder(nidRuleClass, runRuleGuid));
+            Console.Error.WriteLine("  4) RuleTrace.exe --analyze-members --formula Solh");
+            Console.Error.WriteLine("  5) Replace dll10 with EXACT copy from Sara app server (same SafaClassDesingerNew.dll)");
+            Console.Error.WriteLine("  6) RuleTrace.exe --clear-formula-cache ... then retry once with --recompile");
             if (runRuleGuid == Guid.Empty)
                 Console.Error.WriteLine(">> RunRuleGuid is EMPTY — this is the most likely cause.");
             if (reCompile)
@@ -572,6 +598,7 @@ namespace RuleTrace
                 EncryptCode = GetArg(args, "--encrypt") ?? string.Empty,
                 ReCompile = HasFlag(args, "--recompile"),
                 ShowAllParams = HasFlag(args, "--all-params"),
+                ClearFormulaCache = HasFlag(args, "--clear-formula-cache"),
             };
 
             string district = GetArg(args, "--district");
@@ -648,7 +675,9 @@ OPTIONS:
   --dll-path <folder>     Override appSettings:DllPath
   --test-db               Test RuleEngine + Sara SQL login only (no formula run)
   --print-city-guid       Print NidCity GUID for App.config (RunRule 2nd parameter)
-  --dump-engine-config    Show formula cache paths from SafaClassDesingerNew (run on server too)
+  --dump-engine-config    Show formula cache paths from SafaClassDesingerNew
+  --analyze-members       Show DbRuleEngein.dbo.Member rows for --formula
+  --clear-formula-cache   Delete local compile cache before run (build fresh cache)
 
 CONFIG (App.config):
   connectionStrings:RuleEngine  → ClsCommon.CnRuleString
@@ -680,6 +709,7 @@ SQL to find NidProc:
             public int District { get; set; }
             public Guid? CityGuid { get; set; }
             public bool ReCompile { get; set; }
+            public bool ClearFormulaCache { get; set; }
             public bool ShowAllParams { get; set; }
             public Dictionary<string, string> Parameters { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public Dictionary<string, string> FactoryParameters { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

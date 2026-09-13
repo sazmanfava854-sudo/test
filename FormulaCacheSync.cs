@@ -25,8 +25,8 @@ namespace RuleTrace
 
             PatchEngineCachePaths(localRoot);
             Console.WriteLine("Formula cache: {0}", localRoot);
-            if (string.IsNullOrWhiteSpace(source))
-                Console.WriteLine("TIP           : set FormulaCacheSource to server cache folder (ask DBA, near c:\\dll10)");
+            if (!string.IsNullOrWhiteSpace(source))
+                Console.WriteLine("Formula cache: optional import from FormulaCacheSource");
         }
 
         public static void DumpEnginePaths()
