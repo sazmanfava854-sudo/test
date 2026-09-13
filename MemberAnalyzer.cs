@@ -31,7 +31,9 @@ GROUP BY NidCity", nidRuleClass);
             }
 
             TryQuery(ruleEngine, @"
-SELECT TOP 20 *
+SELECT TOP 20
+       DATALENGTH(XmlBody) AS XmlBytes,
+       CASE WHEN CAST(XmlBody AS NVARCHAR(200)) LIKE '%M_Out%' THEN 1 ELSE 0 END AS HasM_Out
 FROM dbo.Member WHERE NidClass = @nid", nidRuleClass);
 
             Console.WriteLine();
