@@ -117,52 +117,13 @@ namespace RuleTrace
             if (seen.Add(full)) list.Add(full);
         }
 
-        /// <summary>Wire compiled assembly into ClsRunRuleResult if possible; else return a lightweight host.</summary>
+        /// <summary>Run compiled formula via DirectFormulaHost (reliable; avoids broken ClsRunRuleResult after vbc).</summary>
         public static object CreateRunHost(Assembly safa, object cls, CompileOutcome compiled, Action<string> log)
         {
-            Type tResult = safa.GetType("SafaClassDesingerNew.ClsRunRuleResult", false);
-            if (tResult != null)
-            {
-                try
-                {
-                    object result = Activator.CreateInstance(tResult);
-                    Patch(result, cls, compiled.Assembly, compiled.FormulaType);
-                    log("Run host     : ClsRunRuleResult wrapper");
-                    return result;
-                }
-                catch (Exception ex) { log("Run host     : ClsRunRuleResult failed — " + ex.Message); }
-            }
-
-            log("Run host     : DirectFormulaHost (ClsRunRuleResult not wired)");
+            log("Run host     : DirectFormulaHost -> " + compiled.FormulaType.FullName);
             return new DirectFormulaHost { ClassDesigner = cls, Assembly = compiled.Assembly, FormulaType = compiled.FormulaType };
         }
 
-        private static void Patch(object result, object cls, Assembly asm, Type formulaType)
-        {
-            string[] clsNames = { "ClassDesinger", "ClassDesigner", "ClsClass", "M_Class" };
-            string[] asmNames = { "Assembly", "MyAssembly", "CompiledAssembly", "FormulaAssembly", "Assem", "M_Assembly" };
-            string[] typeNames = { "TypeClass", "FormulaType", "ClassType", "M_Type" };
-            string[] instNames = { "Instance", "ClassInstance", "ObjClass", "M_Instance" };
-
-            foreach (string n in clsNames) TrySet(result, n, cls);
-            foreach (string n in asmNames) TrySet(result, n, asm);
-            foreach (string n in typeNames) TrySet(result, n, formulaType);
-            if (formulaType != null)
-            {
-                object inst = Activator.CreateInstance(formulaType);
-                foreach (string n in instNames) TrySet(result, n, inst);
-            }
-        }
-
-        private static void TrySet(object o, string name, object value)
-        {
-            Type t = o.GetType();
-            const BindingFlags f = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-            PropertyInfo p = t.GetProperty(name, f);
-            if (p != null && p.CanWrite) { try { p.SetValue(o, value, null); } catch { } return; }
-            FieldInfo fi = t.GetField(name, f);
-            if (fi != null) try { fi.SetValue(o, value); } catch { }
-        }
     }
 
     /// <summary>Fallback when ClsRunRuleResult cannot be constructed — runs compiled Solh via reflection.</summary>

@@ -112,147 +112,136 @@ namespace RuleTrace
             return new List<object>();
         }
 
-        /// <summary>Build one VB source: class shell once + all member bodies inside (fixes 20× M_Out).</summary>
+        /// <summary>Build one VB source: full class shell (ToString1) once + stripped member Sub/Function bodies inside.</summary>
         public static string BuildMergedVb(object cls, IList<MemberSource> sources, Action<string> log)
         {
-            string shell = InvokeString(cls, "GetStrOutClass") ?? InvokeString(cls, "ToString1") ?? string.Empty;
-            if (shell.Length < 100)
-                throw new InvalidOperationException("GetStrOutClass returned empty shell");
+            string shell = GetClassShell(cls);
+            if (shell.Length < 500)
+                throw new InvalidOperationException("class shell too short — ToString1 / GetStrOutClass empty");
 
-            int mOut = CountOccurrences(shell, "M_Out");
-            log("Merge shell  : GetStrOutClass len=" + shell.Length + ", M_Out=" + mOut);
+            int shellMOut = CountOccurrences(shell, "M_Out");
+            log("Merge shell  : len=" + shell.Length + ", M_Out=" + shellMOut + " (from ToString1 if len>5KB)");
 
-            var sb = new StringBuilder(shell.Length + sources.Sum(s => s.Code.Length) + 4096);
+            int cap = shell.Length + (int)Math.Min(sources.Sum(s => (long)s.Code.Length), int.MaxValue - shell.Length - 4096) + 4096;
+            var sb = new StringBuilder(cap);
             int endClass = shell.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
             if (endClass < 0) endClass = shell.LastIndexOf("EndClass", StringComparison.OrdinalIgnoreCase);
             if (endClass < 0) throw new InvalidOperationException("End Class not found in shell");
 
             sb.Append(shell.Substring(0, endClass));
             sb.AppendLine();
-            sb.AppendLine("' --- RuleTrace merged Member bodies from XmlBody <Body> ---");
+            sb.AppendLine("' --- RuleTrace: Member XmlBody methods (class shells stripped) ---");
             foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
             {
                 if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                string body = StripDuplicateClassShell(src.Code);
+                if (body.Length < 20) continue;
                 sb.AppendLine("#Region \"NidFunction " + src.NidMember + " " + src.Name + "\"");
-                sb.AppendLine(StripDuplicateClassShell(src.Code));
+                sb.AppendLine(body);
                 sb.AppendLine("#End Region");
                 sb.AppendLine();
             }
             sb.AppendLine(shell.Substring(endClass));
             string merged = sb.ToString();
-            log("Merged VB    : " + merged.Length + " chars, M_Out=" + CountOccurrences(merged, "M_Out") + " (expect 1)");
+            int totalMOut = CountOccurrences(merged, "M_Out");
+            log("Merged VB    : " + merged.Length + " chars, M_Out=" + totalMOut + " (expect 1–2)");
+            if (totalMOut > 3)
+                log("WARN merge   : still " + totalMOut + " M_Out — member bodies may contain nested shells");
             return merged;
         }
 
-        /// <summary>Remove class shell (M_Out/Out/Namespace/Class) from a member body that incorrectly carries it.</summary>
+        /// <summary>Full VB class header from ClsClass.ToString1 (~18KB); GetStrOutClass is only ~1KB and unusable.</summary>
+        private static string GetClassShell(object cls)
+        {
+            string best = string.Empty;
+            foreach (string name in new[] { "ToString1", "ToString", "ClassSource", "FullText" })
+            {
+                string s = ReadStringMember(cls, name);
+                if (s != null && s.Length > best.Length) best = s;
+            }
+            string getStr = InvokeString(cls, "GetStrOutClass");
+            if (!string.IsNullOrEmpty(getStr) && getStr.Length > best.Length) best = getStr;
+            return best ?? string.Empty;
+        }
+
+        private static string ReadStringMember(object o, string name)
+        {
+            object v = GetMember(o, name);
+            if (v is string) return (string)v;
+            return InvokeString(o, name);
+        }
+
+        /// <summary>Keep only Sub/Function/#Region blocks; drop duplicate M_Out/Out/Namespace/Class from member XML bodies.</summary>
         public static string StripDuplicateClassShell(string code)
         {
             if (string.IsNullOrWhiteSpace(code)) return string.Empty;
-            if (code.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) < 0
-                && code.IndexOf("Property Out As", StringComparison.OrdinalIgnoreCase) < 0)
-                return code.Trim();
+            string norm = code.Replace("\r\n", "\n");
 
-            var lines = code.Replace("\r\n", "\n").Split('\n');
-            int start = 0;
-            for (int i = 0; i < lines.Length; i++)
+            var parts = new List<string>();
+            var methodRx = new Regex(
+                @"(?ms)^\s*((?:Public|Private|Protected|Friend|Partial)?\s*(?:Overrides\s+)?(?:Sub|Function)\s+\w+.+?^End\s+(?:Sub|Function)\s*)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            foreach (Match m in methodRx.Matches(norm))
             {
-                string t = lines[i].Trim();
-                if (t.Length == 0 || t.StartsWith("'")) continue;
-                if (t.StartsWith("#Region", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Sub ", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Function ", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Public Sub", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Private Sub", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Protected Sub", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Public Function", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Private Function", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Dim ", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("Const ", StringComparison.OrdinalIgnoreCase))
-                {
-                    start = i;
-                    break;
-                }
+                string block = m.Groups[1].Value.Trim();
+                if (block.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                parts.Add(block.Replace("\n", "\r\n"));
             }
-            return string.Join("\r\n", lines.Skip(start)).Trim();
+
+            if (parts.Count > 0)
+                return string.Join("\r\n\r\n", parts);
+
+            var regionRx = new Regex(@"(?ms)^\s*(#Region\b.+?^#End Region)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            foreach (Match m in regionRx.Matches(norm))
+            {
+                string block = m.Groups[1].Value;
+                if (block.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0
+                    || block.IndexOf("Property Out As", StringComparison.OrdinalIgnoreCase) >= 0)
+                    continue;
+                parts.Add(block.Trim().Replace("\n", "\r\n"));
+            }
+            if (parts.Count > 0)
+                return string.Join("\r\n\r\n", parts);
+
+            norm = Regex.Replace(norm, @"(?ms)^\s*Private\s+M_Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            norm = Regex.Replace(norm, @"(?ms)^\s*Public\s+Property\s+Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var kept = new List<string>();
+            foreach (string line in norm.Split('\n'))
+            {
+                string t = line.Trim();
+                if (t.Length == 0) continue;
+                if (IsShellLine(t)) continue;
+                kept.Add(line);
+            }
+            return string.Join("\r\n", kept).Trim();
         }
 
-        /// <summary>Try engine compile methods after body injection; returns ClsRunRuleResult or null.</summary>
-        public static object TryCompile(Assembly safa, object cls, Guid cityGuid, string cacheFolder, string mergedVb, Action<string> log)
+        private static bool IsShellLine(string t)
         {
-            Type tCommon = safa.GetType("SafaClassDesingerNew.ClsCommon", false);
-            Type tResult = safa.GetType("SafaClassDesingerNew.ClsRunRuleResult", false);
-            Type tCls = cls.GetType();
-
-            if (!string.IsNullOrWhiteSpace(mergedVb) && !string.IsNullOrWhiteSpace(cacheFolder))
-            {
-                try
-                {
-                    Directory.CreateDirectory(cacheFolder);
-                    string path = Path.Combine(cacheFolder, "RuleTrace_merged.vb");
-                    File.WriteAllText(path, mergedVb, Encoding.UTF8);
-                    log("Merged file  : " + path);
-                }
-                catch (Exception ex) { log("WARN         : cannot write merged.vb: " + ex.Message); }
-            }
-
-            // instance: ClsClass.Compile / RunRule / CreateResult
-            foreach (MethodInfo m in tCls.GetMethods(AnyInstance))
-            {
-                if (!m.Name.Contains("Compile") && !m.Name.Contains("RunRule") && !m.Name.Contains("Assembly")) continue;
-                object r = TryInvoke(log, "ClsClass." + m.Name, cls, m, cls, cityGuid, mergedVb, cacheFolder);
-                if (IsRunRuleResult(r, tResult)) return r;
-            }
-
-            if (tCommon != null)
-            {
-                foreach (MethodInfo m in tCommon.GetMethods(AnyStatic))
-                {
-                    if (tResult != null && m.ReturnType != tResult && !m.ReturnType.Name.Contains("RunRule")) continue;
-                    if (!m.Name.Contains("Compile") && !m.Name.Contains("RunRule") && !m.Name.Contains("Assembly") && !m.Name.Contains("Create")) continue;
-                    object r = TryInvoke(log, "ClsCommon." + m.Name, null, m, cls, cityGuid, mergedVb, cacheFolder);
-                    if (IsRunRuleResult(r, tResult)) return r;
-                }
-            }
-
-            return null;
+            if (t.StartsWith("Imports ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("Namespace ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.Equals("End Namespace", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.IndexOf(" Class ", StringComparison.OrdinalIgnoreCase) >= 0
+                || t.StartsWith("Public Class", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Partial Class", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.Equals("End Class", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (t.IndexOf("Property Out As", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (t.StartsWith("<Serializable", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
-        private static object TryInvoke(Action<string> log, string label, object target, MethodInfo m, object cls, Guid cityGuid, string mergedVb, string cacheFolder)
+        public static void SaveMergedFile(string mergedVb, string cacheFolder, Action<string> log)
         {
-            var ps = m.GetParameters();
-            if (ps.Length > 4) return null;
+            if (string.IsNullOrWhiteSpace(mergedVb) || string.IsNullOrWhiteSpace(cacheFolder)) return;
             try
             {
-                var args = new object[ps.Length];
-                for (int i = 0; i < ps.Length; i++)
-                {
-                    Type pt = ps[i].ParameterType;
-                    string pn = ps[i].Name ?? "";
-                    if (pt.IsInstanceOfType(cls)) args[i] = cls;
-                    else if (pt == typeof(Guid)) args[i] = cityGuid;
-                    else if (pt == typeof(bool)) args[i] = true;
-                    else if (pt == typeof(string) && pn.IndexOf("path", StringComparison.OrdinalIgnoreCase) >= 0) args[i] = cacheFolder;
-                    else if (pt == typeof(string) && (pn.IndexOf("source", StringComparison.OrdinalIgnoreCase) >= 0 || pn.IndexOf("code", StringComparison.OrdinalIgnoreCase) >= 0 || pn.IndexOf("vb", StringComparison.OrdinalIgnoreCase) >= 0))
-                        args[i] = mergedVb;
-                    else if (pt == typeof(int) || pt == typeof(double)) args[i] = Convert.ToInt32(GetMember(cls, "NidClass") ?? 0);
-                    else return null;
-                }
-                object r = m.Invoke(target, args);
-                log("Compile try  : " + label + "(" + ps.Length + " args) => " + (r == null ? "null" : r.GetType().Name));
-                return r;
+                Directory.CreateDirectory(cacheFolder);
+                string path = Path.Combine(cacheFolder, "RuleTrace_merged.vb");
+                File.WriteAllText(path, mergedVb, Encoding.UTF8);
+                log("Merged file  : " + path);
             }
-            catch (Exception ex)
-            {
-                log("Compile skip : " + label + " — " + FirstLine((ex.InnerException ?? ex).Message));
-                return null;
-            }
-        }
-
-        private static bool IsRunRuleResult(object r, Type tResult)
-        {
-            if (r == null) return false;
-            if (tResult != null && tResult.IsInstanceOfType(r)) return true;
-            return r.GetType().Name.IndexOf("RunRule", StringComparison.OrdinalIgnoreCase) >= 0;
+            catch (Exception ex) { log("WARN         : cannot write merged.vb: " + ex.Message); }
         }
 
         public static bool IsMOutDuplicateError(object compilerErrors)

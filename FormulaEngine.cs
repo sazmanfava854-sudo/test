@@ -618,10 +618,10 @@ namespace RuleTrace
                     LogCompilerErrors(compilerErrors, 12);
                     SaveMergedVb(compilerErrors, cacheFolder);
                     object retry = TryInjectedCompile(nid, cityGuid, r.ReCompile, cacheFolder);
-                    if (retry != null && !HasCompilerErrors(Get(retry, "CompilerErrors")))
+                    if (retry != null && (retry is DirectFormulaHost || !HasCompilerErrors(Get(retry, "CompilerErrors"))))
                     {
                         result = retry;
-                        _log("Retry        : compile OK (XmlBody inject + merge + vbc if needed)");
+                        _log("Retry        : compile OK (XmlBody + ToString1 shell + vbc)");
                     }
                 }
 
@@ -645,6 +645,8 @@ namespace RuleTrace
             ReportCache(cacheFolder);
 
             object classDesigner = Get(result, "ClassDesinger");
+            if (classDesigner == null && result is DirectFormulaHost)
+                classDesigner = ((DirectFormulaHost)result).ClassDesigner;
             if (classDesigner != null)
                 _log("Class        : " + Get(classDesigner, "Name") + " (FormulaGroup=" + Get(classDesigner, "FormulaGroup") + ")");
 
@@ -819,21 +821,19 @@ namespace RuleTrace
                 FormulaMerger.LogFunctionBodies(cls, _log, 5);
 
                 string merged = FormulaMerger.BuildMergedVb(cls, sources, _log);
+                FormulaMerger.SaveMergedFile(merged, cacheFolder, _log);
                 DateTime t0 = DateTime.UtcNow;
-                object result = FormulaMerger.TryCompile(_safa, cls, cityGuid, cacheFolder, merged, _log);
-                if (result == null)
-                {
-                    _log("Retry compile: engine has no Compile API — trying vbc (VBCodeProvider)...");
-                    var vbc = FormulaVbcCompiler.Compile(merged, cacheFolder, _s.DllPath, _log);
-                    if (vbc.Ok)
-                        result = FormulaVbcCompiler.CreateRunHost(_safa, cls, vbc, _log);
-                    else if (vbc.Errors.Count > 0)
-                        _log("VBC FAILED   : see errors above");
-                }
+                _log("Retry compile: vbc (VBCodeProvider) on merged source...");
+                var vbc = FormulaVbcCompiler.Compile(merged, cacheFolder, _s.DllPath, _log);
+                object result = null;
+                if (vbc.Ok)
+                    result = FormulaVbcCompiler.CreateRunHost(_safa, cls, vbc, _log);
+                else if (vbc.Errors.Count > 0)
+                    _log("VBC FAILED   : see vbc errors above");
                 if (result != null)
                     _log("Retry compile: done in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
                 else
-                    _log("Retry compile: all paths failed (engine + vbc)");
+                    _log("Retry compile: vbc failed — send RuleTrace_merged.vb from cache folder");
                 return result;
             }
             catch (Exception ex)
