@@ -155,6 +155,11 @@ WHERE NidIncome = @nid
         };
     }
 
+    private static string ResolveIdentifierSearchValue(IdentifierType type, string value) =>
+        type == IdentifierType.BillPaymentKey
+            ? BankInquiryConfirmHelper.NormalizeBillPaymentKey(value)
+            : value.Trim();
+
     private async Task<FicheHeaderDto?> TryLoadIncomeAsync(IdentifierType type, string value, CancellationToken ct)
     {
         var where = type == IdentifierType.FicheNo
@@ -191,7 +196,7 @@ WHERE {where}";
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@val", value.Trim());
+        cmd.Parameters.AddWithValue("@val", ResolveIdentifierSearchValue(type, value));
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
@@ -346,7 +351,7 @@ WHERE {where}";
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@val", value.Trim());
+        cmd.Parameters.AddWithValue("@val", ResolveIdentifierSearchValue(type, value));
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;

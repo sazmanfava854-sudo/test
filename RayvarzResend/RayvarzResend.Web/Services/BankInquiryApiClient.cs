@@ -154,6 +154,11 @@ public sealed class BankInquiryApiClient
             case BankInquiryStepKind.Paid:
             case BankInquiryStepKind.NotPaid:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
+            case BankInquiryStepKind.ServiceError when BankInquiryResponseParser.LooksLikePermissionDenied(lookupStep.Message):
+                return BankInquiryApiResult.Failed(
+                    $"استعلام قبوض: {lookupStep.Message} — کاربر epay به سرویس FindFiches دسترسی ندارد؛ با IT مجوز FinancialAssistant را بررسی کنید.",
+                    lookupStep.RawResponse,
+                    BankInquiryResponseParser.FicheLookupSourceLabel);
             case BankInquiryStepKind.RecordNotFound:
             case BankInquiryStepKind.ServiceError:
                 _logger.LogInformation(

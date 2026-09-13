@@ -122,7 +122,7 @@ public static class BankInquiryResponseParser
                 return RecordNotFoundStep(message);
 
             if (LooksLikePermissionDenied(message))
-                return RecordNotFoundStep(message);
+                return ServiceErrorStep(message, rawJson);
 
             return RecordNotFoundStep(
                 string.IsNullOrWhiteSpace(message) ? "فیش در استعلام قبوض یافت نشد" : message);

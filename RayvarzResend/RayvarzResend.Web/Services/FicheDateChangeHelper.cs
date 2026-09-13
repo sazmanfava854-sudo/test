@@ -87,7 +87,7 @@ public static class FicheDateChangeHelper
 
         var type = IdentifierDetector.Detect(value);
         return type == IdentifierType.BillPaymentKey
-            ? ("f.BillID + f.PaymentID = @idVal", "@idVal", value)
+            ? ("f.BillID + f.PaymentID = @idVal", "@idVal", BankInquiryConfirmHelper.NormalizeBillPaymentKey(value))
             : ("f.FicheNo = @idVal", "@idVal", value);
     }
 

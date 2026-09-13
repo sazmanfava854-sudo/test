@@ -75,8 +75,8 @@ public static class BankInquiryConfirmHelper
         else if (!string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId))
         {
             clauses.Add("f.BillID = @billId AND f.PaymentID = @paymentId");
-            parameters.Add(("@billId", req.BillId.Trim()));
-            parameters.Add(("@paymentId", req.PaymentId.Trim()));
+            parameters.Add(("@billId", NormalizeBillOrPayId(req.BillId)));
+            parameters.Add(("@paymentId", NormalizeBillOrPayId(req.PaymentId)));
         }
         else if (!string.IsNullOrWhiteSpace(req.IdentifierValue))
         {
@@ -107,6 +107,25 @@ public static class BankInquiryConfirmHelper
         return onlyDigits.Length < EpayBillPayIdLength
             ? onlyDigits.PadLeft(EpayBillPayIdLength, '0')
             : onlyDigits;
+    }
+
+    /// <summary>شناسه ادغام‌شده BillID+PaymentID — بخش پرداخت با صفر پیشرو تا ۱۳ رقم.</summary>
+    public static string NormalizeBillPaymentKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        var digits = NumericHelper.NormalizeDigits(value.Trim());
+        var onlyDigits = new string(digits.Where(char.IsDigit).ToArray());
+        if (onlyDigits.Length == 0)
+            return "";
+
+        if (onlyDigits.Length <= EpayBillPayIdLength)
+            return NormalizeBillOrPayId(onlyDigits);
+
+        var billPart = onlyDigits[..EpayBillPayIdLength];
+        var payPart = onlyDigits[EpayBillPayIdLength..];
+        return NormalizeBillOrPayId(billPart) + NormalizeBillOrPayId(payPart);
     }
 
     public static string? ValidateConfirmRequest(BankInquiryConfirmRequest? req)
