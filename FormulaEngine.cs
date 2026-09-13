@@ -621,7 +621,7 @@ namespace RuleTrace
                     if (retry != null && !HasCompilerErrors(Get(retry, "CompilerErrors")))
                     {
                         result = retry;
-                        _log("Retry        : compile OK after XmlBody inject + merge");
+                        _log("Retry        : compile OK (XmlBody inject + merge + vbc if needed)");
                     }
                 }
 
@@ -662,6 +662,7 @@ namespace RuleTrace
             {
                 var list = classDesigner == null ? null : Get(classDesigner, "UpdatedFunctionList") as IEnumerable;
                 if (list != null) foreach (object o in list) { entry = o == null ? null : o.ToString(); break; }
+                if (string.IsNullOrWhiteSpace(entry) && string.Equals(r.Formula, "Solh", StringComparison.OrdinalIgnoreCase)) entry = "Run";
                 if (string.IsNullOrWhiteSpace(entry)) entry = "Map_Function";
             }
 
@@ -678,6 +679,8 @@ namespace RuleTrace
             bool hasStop = PrintBizErrors(errorResult, r.Watch);
 
             var paramsValue = Get(result, "ParametersValue") as IDictionary;
+            if (paramsValue == null && result is DirectFormulaHost)
+                paramsValue = ((DirectFormulaHost)result).ParametersValue;
             LastParams.Clear();
             if (paramsValue != null)
             {
@@ -818,10 +821,19 @@ namespace RuleTrace
                 string merged = FormulaMerger.BuildMergedVb(cls, sources, _log);
                 DateTime t0 = DateTime.UtcNow;
                 object result = FormulaMerger.TryCompile(_safa, cls, cityGuid, cacheFolder, merged, _log);
+                if (result == null)
+                {
+                    _log("Retry compile: engine has no Compile API — trying vbc (VBCodeProvider)...");
+                    var vbc = FormulaVbcCompiler.Compile(merged, cacheFolder, _s.DllPath, _log);
+                    if (vbc.Ok)
+                        result = FormulaVbcCompiler.CreateRunHost(_safa, cls, vbc, _log);
+                    else if (vbc.Errors.Count > 0)
+                        _log("VBC FAILED   : see errors above");
+                }
                 if (result != null)
                     _log("Retry compile: done in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
                 else
-                    _log("Retry compile: no compatible Compile/RunRule method found on SafaClassDesingerNew");
+                    _log("Retry compile: all paths failed (engine + vbc)");
                 return result;
             }
             catch (Exception ex)
