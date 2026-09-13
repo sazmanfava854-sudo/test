@@ -89,6 +89,17 @@ Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–
 
 Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
+## BC30269: M_Out / Out duplicate (20 Member XML)
+
+Local compile merges all `DbRuleEngein.dbo.Member` rows for Solh (344) into one `.vb` file — duplicate `M_Out` errors are common on a PC.
+
+**Fix (in order):**
+
+1. Get city GUID: `RuleTrace.exe --print-city-guid` → put in `CityGuid` in config
+2. Run **without** `--recompile`
+3. Copy **pre-built formula cache** from the Sara app server (same machine as `c:\dll10`) — ask DBA
+4. Do not expect local recompile to work like the server unless CityGuid matches production
+
 ## BC2017: could not find library c:\dll10\BIZ.SC.DLL
 
 The formula compiler expects Sara DLLs at **`c:\dll10`** (server path). RuleTrace auto-syncs from `DllPath` on startup.

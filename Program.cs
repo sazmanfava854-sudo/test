@@ -45,6 +45,9 @@ namespace RuleTrace
                 if (HasFlag(args, "--test-db"))
                     return TestDatabaseConnections(args);
 
+                if (HasFlag(args, "--print-city-guid"))
+                    return PrintCityGuidOnly(args);
+
                 _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
                 if (string.IsNullOrWhiteSpace(_dllPath) || !Directory.Exists(_dllPath))
                 {
@@ -100,6 +103,7 @@ namespace RuleTrace
                 Console.Error.WriteLine("=== COMPILE ERRORS ===");
                 foreach (var err in result.CompilerErrors)
                     Console.Error.WriteLine("  {0}", err);
+                PrintCompileErrorHelp(nidRuleClass, runRuleGuid, options.ReCompile);
                 return 4;
             }
 
@@ -247,6 +251,49 @@ namespace RuleTrace
             return (bytes / (1024.0 * 1024.0)).ToString("0.#") + " MB";
         }
 
+        private static int PrintCityGuidOnly(string[] args)
+        {
+            _dllPath = GetArg(args, "--dll-path") ?? ConfigurationManager.AppSettings["DllPath"];
+            if (!string.IsNullOrWhiteSpace(_dllPath) && Directory.Exists(_dllPath))
+            {
+                AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+                ConnectionBootstrap.Apply(_dllPath);
+            }
+
+            string cityGuidArg = GetArg(args, "--city-guid");
+            Guid? overrideGuid = string.IsNullOrWhiteSpace(cityGuidArg) ? (Guid?)null : Guid.Parse(cityGuidArg);
+            Guid guid = ResolveRunRuleGuid(overrideGuid);
+            Console.WriteLine();
+            Console.WriteLine("CityGuid for RunRule (put in App.config):");
+            Console.WriteLine(guid == Guid.Empty ? "(not resolved — run SQL below)" : guid.ToString());
+            if (guid == Guid.Empty)
+            {
+                Console.WriteLine();
+                Console.WriteLine("SQL:");
+                Console.WriteLine("  SELECT ID, NidCity, Title FROM dbo.CI_City WHERE ID = 2;");
+            }
+            return guid == Guid.Empty ? 6 : 0;
+        }
+
+        private static void PrintCompileErrorHelp(int nidRuleClass, Guid runRuleGuid, bool reCompile)
+        {
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("=== COMPILE HELP ===");
+            Console.Error.WriteLine("BC30269 / M_Out duplicate: all {0} Member XML rows were merged into ONE .vb file,", nidRuleClass);
+            Console.Error.WriteLine("each with its own 'M_Out' / 'Out' — local compile often fails; Sara server uses pre-built cache.");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine("Try in order:");
+            Console.Error.WriteLine("  1) Set CityGuid (NidCity for Mashhad):  RuleTrace.exe --print-city-guid");
+            Console.Error.WriteLine("     Then in RuleTrace.exe.config:  <add key=\"CityGuid\" value=\"...\" />");
+            Console.Error.WriteLine("  2) Do NOT use --recompile on your PC");
+            Console.Error.WriteLine("  3) Copy formula cache from Sara app server (ask DBA) — folder often near c:\\dll10");
+            Console.Error.WriteLine("  4) Inspect merged VB:  dir %TEMP%\\*.vb  (largest recent file)");
+            if (runRuleGuid == Guid.Empty)
+                Console.Error.WriteLine(">> RunRuleGuid is EMPTY — this is the most likely cause.");
+            if (reCompile)
+                Console.Error.WriteLine(">> You used --recompile — local full compile of 20 large XML files often fails.");
+        }
+
         private static int TestDatabaseConnections(string[] args)
         {
             Console.WriteLine("=== RuleTrace DB test ===");
@@ -387,8 +434,11 @@ namespace RuleTrace
             string[] queries =
             {
                 "SELECT TOP 1 NidCity FROM dbo.CI_City WHERE ID = @id",
-                "SELECT TOP 1 NidCity FROM dbo.Base_City WHERE ID = @id",
+                "SELECT TOP 1 NidCity FROM dbo.CI_City WHERE CiCity = @id",
+                "SELECT TOP 1 NidCity FROM dbo.CI_City WHERE CityId = @id",
                 "SELECT TOP 1 NidProc FROM dbo.CI_City WHERE ID = @id",
+                "SELECT TOP 1 NidCity FROM dbo.Base_City WHERE ID = @id",
+                "SELECT TOP 1 NidCity FROM dbo.Base_City WHERE CiCity = @id",
             };
 
             foreach (string sql in queries)
@@ -573,6 +623,7 @@ OPTIONS:
   --all-params            Print all ParametersValue after run
   --dll-path <folder>     Override appSettings:DllPath
   --test-db               Test RuleEngine + Sara SQL login only (no formula run)
+  --print-city-guid       Print NidCity GUID for App.config (RunRule 2nd parameter)
 
 CONFIG (App.config):
   connectionStrings:RuleEngine  → ClsCommon.CnRuleString
