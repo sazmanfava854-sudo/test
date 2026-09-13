@@ -76,11 +76,37 @@ public class BankInquiryRequestBuilderTests
     public void BuildBillPayEnvelope_supports_pascal_case()
     {
         var json = JsonSerializer.Serialize(BankInquiryRequestBuilder.BuildBillPayEnvelope(
-            "FinancialAssistant", "secret", "9000152552362", "4172333232581", pascalCase: true));
+            "FinancialAssistant", "secret", "9000152552362", "4172333232581",
+            BankInquiryRequestFormat.PascalFlat));
 
         Assert.Equal(
             """{"UserName":"FinancialAssistant","Password":"secret","BillId":"9000152552362","PayId":"4172333232581"}""",
             json);
+    }
+
+    [Fact]
+    public void BuildBillPayEnvelope_supports_epay_billID_payID_keys()
+    {
+        var json = JsonSerializer.Serialize(BankInquiryRequestBuilder.BuildBillPayEnvelope(
+            "FinancialAssistant", "secret", "2059180578007", "0000060510575",
+            BankInquiryRequestFormat.EpayIdFlat));
+
+        Assert.Equal(
+            """{"userName":"FinancialAssistant","password":"secret","billID":"2059180578007","payID":"0000060510575"}""",
+            json);
+    }
+
+    [Fact]
+    public void BuildBillPayEnvelope_supports_request_wrapper()
+    {
+        var json = JsonSerializer.Serialize(BankInquiryRequestBuilder.BuildBillPayEnvelope(
+            "FinancialAssistant", "secret", "2059180578007", "0000060510575",
+            BankInquiryRequestFormat.CamelWrapped));
+
+        using var doc = JsonDocument.Parse(json);
+        var request = doc.RootElement.GetProperty("request");
+        Assert.Equal("2059180578007", request.GetProperty("billId").GetString());
+        Assert.Equal("0000060510575", request.GetProperty("payId").GetString());
     }
 
     [Fact]

@@ -62,6 +62,10 @@ public class FicheDateChangeHelperTests
         var bill = FicheDateChangeHelper.BuildIdentifierFilter("12345678901234567890123456");
         Assert.NotNull(bill);
         Assert.Contains("BillID", bill.Value.Clause);
+
+        var padded = FicheDateChangeHelper.BuildIdentifierFilter("205918057800760510575");
+        Assert.NotNull(padded);
+        Assert.Equal("20591805780070000060510575", padded.Value.Value);
     }
 
     [Fact]

@@ -227,13 +227,36 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
-    public void Parse_fiche_lookup_permission_denied_continues_to_online_bank()
+    public void Parse_fiche_lookup_permission_denied_includes_troubleshooting_hint()
     {
-        var raw = """{"intResult":3,"strResult":"مجوز دسترسی به سرویس را ندارید","isPay":0,"fichesId":0}""";
+        var raw = """{"intResult":1,"strResult":"مجوز دسترسی به سرویس را ندارید","isPay":0,"fichesId":0,"epayRef":0}""";
         var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
 
         Assert.Equal(BankInquiryStepKind.RecordNotFound, step.Kind);
         Assert.Contains("مجوز دسترسی", step.Message);
+        Assert.Contains("IP سرور", step.Message);
+    }
+
+    [Fact]
+    public void Parse_fiche_lookup_user_case_paid_response()
+    {
+        var raw = """
+            [{
+              "intResult": 0,
+              "strResult": "قبض با شناسه قبض و شناسه پرداخت وارد شده به شرح زیر یافت شد",
+              "billID": "2059180578007",
+              "payID": "0000060510575",
+              "payDate": "1405/06/15",
+              "insertDate": "1405/06/16",
+              "amount": 605000,
+              "branchCode": "0",
+              "epayRef": 1963523
+            }]
+            """;
+        var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
+
+        Assert.Equal(BankInquiryStepKind.Paid, step.Kind);
+        Assert.Equal("1405/06/15", step.PaymentDate);
     }
 
     [Fact]

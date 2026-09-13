@@ -1246,21 +1246,37 @@ function formatBankInquiryConfirmResult(data) {
   ].join('\n');
 }
 
-function formatBankInquiryDiagnoseStep(step) {
-  if (!step) return ['  (فراخوانی نشد)'];
+function formatBankInquiryDiagnoseStep(step, prefix = '  ') {
+  if (!step) return [`${prefix}(فراخوانی نشد)`];
   const lines = [
-    `  URL: ${step.url}`,
-    `  درخواست: ${step.requestBody}`,
-    `  HTTP: ${step.httpStatus ?? '-'} | زمان: ${step.elapsedMs} ms`,
-    `  نتیجه: ${step.kind} — ${step.message || ''}`
+    `${prefix}فرمت: ${step.requestFormat || '-'}`,
+    `${prefix}URL: ${step.url}`,
+    `${prefix}درخواست: ${step.requestBody}`,
+    `${prefix}HTTP: ${step.httpStatus ?? '-'} | زمان: ${step.elapsedMs} ms`,
+    `${prefix}نتیجه: ${step.kind} — ${step.message || ''}`
   ];
-  if (step.paymentDate) lines.push(`  تاریخ پرداخت: ${step.paymentDate}`);
-  if (step.exception) lines.push(`  خطا: ${step.exception}`);
-  lines.push(`  پاسخ خام: ${step.rawResponse || '(خالی)'}`);
+  if (step.paymentDate) lines.push(`${prefix}تاریخ پرداخت: ${step.paymentDate}`);
+  if (step.exception) lines.push(`${prefix}خطا: ${step.exception}`);
+  lines.push(`${prefix}پاسخ خام: ${step.rawResponse || '(خالی)'}`);
   return lines;
 }
 
 function formatBankInquiryDiagnoseResult(data) {
+  const ficheAttempts = Array.isArray(data.ficheLookupAttempts) ? data.ficheLookupAttempts : [];
+  const ficheLines = ficheAttempts.length > 1
+    ? ficheAttempts.flatMap((step, index) => [
+        `  [تلاش ${index + 1}/${ficheAttempts.length}]`,
+        ...formatBankInquiryDiagnoseStep(step, '    ')
+      ])
+    : formatBankInquiryDiagnoseStep(data.ficheLookup);
+
+  const permissionHint = (data.ficheLookup?.message || '').includes('مجوز دسترسی')
+    ? [
+        '',
+        '  نکته: پیام «مجوز دسترسی» در epay اغلب به‌خاطر IP سرور، رمز appsettings، پروکسی، یا فرمت JSON است — نه صرفاً نبودن کاربر در پنل.'
+      ]
+    : [];
+
   return [
     '=== تست مستقیم سرویس‌های استعلام epay (بدون تغییر در دیتابیس) ===',
     `شناسه قبض: ${data.billId} | شناسه پرداخت: ${data.payId}`,
@@ -1268,7 +1284,8 @@ function formatBankInquiryDiagnoseResult(data) {
     ...(data.error ? [`خطا: ${data.error}`] : []),
     '',
     '--- مرحله ۱: استعلام قبوض (epay_FindFichesByBillIDPayID) ---',
-    ...formatBankInquiryDiagnoseStep(data.ficheLookup),
+    ...ficheLines,
+    ...permissionHint,
     '',
     '--- مرحله ۲: استعلام آنی بانک (epay_EstelamOnLineBank) ---',
     ...formatBankInquiryDiagnoseStep(data.onlineBank)

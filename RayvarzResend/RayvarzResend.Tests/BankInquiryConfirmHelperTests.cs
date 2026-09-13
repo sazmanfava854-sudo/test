@@ -30,7 +30,34 @@ public class BankInquiryConfirmHelperTests
     {
         Assert.Equal("0000060510574", BankInquiryConfirmHelper.NormalizeBillOrPayId("60510574"));
         Assert.Equal("0000060510574", BankInquiryConfirmHelper.NormalizeBillOrPayId("0000060510574"));
+        Assert.Equal("0000060510575", BankInquiryConfirmHelper.NormalizeBillOrPayId("60510575"));
         Assert.Equal("2059120578008", BankInquiryConfirmHelper.NormalizeBillOrPayId("2059120578008"));
+        Assert.Equal("2059180578007", BankInquiryConfirmHelper.NormalizeBillOrPayId("2059180578007"));
+    }
+
+    [Fact]
+    public void NormalizeBillPaymentKey_pads_payment_part_when_combined_without_leading_zeros()
+    {
+        Assert.Equal(
+            "20591805780070000060510575",
+            BankInquiryConfirmHelper.NormalizeBillPaymentKey("20591805780070000060510575"));
+        Assert.Equal(
+            "20591805780070000060510575",
+            BankInquiryConfirmHelper.NormalizeBillPaymentKey("205918057800760510575"));
+    }
+
+    [Fact]
+    public void BuildSearchWhere_normalizes_bill_and_payment_ids()
+    {
+        var (where, parameters) = BankInquiryConfirmHelper.BuildSearchWhere(new BankInquirySearchRequest
+        {
+            BillId = "2059180578007",
+            PaymentId = "60510575"
+        });
+
+        Assert.Contains("BillID", where);
+        Assert.Equal("2059180578007", parameters.First(p => p.Name == "@billId").Value);
+        Assert.Equal("0000060510575", parameters.First(p => p.Name == "@paymentId").Value);
     }
 
     [Fact]
