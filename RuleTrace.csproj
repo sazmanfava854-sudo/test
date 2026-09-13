@@ -13,7 +13,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <LangVersion>latest</LangVersion>
-    <DllPath Condition="'$(DllPath)' == ''">C:\Users\sadathoseini-sh\Desktop\dll10</DllPath>
+    <DllPath Condition="'$(DllPath)' == ''">C:\Users\sadathoseini-sh\Desktop\dll new</DllPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -67,7 +67,9 @@
     <None Include="App.config" />
     <None Include="build.cmd" />
     <None Include="build.ps1" />
+    <None Include="BUILD.txt" />
     <None Include="README.md" />
+    <None Include="setup-dll10.cmd" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="CopySaraDlls" AfterTargets="Build">
