@@ -45,6 +45,23 @@ public static class BankInquiryResponseParser
 
     public static bool LooksLikePermissionDenied(string? message) =>
         ContainsAny(message, PermissionDeniedHints);
+
+    /// <summary>
+    /// epay اغلب همین متن را برای IP غیرمجاز، رمز اشتباه، یا فرمت JSON نادرست هم برمی‌گرداند —
+    /// نه فقط «نداشتن کاربر» در پنل.
+    /// </summary>
+    public static string ExplainPermissionLikeMessage(string? message)
+    {
+        if (!LooksLikePermissionDenied(message))
+            return message ?? "";
+
+        return (string.IsNullOrWhiteSpace(message) ? "مجوز دسترسی به سرویس را ندارید" : message.Trim())
+               + " — این پیام در epay معمولاً به‌خاطر یکی از موارد زیر است (حتی اگر کاربر در پنل وجود داشته باشد): "
+               + "IP سرور اجرای برنامه در whitelist epayws نیست؛ "
+               + "Password در appsettings با epay یکسان نیست؛ "
+               + "فرمت JSON درخواست؛ "
+               + "نیاز به BankInquiryConfirm:UseSystemProxy=true یا ProxyUrl از شبکه سازمان.";
+    }
     private static readonly string[] PaidMessageHints =
     [
         "پرداخت شده",
@@ -107,6 +124,9 @@ public static class BankInquiryResponseParser
                 && (ReadInt(root, "amount", "Amount") is > 0 || HasBillOrPayId(root)))
                 return PaidStep(paymentDate, message);
 
+            if (LooksLikePermissionDenied(message))
+                return RecordNotFoundStep(ExplainPermissionLikeMessage(message));
+
             if (HasFicheLookupRecord(root, intResult, fichesId, isPay, paymentDate))
             {
                 if (isPay == 0)
@@ -120,9 +140,6 @@ public static class BankInquiryResponseParser
 
             if (IsRecordNotFound(message, intResult, fichesId, isPay))
                 return RecordNotFoundStep(message);
-
-            if (LooksLikePermissionDenied(message))
-                return ServiceErrorStep(message, rawJson);
 
             return RecordNotFoundStep(
                 string.IsNullOrWhiteSpace(message) ? "فیش در استعلام قبوض یافت نشد" : message);

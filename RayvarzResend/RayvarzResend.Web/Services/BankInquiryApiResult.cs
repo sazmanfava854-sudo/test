@@ -3,6 +3,7 @@ namespace RayvarzResend.Web.Services;
 public sealed class BankInquiryDiagnosticsStep
 {
     public string Service { get; set; } = "";
+    public string RequestFormat { get; set; } = "";
     public string Url { get; set; } = "";
     public string RequestBody { get; set; } = "";
     public int? HttpStatus { get; set; }
@@ -23,6 +24,7 @@ public sealed class BankInquiryDiagnosticsResult
     public bool PasswordConfigured { get; set; }
     public string? Error { get; set; }
     public BankInquiryDiagnosticsStep? FicheLookup { get; set; }
+    public List<BankInquiryDiagnosticsStep> FicheLookupAttempts { get; set; } = [];
     public BankInquiryDiagnosticsStep? OnlineBank { get; set; }
 }
 

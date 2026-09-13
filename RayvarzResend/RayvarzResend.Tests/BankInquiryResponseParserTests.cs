@@ -227,13 +227,14 @@ public class BankInquiryResponseParserTests
     }
 
     [Fact]
-    public void Parse_fiche_lookup_permission_denied_is_service_error()
+    public void Parse_fiche_lookup_permission_denied_includes_troubleshooting_hint()
     {
         var raw = """{"intResult":1,"strResult":"مجوز دسترسی به سرویس را ندارید","isPay":0,"fichesId":0,"epayRef":0}""";
         var step = BankInquiryResponseParser.ParseFicheLookupStep(raw, 200);
 
-        Assert.Equal(BankInquiryStepKind.ServiceError, step.Kind);
+        Assert.Equal(BankInquiryStepKind.RecordNotFound, step.Kind);
         Assert.Contains("مجوز دسترسی", step.Message);
+        Assert.Contains("IP سرور", step.Message);
     }
 
     [Fact]

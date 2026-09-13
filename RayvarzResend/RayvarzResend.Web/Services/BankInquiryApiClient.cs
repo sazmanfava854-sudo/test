@@ -61,18 +61,35 @@ public sealed class BankInquiryApiClient
         var userName = _options.UserName.Trim();
         var password = _options.Password;
 
-        result.FicheLookup = await DiagnoseOneAsync(
-            _options.EffectiveFicheLookupServiceUrl,
-            BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, result.BillId, result.PayId),
-            BankInquiryResponseParser.ParseFicheLookupStep,
-            BankInquiryResponseParser.FicheLookupSourceLabel,
-            ct);
+        foreach (var format in BankInquiryRequestBuilder.AllFormats)
+        {
+            var attempt = await DiagnoseOneAsync(
+                _options.EffectiveFicheLookupServiceUrl,
+                BankInquiryRequestBuilder.BuildBillPayEnvelope(
+                    userName, password, result.BillId, result.PayId, format),
+                BankInquiryResponseParser.ParseFicheLookupStep,
+                BankInquiryResponseParser.FicheLookupSourceLabel,
+                format,
+                ct);
+            result.FicheLookupAttempts.Add(attempt);
+
+            if (attempt.Kind == BankInquiryStepKind.Paid.ToString()
+                || attempt.Kind == BankInquiryStepKind.NotPaid.ToString())
+            {
+                result.FicheLookup = attempt;
+                break;
+            }
+        }
+
+        result.FicheLookup ??= result.FicheLookupAttempts.LastOrDefault();
 
         result.OnlineBank = await DiagnoseOneAsync(
             _options.EffectiveServiceUrl,
-            BankInquiryRequestBuilder.BuildEnvelope(userName, password, result.BillId, result.PayId, _options.BankCode),
+            BankInquiryRequestBuilder.BuildEnvelope(
+                userName, password, result.BillId, result.PayId, _options.BankCode),
             BankInquiryResponseParser.ParseOnlineBankStep,
             BankInquiryResponseParser.OnlineBankSourceLabel,
+            BankInquiryRequestFormat.CamelFlat,
             ct);
 
         return result;
@@ -83,11 +100,13 @@ public sealed class BankInquiryApiClient
         object envelope,
         Func<string?, int, BankInquiryParsedStep> parser,
         string serviceLabel,
+        BankInquiryRequestFormat requestFormat,
         CancellationToken ct)
     {
         var step = new BankInquiryDiagnosticsStep
         {
             Service = serviceLabel,
+            RequestFormat = BankInquiryRequestBuilder.FormatLabel(requestFormat),
             Url = serviceUrl,
             RequestBody = RedactPassword(JsonSerializer.Serialize(envelope, JsonOptions))
         };
@@ -141,8 +160,9 @@ public sealed class BankInquiryApiClient
         var userName = _options.UserName.Trim();
         var password = _options.Password;
 
-        var lookupStep = await CallWithJsonFormatFallbackAsync(
-            usePascalCase => BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId, usePascalCase),
+        var lookupStep = await CallWithFormatFallbackAsync(
+            format => BankInquiryRequestBuilder.BuildBillPayEnvelope(
+                userName, password, billId, payId, format),
             _options.EffectiveFicheLookupServiceUrl,
             billId,
             BankInquiryResponseParser.ParseFicheLookupStep,
@@ -154,11 +174,6 @@ public sealed class BankInquiryApiClient
             case BankInquiryStepKind.Paid:
             case BankInquiryStepKind.NotPaid:
                 return lookupStep.ToApiResult(BankInquiryResponseParser.FicheLookupSourceLabel);
-            case BankInquiryStepKind.ServiceError when BankInquiryResponseParser.LooksLikePermissionDenied(lookupStep.Message):
-                return BankInquiryApiResult.Failed(
-                    $"استعلام قبوض: {lookupStep.Message} — کاربر epay به سرویس FindFiches دسترسی ندارد؛ با IT مجوز FinancialAssistant را بررسی کنید.",
-                    lookupStep.RawResponse,
-                    BankInquiryResponseParser.FicheLookupSourceLabel);
             case BankInquiryStepKind.RecordNotFound:
             case BankInquiryStepKind.ServiceError:
                 _logger.LogInformation(
@@ -181,9 +196,9 @@ public sealed class BankInquiryApiClient
         BankInquiryParsedStep? onlineStep = null;
         foreach (var serviceUrl in onlineUrls)
         {
-            onlineStep = await CallWithJsonFormatFallbackAsync(
-                usePascalCase => BankInquiryRequestBuilder.BuildEnvelope(
-                    userName, password, billId, payId, _options.BankCode, usePascalCase),
+            onlineStep = await CallWithFormatFallbackAsync(
+                format => BankInquiryRequestBuilder.BuildEnvelope(
+                    userName, password, billId, payId, _options.BankCode, format),
                 serviceUrl,
                 billId,
                 BankInquiryResponseParser.ParseOnlineBankStep,
@@ -238,8 +253,8 @@ public sealed class BankInquiryApiClient
         };
     }
 
-    private async Task<BankInquiryParsedStep> CallWithJsonFormatFallbackAsync(
-        Func<bool, object> buildEnvelope,
+    private async Task<BankInquiryParsedStep> CallWithFormatFallbackAsync(
+        Func<BankInquiryRequestFormat, object> buildEnvelope,
         string serviceUrl,
         string billId,
         Func<string?, int, BankInquiryParsedStep> parser,
@@ -248,11 +263,11 @@ public sealed class BankInquiryApiClient
     {
         BankInquiryParsedStep? lastStep = null;
 
-        foreach (var usePascalCase in new[] { false, true })
+        foreach (var format in BankInquiryRequestBuilder.AllFormats)
         {
             var step = await CallAndParseAsync(
                 serviceUrl,
-                buildEnvelope(usePascalCase),
+                buildEnvelope(format),
                 billId,
                 parser,
                 serviceLabel,
@@ -260,22 +275,40 @@ public sealed class BankInquiryApiClient
             lastStep = step;
 
             if (step.Kind is BankInquiryStepKind.Paid or BankInquiryStepKind.NotPaid)
-                return step;
+            {
+                if (format != BankInquiryRequestFormat.CamelFlat)
+                {
+                    _logger.LogInformation(
+                        "Bank inquiry {Service} succeeded with format={Format} billId={BillId}",
+                        serviceLabel, format, billId);
+                }
 
-            if (!ShouldTryAlternateJsonFormat(step, usePascalCase))
+                return step;
+            }
+
+            if (!ShouldTryNextRequestFormat(step, format))
                 return step;
         }
 
         return lastStep ?? ServiceUnavailableStep(serviceLabel, $"خطا در ارتباط با {serviceLabel}");
     }
 
-    private static bool ShouldTryAlternateJsonFormat(BankInquiryParsedStep step, bool usedPascalCase) =>
-        !usedPascalCase
-        && (step.Kind == BankInquiryStepKind.RecordNotFound
-            || (step.Kind == BankInquiryStepKind.ServiceError
-                && (step.Message.Contains("400", StringComparison.Ordinal)
-                    || step.Message.Contains("PayId", StringComparison.OrdinalIgnoreCase)
-                    || step.Message.Contains("نامعتبر", StringComparison.Ordinal))));
+    private static bool ShouldTryNextRequestFormat(BankInquiryParsedStep step, BankInquiryRequestFormat format)
+    {
+        if (step.Kind is BankInquiryStepKind.Paid or BankInquiryStepKind.NotPaid)
+            return false;
+
+        if (format == BankInquiryRequestFormat.PascalWrapped)
+            return false;
+
+        if (step.Kind == BankInquiryStepKind.RecordNotFound)
+            return true;
+
+        if (step.Kind == BankInquiryStepKind.ServiceError)
+            return true;
+
+        return false;
+    }
 
     private static BankInquiryApiResult WithLookupNote(BankInquiryApiResult result, string lookupNote)
     {
