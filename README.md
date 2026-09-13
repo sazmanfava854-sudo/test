@@ -69,11 +69,14 @@ Expected:
 OK — both databases reachable with debugger login.
 ```
 
-**Step 2 — full formula trace:**
+**Step 2 — full formula trace (fast, uses compile cache):**
 
 ```powershell
-.\RuleTrace.exe --nidproc "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28" --formula Solh --watch Calc_Chandganeh --recompile
+.\RuleTrace.exe --nidproc "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28" --formula Solh --watch Calc_Chandganeh
 ```
+
+Use `--recompile` **only** when VB code in `DbRuleEngein.dbo.Member` changed.  
+Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–20 minutes**.
 
 ## Config (`App.config` → `bin\RuleTrace.exe.config`)
 

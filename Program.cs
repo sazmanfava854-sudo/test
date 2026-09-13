@@ -78,9 +78,13 @@ namespace RuleTrace
             Console.WriteLine("Formula     : {0} (NidRuleClass={1})", options.Formula, nidRuleClass);
             Console.WriteLine("RunRuleGuid : {0}", runRuleGuid);
             Console.WriteLine("ReCompile   : {0}", options.ReCompile);
+            PrintFormulaMemberStats(nidRuleClass, options.ReCompile);
 
             // ── 1. Compile / cache formula assembly ──
-            Console.WriteLine("Compiling   : loading RuleClass {0} from DbRuleEngein (may take 30–120 sec)...", nidRuleClass);
+            if (options.ReCompile)
+                Console.WriteLine("Compiling   : FULL recompile of all Member XML for NidClass {0} — large formulas can take 5–20 min...", nidRuleClass);
+            else
+                Console.WriteLine("Compiling   : loading cached assembly for NidClass {0} (fast — omit --recompile unless VB code changed)...", nidRuleClass);
             var compileStarted = DateTime.UtcNow;
             ClsRunRuleResult result = FormulaClsCommon.RunRule(nidRuleClass, runRuleGuid, options.ReCompile);
             Console.WriteLine("Compiling   : done in {0:0.0}s", (DateTime.UtcNow - compileStarted).TotalSeconds);
@@ -185,6 +189,62 @@ namespace RuleTrace
             }
 
             return factory;
+        }
+
+        private static void PrintFormulaMemberStats(int nidRuleClass, bool reCompile)
+        {
+            string ruleEngine = ConfigurationManager.ConnectionStrings["RuleEngine"]?.ConnectionString;
+            if (string.IsNullOrWhiteSpace(ruleEngine))
+                return;
+
+            string[] queries =
+            {
+                @"SELECT COUNT(*) AS Cnt, ISNULL(SUM(DATALENGTH(XmlBody)),0) AS TotalBytes
+                  FROM dbo.Member WHERE NidClass = @nid",
+                @"SELECT COUNT(*) AS Cnt, ISNULL(SUM(DATALENGTH(Body)),0) AS TotalBytes
+                  FROM dbo.Member WHERE NidClass = @nid",
+                @"SELECT COUNT(*) AS Cnt, 0 AS TotalBytes FROM dbo.Member WHERE NidClass = @nid",
+            };
+
+            foreach (string sql in queries)
+            {
+                try
+                {
+                    using (var conn = new SqlConnection(ruleEngine))
+                    using (var cmd = new SqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@nid", nidRuleClass);
+                        conn.Open();
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.Read())
+                                return;
+
+                            int count = reader.GetInt32(0);
+                            long totalBytes = reader.GetInt64(1);
+                            string size = totalBytes > 0 ? FormatBytes(totalBytes) : "(unknown)";
+                            Console.WriteLine("Member rows : {0} in DbRuleEngein.dbo.Member (total XML ~{1})", count, size);
+
+                            if (reCompile && count >= 5)
+                                Console.WriteLine("TIP         : --recompile rebuilds ALL {0} XML bodies — for trace/debug drop --recompile after first successful run.", count);
+                            else if (!reCompile)
+                                Console.WriteLine("TIP         : using compile cache — add --recompile only when formula VB in Member table changed.");
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
+                    // try next column name
+                }
+            }
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("0.#") + " KB";
+            return (bytes / (1024.0 * 1024.0)).ToString("0.#") + " MB";
         }
 
         private static int TestDatabaseConnections(string[] args)
@@ -502,7 +562,7 @@ OPTIONS:
   --formula <name>        Rule | Solh | Income | Takhalofat | ...  (default: Solh)
   --watch <name>          Filter BizErrors by ErrorKey or ErrorTitel
   --entry <method>        VB entry point (default: first in UpdatedFunctionList)
-  --recompile             Force recompile (PReCompile=true)
+  --recompile             Force full recompile of ALL Member XML (slow: 20+ large files = minutes)
   --district <int>        ClsObjectFactory._District
   --city-guid <GUID>      RunRule city GUID (if not in web.config — often NidCity for Mashhad)
   --request-guid <GUID>   Security_RequestGuid (default: empty)
