@@ -1,161 +1,71 @@
-# RuleTrace
+# RuleTrace — Sara Formula Debugger (UI)
 
-Standalone Sara formula debugger — `C:\Users\sadathoseini-sh\Downloads\ruletrace`
+دیباگر فرمول‌های Sara بدون UI اصلی. کاربر NidProc/NidWorkItem را وارد می‌کند، فرمول (Solh, Rule, Income, ...) اجرا می‌شود و خروجی `AddError` / `BizErrors` و مقدار متغیر Watch نمایش داده می‌شود.
 
-## Structure
+## ساختار
 
 ```
 ruletrace/
   RuleTrace.sln
-  RuleTrace.csproj
-  Program.cs
-  ConnectionBootstrap.cs   ← forces debugger login (not hService)
-  App.config
-  build.cmd                ← use this (no PowerShell policy needed)
-  build.ps1
-  bin/
-    RuleTrace.exe
-    RuleTrace.exe.config   ← connection strings (debugger)
-    BIZ.SC.DLL
-    SafaClassDesingerNew.dll
-    ...
+  RuleTrace.csproj      ← WinForms, .NET 4.7.2, بدون reference به DLLهای Sara
+  Program.cs            ← نقطه شروع
+  MainForm.cs           ← UI
+  FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule
+  UserSettings.cs       ← ذخیره تنظیمات UI در bin\RuleTrace.user.ini
+  MemberAnalyzer.cs     ← تحلیل جدول Member
+  App.config            ← مقادیر پیش‌فرض
+  build.cmd             ← Build خودکار + اجرا
+  run.cmd               ← اجرای bin\RuleTrace.exe
+  bin\                  ← بعد از Build ساخته می‌شود
 ```
 
-## Build
+**نکته مهم:** پروژه هیچ reference به `BIZ.SC.DLL` / `SafaClassDesingerNew.dll` ندارد. DLLها **در زمان اجرا** از پوشه‌ای که در UI مشخص می‌کنید (پیش‌فرض `Desktop\dll10`) بارگذاری می‌شوند. بنابراین Build همیشه موفق است.
 
-**Recommended** (works even when PowerShell scripts are blocked):
+## Build (یک دستور)
 
 ```cmd
 cd C:\Users\sadathoseini-sh\Downloads\ruletrace
-build.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
+build.cmd
 ```
 
-Or in PowerShell without changing execution policy:
+- MSBuild را خودکار پیدا می‌کند (VS 2019/2022/Build Tools/dotnet).
+- خروجی: `bin\RuleTrace.exe` و بعد از Build خودکار اجرا می‌شود.
 
-```powershell
-cd C:\Users\sadathoseini-sh\Downloads\ruletrace
-cmd /c build.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
-```
+در PowerShell: `.\build.cmd`
 
-Optional — only if scripts are allowed on your machine:
+## استفاده
 
-```powershell
-.\build.ps1 -DllPath "C:\Users\sadathoseini-sh\Desktop\dll10"
-```
+1. **پوشه DLL**: `C:\Users\sadathoseini-sh\Desktop\dll10` (خودکار پیدا می‌شود؛ یا «انتخاب پوشه»)
+2. **RuleEngine / Sara**: connection stringها با `debugger` (از App.config پر شده)
+3. **CityGuid**: `06065CA7-8B68-491F-A002-2AC9CAC8AE34` (خالی = از `CI_City` خوانده می‌شود)
+4. **تست اتصال DB** → باید `[RuleEngine] OK` و `[Sara] OK` ببینید
+5. **NidWorkItem** (مثلاً `11314989`) یا کد نوسازی → «جستجو در Sara» → NidProc پر می‌شود
+6. فرمول `Solh`، Watch `Calc_Chandganeh`
+7. **اجرا و دیباگ**
 
-Or manually:
+اولین بار **Recompile** را تیک بزنید (چند دقیقه). Cache در `پوشه Cache محلی` ساخته می‌شود. بارهای بعد بدون Recompile.
 
-```powershell
-$msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
-& $msbuild "RuleTrace.sln" /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:DllPath="C:\Users\sadathoseini-sh\Desktop\dll10"
-```
-
-MSBuild copies DLLs into `bin\` and **deletes `*.dll.config`** (those files often contain `hService`).
-
-## Run
-
-**Step 1 — test SQL only:**
-
-```powershell
-cd .\bin
-.\RuleTrace.exe --test-db
-```
-
-Expected:
+## Cache محلی
 
 ```
-[RuleEngine] OK — db=DbRuleEngein, login=debugger
-[Sara] OK — db=Sara8M03, login=debugger
-OK — both databases reachable with debugger login.
+{CachePath}\{CityGuid}\{NidRuleClass}\
 ```
 
-**Step 2 — full formula trace (fast, uses compile cache):**
+پیش‌فرض: `Desktop\dll10\SafaFormulaCache\06065CA7-...\344\`
 
-```powershell
-.\RuleTrace.exe --nidproc "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28" --formula Solh --watch Calc_Chandganeh
-```
+## خطاهای رایج
 
-Use `--recompile` **only** when VB code in `DbRuleEngein.dbo.Member` changed.  
-Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–20 minutes**.
+| خطا | علت / راه‌حل |
+|-----|--------------|
+| `Login failed for user 'hService'` | فایل‌های `*.dll.config` کنار DLLها — RuleTrace خودکار آن‌ها را `.bak` می‌کند |
+| `BC2017 could not find c:\dll10\BIZ.SC.DLL` | vbc داخل موتور به `c:\dll10` نیاز دارد — RuleTrace خودکار sync می‌کند؛ اگر دسترسی نبود یک بار as Administrator اجرا کنید |
+| `BC30269 'Out' has multiple definitions` / `M_Out` | نسخه `SafaClassDesingerNew.dll` با دیتابیس هم‌خوان نیست — DLLها را دقیقاً از سرور Sara کپی کنید. «تحلیل Member» را بزنید و خروجی را بفرستید |
+| `RunRule returned null` | اتصال RuleEngine یا `CnRuleString` |
 
-## Config (`App.config` → `bin\RuleTrace.exe.config`)
-
-```xml
-<connectionStrings>
-  <add name="RuleEngine" connectionString="Server=tcp:172.16.10.232;Database=DbRuleEngein;User Id=debugger;Password=Ra@123456;..." />
-  <add name="Sara"       connectionString="Server=tcp:172.16.10.232;Database=Sara8M03;User Id=debugger;Password=Ra@123456;..." />
-</connectionStrings>
-```
-
-Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
-
-## Local formula cache (built on your PC — NOT from server)
-
-There is **no cache on the Sara server**. RuleTrace creates a **new cache** on your machine:
-
-```
-{FormulaCachePath}\{CityGuid}\344\
-```
-
-Example:
-
-```
-C:\Users\...\SafaFormulaCache\06065CA7-8B68-491F-A002-2AC9CAC8AE34\344\
-```
-
-Config:
-
-```xml
-<add key="FormulaCacheSource" value="" />   <!-- always empty -->
-<add key="FormulaCachePath" value="C:\Users\...\SafaFormulaCache" />
-```
-
-**First successful compile** (`--recompile` once) writes files into `FormulaCachePath`.  
-**Next runs** without `--recompile` reuse that local cache (fast).
-
-## BC30269: M_Out / Out duplicate (20 Member XML)
-
-Local compile fails when `SafaClassDesingerNew.dll` cannot merge 20 `Member` XML rows.
-
-**Fix (on your PC):**
-
-1. Replace `dll10` with **exact copy from Sara app server** (especially `SafaClassDesingerNew.dll`)
-2. `RuleTrace.exe --analyze-members --formula Solh` — check Member rows / NidCity
-3. One-time build cache:
-
-```powershell
-.\RuleTrace.exe --clear-formula-cache --nidproc "..." --formula Solh --recompile
-```
-
-4. Daily debug (uses local cache):
-
-```powershell
-.\RuleTrace.exe --nidproc "..." --formula Solh --watch Calc_Chandganeh
-```
-
-If compile still fails, send output of `--analyze-members` and ensure `CityGuid` matches your `NidCity` group.
-
-## BC2017: could not find library c:\dll10\BIZ.SC.DLL
-
-The formula compiler expects Sara DLLs at **`c:\dll10`** (server path). RuleTrace auto-syncs from `DllPath` on startup.
-
-If sync fails (permissions), run **once as Administrator**:
+## اجرای مستقیم با پارامتر (اختیاری)
 
 ```cmd
-setup-dll10.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
+bin\RuleTrace.exe --nidproc FA77A442-29CD-4DDC-ADEA-A3D3A6183F28 --formula Solh --watch Calc_Chandganeh
 ```
 
-Or manually:
-
-```cmd
-mkdir c:\dll10
-xcopy /Y "C:\Users\sadathoseini-sh\Desktop\dll10\*" "c:\dll10\"
-```
-
-## hService login error
-
-If you still see `Login failed for user 'hService'`:
-
-1. Rebuild with `build.cmd` (removes sidecar `*.dll.config` from `bin\`).
-2. Confirm `bin\RuleTrace.exe.config` has `User Id=debugger` (not `hService`).
-3. On first run, ConnectionBootstrap renames any remaining `*.dll.config` to `*.dll.config.hService.bak`.
+فقط فیلدها را پر می‌کند؛ اجرا با دکمه.

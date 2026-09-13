@@ -1,40 +1,56 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
+title RuleTrace build
 
-set "DllPath=%~1"
-if "%DllPath%"=="" set "DllPath=C:\Users\sadathoseini-sh\Desktop\dll new"
-
-set "CACHE_PATH=C:\Users\sadathoseini-sh\Desktop\dll new\SafaFormulaCache"
-if not exist "%CACHE_PATH%" mkdir "%CACHE_PATH%"
-
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-if not exist "%VSWHERE%" (
-  echo ERROR: vswhere not found. Install Visual Studio or Build Tools.
-  exit /b 1
-)
+echo ============================================
+echo  RuleTrace build  (no Sara DLL needed here)
+echo ============================================
 
 set "MSBUILD="
-for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do set "MSBUILD=%%i"
+
+REM 1) vswhere (VS 2017+ / Build Tools)
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" (
+  for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do set "MSBUILD=%%i"
+)
+
+REM 2) well-known VS paths
+if not defined MSBUILD for %%p in (
+  "%ProgramFiles%\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
+  "%ProgramFiles%\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
+  "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+  "%ProgramFiles%\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+  "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe"
+  "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe"
+  "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+) do if not defined MSBUILD if exist %%p set "MSBUILD=%%~p"
+
+REM 3) dotnet msbuild (if .NET SDK is installed)
+if not defined MSBUILD where dotnet >nul 2>nul && set "MSBUILD=dotnet msbuild"
 
 if not defined MSBUILD (
-  echo ERROR: MSBuild not found.
+  echo.
+  echo ERROR: MSBuild not found. Install "Visual Studio Build Tools" ^(.NET desktop build tools^).
+  echo        https://aka.ms/vs/17/release/vs_BuildTools.exe
+  pause
   exit /b 1
 )
 
-echo MSBuild : %MSBUILD%
-echo DllPath : %DllPath%
+echo MSBuild: %MSBUILD%
 echo.
 
-"%MSBUILD%" RuleTrace.sln /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:DllPath="%DllPath%"
-if errorlevel 1 exit /b 1
+%MSBUILD% RuleTrace.sln /nologo /v:m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU"
+if errorlevel 1 (
+  echo.
+  echo BUILD FAILED
+  pause
+  exit /b 1
+)
 
 echo.
-echo Output : %~dp0bin\RuleTrace.exe
-echo Cache  : %CACHE_PATH%\06065CA7-8B68-491F-A002-2AC9CAC8AE34\344\
-echo.
-echo Next:
-echo   cd bin
-echo   RuleTrace.exe --test-db
-echo   setup-dll10.cmd "%DllPath%"
-echo   RuleTrace.exe --clear-formula-cache --nidproc "..." --formula Solh --recompile
+echo ============================================
+echo  OK  ->  %~dp0bin\RuleTrace.exe
+echo ============================================
+echo Starting RuleTrace...
+start "" "%~dp0bin\RuleTrace.exe"

@@ -1,96 +1,85 @@
 using System;
-using System.Configuration;
 using System.Data.SqlClient;
+using System.Text;
 
 namespace RuleTrace
 {
     internal static class MemberAnalyzer
     {
-        public static void Print(int nidRuleClass)
+        public static void Print(string ruleEngine, int nidRuleClass, Action<string> log)
         {
-            string ruleEngine = ConfigurationManager.ConnectionStrings["RuleEngine"]?.ConnectionString;
-            if (string.IsNullOrWhiteSpace(ruleEngine))
-            {
-                Console.Error.WriteLine("ERROR: RuleEngine connection string missing");
-                return;
-            }
+            log("=== Member analysis NidClass=" + nidRuleClass + " ===");
 
-            Console.WriteLine("=== Member analysis NidClass={0} ===", nidRuleClass);
-
-            TryQuery(ruleEngine, @"
+            Query(ruleEngine, log, @"
 SELECT COUNT(*) AS MemberCount,
        SUM(CASE WHEN CAST(XmlBody AS NVARCHAR(MAX)) LIKE '%M_Out%' THEN 1 ELSE 0 END) AS RowsWithM_Out
 FROM dbo.Member WHERE NidClass = @nid", nidRuleClass);
 
             if (ColumnExists(ruleEngine, "Member", "NidCity"))
             {
-                TryQuery(ruleEngine, @"
-SELECT NidCity, COUNT(*) AS Cnt
-FROM dbo.Member WHERE NidClass = @nid
-GROUP BY NidCity", nidRuleClass);
+                Query(ruleEngine, log, @"
+SELECT NidCity, COUNT(*) AS Cnt FROM dbo.Member WHERE NidClass = @nid GROUP BY NidCity", nidRuleClass);
             }
 
-            TryQuery(ruleEngine, @"
-SELECT TOP 20
-       DATALENGTH(XmlBody) AS XmlBytes,
-       CASE WHEN CAST(XmlBody AS NVARCHAR(200)) LIKE '%M_Out%' THEN 1 ELSE 0 END AS HasM_Out
+            Query(ruleEngine, log, @"
+SELECT TOP 25 DATALENGTH(XmlBody) AS XmlBytes,
+       CASE WHEN CAST(XmlBody AS NVARCHAR(MAX)) LIKE '%M_Out%' THEN 1 ELSE 0 END AS HasM_Out
 FROM dbo.Member WHERE NidClass = @nid", nidRuleClass);
 
-            Console.WriteLine();
-            Console.WriteLine("If multiple NidCity groups: RunRule must filter by your CityGuid.");
-            Console.WriteLine("If RowsWithM_Out = MemberCount: each XML has M_Out — local compile needs correct SafaClassDesingerNew.dll from server.");
+            Query(ruleEngine, log, @"
+SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'Member' ORDER BY ORDINAL_POSITION", nidRuleClass);
+
+            log("");
+            log("If RowsWithM_Out = MemberCount: every XML carries the class shell — engine must merge as Partial Class.");
+            log("If NidCity groups > 1: RunRule must filter by your CityGuid.");
         }
 
-        private static bool ColumnExists(string connectionString, string table, string column)
+        private static void Query(string cs, Action<string> log, string sql, int nid)
         {
             try
             {
-                using (var conn = new SqlConnection(connectionString))
-                using (var cmd = new SqlCommand(
-                    "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=@t AND COLUMN_NAME=@c", conn))
+                using (var c = new SqlConnection(cs))
+                using (var cmd = new SqlCommand(sql, c))
+                {
+                    cmd.Parameters.AddWithValue("@nid", nid);
+                    c.Open();
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        var sb = new StringBuilder();
+                        for (int i = 0; i < r.FieldCount; i++) sb.Append(r.GetName(i)).Append('\t');
+                        log(sb.ToString());
+                        while (r.Read())
+                        {
+                            sb.Clear();
+                            for (int i = 0; i < r.FieldCount; i++)
+                                sb.Append(r.IsDBNull(i) ? "" : r.GetValue(i).ToString()).Append('\t');
+                            log(sb.ToString());
+                        }
+                    }
+                }
+                log("");
+            }
+            catch (Exception ex)
+            {
+                log("SQL skipped: " + ex.Message);
+            }
+        }
+
+        private static bool ColumnExists(string cs, string table, string column)
+        {
+            try
+            {
+                using (var c = new SqlConnection(cs))
+                using (var cmd = new SqlCommand("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=@t AND COLUMN_NAME=@c", c))
                 {
                     cmd.Parameters.AddWithValue("@t", table);
                     cmd.Parameters.AddWithValue("@c", column);
-                    conn.Open();
+                    c.Open();
                     return cmd.ExecuteScalar() != null;
                 }
             }
             catch { return false; }
-        }
-
-        private static void TryQuery(string connectionString, string sql, int nidRuleClass)
-        {
-            try
-            {
-                using (var conn = new SqlConnection(connectionString))
-                using (var cmd = new SqlCommand(sql, conn))
-                {
-                    cmd.Parameters.AddWithValue("@nid", nidRuleClass);
-                    conn.Open();
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        int fieldCount = reader.FieldCount;
-                        bool header = true;
-                        while (reader.Read())
-                        {
-                            if (header)
-                            {
-                                for (int i = 0; i < fieldCount; i++)
-                                    Console.Write(reader.GetName(i) + "\t");
-                                Console.WriteLine();
-                                header = false;
-                            }
-                            for (int i = 0; i < fieldCount; i++)
-                                Console.Write((reader.IsDBNull(i) ? "" : reader.GetValue(i).ToString()) + "\t");
-                            Console.WriteLine();
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("SQL skipped: {0}", ex.Message);
-            }
         }
     }
 }
