@@ -153,6 +153,7 @@ namespace RuleTrace
             _log("  SafaClassDesingerNew " + _safa.GetName().Version);
             _log("  BIZ.SC               " + _sc.GetName().Version);
             if (_sa != null) _log("  BIZ.SA               " + _sa.GetName().Version);
+            FormulaMerger.PatchEngineFlags(_safa, _log);
         }
 
         private static void InstallResolver(string dir)
@@ -608,23 +609,36 @@ namespace RuleTrace
             }
 
             object compilerErrors = Get(result, "CompilerErrors");
-            if (compilerErrors != null && Convert.ToBoolean(Get(compilerErrors, "HasErrors") ?? false))
+            if (HasCompilerErrors(compilerErrors))
             {
-                _log("");
-                _log("=== COMPILE ERRORS ===");
-                int shown = 0;
-                foreach (object e in (IEnumerable)compilerErrors)
+                if (FormulaMerger.IsMOutDuplicateError(compilerErrors))
                 {
-                    if (shown++ < 40) _log("  " + e);
+                    _log("");
+                    _log("=== COMPILE ERRORS (M_Out duplicate — retry with XmlBody inject) ===");
+                    LogCompilerErrors(compilerErrors, 12);
+                    SaveMergedVb(compilerErrors, cacheFolder);
+                    object retry = TryInjectedCompile(nid, cityGuid, r.ReCompile, cacheFolder);
+                    if (retry != null && !HasCompilerErrors(Get(retry, "CompilerErrors")))
+                    {
+                        result = retry;
+                        _log("Retry        : compile OK after XmlBody inject + merge");
+                    }
                 }
-                if (shown > 40) _log("  ... (" + shown + " errors total)");
-                SaveMergedVb(compilerErrors, cacheFolder);
-                _log("");
-                _log("راهنما: خطای M_Out/Out تکراری = موتور ۲۰ ردیف Member را به جای یک کلاس، ۲۰ پوسته خالی کرده است.");
-                _log("        خروجی «ENGINE INSPECT» زیر و «تحلیل Member» را برای بررسی بفرستید.");
-                try { InspectClass(nid, cityGuid); }
-                catch (Exception ex) { _log("Inspect failed: " + ex.Message); }
-                return 4;
+
+                if (HasCompilerErrors(Get(result, "CompilerErrors")))
+                {
+                    _log("");
+                    _log("=== COMPILE ERRORS ===");
+                    LogCompilerErrors(Get(result, "CompilerErrors"), 40);
+                    SaveMergedVb(Get(result, "CompilerErrors"), cacheFolder);
+                    _log("");
+                    _log("تشخیص: کد در XmlBody/<Body> موجود است (تحلیل Member) اما موتور هنگام merge بدنه را خالی می‌گذارد.");
+                    _log("        EncryptXmlBody پر است — احتمالاً موتور از رمزنگاری می‌خواند و روی PC decrypt نمی‌شود.");
+                    _log("        RuleTrace inject + merge را امتحان کرد؛ اگر باز خطا داد DLL دقیق سرور Sara لازم است.");
+                    try { InspectClass(nid, cityGuid); }
+                    catch (Exception ex) { _log("Inspect failed: " + ex.Message); }
+                    return 4;
+                }
             }
 
             _log("Compile      : OK");
@@ -769,6 +783,54 @@ namespace RuleTrace
             foreach (string f in files.Take(10)) _log("Cached       : " + f);
         }
 
+        private static bool HasCompilerErrors(object compilerErrors)
+        {
+            return compilerErrors != null && Convert.ToBoolean(Get(compilerErrors, "HasErrors") ?? false);
+        }
+
+        private void LogCompilerErrors(object compilerErrors, int max)
+        {
+            int shown = 0;
+            foreach (object e in (IEnumerable)compilerErrors)
+            {
+                if (shown++ < max) _log("  " + e);
+            }
+            if (shown > max) _log("  ... (" + shown + " errors total)");
+        }
+
+        /// <summary>Inject XmlBody bodies into ClsFunction, build single merged VB, call engine compile APIs.</summary>
+        private object TryInjectedCompile(int nid, Guid cityGuid, bool recompile, string cacheFolder)
+        {
+            try
+            {
+                var sources = GetMemberSources(nid);
+                if (sources.Count == 0 || sources.All(s => s.Code.Length < 50))
+                {
+                    _log("Retry skip   : no XmlBody <Body> text in Member table");
+                    return null;
+                }
+
+                _log("Retry        : " + sources.Count + " member(s), " + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB VB from XmlBody");
+                object cls = FormulaMerger.CreateClassWithBodies(_safa, nid, cityGuid, true, sources, _log);
+                _log("After inject (ClsFunction.Body lengths):");
+                FormulaMerger.LogFunctionBodies(cls, _log, 5);
+
+                string merged = FormulaMerger.BuildMergedVb(cls, sources, _log);
+                DateTime t0 = DateTime.UtcNow;
+                object result = FormulaMerger.TryCompile(_safa, cls, cityGuid, cacheFolder, merged, _log);
+                if (result != null)
+                    _log("Retry compile: done in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
+                else
+                    _log("Retry compile: no compatible Compile/RunRule method found on SafaClassDesingerNew");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _log("Retry FAILED : " + ex.Message);
+                return null;
+            }
+        }
+
         private void SaveMergedVb(object compilerErrors, string cacheFolder)
         {
             try
@@ -838,6 +900,8 @@ namespace RuleTrace
                 return;
             }
             _log("ClsClass     : loaded in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
+            _log("Function bodies (ClsFunction.Body length — 0 = engine did not load code):");
+            FormulaMerger.LogFunctionBodies(cls, _log, 20);
             int budget = 400;
             DumpObject(cls, "ClsClass", 0, ref budget);
         }
@@ -1002,6 +1066,13 @@ namespace RuleTrace
             try
             {
                 var doc = System.Xml.Linq.XDocument.Parse(xml, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+                var bodyEl = doc.Descendants().FirstOrDefault(e => e.Name.LocalName.Equals("Body", StringComparison.OrdinalIgnoreCase) && !e.HasElements && e.Value.Length > 0);
+                if (bodyEl != null)
+                {
+                    var nameEl = doc.Descendants().FirstOrDefault(e => e.Name.LocalName.Equals("Name", StringComparison.OrdinalIgnoreCase) && !e.HasElements && e.Value.Length > 0 && e.Value.Length < 120);
+                    if (nameEl != null) name = nameEl.Value.Trim();
+                    return bodyEl.Value.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n");
+                }
                 string best = null;
                 foreach (var el in doc.Descendants())
                 {

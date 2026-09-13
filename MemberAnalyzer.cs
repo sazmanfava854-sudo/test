@@ -42,9 +42,9 @@ WHERE TABLE_NAME = 'Member' ORDER BY ORDINAL_POSITION", nidRuleClass);
             DumpXmlStructure(ruleEngine, nidRuleClass, log);
 
             log("");
-            log("If RowsWithM_Out = MemberCount: every XML carries the class shell — engine must merge as Partial Class.");
+            log("RowsWithM_Out < MemberCount: only some members carry M_Out shell — engine must merge as ONE class + methods.");
+            log("If XmlBytes large and <Body> has VB text but compile fails BC30269: engine reads EncryptXmlBody (EncBytes) not XmlBody.");
             log("If a NidMember has Versions > 1 with several ActiveRows: engine is not filtering versions => duplicates.");
-            log("If BodyBytes/EncBytes > 0 and XmlBytes small: the code is encrypted (needs the server's encryption key).");
         }
 
         /// <summary>Element layout of the first two XmlBody rows: shows where the VB code and member name live.</summary>

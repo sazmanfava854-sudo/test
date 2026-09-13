@@ -72,7 +72,11 @@ build.cmd
 - **تحلیل Member**: نسخه‌ها/`isActive` هر `NidMember`، حجم `Body` / `XmlBody` / `EncryptXmlBody` و ساختار عناصر XML (کجا کد است، کجا نام).
 - **بررسی موتور (ClsClass)**: `ClsClass(344, CityGuid, false)` را دقیقاً مانند `RunRule` می‌سازد و لیست Memberهایی که موتور خوانده (نام، اندازه Body، نسخه) و فیلدهای static `ClsCommon` را چاپ می‌کند. بعد از هر خطای کامپایل خودکار اجرا می‌شود.
 
-سه حالت ممکن: (۱) `EncryptXmlBody`/`Body` رمز است و کلید سرور لازم است؛ (۲) موتور همه نسخه‌های یک `NidMember` را می‌گیرد (فیلتر `isActive`/`Version` اعمال نمی‌شود)؛ (۳) نسخه `SafaClassDesingerNew 2012.5` ساختار XML جدید را نمی‌شناسد → DLL دقیق سرور لازم است.
+**علت رایج (تأیید شده با تحلیل Member شما):** کد VB در `XmlBody/<Body>` خوانا است (~۳۶۰K کاراکتر) اما `EncryptXmlBody` هم پر است؛ موتور `2012.5` هنگام compile از مسیر رمزنگاری می‌خواند، `ClsFunction.Body` خالی می‌ماند و ۲۰ پوسته `M_Out` کنار هم merge می‌شود.
+
+RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، یک فایل VB واحد می‌سازد (`RuleTrace_merged.vb` در پوشه cache) و متدهای Compile موتور را صدا می‌زند. در Log ببینید: `Retry : compile OK after XmlBody inject`.
+
+اگر retry هم خطا داد: DLL دقیق سرور Sara یا کلید `FormulaEncryptionCode` سرور لازم است.
 
 ## اخطار آنتی‌ویروس
 
