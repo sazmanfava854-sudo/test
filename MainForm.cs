@@ -22,18 +22,49 @@ namespace RuleTrace
         private CheckBox _chkRecompile, _chkClearCache, _chkAllParams;
         private ListView _lvCases;
         // actions
-        private Button _btnBrowse, _btnDetect, _btnTestDb, _btnLookup, _btnAnalyze, _btnRun, _btnClearLog, _btnSaveLog, _btnCopyLog;
+        private Button _btnBrowse, _btnDetect, _btnTestDb, _btnLookup, _btnAnalyze, _btnInspect, _btnRun, _btnClearLog, _btnSaveLog, _btnCopyLog;
         private TextBox _txtLog;
+        private TabControl _tabs;
+        private TabPage _tabLog, _tabDebug;
+        private DebugPanel _debug;
+        private GroupBox _grpSettings;
+        private Button _btnToggleSettings;
         private ToolStripStatusLabel _status;
         private ToolStripProgressBar _progress;
 
         private int _running;
+        private int _sourcesNid;
 
         public MainForm(UserSettings settings)
         {
             _settings = settings;
+            KeyPreview = true;
             BuildUi();
             LoadFromSettings();
+        }
+
+        /// <summary>VS-style keys: F10/F11 next step, Shift+F10 previous, F5 run (or run-to-end when a trace exists), Ctrl+Home first.</summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.F10:
+                case Keys.F11:
+                    if (_debug.HasTrace) { _tabs.SelectedTab = _tabDebug; _debug.StepNext(); return true; }
+                    break;
+                case Keys.F10 | Keys.Shift:
+                case Keys.F11 | Keys.Shift:
+                    if (_debug.HasTrace) { _tabs.SelectedTab = _tabDebug; _debug.StepPrev(); return true; }
+                    break;
+                case Keys.Home | Keys.Control:
+                    if (_debug.HasTrace && _tabs.SelectedTab == _tabDebug) { _debug.StepFirst(); return true; }
+                    break;
+                case Keys.F5:
+                    if (_debug.HasTrace && _tabs.SelectedTab == _tabDebug) _debug.StepLast();
+                    else if (_running == 0) RunFormula();
+                    return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         // ───────────────────────────── UI construction ─────────────────────────────
@@ -42,7 +73,7 @@ namespace RuleTrace
         {
             Text = "RuleTrace — Sara Formula Debugger";
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(1180, 820);
+            Size = new Size(1180, 880);
             MinimumSize = new Size(980, 680);
             Font = new Font("Segoe UI", 9F);
 
@@ -53,7 +84,8 @@ namespace RuleTrace
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
-            root.Controls.Add(BuildSettingsGroup(), 0, 0);
+            _grpSettings = BuildSettingsGroup();
+            root.Controls.Add(_grpSettings, 0, 0);
             root.Controls.Add(BuildCaseGroup(), 0, 1);
             root.Controls.Add(BuildActionBar(), 0, 2);
             root.Controls.Add(BuildLog(), 0, 3);
@@ -185,11 +217,21 @@ namespace RuleTrace
             _btnRun.Height = 34; _btnRun.Width = 160;
             _btnTestDb = Btn("تست اتصال DB", (s, e) => TestDb());
             _btnAnalyze = Btn("تحلیل Member", (s, e) => AnalyzeMembers());
+            _btnInspect = Btn("بررسی موتور (ClsClass)", (s, e) => InspectEngine());
             _btnClearLog = Btn("پاک کردن خروجی", (s, e) => _txtLog.Clear());
             _btnCopyLog = Btn("کپی خروجی", (s, e) => { if (_txtLog.TextLength > 0) Clipboard.SetText(_txtLog.Text); });
             _btnSaveLog = Btn("ذخیره خروجی...", (s, e) => SaveLog());
-            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnClearLog, _btnCopyLog, _btnSaveLog }) p.Controls.Add(b);
+            _btnToggleSettings = Btn("▲ پنهان کردن تنظیمات", (s, e) => ToggleSettings(!_grpSettings.Visible));
+            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnClearLog, _btnCopyLog, _btnSaveLog, _btnToggleSettings }) p.Controls.Add(b);
+            p.Controls.Add(new Label { Text = "کلیدها: F5 اجرا • F10 رویداد بعدی • Shift+F10 قبلی", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
             return p;
+        }
+
+        /// <summary>Hides the settings block so the debug tab gets the vertical space; settings stay editable after re-showing.</summary>
+        private void ToggleSettings(bool show)
+        {
+            _grpSettings.Visible = show;
+            _btnToggleSettings.Text = show ? "▲ پنهان کردن تنظیمات" : "▼ نمایش تنظیمات";
         }
 
         private Control BuildLog()
@@ -205,7 +247,19 @@ namespace RuleTrace
                 BackColor = Color.FromArgb(30, 30, 30),
                 ForeColor = Color.Gainsboro,
             };
-            return _txtLog;
+
+            _debug = new DebugPanel();
+            _debug.LoadSourcesRequested += () => LoadSources(force: true);
+            _debug.RunRequested += RunFormula;
+
+            _tabs = new TabControl { Dock = DockStyle.Fill };
+            _tabLog = new TabPage("خروجی (Log)");
+            _tabLog.Controls.Add(_txtLog);
+            _tabDebug = new TabPage("دیباگ مرحله‌ای — F10");
+            _tabDebug.Controls.Add(_debug);
+            _tabs.TabPages.Add(_tabLog);
+            _tabs.TabPages.Add(_tabDebug);
+            return _tabs;
         }
 
         private static TextBox Tb() { return new TextBox { Dock = DockStyle.Fill, Margin = new Padding(3) }; }
@@ -319,12 +373,52 @@ namespace RuleTrace
             }, loadDlls: false);
         }
 
+        private bool TryFormulaId(out int nid)
+        {
+            string f = _cboFormula.Text.Trim();
+            if (FormulaEngine.FormulaMap.TryGetValue(f, out nid)) return true;
+            if (int.TryParse(f, out nid) && nid > 0) return true;
+            Log("فرمول ناشناخته: " + f);
+            return false;
+        }
+
         private void AnalyzeMembers()
         {
             int nid;
-            if (!FormulaEngine.FormulaMap.TryGetValue(_cboFormula.Text.Trim(), out nid)) { Log("فرمول ناشناخته."); return; }
+            if (!TryFormulaId(out nid)) return;
             string cs = _txtRuleEngine.Text.Trim();
             RunBackground("تحلیل Member...", eng => MemberAnalyzer.Print(cs, nid, Log), loadDlls: false);
+        }
+
+        /// <summary>Loads ClsClass through the Sara engine without running and dumps what it parsed from dbo.Member.</summary>
+        private void InspectEngine()
+        {
+            int nid;
+            if (!TryFormulaId(out nid)) return;
+            _tabs.SelectedTab = _tabLog;
+            RunBackground("بررسی موتور...", eng =>
+            {
+                Log("");
+                Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " ENGINE INSPECT ══════════");
+                eng.InspectClass(nid, eng.ResolveCityGuid());
+            }, loadDlls: true);
+        }
+
+        /// <summary>Pulls the VB source of every Member row into the debug panel (once per formula unless forced).</summary>
+        private void LoadSources(bool force)
+        {
+            int nid;
+            if (!TryFormulaId(out nid)) return;
+            if (!force && _sourcesNid == nid && _debug.HasSources) return;
+            RunBackground("بارگذاری کد فرمول از DB...", eng => LoadSourcesInto(eng, nid), loadDlls: false);
+        }
+
+        private void LoadSourcesInto(FormulaEngine eng, int nid)
+        {
+            var sources = eng.GetMemberSources(nid);
+            _sourcesNid = nid;
+            Ui(() => _debug.SetSources(sources));
+            Log("Source       : " + sources.Count + " Member row(s) loaded into debug panel (" + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB)");
         }
 
         private void RunFormula()
@@ -358,12 +452,36 @@ namespace RuleTrace
                     return;
             }
 
+            _tabs.SelectedTab = _tabLog;
             RunBackground("اجرای فرمول " + req.Formula + " ...", eng =>
             {
                 Log("");
                 Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " ══════════");
                 int code = eng.Run(req);
                 Log("Exit code    : " + code + (code == 0 ? " (OK)" : code == 1 ? " (Stop error in BizErrors)" : code == 4 ? " (compile errors)" : ""));
+
+                if (code == 0 || code == 1)
+                {
+                    int nid;
+                    if (FormulaEngine.FormulaMap.TryGetValue(req.Formula, out nid) || int.TryParse(req.Formula, out nid))
+                    {
+                        if (_sourcesNid != nid || !_debug.HasSources)
+                        {
+                            try { LoadSourcesInto(eng, nid); }
+                            catch (Exception ex) { Log("WARN         : source load failed: " + ex.Message); }
+                        }
+                    }
+                    var trace = eng.LastTrace.ToList();
+                    var parms = new Dictionary<string, string>(eng.LastParams, StringComparer.OrdinalIgnoreCase);
+                    Ui(() =>
+                    {
+                        _debug.SetTrace(trace, parms, req.Watch);
+                        if (trace.Count > 0) { _tabs.SelectedTab = _tabDebug; ToggleSettings(false); }
+                    });
+                    Log(trace.Count > 0
+                        ? "Debug        : " + trace.Count + " رویداد در تب «دیباگ مرحله‌ای» — F10 برای رویداد بعدی"
+                        : "Debug        : فرمول هیچ AddError ثبت نکرد؛ چیزی برای مرحله‌ای رفتن نیست");
+                }
             }, loadDlls: true);
         }
 
@@ -417,7 +535,7 @@ namespace RuleTrace
         {
             _status.Text = status;
             _progress.Visible = busy;
-            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnLookup }) b.Enabled = !busy;
+            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnLookup }) b.Enabled = !busy;
             UseWaitCursor = busy;
         }
 

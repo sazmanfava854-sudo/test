@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Data;
 using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
@@ -24,6 +25,26 @@ namespace RuleTrace
         public string EncryptCode = string.Empty;
         public Dictionary<string, string> Parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> FactoryParameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>One AddError / BizErrors entry, in execution order — the unit the F10 stepper walks over.</summary>
+    internal sealed class TraceEvent
+    {
+        public int Index;
+        public string Action;
+        public string Key;
+        public string Title;
+        public override string ToString() { return "[" + Action + "] " + Key + ": " + Title; }
+    }
+
+    /// <summary>VB source of one dbo.Member row (extracted from XmlBody) shown in the debug panel.</summary>
+    internal sealed class MemberSource
+    {
+        public int NidMember;
+        public string Name;
+        public string Meta;
+        public string Code;
+        public override string ToString() { return NidMember + "  " + Name + "  " + Meta; }
     }
 
     /// <summary>
@@ -60,6 +81,11 @@ namespace RuleTrace
         private Assembly _safa;
         private Assembly _sc;
         private Assembly _sa;
+
+        /// <summary>BizErrors of the last Run, in order (filled even when Watch filters the log).</summary>
+        public readonly List<TraceEvent> LastTrace = new List<TraceEvent>();
+        /// <summary>ParametersValue snapshot after the last Run.</summary>
+        public readonly Dictionary<string, string> LastParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public FormulaEngine(UserSettings settings, Action<string> log)
         {
@@ -594,7 +620,10 @@ namespace RuleTrace
                 if (shown > 40) _log("  ... (" + shown + " errors total)");
                 SaveMergedVb(compilerErrors, cacheFolder);
                 _log("");
-                _log("راهنما: اگر خطای M_Out / Out تکراری است، DLLهای dll10 با دیتابیس هم‌خوان نیستند — نسخه دقیق سرور Sara را کپی کنید.");
+                _log("راهنما: خطای M_Out/Out تکراری = موتور ۲۰ ردیف Member را به جای یک کلاس، ۲۰ پوسته خالی کرده است.");
+                _log("        خروجی «ENGINE INSPECT» زیر و «تحلیل Member» را برای بررسی بفرستید.");
+                try { InspectClass(nid, cityGuid); }
+                catch (Exception ex) { _log("Inspect failed: " + ex.Message); }
                 return 4;
             }
 
@@ -635,8 +664,11 @@ namespace RuleTrace
             bool hasStop = PrintBizErrors(errorResult, r.Watch);
 
             var paramsValue = Get(result, "ParametersValue") as IDictionary;
+            LastParams.Clear();
             if (paramsValue != null)
             {
+                foreach (DictionaryEntry de in paramsValue)
+                    Try(() => LastParams[Convert.ToString(de.Key)] = Convert.ToString(de.Value));
                 if (!string.IsNullOrWhiteSpace(r.Watch) && paramsValue.Contains(r.Watch))
                     _log("ParametersValue[" + r.Watch + "] = " + paramsValue[r.Watch]);
                 if (r.ShowAllParams)
@@ -686,6 +718,7 @@ namespace RuleTrace
 
         private bool PrintBizErrors(object errorResult, string watch)
         {
+            LastTrace.Clear();
             var errors = errorResult == null ? null : Get(errorResult, "BizErrors") as IEnumerable;
             if (errors == null)
             {
@@ -707,6 +740,7 @@ namespace RuleTrace
                 string action = Convert.ToString(Get(e, "ErrorAction"));
                 string key = Convert.ToString(Get(e, "ErrorKey"));
                 string title = Convert.ToString(Get(e, "ErrorTitel"));
+                LastTrace.Add(new TraceEvent { Index = LastTrace.Count, Action = action, Key = key, Title = title });
                 if (action == "Stop") hasStop = true;
 
                 bool match = string.IsNullOrWhiteSpace(watch)
@@ -752,6 +786,244 @@ namespace RuleTrace
                 }
             }
             catch { }
+        }
+
+        // ───────────────────────────── Diagnostics: engine inspect ─────────────────────────────
+
+        /// <summary>
+        /// Builds SafaClassDesingerNew.ClsClass(nid, city, false) exactly like RunRule does and dumps what the
+        /// engine parsed from dbo.Member (member list, names, body sizes) plus ClsCommon statics.
+        /// Shows whether the engine reads member bodies at all (BC30269 = 20 empty shells).
+        /// </summary>
+        public void InspectClass(int nid, Guid cityGuid)
+        {
+            _log("");
+            _log("=== ENGINE INSPECT (SafaClassDesingerNew " + _safa.GetName().Version + ") ===");
+
+            Type tCommon = _safa.GetType("SafaClassDesingerNew.ClsCommon", false);
+            if (tCommon != null) DumpStatics(tCommon);
+
+            Type tCls = _safa.GetType("SafaClassDesingerNew.ClsClass", false);
+            if (tCls == null) { _log("ClsClass     : type not found"); return; }
+
+            foreach (ConstructorInfo c in tCls.GetConstructors(AnyInstance))
+                _log("ClsClass ctor: (" + string.Join(", ", c.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name)) + ")");
+            foreach (MethodInfo m in tCls.GetMethods(AnyInstance | BindingFlags.DeclaredOnly).Where(m => !m.IsSpecialName).Take(60))
+                _log("ClsClass meth: " + m.ReturnType.Name + " " + m.Name + "(" + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name)) + ")");
+
+            ConstructorInfo ctor = tCls.GetConstructors(AnyInstance).FirstOrDefault(c => c.GetParameters().Length == 3)
+                                   ?? tCls.GetConstructors(AnyInstance).OrderByDescending(c => c.GetParameters().Length).FirstOrDefault();
+            if (ctor == null) { _log("ClsClass     : no constructor"); return; }
+
+            var ps = ctor.GetParameters();
+            var args = new object[ps.Length];
+            for (int i = 0; i < ps.Length; i++)
+            {
+                Type pt = ps[i].ParameterType;
+                if (pt == typeof(Guid)) args[i] = cityGuid;
+                else if (pt == typeof(bool)) args[i] = false;
+                else if (pt == typeof(string)) args[i] = cityGuid.ToString("D");
+                else args[i] = Coerce(nid, pt);
+            }
+
+            object cls;
+            DateTime t0 = DateTime.UtcNow;
+            try
+            {
+                cls = ctor.Invoke(args);
+            }
+            catch (TargetInvocationException tie)
+            {
+                _log("ClsClass ctor: FAILED " + (tie.InnerException ?? tie).GetType().Name + ": " + (tie.InnerException ?? tie).Message);
+                return;
+            }
+            _log("ClsClass     : loaded in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
+            int budget = 400;
+            DumpObject(cls, "ClsClass", 0, ref budget);
+        }
+
+        private void DumpStatics(Type t)
+        {
+            foreach (FieldInfo f in t.GetFields(AnyStatic))
+            {
+                object v = null;
+                Try(() => v = f.GetValue(null));
+                _log("static       : " + t.Name + "." + f.Name + " = " + Short(v));
+            }
+        }
+
+        private void DumpObject(object o, string prefix, int depth, ref int budget)
+        {
+            if (o == null || budget <= 0) return;
+            Type t = o.GetType();
+            foreach (MemberInfo mi in t.GetProperties(AnyInstance).Cast<MemberInfo>().Concat(t.GetFields(AnyInstance)))
+            {
+                if (budget-- <= 0) { _log("  ... (truncated)"); return; }
+                var pi = mi as PropertyInfo;
+                var fi = mi as FieldInfo;
+                if (pi != null && pi.GetIndexParameters().Length > 0) continue;
+                if (fi != null && fi.Name.EndsWith("BackingField")) continue;
+
+                object v = null;
+                string err = null;
+                try { v = pi != null ? pi.GetValue(o, null) : fi.GetValue(o); }
+                catch (Exception ex) { err = (ex.InnerException ?? ex).Message; }
+
+                string name = prefix + "." + mi.Name;
+                if (err != null) { _log("  " + name + " = <error: " + FirstLine(err) + ">"); continue; }
+                if (v == null) { _log("  " + name + " = (null)"); continue; }
+
+                Type vt = v.GetType();
+                if (IsSimple(vt)) { _log("  " + name + " = " + Short(v)); continue; }
+
+                var en = v as IEnumerable;
+                if (en != null)
+                {
+                    var items = en.Cast<object>().Take(200).ToList();
+                    _log("  " + name + " : " + vt.Name + " count=" + items.Count);
+                    int shown = 0;
+                    foreach (object item in items)
+                    {
+                        if (shown++ >= 40) { _log("      ... more items"); break; }
+                        if (item == null) { _log("      [" + (shown - 1) + "] (null)"); continue; }
+                        if (IsSimple(item.GetType())) { _log("      [" + (shown - 1) + "] " + Short(item)); continue; }
+                        _log("      [" + (shown - 1) + "] " + Summary(item));
+                    }
+                    continue;
+                }
+
+                if (depth < 1 && vt.Assembly == _safa)
+                {
+                    _log("  " + name + " : " + vt.Name);
+                    DumpObject(v, name, depth + 1, ref budget);
+                }
+                else
+                {
+                    _log("  " + name + " : " + vt.Name + " " + Summary(v));
+                }
+            }
+        }
+
+        /// <summary>Single-line view of an engine object: all simple-valued members (name/type/version/active/body length).</summary>
+        private static string Summary(object item)
+        {
+            Type t = item.GetType();
+            var parts = new List<string>();
+            foreach (MemberInfo mi in t.GetProperties(AnyInstance).Cast<MemberInfo>().Concat(t.GetFields(AnyInstance)))
+            {
+                var pi = mi as PropertyInfo;
+                var fi = mi as FieldInfo;
+                if (pi != null && pi.GetIndexParameters().Length > 0) continue;
+                if (fi != null && fi.Name.EndsWith("BackingField")) continue;
+                object v = null;
+                try { v = pi != null ? pi.GetValue(item, null) : fi.GetValue(item); } catch { continue; }
+                if (v == null) continue;
+                Type vt = v.GetType();
+                if (vt == typeof(string))
+                {
+                    string s = (string)v;
+                    parts.Add(mi.Name + "=" + (s.Length > 60 ? "\"" + FirstLine(s.Substring(0, 60)).Replace("\r", "") + "…\"(len " + s.Length + ")" : "\"" + s + "\""));
+                }
+                else if (IsSimple(vt)) parts.Add(mi.Name + "=" + v);
+                else if (v is Array) parts.Add(mi.Name + "[" + ((Array)v).Length + "]");
+                else if (v is ICollection) parts.Add(mi.Name + ".Count=" + ((ICollection)v).Count);
+                if (parts.Count >= 14) break;
+            }
+            return t.Name + " { " + string.Join(", ", parts) + " }";
+        }
+
+        private static bool IsSimple(Type t)
+        {
+            return t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(Guid) || t == typeof(DateTime) || t == typeof(TimeSpan);
+        }
+
+        private static string Short(object v)
+        {
+            if (v == null) return "(null)";
+            string s = v as string;
+            if (s == null) return v.ToString();
+            s = Mask(s);
+            return s.Length > 160 ? "\"" + s.Substring(0, 160) + "…\" (len " + ((string)v).Length + ")" : "\"" + s + "\"";
+        }
+
+        // ───────────────────────────── Diagnostics: member sources ─────────────────────────────
+
+        /// <summary>Reads dbo.Member rows of a formula and extracts the VB code text from XmlBody for the debug panel.</summary>
+        public List<MemberSource> GetMemberSources(int nid)
+        {
+            var list = new List<MemberSource>();
+            string[] sqls =
+            {
+                "SELECT NidMember, EnumType, isActive, Version, FromDate, ToDate, CAST(XmlBody AS NVARCHAR(MAX)) FROM dbo.Member WHERE NidClass=@nid ORDER BY NidMember, Version",
+                "SELECT NidMember, NULL, NULL, NULL, NULL, NULL, CAST(XmlBody AS NVARCHAR(MAX)) FROM dbo.Member WHERE NidClass=@nid ORDER BY NidMember",
+            };
+            Exception last = null;
+            foreach (string sql in sqls)
+            {
+                try
+                {
+                    using (var c = new SqlConnection(_s.RuleEngine))
+                    using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 120 })
+                    {
+                        cmd.Parameters.AddWithValue("@nid", nid);
+                        c.Open();
+                        using (var r = cmd.ExecuteReader())
+                        {
+                            while (r.Read())
+                            {
+                                var m = new MemberSource { NidMember = Convert.ToInt32(r.GetValue(0)) };
+                                string xml = r.IsDBNull(6) ? string.Empty : r.GetString(6);
+                                string name;
+                                m.Code = ExtractCode(xml, out name);
+                                m.Name = name ?? "";
+                                m.Meta = "v" + Str(r, 3) + " active=" + Str(r, 2) + " type=" + Str(r, 1) + " " + Str(r, 4).Trim() + "→" + Str(r, 5).Trim()
+                                         + " (" + (m.Code.Length / 1024) + " KB)";
+                                list.Add(m);
+                            }
+                        }
+                    }
+                    return list;
+                }
+                catch (Exception ex) { last = ex; list.Clear(); }
+            }
+            throw last ?? new InvalidOperationException("Member query failed");
+        }
+
+        private static string Str(IDataRecord r, int i)
+        {
+            try { return r.IsDBNull(i) ? "" : Convert.ToString(r.GetValue(i)); } catch { return ""; }
+        }
+
+        /// <summary>Largest text node in the member XML is the VB body; the first short Name/Title-like element is the member name.</summary>
+        private static string ExtractCode(string xml, out string name)
+        {
+            name = null;
+            if (string.IsNullOrWhiteSpace(xml)) return string.Empty;
+            try
+            {
+                var doc = System.Xml.Linq.XDocument.Parse(xml, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+                string best = null;
+                foreach (var el in doc.Descendants())
+                {
+                    if (el.HasElements) continue;
+                    string v = el.Value;
+                    string ln = el.Name.LocalName;
+                    if (name == null && v.Length > 0 && v.Length < 120 && !v.Contains("\n") &&
+                        (ln.IndexOf("Name", StringComparison.OrdinalIgnoreCase) >= 0 || ln.IndexOf("Title", StringComparison.OrdinalIgnoreCase) >= 0))
+                        name = v.Trim();
+                    if (best == null || v.Length > best.Length) best = v;
+                }
+                if (name == null)
+                {
+                    var attr = doc.Root == null ? null : doc.Root.Attributes().FirstOrDefault(a => a.Name.LocalName.IndexOf("Name", StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (attr != null) name = attr.Value;
+                }
+                return (best ?? xml).Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n");
+            }
+            catch
+            {
+                return xml;
+            }
         }
 
         // ───────────────────────────── reflection helpers ─────────────────────────────

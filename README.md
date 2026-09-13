@@ -10,9 +10,10 @@ ruletrace/
   RuleTrace.csproj      ← WinForms, .NET 4.7.2, بدون reference به DLLهای Sara
   Program.cs            ← نقطه شروع
   MainForm.cs           ← UI
-  FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule
+  FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule + Inspect موتور
+  DebugPanel.cs         ← تب «دیباگ مرحله‌ای» (F10 / Shift+F10 / F5) روی trace فرمول
   UserSettings.cs       ← ذخیره تنظیمات UI در bin\RuleTrace.user.ini
-  MemberAnalyzer.cs     ← تحلیل جدول Member
+  MemberAnalyzer.cs     ← تحلیل جدول Member (نسخه‌ها، ساختار XML)
   App.config            ← مقادیر پیش‌فرض
   build.cmd             ← Build خودکار + اجرا
   run.cmd               ← اجرای bin\RuleTrace.exe
@@ -45,6 +46,43 @@ build.cmd
 
 اولین بار **Recompile** را تیک بزنید (چند دقیقه). Cache در `پوشه Cache محلی` ساخته می‌شود. بارهای بعد بدون Recompile.
 
+## دیباگ مرحله‌ای (F10) — تب «دیباگ مرحله‌ای»
+
+فرمول‌های Sara کد VB هستند که موتور `SafaClassDesingerNew` در زمان اجرا کامپایل می‌کند؛ نمی‌توان مانند VS روی هر خط breakpoint گذاشت. به جای آن RuleTrace **اجرا را ضبط می‌کند و بعد مرحله‌به‌مرحله بازپخش می‌کند**:
+
+- هر `AddError` که فرمول ثبت می‌کند (همان `BizErrors`) یک **رویداد / گام** است.
+- بعد از اجرا، RuleTrace کد VB همه ردیف‌های `dbo.Member` را از DB می‌خواند و برای هر گام **خط متناظر در کد** را highlight می‌کند (خط `AddError("Key", ...)` با همان Key؛ در حلقه‌ها گام n به n‌امین رخداد می‌رود).
+- برای هر گام مقدار متغیر (`ParametersValue[Key]`) و مقدار Watch نمایش داده می‌شود.
+
+| کلید | عمل |
+|------|-----|
+| `F5` | اجرای فرمول (اگر trace وجود دارد و تب دیباگ فعال است: رفتن به آخر) |
+| `F10` / `F11` | گام بعدی |
+| `Shift+F10` | گام قبلی |
+| `Ctrl+Home` | گام اول |
+
+اگر Key در کد پیدا نشد (مثلاً Key به صورت متغیر ساخته می‌شود) فقط رویداد و مقدارها نمایش داده می‌شود. برای دیدن کد بدون اجرا: «بارگذاری کد از DB».
+
+**Breakpoint واقعی (اختیاری):** Visual Studio → Debug → Attach to Process → `RuleTrace.exe`، سپس اجرا. VS روی exception‌های داخل فرمول متوقف می‌شود؛ stepping خط‌به‌خط فقط اگر موتور با `/debug` کامپایل کند ممکن است.
+
+## تشخیص خطای کامپایل (BC30269 / M_Out)
+
+خروجی فعلی: فایل merge‌شده فقط ~۳۳۰ خط است در حالی که ۲۰ XML حدود ۳.۶ MB است و خطاها هر ۱۶ خط تکرار می‌شوند؛ یعنی موتور برای هر Member فقط **پوسته کلاس** را می‌نویسد و بدنه کد را نمی‌خواند. ابزارها:
+
+- **تحلیل Member**: نسخه‌ها/`isActive` هر `NidMember`، حجم `Body` / `XmlBody` / `EncryptXmlBody` و ساختار عناصر XML (کجا کد است، کجا نام).
+- **بررسی موتور (ClsClass)**: `ClsClass(344, CityGuid, false)` را دقیقاً مانند `RunRule` می‌سازد و لیست Memberهایی که موتور خوانده (نام، اندازه Body، نسخه) و فیلدهای static `ClsCommon` را چاپ می‌کند. بعد از هر خطای کامپایل خودکار اجرا می‌شود.
+
+سه حالت ممکن: (۱) `EncryptXmlBody`/`Body` رمز است و کلید سرور لازم است؛ (۲) موتور همه نسخه‌های یک `NidMember` را می‌گیرد (فیلتر `isActive`/`Version` اعمال نمی‌شود)؛ (۳) نسخه `SafaClassDesingerNew 2012.5` ساختار XML جدید را نمی‌شناسد → DLL دقیق سرور لازم است.
+
+## اخطار آنتی‌ویروس
+
+`RuleTrace.exe` امضای دیجیتال ندارد و در زمان اجرا DLL بارگذاری می‌کند، به `c:\dll10` کپی می‌کند و موتور Sara فایل `.vb` موقت کامپایل می‌کند — همین رفتار برای heuristics آنتی‌ویروس «مشکوک» است (false positive). راه‌حل: پوشه پروژه را Exclude کنید (Windows Security → Virus & threat protection → Exclusions) یا در PowerShell (Admin):
+
+```powershell
+Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Downloads\rule5"
+Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Desktop\dll10"
+```
+
 ## Cache محلی
 
 ```
@@ -59,7 +97,8 @@ build.cmd
 |-----|--------------|
 | `Login failed for user 'hService'` | فایل‌های `*.dll.config` کنار DLLها — RuleTrace خودکار آن‌ها را `.bak` می‌کند |
 | `BC2017 could not find c:\dll10\BIZ.SC.DLL` | vbc داخل موتور به `c:\dll10` نیاز دارد — RuleTrace خودکار sync می‌کند؛ اگر دسترسی نبود یک بار as Administrator اجرا کنید |
-| `BC30269 'Out' has multiple definitions` / `M_Out` | نسخه `SafaClassDesingerNew.dll` با دیتابیس هم‌خوان نیست — DLLها را دقیقاً از سرور Sara کپی کنید. «تحلیل Member» را بزنید و خروجی را بفرستید |
+| `BC30269 'Out' has multiple definitions` / `M_Out` | موتور بدنه Memberها را نمی‌خواند (بخش «تشخیص خطای کامپایل») — خروجی «تحلیل Member» و «بررسی موتور» را بفرستید؛ احتمالاً DLL دقیق سرور Sara لازم است |
+| اخطار آنتی‌ویروس | false positive (exe بدون امضا + کامپایل داینامیک) — پوشه را Exclude کنید (بخش «اخطار آنتی‌ویروس») |
 | `RunRule returned null` | اتصال RuleEngine یا `CnRuleString` |
 
 ## اجرای مستقیم با پارامتر (اختیاری)
