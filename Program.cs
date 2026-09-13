@@ -77,10 +77,15 @@ namespace RuleTrace
             Guid rootGuid = ParseRootGuid();
             Console.WriteLine("Formula     : {0} (NidRuleClass={1})", options.Formula, nidRuleClass);
             Console.WriteLine("RootGUID    : {0}", rootGuid);
+            if (rootGuid == Guid.Empty)
+                Console.WriteLine("WARN: RootGUID is empty — copy appSettings:RootGUID from Sara web.config if compile/run fails.");
             Console.WriteLine("ReCompile   : {0}", options.ReCompile);
 
             // ── 1. Compile / cache formula assembly ──
+            Console.WriteLine("Compiling   : loading RuleClass {0} from DbRuleEngein (may take 30–120 sec)...", nidRuleClass);
+            var compileStarted = DateTime.UtcNow;
             ClsRunRuleResult result = FormulaClsCommon.RunRule(nidRuleClass, rootGuid, options.ReCompile);
+            Console.WriteLine("Compiling   : done in {0:0.0}s", (DateTime.UtcNow - compileStarted).TotalSeconds);
 
             if (result == null)
             {
