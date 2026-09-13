@@ -53,9 +53,59 @@ namespace RuleTrace
             }
 
             PatchMergeFlags();
+            PatchCityGuid(cityGuid);
             Console.WriteLine("Local cache  : {0}", folder);
             if (Directory.GetFiles(folder, "*", SearchOption.AllDirectories).Length == 0)
-                Console.WriteLine("Local cache  : (empty — will be created here after first successful compile)");
+                Console.WriteLine("Local cache  : (empty — first successful compile creates cache files here)");
+        }
+
+        public static void ReportWrittenFiles(int nidRuleClass, Guid cityGuid)
+        {
+            string folder = GetCacheKeyFolder(nidRuleClass, cityGuid);
+            if (!Directory.Exists(folder))
+                return;
+
+            string[] files = Directory.GetFiles(folder, "*", SearchOption.AllDirectories);
+            if (files.Length == 0)
+            {
+                Console.WriteLine("Local cache  : folder exists but no files yet (engine may use parent path)");
+                return;
+            }
+
+            foreach (string file in files)
+                Console.WriteLine("Cached file : {0}", file);
+        }
+
+        private static void PatchCityGuid(Guid cityGuid)
+        {
+            if (cityGuid == Guid.Empty) return;
+
+            string guid = cityGuid.ToString("D");
+            string[] types =
+            {
+                "SafaClassDesingerNew.ClsCommon",
+                "SafaClassDesingerNew.ClsClass",
+            };
+            string[] fields = { "NidCity", "pNidCity", "CityGuid", "RootGUID" };
+
+            foreach (string typeName in types)
+            {
+                Type type = Type.GetType(typeName + ", SafaClassDesingerNew");
+                if (type == null) continue;
+                foreach (string fieldName in fields)
+                {
+                    FieldInfo field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                    if (field == null) continue;
+                    try
+                    {
+                        if (field.FieldType == typeof(Guid))
+                            field.SetValue(null, cityGuid);
+                        else if (field.FieldType == typeof(string))
+                            field.SetValue(null, guid);
+                    }
+                    catch { /* optional */ }
+                }
+            }
         }
 
         public static bool TrySeedFromDatabase(int nidRuleClass, Guid cityGuid)
