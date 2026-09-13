@@ -1,196 +1,98 @@
-# HR Performance & Discipline Management System
+# RuleTrace
 
-سیستم جامع مدیریت عملکرد و انضباط کارکنان برای شهرداری‌ها، سازمان‌های دولتی و شرکت‌های بزرگ.
+Standalone Sara formula debugger — `C:\Users\sadathoseini-sh\Downloads\ruletrace`
 
-**دانلود نسخه نهایی (v1.0.1-final):**  
-https://github.com/sazmanfava854-sudo/test/releases/download/v1.0.1-final/HRPerformance-System-v1.0.1-final.zip
-
-## Architecture
+## Structure
 
 ```
-HRPerformance/
-├── database/           # SQL Server scripts (01-08)
-├── src/
-│   ├── HRPerformance.Domain/          # Entities, Enums, Interfaces
-│   ├── HRPerformance.Application/     # CQRS (MediatR), DTOs, Validators
-│   ├── HRPerformance.Infrastructure/  # EF Core, Repositories, Services
-│   └── HRPerformance.API/             # REST API, SignalR, Background Services
-└── frontend/
-    └── hr-performance-web/            # React + TypeScript + MUI (RTL)
+ruletrace/
+  RuleTrace.sln
+  RuleTrace.csproj
+  Program.cs
+  ConnectionBootstrap.cs   ← forces debugger login (not hService)
+  App.config
+  build.cmd                ← use this (no PowerShell policy needed)
+  build.ps1
+  bin/
+    RuleTrace.exe
+    RuleTrace.exe.config   ← connection strings (debugger)
+    BIZ.SC.DLL
+    SafaClassDesingerNew.dll
+    ...
 ```
 
-## Tech Stack
+## Build
 
-### Backend
-- ASP.NET Core 8 Web API
-- Entity Framework Core 8 + SQL Server
-- JWT Authentication + Refresh Token
-- Clean Architecture + CQRS (MediatR)
-- FluentValidation, AutoMapper, Serilog
-- SignalR (real-time notifications)
-- Background Service (attendance sync every 5 min)
-
-### Frontend
-- React 18 + TypeScript + Vite
-- Material UI (RTL, Dark/Light theme)
-- Redux Toolkit, React Router, Axios
-- Chart.js, Persian date support, PWA
-
-## Quick Start (یک دستور — فقط .NET)
-
-> **نیاز به Node.js/npm ندارید.** فرانت‌اند از قبل بیلد شده و داخل API سرو می‌شود.
-
-### Windows
-
-**اولین بار (توصیه‌شده):**
-```powershell
-cd HRPerformance
-.\scripts\setup-windows.ps1
-```
-
-**اجرای برنامه:**
-```powershell
-.\start.ps1
-```
-
-یا دوبار کلیک روی `start.bat` — در اولین اجرا، restore پکیج‌ها به‌صورت خودکار انجام می‌شود.
-
-### Linux / macOS
-
-```bash
-cd HRPerformance
-./start.sh
-```
-
-سپس مرورگر را باز کنید:
-- **Application:** http://localhost:5000
-- **Swagger:** http://localhost:5000/swagger
-
-برای توقف: `Ctrl+C`
-
-### پیش‌نیازها
-
-| نرم‌افزار | نسخه | دانلود |
-|-----------|------|--------|
-| .NET SDK | **8.0** (شما: 8.0.401 ✅) | https://dotnet.microsoft.com/download/dotnet/8.0 |
-| SQL Server | 2019+ | برای دیتابیس (یک بار `npm run db:init` یا اسکریپت‌های SQL) |
-
-### رفع کندی Cursor / خطای NuGet (SSL)
-
-اگر در IDE پیام `unresolved dependencies` یا خطای SSL هنگام دانلود پکیج می‌بینید:
-
-```powershell
-# Windows — از ریشه پروژه
-.\scripts\restore-packages.ps1
-```
+**Recommended** (works even when PowerShell scripts are blocked):
 
 ```cmd
-scripts\restore-packages.bat
+cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+build.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
 ```
 
-سپس Cursor را ببندید و دوباره پوشه پروژه را باز کنید. فقط `HRPerformance.sln` را باز کنید (نه چند solution همزمان).
+Or in PowerShell without changing execution policy:
 
-**علت رایج:** فایروال/آنتی‌ویروس/VPN اتصال به `api.nuget.org` را قطع می‌کند. در صورت نیاز:
-- `dotnet nuget locals all --clear` و restore مجدد
-- تنظیم پروکسی: `$env:HTTPS_PROXY='http://proxy:port'`
-
-**Node.js فقط برای توسعه‌دهندگان** که می‌خواهند UI را تغییر دهند — برای اجرای عادی لازم نیست.
-
----
-
-## توسعه UI (اختیاری — نیاز به Node.js)
-
-اگر می‌خواهید فرانت‌اند را ویرایش کنید:
-
-```bash
-cd HRPerformance/frontend/hr-performance-web
-npm install
-npm run dev
+```powershell
+cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+cmd /c build.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
 ```
 
-بعد از تغییرات UI:
-```bash
-npm run build
-# فایل‌های dist را به src/HRPerformance.API/wwwroot کپی کنید
+Optional — only if scripts are allowed on your machine:
+
+```powershell
+.\build.ps1 -DllPath "C:\Users\sadathoseini-sh\Desktop\dll10"
 ```
 
----
+Or manually:
 
-## Database Setup (دستی)
-
-```bash
-# Run scripts in order against SQL Server:
-sqlcmd -S localhost -i database/01_CreateDatabase.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/02_Tables.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/03_ForeignKeys.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/04_Indexes.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/05_Views.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/06_StoredProcedures.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/07_Triggers.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/08_SeedData.sql
+```powershell
+$msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+& $msbuild "RuleTrace.sln" /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:DllPath="C:\Users\sadathoseini-sh\Desktop\dll10"
 ```
 
-## Backend Setup (جداگانه - اختیاری)
+MSBuild copies DLLs into `bin\` and **deletes `*.dll.config`** (those files often contain `hService`).
 
-```bash
-cd HRPerformance
-dotnet run --project src/HRPerformance.API --launch-profile http
+## Run
+
+**Step 1 — test SQL only:**
+
+```powershell
+cd .\bin
+.\RuleTrace.exe --test-db
 ```
 
-API: `http://localhost:5000` | Swagger: `http://localhost:5000/swagger`
+Expected:
 
-## Frontend Setup (جداگانه - اختیاری)
-
-```bash
-cd HRPerformance/frontend/hr-performance-web
-npm run dev
+```
+[RuleEngine] OK — db=DbRuleEngein, login=debugger
+[Sara] OK — db=Sara8M03, login=debugger
+OK — both databases reachable with debugger login.
 ```
 
-Frontend: `http://localhost:3000` (proxies API to backend)
+**Step 2 — full formula trace (fast, uses compile cache):**
 
-## User Roles
+```powershell
+.\RuleTrace.exe --nidproc "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28" --formula Solh --watch Calc_Chandganeh
+```
 
-| Role | Access |
-|------|--------|
-| SuperAdministrator | Full system access |
-| OrganizationAdministrator | Org structure, policies, managers |
-| Manager | Subordinate employees only |
-| Employee | Own profile and scores |
+Use `--recompile` **only** when VB code in `DbRuleEngein.dbo.Member` changed.  
+Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–20 minutes**.
 
-## Key Features
+## Config (`App.config` → `bin\RuleTrace.exe.config`)
 
-- Dynamic organization hierarchy (unlimited levels)
-- Dynamic evaluation categories, items, and rule engine
-- Attendance integration (REST/SOAP/SQL View) with auto sync
-- Manual evaluations with attachments and workflow
-- Employee/Manager/Admin dashboards with charts
-- Ranking engine, appeals system, audit log
-- Smart alerts via SignalR
-- Reports (employee, department, attendance)
-- Excel/PDF export ready architecture
+```xml
+<connectionStrings>
+  <add name="RuleEngine" connectionString="Server=tcp:172.16.10.232;Database=DbRuleEngein;User Id=debugger;Password=Ra@123456;..." />
+  <add name="Sara"       connectionString="Server=tcp:172.16.10.232;Database=Sara8M03;User Id=debugger;Password=Ra@123456;..." />
+</connectionStrings>
+```
 
-## API Endpoints
+Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
-| Controller | Endpoints |
-|------------|-----------|
-| Auth | POST /api/auth/login, /refresh |
-| Employees | CRUD + search |
-| Dashboard | /employee, /manager, /admin |
-| Evaluations | Categories, rules, manual evaluations |
-| Appeals | Create, review, list |
-| Settings | Key-value settings, holidays |
-| Notifications | List, mark read |
-| Health | GET /api/health |
+## hService login error
 
-## Security
+If you still see `Login failed for user 'hService'`:
 
-- JWT + Refresh Token rotation
-- Role-based authorization
-- Password hashing (ASP.NET Identity)
-- Rate limiting (AspNetCoreRateLimit)
-- Input validation (FluentValidation)
-- Full audit logging
-
-## License
-
-Proprietary - Enterprise HR Management System
+1. Rebuild with `build.cmd` (removes sidecar `*.dll.config` from `bin\`).
+2. Confirm `bin\RuleTrace.exe.config` has `User Id=debugger` (not `hService`).
+3. On first run, ConnectionBootstrap renames any remaining `*.dll.config` to `*.dll.config.hService.bak`.
