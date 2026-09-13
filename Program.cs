@@ -74,17 +74,15 @@ namespace RuleTrace
                 return 2;
             }
 
-            Guid rootGuid = ParseRootGuid();
+            Guid runRuleGuid = ResolveRunRuleGuid(options.CityGuid);
             Console.WriteLine("Formula     : {0} (NidRuleClass={1})", options.Formula, nidRuleClass);
-            Console.WriteLine("RootGUID    : {0}", rootGuid);
-            if (rootGuid == Guid.Empty)
-                Console.WriteLine("WARN: RootGUID is empty — copy appSettings:RootGUID from Sara web.config if compile/run fails.");
+            Console.WriteLine("RunRuleGuid : {0}", runRuleGuid);
             Console.WriteLine("ReCompile   : {0}", options.ReCompile);
 
             // ── 1. Compile / cache formula assembly ──
             Console.WriteLine("Compiling   : loading RuleClass {0} from DbRuleEngein (may take 30–120 sec)...", nidRuleClass);
             var compileStarted = DateTime.UtcNow;
-            ClsRunRuleResult result = FormulaClsCommon.RunRule(nidRuleClass, rootGuid, options.ReCompile);
+            ClsRunRuleResult result = FormulaClsCommon.RunRule(nidRuleClass, runRuleGuid, options.ReCompile);
             Console.WriteLine("Compiling   : done in {0:0.0}s", (DateTime.UtcNow - compileStarted).TotalSeconds);
 
             if (result == null)
@@ -263,17 +261,100 @@ namespace RuleTrace
             Console.WriteLine("Config file : {0}", AppDomain.CurrentDomain.SetupInformation.ConfigurationFile);
             ConnectionBootstrap.Apply(_dllPath);
 
-            string rootGuid = ConfigurationManager.AppSettings["RootGUID"] ?? Guid.Empty.ToString();
-            TrySetStaticString("BIZ.SC.ClsConnection", "FormulaEncryptionCode", rootGuid);
-            TrySetStaticString("BIZ.SC.ClsProxyHelper", "FormulaEncryptionCode", rootGuid);
+            string encryptionCode = ConfigurationManager.AppSettings["CityGuid"]
+                ?? ConfigurationManager.AppSettings["RootGUID"]
+                ?? ConfigurationManager.AppSettings["FormulaEncryptionCode"]
+                ?? Guid.Empty.ToString();
+            TrySetStaticString("BIZ.SC.ClsConnection", "FormulaEncryptionCode", encryptionCode);
+            TrySetStaticString("BIZ.SC.ClsProxyHelper", "FormulaEncryptionCode", encryptionCode);
         }
 
-        private static Guid ParseRootGuid()
+        /// <summary>
+        /// 2nd parameter of ClsCommon.RunRule — in many Sara installs this is the city GUID (NidCity),
+        /// not a web.config key named RootGUID (often missing in Sara10).
+        /// </summary>
+        private static Guid ResolveRunRuleGuid(Guid? cityGuidOverride = null)
         {
-            string root = ConfigurationManager.AppSettings["RootGUID"];
-            if (string.IsNullOrWhiteSpace(root))
-                return Guid.Empty;
-            return Guid.TryParse(root, out Guid g) ? g : Guid.Empty;
+            if (cityGuidOverride.HasValue && cityGuidOverride.Value != Guid.Empty)
+            {
+                Console.WriteLine("RunRule key : --city-guid");
+                return cityGuidOverride.Value;
+            }
+
+            foreach (string key in new[] { "CityGuid", "RootGUID", "FormulaEncryptionCode", "NidCity" })
+            {
+                string value = ConfigurationManager.AppSettings[key];
+                if (TryParseNonEmptyGuid(value, out Guid guid))
+                {
+                    Console.WriteLine("RunRule key : appSettings:{0}", key);
+                    return guid;
+                }
+            }
+
+            if (TryResolveCityGuidFromDatabase(out Guid cityGuid))
+            {
+                Console.WriteLine("RunRule key : dbo.CI_City / DefaultCity");
+                return cityGuid;
+            }
+
+            Console.WriteLine("WARN: RunRuleGuid not set — using Guid.Empty (OK on some Sara10 installs).");
+            Console.WriteLine("      Optional: appSettings:CityGuid or --city-guid <GUID>");
+            return Guid.Empty;
+        }
+
+        private static bool TryParseNonEmptyGuid(string value, out Guid guid)
+        {
+            guid = Guid.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            if (!Guid.TryParse(value, out guid) || guid == Guid.Empty)
+                return false;
+            return true;
+        }
+
+        private static bool TryResolveCityGuidFromDatabase(out Guid cityGuid)
+        {
+            cityGuid = Guid.Empty;
+            string cityIdText = ConfigurationManager.AppSettings["DefaultCity"] ?? "2";
+            if (!int.TryParse(cityIdText, out int cityId))
+                return false;
+
+            string sara = ConfigurationManager.ConnectionStrings["Sara"]?.ConnectionString;
+            if (string.IsNullOrWhiteSpace(sara))
+                return false;
+
+            string[] queries =
+            {
+                "SELECT TOP 1 NidCity FROM dbo.CI_City WHERE ID = @id",
+                "SELECT TOP 1 NidCity FROM dbo.Base_City WHERE ID = @id",
+                "SELECT TOP 1 NidProc FROM dbo.CI_City WHERE ID = @id",
+            };
+
+            foreach (string sql in queries)
+            {
+                try
+                {
+                    using (var conn = new SqlConnection(sara))
+                    using (var cmd = new SqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", cityId);
+                        conn.Open();
+                        object scalar = cmd.ExecuteScalar();
+                        if (scalar != null && scalar != DBNull.Value && Guid.TryParse(scalar.ToString(), out Guid g) && g != Guid.Empty)
+                        {
+                            cityGuid = g;
+                            Console.WriteLine("CityGuid    : {0} (DefaultCity={1})", cityGuid, cityId);
+                            return true;
+                        }
+                    }
+                }
+                catch
+                {
+                    // try next query shape
+                }
+            }
+
+            return false;
         }
 
         private static int PrintBizErrors(ClsErrorResult errors, string watch)
@@ -367,6 +448,10 @@ namespace RuleTrace
                 ? Guid.Empty
                 : Guid.Parse(requestGuid);
 
+            string cityGuid = GetArg(args, "--city-guid");
+            if (!string.IsNullOrWhiteSpace(cityGuid))
+                options.CityGuid = Guid.Parse(cityGuid);
+
             // --param SatheEshghal=120.5  (repeatable)
             for (int i = 0; i < args.Length; i++)
             {
@@ -419,6 +504,7 @@ OPTIONS:
   --entry <method>        VB entry point (default: first in UpdatedFunctionList)
   --recompile             Force recompile (PReCompile=true)
   --district <int>        ClsObjectFactory._District
+  --city-guid <GUID>      RunRule city GUID (if not in web.config — often NidCity for Mashhad)
   --request-guid <GUID>   Security_RequestGuid (default: empty)
   --encrypt <code>        Security_EncryptCode (default: empty)
   --param Name=Value      Formula parameter (ClsRunRuleResult.SetParam)
@@ -430,7 +516,7 @@ OPTIONS:
 CONFIG (App.config):
   connectionStrings:RuleEngine  → ClsCommon.CnRuleString
   connectionStrings:Sara        → used by BIZ.SA / BIZ.SC at runtime
-  appSettings:RootGUID          → 2nd arg of ClsCommon.RunRule
+  appSettings:CityGuid / DefaultCity → 2nd arg of ClsCommon.RunRule (RootGUID often missing in Sara10)
   appSettings:DllPath           → folder with BIZ.SC.DLL, SafaClassDesingerNew.dll, ...
 
 EXAMPLE:
@@ -455,6 +541,7 @@ SQL to find NidProc:
             public Guid RequestGuid { get; set; }
             public string EncryptCode { get; set; }
             public int District { get; set; }
+            public Guid? CityGuid { get; set; }
             public bool ReCompile { get; set; }
             public bool ShowAllParams { get; set; }
             public Dictionary<string, string> Parameters { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
