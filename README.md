@@ -89,6 +89,23 @@ Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–
 
 Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
+## BC2017: could not find library c:\dll10\BIZ.SC.DLL
+
+The formula compiler expects Sara DLLs at **`c:\dll10`** (server path). RuleTrace auto-syncs from `DllPath` on startup.
+
+If sync fails (permissions), run **once as Administrator**:
+
+```cmd
+setup-dll10.cmd "C:\Users\sadathoseini-sh\Desktop\dll10"
+```
+
+Or manually:
+
+```cmd
+mkdir c:\dll10
+xcopy /Y "C:\Users\sadathoseini-sh\Desktop\dll10\*" "c:\dll10\"
+```
+
 ## hService login error
 
 If you still see `Login failed for user 'hService'`:

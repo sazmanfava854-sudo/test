@@ -320,6 +320,7 @@ namespace RuleTrace
         {
             Console.WriteLine("Config file : {0}", AppDomain.CurrentDomain.SetupInformation.ConfigurationFile);
             ConnectionBootstrap.Apply(_dllPath);
+            CompileDllPathSync.Sync(_dllPath);
 
             string encryptionCode = ConfigurationManager.AppSettings["CityGuid"]
                 ?? ConfigurationManager.AppSettings["RootGUID"]
