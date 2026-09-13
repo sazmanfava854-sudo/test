@@ -74,7 +74,16 @@ build.cmd
 
 **علت رایج (تأیید شده با تحلیل Member شما):** کد VB در `XmlBody/<Body>` خوانا است (~۳۶۰K کاراکتر) اما `EncryptXmlBody` هم پر است؛ موتور `2012.5` هنگام compile از مسیر رمزنگاری می‌خواند، `ClsFunction.Body` خالی می‌ماند و ۲۰ پوسته `M_Out` کنار هم merge می‌شود.
 
-RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، یک فایل VB واحد می‌سازد (`RuleTrace_merged.vb` در پوشه cache) و متدهای Compile موتور را صدا می‌زند. در Log ببینید: `Retry : compile OK after XmlBody inject`.
+RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، پوسته `ToString1` را یک‌بار می‌گیرد، فقط `Sub`/`Function`ها را merge می‌کند (`RuleTrace_merged.vb` در cache) و با **vbc** کامپایل می‌کند (نه `RunRule` دوباره). در Log باید ببینید:
+
+```
+RuleTrace 62a0917+merge-v2 ... — ToString1 shell + vbc retry
+Merge shell  : ToString1 len=~18676, M_Out=1
+Retry compile: vbc (VBCodeProvider) on merged source...
+VBC OK       : N_Solh.Solh -> ...\Solh_ruletrace.dll
+```
+
+اگر هنوز `GetStrOutClass len=1226` یا `Compile try : RunRule` می‌بینید، ZIP/branch قدیمی است — از `cursor/ruletrace-standalone-88fc` دوباره `build.cmd` بزنید.
 
 اگر retry هم خطا داد: DLL دقیق سرور Sara یا کلید `FormulaEncryptionCode` سرور لازم است.
 
