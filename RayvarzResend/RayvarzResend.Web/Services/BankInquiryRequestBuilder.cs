@@ -4,6 +4,17 @@ namespace RayvarzResend.Web.Services;
 
 public static class BankInquiryRequestBuilder
 {
+    /// <summary>هر دو سرویس epay — بدنه تخت در ریشه JSON (بدون request).</summary>
+    public static IReadOnlyList<BankInquiryRequestFormat> FlatFormats { get; } =
+    [
+        BankInquiryRequestFormat.CamelFlat,
+        BankInquiryRequestFormat.PascalFlat,
+        BankInquiryRequestFormat.EpayIdFlat
+    ];
+
+    /// <summary>استعلام قبوض — wrapped به HTTP 400 می‌خورد؛ فقط تخت.</summary>
+    public static IReadOnlyList<BankInquiryRequestFormat> FicheLookupFormats => FlatFormats;
+
     public static IReadOnlyList<BankInquiryRequestFormat> AllFormats { get; } =
     [
         BankInquiryRequestFormat.CamelFlat,

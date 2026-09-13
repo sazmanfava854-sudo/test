@@ -61,7 +61,7 @@ public sealed class BankInquiryApiClient
         var userName = _options.UserName.Trim();
         var password = _options.Password;
 
-        foreach (var format in BankInquiryRequestBuilder.AllFormats)
+        foreach (var format in BankInquiryRequestBuilder.FicheLookupFormats)
         {
             var attempt = await DiagnoseOneAsync(
                 _options.EffectiveFicheLookupServiceUrl,
@@ -167,7 +167,8 @@ public sealed class BankInquiryApiClient
             billId,
             BankInquiryResponseParser.ParseFicheLookupStep,
             BankInquiryResponseParser.FicheLookupSourceLabel,
-            ct);
+            ct,
+            BankInquiryRequestBuilder.FicheLookupFormats);
 
         switch (lookupStep.Kind)
         {
@@ -259,11 +260,12 @@ public sealed class BankInquiryApiClient
         string billId,
         Func<string?, int, BankInquiryParsedStep> parser,
         string serviceLabel,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<BankInquiryRequestFormat>? formats = null)
     {
         BankInquiryParsedStep? lastStep = null;
 
-        foreach (var format in BankInquiryRequestBuilder.AllFormats)
+        foreach (var format in formats ?? BankInquiryRequestBuilder.AllFormats)
         {
             var step = await CallAndParseAsync(
                 serviceUrl,
@@ -286,26 +288,26 @@ public sealed class BankInquiryApiClient
                 return step;
             }
 
-            if (!ShouldTryNextRequestFormat(step, format))
+            if (!ShouldTryNextRequestFormat(step, format, formats ?? BankInquiryRequestBuilder.AllFormats))
                 return step;
         }
 
         return lastStep ?? ServiceUnavailableStep(serviceLabel, $"خطا در ارتباط با {serviceLabel}");
     }
 
-    private static bool ShouldTryNextRequestFormat(BankInquiryParsedStep step, BankInquiryRequestFormat format)
+    private static bool ShouldTryNextRequestFormat(
+        BankInquiryParsedStep step,
+        BankInquiryRequestFormat format,
+        IReadOnlyList<BankInquiryRequestFormat> formats)
     {
         if (step.Kind is BankInquiryStepKind.Paid or BankInquiryStepKind.NotPaid)
             return false;
 
-        if (format == BankInquiryRequestFormat.PascalWrapped)
-            return false;
-
-        if (step.Kind == BankInquiryStepKind.RecordNotFound)
-            return true;
-
-        if (step.Kind == BankInquiryStepKind.ServiceError)
-            return true;
+        for (var i = 0; i < formats.Count; i++)
+        {
+            if (formats[i] == format)
+                return i < formats.Count - 1;
+        }
 
         return false;
     }
