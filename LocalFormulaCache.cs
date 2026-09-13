@@ -54,6 +54,8 @@ namespace RuleTrace
 
             PatchMergeFlags();
             Console.WriteLine("Local cache  : {0}", folder);
+            if (Directory.GetFiles(folder, "*", SearchOption.AllDirectories).Length == 0)
+                Console.WriteLine("Local cache  : (empty — will be created here after first successful compile)");
         }
 
         public static bool TrySeedFromDatabase(int nidRuleClass, Guid cityGuid)

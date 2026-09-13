@@ -89,17 +89,29 @@ Solh (NidClass=344) has ~20 large XML members — full recompile can take **5–
 
 Edit `App.config` then rebuild, or edit `bin\RuleTrace.exe.config` directly.
 
-## Local formula cache (on your PC)
+## Local formula cache (built on your PC — NOT from server)
 
-RuleTrace builds cache under:
+There is **no cache on the Sara server**. RuleTrace creates a **new cache** on your machine:
 
 ```
-C:\SafaFormulaCache\{CityGuid}\344\
+{FormulaCachePath}\{CityGuid}\344\
 ```
 
-(or `FormulaCachePath` in config)
+Example:
 
-**First successful compile** writes cache locally. Next runs are fast (no `--recompile`).
+```
+C:\Users\...\SafaFormulaCache\06065CA7-8B68-491F-A002-2AC9CAC8AE34\344\
+```
+
+Config:
+
+```xml
+<add key="FormulaCacheSource" value="" />   <!-- always empty -->
+<add key="FormulaCachePath" value="C:\Users\...\SafaFormulaCache" />
+```
+
+**First successful compile** (`--recompile` once) writes files into `FormulaCachePath`.  
+**Next runs** without `--recompile` reuse that local cache (fast).
 
 ## BC30269: M_Out / Out duplicate (20 Member XML)
 

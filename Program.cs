@@ -118,6 +118,7 @@ namespace RuleTrace
             }
 
             Console.WriteLine("Compile     : OK");
+            Console.WriteLine("Local cache  : saved under {0}", LocalFormulaCache.GetCacheKeyFolder(nidRuleClass, runRuleGuid));
             if (result.ClassDesinger != null)
             {
                 Console.WriteLine("Class       : {0} (FormulaGroup={1})",
