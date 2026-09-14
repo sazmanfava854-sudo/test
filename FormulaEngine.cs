@@ -123,7 +123,7 @@ namespace RuleTrace
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) || t.IndexOf("BC30269", StringComparison.Ordinal) >= 0
                 || t.IndexOf("BC30260", StringComparison.Ordinal) >= 0 || t.IndexOf("BC30201", StringComparison.Ordinal) >= 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Retry", "Inject", "After inject", "  ClsFunction", "Partial", "Member filter", "Engine compile", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Retry", "Inject", "After inject", "  ClsFunction", "Partial", "Member filter", "Engine compile", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "RunRule", "Run FAILED", "SetMyInfo", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -737,7 +737,19 @@ namespace RuleTrace
                 ? "Compiling    : FULL recompile of all Member XML (may take several minutes)..."
                 : "Compiling    : load/compile NidClass " + nid + " ...");
             DateTime t0 = DateTime.UtcNow;
-            object result = runRule.Invoke(null, new object[] { nid, cityGuid, r.ReCompile });
+            object result;
+            try
+            {
+                result = runRule.Invoke(null, new object[] { nid, cityGuid, r.ReCompile });
+            }
+            catch (TargetInvocationException tie)
+            {
+                Exception inner = tie.InnerException ?? tie;
+                _log("RunRule FAIL : " + inner.GetType().Name + ": " + FirstLine(inner.Message));
+                _summaryCapture = false;
+                PrintSummary();
+                return 4;
+            }
             _log("Compiling    : done in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
 
             if (result == null)
@@ -749,49 +761,26 @@ namespace RuleTrace
             object compilerErrors = Get(result, "CompilerErrors");
             if (HasCompilerErrors(compilerErrors))
             {
-                bool retried = false;
-                if (FormulaMerger.IsMOutDuplicateError(compilerErrors))
+                _log("");
+                _log("Phase 2      : موتور Sara خطا داد — vbc محلی صدا زده نمی‌شود");
+                LogCompilerErrors(compilerErrors, 15);
+                SaveMergedVb(compilerErrors, cacheFolder);
+                object designer = Get(result, "ClassDesinger");
+                if (designer == null)
                 {
-                    _log("");
-                    _log("=== موتور Sara: BC30269 (M_Out تکراری) — این خطا مهم نیست، RuleTrace خودش retry می‌کند ===");
-                    LogCompilerErrors(compilerErrors, 3);
-                    SaveMergedVb(compilerErrors, cacheFolder);
-                    _log("");
-                    _log("=== RETRY: XmlBody inject + per-member partial vbc (no monolithic glue) ===");
-                    retried = true;
-                    object retry = TryInjectedCompile(nid, cityGuid, r.ReCompile, cacheFolder, r);
-                    if (retry != null && (retry is DirectFormulaHost || !HasCompilerErrors(Get(retry, "CompilerErrors"))))
-                    {
-                        result = retry;
-                        _log("Retry        : compile OK (per-member partial / engine native)");
-                    }
-                }
-
-                if (HasCompilerErrors(Get(result, "CompilerErrors")))
-                {
-                    if (retried)
-                    {
-                        _log("");
-                        _log("Compile      : FAILED — vbc نتوانست partial VB را کامپایل کند (خطوط «vbc :» بالا)");
-                        _log("               فایل‌ها: " + Path.Combine(cacheFolder, "partial"));
-                        _summaryCapture = false;
-                        PrintSummary();
-                        return 4;
-                    }
-
-                    _log("");
-                    _log("=== COMPILE ERRORS ===");
-                    LogCompilerErrors(Get(result, "CompilerErrors"), 40);
-                    SaveMergedVb(Get(result, "CompilerErrors"), cacheFolder);
-                    _log("");
-                    _log("تشخیص: خطای کامپایل موتور Sara که از نوع M_Out نیست — «بررسی موتور (ClsClass)» را دستی بزنید.");
+                    _log("Compile      : FAILED — ClassDesinger خالی است؛ اجرا ممکن نیست");
+                    _log("               ReCompile را خاموش بگذارید تا Cache موتور Sara استفاده شود.");
                     _summaryCapture = false;
                     PrintSummary();
                     return 4;
                 }
+                _log("Compile      : ClassDesinger موجود است — اجرا با همان نتیجه موتور (بدون vbc)");
+            }
+            else
+            {
+                _log("Compile      : OK");
             }
 
-            _log("Compile      : OK");
             ReportCache(cacheFolder);
 
             object classDesigner = Get(result, "ClassDesinger");
@@ -800,8 +789,20 @@ namespace RuleTrace
             if (classDesigner != null)
                 _log("Class        : " + Get(classDesigner, "Name") + " (FormulaGroup=" + Get(classDesigner, "FormulaGroup") + ")");
 
-            object factory = BuildFactory(r);
-            Invoke(result, "SetMyInfo", factory);
+            object factory;
+            try
+            {
+                factory = BuildFactory(r);
+                Invoke(result, "SetMyInfo", factory);
+            }
+            catch (Exception ex)
+            {
+                _log("SetMyInfo    : FAILED — " + FirstLine(ex.Message));
+                if (ex.InnerException != null) _log("  inner      : " + FirstLine(ex.InnerException.Message));
+                _summaryCapture = false;
+                PrintSummary();
+                return 4;
+            }
 
             foreach (var kv in r.Parameters)
             {
@@ -821,7 +822,19 @@ namespace RuleTrace
             _log("");
             _log("=== RUN " + entry + " ===");
             DateTime t1 = DateTime.UtcNow;
-            object runResult = Invoke(result, "Run", entry);
+            object runResult;
+            try
+            {
+                runResult = Invoke(result, "Run", entry);
+            }
+            catch (Exception ex)
+            {
+                _log("Run FAILED   : " + ex.GetType().Name + ": " + FirstLine(ex.Message));
+                if (ex.InnerException != null) _log("  inner      : " + FirstLine(ex.InnerException.Message));
+                _summaryCapture = false;
+                PrintSummary();
+                return 4;
+            }
             _log("Run          : done in " + (DateTime.UtcNow - t1).TotalSeconds.ToString("0.0") + "s");
             if (runResult != null) _log("Return       : " + runResult);
 
@@ -853,12 +866,10 @@ namespace RuleTrace
             {
                 LastMemberSources.Clear();
                 LastMemberSources.AddRange(GetMemberSources(nid));
-                if (string.Equals(r.Formula, "Solh", StringComparison.OrdinalIgnoreCase) || nid == 344)
-                    ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
             }
             catch (Exception ex)
             {
-                _log("Chidman      : analysis skipped — " + ex.Message);
+                _log("Source       : skipped — " + ex.Message);
             }
 
             _log("Done.");
@@ -964,12 +975,21 @@ namespace RuleTrace
 
         private void LogCompilerErrors(object compilerErrors, int max)
         {
-            int shown = 0;
-            foreach (object e in (IEnumerable)compilerErrors)
+            if (compilerErrors == null) return;
+            var en = compilerErrors as IEnumerable;
+            if (en == null || compilerErrors is string)
             {
+                _log("  " + compilerErrors);
+                return;
+            }
+            int shown = 0;
+            foreach (object e in en)
+            {
+                if (e == null || object.ReferenceEquals(e, compilerErrors)) continue;
                 if (shown++ < max) _log("  " + e);
             }
             if (shown > max) _log("  ... (" + shown + " errors total)");
+            if (shown == 0) _log("  " + compilerErrors);
         }
 
         /// <summary>Inject XmlBody into ClsFunction; compile per-member partial files (Sara model) — never glue all XmlBody into one VB.</summary>
