@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "merge-v14-property-stubs-order";
+        public const string Label = "merge-v15-class-scope-fix";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — single-pass unique properties & types";
+                return "RuleTrace " + Label + " (v" + v + ") — relocate pre-Class member code into class body";
             }
         }
     }

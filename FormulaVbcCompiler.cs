@@ -57,9 +57,17 @@ namespace RuleTrace
                 if (missing.Count > 0)
                 {
                     log("VBC auto-fix : " + missing.Count + " undeclared variable(s) from vbc.exe — adding property stubs...");
-                    mergedVb = FormulaMerger.InjectPropertyStubs(mergedVb, missing);
-                    File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
-                    exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
+                    string updated = FormulaMerger.InjectPropertyStubs(mergedVb, missing);
+                    if (updated.Length != mergedVb.Length)
+                    {
+                        mergedVb = updated;
+                        File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
+                        exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
+                    }
+                    else
+                    {
+                        log("VBC auto-fix : names are already declared — scope problem, not a missing declaration");
+                    }
                 }
             }
             if (exeOutcome.Ok) return exeOutcome;
@@ -91,7 +99,13 @@ namespace RuleTrace
                 if (missing.Count == 0) break;
 
                 log("VBC auto-fix : " + missing.Count + " undeclared variable(s) found (" + string.Join(", ", missing.Take(8)) + (missing.Count > 8 ? "..." : "") + ") — adding property stubs...");
-                mergedVb = FormulaMerger.InjectPropertyStubs(mergedVb, missing);
+                string updated = FormulaMerger.InjectPropertyStubs(mergedVb, missing);
+                if (updated.Length == mergedVb.Length)
+                {
+                    log("VBC auto-fix : names are already declared in the class — the code using them is out of class scope, not missing a declaration");
+                    break;
+                }
+                mergedVb = updated;
                 File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
 
                 outcome = TryCompileWithCodeDom(vbPath, dllPath, cacheFolder, refs, log);

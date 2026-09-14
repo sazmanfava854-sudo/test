@@ -77,8 +77,9 @@ build.cmd
 RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، پوسته `ToString1` را یک‌بار می‌گیرد، فقط `Sub`/`Function`ها را merge می‌کند (`RuleTrace_merged.vb` در cache) و با **vbc** کامپایل می‌کند (نه `RunRule` دوباره). در Log باید ببینید:
 
 ```
-RuleTrace merge-v14-property-stubs-order ... — single-pass unique properties & types
+RuleTrace merge-v15-class-scope-fix ... — relocate pre-Class member code into class body
 Merge source : ToString1 len=~1021416
+Merge struct : moved N line(s) from before Class into the class body
 Merge params : ... parameter properties added
 Merged VB    : ... M_Out decls=1, Property Out=1 (injected path)
 Retry compile: vbc (VBCodeProvider) on merged source...

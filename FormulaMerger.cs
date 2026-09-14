@@ -143,7 +143,8 @@ namespace RuleTrace
         {
             log("Merge path   : injected full class, M_Out=" + CountOccurrences(injected, "M_Out"));
             var stripped = StripAllOutDeclarations(NormalizeNewlines(injected));
-            string merged = InsertCanonicalOutBlock(stripped.CleanedText, stripped.FirstMOut, stripped.FirstPropOut);
+            string body = MoveOrphanCodeIntoClass(stripped.CleanedText, log);
+            string merged = InsertCanonicalOutBlock(body, stripped.FirstMOut, stripped.FirstPropOut);
 
             var missingParams = DiscoverUndeclaredParameters(merged, cls, sources, log);
             if (missingParams.Count > 0)
@@ -162,6 +163,108 @@ namespace RuleTrace
         {
             return !string.IsNullOrEmpty(s) && s.Length >= 50000 && s.Length <= 6000000
                 && s.IndexOf("End Class", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static readonly Regex ClassDeclRx = new Regex(
+            @"^(?:(?:Public|Private|Friend|Protected|Partial|NotInheritable|MustInherit|Shadows)\s+)*Class\s+\w+",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        /// <summary>
+        /// ToString1 emits member bodies (SetParam assignments, Sub/Function) BEFORE the Class line, so they are at
+        /// file scope and cannot see class properties (BC30451 at the top of the file). Relocate them into the class.
+        /// </summary>
+        private static string MoveOrphanCodeIntoClass(string vb, Action<string> log)
+        {
+            if (string.IsNullOrWhiteSpace(vb)) return vb;
+            string[] lines = NormalizeNewlines(vb).Split('\n');
+
+            int classIdx = -1;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (ClassDeclRx.IsMatch(lines[i].TrimStart())) { classIdx = i; break; }
+            }
+            if (classIdx < 0)
+            {
+                log("Merge struct : no Class declaration found — leaving source as-is");
+                return vb;
+            }
+
+            int endClassIdx = -1;
+            for (int i = lines.Length - 1; i > classIdx; i--)
+            {
+                if (lines[i].TrimStart().StartsWith("End Class", StringComparison.OrdinalIgnoreCase)) { endClassIdx = i; break; }
+            }
+            if (endClassIdx < 0)
+            {
+                log("Merge struct : no End Class found — leaving source as-is");
+                return vb;
+            }
+
+            var header = new List<string>();
+            var orphanBefore = new List<string>();
+            for (int i = 0; i < classIdx; i++)
+            {
+                if (IsFileScopeHeaderLine(lines[i])) header.Add(lines[i]);
+                else orphanBefore.Add(lines[i]);
+            }
+
+            var orphanAfter = new List<string>();
+            var trailer = new List<string>();
+            for (int i = endClassIdx + 1; i < lines.Length; i++)
+            {
+                if (IsFileScopeTrailerLine(lines[i])) trailer.Add(lines[i]);
+                else orphanAfter.Add(lines[i]);
+            }
+
+            if (orphanBefore.Count == 0 && orphanAfter.Count == 0)
+            {
+                log("Merge struct : class scope already correct (Class at line " + (classIdx + 1) + ")");
+                return vb;
+            }
+
+            log("Merge struct : moved " + orphanBefore.Count + " line(s) from before Class and "
+                + orphanAfter.Count + " line(s) from after End Class into the class body");
+
+            var sb = new StringBuilder(vb.Length + 512);
+            foreach (string l in header) sb.Append(l).Append('\n');
+            sb.Append(lines[classIdx]).Append('\n');
+            if (orphanBefore.Count > 0)
+            {
+                sb.Append("' --- RuleTrace: relocated pre-Class member code ---").Append('\n');
+                foreach (string l in orphanBefore) sb.Append(l).Append('\n');
+            }
+            for (int i = classIdx + 1; i < endClassIdx; i++) sb.Append(lines[i]).Append('\n');
+            if (orphanAfter.Count > 0)
+            {
+                sb.Append("' --- RuleTrace: relocated post-Class member code ---").Append('\n');
+                foreach (string l in orphanAfter) sb.Append(l).Append('\n');
+            }
+            sb.Append(lines[endClassIdx]).Append('\n');
+            foreach (string l in trailer) sb.Append(l).Append('\n');
+
+            return sb.ToString().Replace("\n", "\r\n");
+        }
+
+        /// <summary>Imports/Option/Namespace/attribute/comment lines legally precede a Class declaration.</summary>
+        private static bool IsFileScopeHeaderLine(string line)
+        {
+            string t = (line ?? string.Empty).Trim();
+            if (t.Length == 0 || t.StartsWith("'")) return true;
+            if (t.StartsWith("Imports ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("Option ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("Namespace ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("#", StringComparison.Ordinal)) return true;
+            if (t.StartsWith("<", StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private static bool IsFileScopeTrailerLine(string line)
+        {
+            string t = (line ?? string.Empty).Trim();
+            if (t.Length == 0 || t.StartsWith("'")) return true;
+            if (t.Equals("End Namespace", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("#", StringComparison.Ordinal)) return true;
+            return false;
         }
 
         /// <summary>Fallback: ToString1 shell once + stripped member Sub/Function bodies.</summary>
