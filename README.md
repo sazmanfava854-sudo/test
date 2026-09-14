@@ -77,8 +77,9 @@ build.cmd
 RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، پوسته `ToString1` را یک‌بار می‌گیرد، فقط `Sub`/`Function`ها را merge می‌کند (`RuleTrace_merged.vb` در cache) و با **vbc** کامپایل می‌کند (نه `RunRule` دوباره). در Log باید ببینید:
 
 ```
-RuleTrace merge-v3-vbc-fix ... — ToString1 shell + vbc.exe fallback
+RuleTrace merge-v6-dedupe-fields ... — imports + field merge + deduped refs
 Merge shell  : ToString1 len=~18676, M_Out=1
+Merge fields  : N unique (M skipped — already in shell or duplicate)
 Retry compile: vbc (VBCodeProvider) on merged source...
 VBC OK       : N_Solh.Solh -> ...\Solh_ruletrace.dll
 ```
