@@ -881,7 +881,7 @@ namespace RuleTrace
                 }
 
                 var filterKw = InferMemberFilterKeywords(nid, r);
-                FormulaMerger.PartialCompileSet partial = FormulaMerger.BuildPartialMemberFiles(shellCls, sources, cacheFolder, _log, filterKw);
+                FormulaMerger.PartialCompileSet partial = FormulaMerger.BuildPartialMemberFiles(shellCls, cls, sources, cacheFolder, _log, filterKw);
                 if (partial.FilePaths.Count <= 1)
                 {
                     _log("Retry skip   : no member partial files produced");

@@ -429,6 +429,7 @@ namespace RuleTrace
             {
                 "System",
                 "System.Collections.Generic",
+                "System.ComponentModel",
                 "System.Data",
                 "System.Runtime.Serialization",
                 "System.Xml",
@@ -451,7 +452,15 @@ namespace RuleTrace
                 result = sb.ToString();
             }
             result = FixSerializableAttribute(result);
+            result = FixFormulaAttributes(result);
             return EnsureCommonTypeAliases(result);
+        }
+
+        private static string FixFormulaAttributes(string merged)
+        {
+            if (string.IsNullOrWhiteSpace(merged)) return merged;
+            merged = Regex.Replace(merged, @"<\s*DisplayName\s*\(", "<System.ComponentModel.DisplayName(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            return merged;
         }
 
         private static string EnsureCommonTypeAliases(string merged)
@@ -461,7 +470,8 @@ namespace RuleTrace
             var aliases = new[]
             {
                 "Imports MapArr = System.Object",
-                "Imports SegmentArr = System.Object"
+                "Imports SegmentArr = System.Object",
+                "Imports ClsOut = BIZ.SC.ClsOut",
             };
             string norm = NormalizeNewlines(merged);
             var sb = new StringBuilder();
@@ -696,6 +706,14 @@ namespace RuleTrace
             // Match Property declarations in member bodies (e.g. Public Property Foo As ...)
             var rxProp = new Regex(@"(?:Public|Private|Protected|Friend)?\s*Property\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase);
             foreach (Match m in rxProp.Matches(text))
+            {
+                string id = m.Groups[1].Value;
+                if (!string.IsNullOrWhiteSpace(id) && !id.Equals("Out", StringComparison.OrdinalIgnoreCase))
+                    yield return id;
+            }
+
+            var rxMe = new Regex(@"\bMe\.([A-Za-z_]\w+)\b", RegexOptions.IgnoreCase);
+            foreach (Match m in rxMe.Matches(text))
             {
                 string id = m.Groups[1].Value;
                 if (!string.IsNullOrWhiteSpace(id) && !id.Equals("Out", StringComparison.OrdinalIgnoreCase))
@@ -1129,6 +1147,7 @@ namespace RuleTrace
         internal sealed class PartialCompileSet
         {
             public string ClassName = "Solh";
+            public string ShellPath;
             public readonly List<string> FilePaths = new List<string>();
             public int MemberFileCount;
             public int MethodCount;
@@ -1139,7 +1158,7 @@ namespace RuleTrace
         /// Unlike BuildMergedVbManual, methods from different members are never concatenated into one class body.
         /// </summary>
         public static PartialCompileSet BuildPartialMemberFiles(
-            object shellCls, IList<MemberSource> sources, string cacheFolder, Action<string> log,
+            object shellCls, object injectedCls, IList<MemberSource> sources, string cacheFolder, Action<string> log,
             IEnumerable<string> filterKeywords = null)
         {
             var result = new PartialCompileSet();
@@ -1157,12 +1176,20 @@ namespace RuleTrace
             shell = EnsurePartialClassDeclaration(shellOut.CleanedText, className);
             shell = InsertCanonicalOutBlock(shell, shellOut.FirstMOut, shellOut.FirstPropOut);
 
-            var shellKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var shellMethodKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (string block in ExtractMethodBlocks(NormalizeNewlines(shell)))
             {
                 string key = MethodKey(block);
-                if (!string.IsNullOrEmpty(key)) shellKeys.Add(key);
+                if (!string.IsNullOrEmpty(key)) shellMethodKeys.Add(key);
             }
+
+            var shellNames = CollectDeclarationNames(shell);
+            EnrichDeclarationNamesFromText(shell, shellNames);
+            var fieldByName = CollectSharedFieldsFromSources(sources, shellNames);
+            var hostStubs = BuildRuntimeHostFieldStubs(shellNames, fieldByName);
+            shell = InjectSharedFieldsBeforeEndClass(shell, fieldByName, hostStubs);
+            if (fieldByName.Count > 0 || hostStubs.Count > 0)
+                log("Partial fields: " + fieldByName.Count + " from XmlBody + " + hostStubs.Count + " host stub(s) in shell");
 
             var members = sources.OrderBy(s => s.NidMember).ToList();
             if (filterKeywords != null)
@@ -1179,18 +1206,35 @@ namespace RuleTrace
             string partialDir = Path.Combine(cacheFolder, "partial");
             Directory.CreateDirectory(partialDir);
 
-            string shellPath = Path.Combine(partialDir, className + "_00_shell.vb");
-            File.WriteAllText(shellPath, PrependStandardImports(shell), Encoding.UTF8);
-            result.FilePaths.Add(shellPath);
-            log("Partial shell: " + shellSource + " len=" + shell.Length + ", methods=" + shellKeys.Count + " -> " + shellPath);
-
+            var memberFiles = new List<KeyValuePair<MemberSource, string>>();
             int methodCount = 0;
             foreach (MemberSource src in members)
             {
                 if (string.IsNullOrWhiteSpace(src.Code)) continue;
-                string body = BuildMemberPartialBody(src, shellKeys, log);
+                string body = BuildMemberPartialBody(src, shellMethodKeys, shellNames, log);
                 if (string.IsNullOrWhiteSpace(body)) continue;
+                memberFiles.Add(new KeyValuePair<MemberSource, string>(src, body));
+                methodCount += ExtractMethodBlocks(NormalizeNewlines(body)).Count;
+            }
 
+            string combinedForParams = shell + "\n" + string.Join("\n", memberFiles.Select(kv => kv.Value));
+            var missingParams = DiscoverUndeclaredParameters(combinedForParams, injectedCls ?? shellCls, sources, log);
+            if (missingParams.Count > 0)
+            {
+                log("Partial params: " + missingParams.Count + " property stub(s) in shell (" + string.Join(", ", missingParams.Take(8)) + (missingParams.Count > 8 ? "..." : "") + ")");
+                shell = InjectPropertyStubs(shell, missingParams);
+            }
+
+            string shellPath = Path.Combine(partialDir, className + "_00_shell.vb");
+            File.WriteAllText(shellPath, PrependStandardImports(shell), Encoding.UTF8);
+            result.FilePaths.Add(shellPath);
+            result.ShellPath = shellPath;
+            log("Partial shell: " + shellSource + " len=" + shell.Length + ", methods=" + shellMethodKeys.Count + " -> " + shellPath);
+
+            foreach (var kv in memberFiles)
+            {
+                MemberSource src = kv.Key;
+                string body = kv.Value;
                 string safeName = SanitizeFileName(src.Name);
                 if (string.IsNullOrEmpty(safeName)) safeName = "m" + src.NidMember;
                 string path = Path.Combine(partialDir, className + "_member_" + src.NidMember + "_" + safeName + ".vb");
@@ -1203,7 +1247,6 @@ namespace RuleTrace
                 File.WriteAllText(path, PrependStandardImports(sb.ToString()), Encoding.UTF8);
                 result.FilePaths.Add(path);
                 result.MemberFileCount++;
-                methodCount += ExtractMethodBlocks(NormalizeNewlines(body)).Count;
             }
 
             result.MethodCount = methodCount;
@@ -1211,7 +1254,50 @@ namespace RuleTrace
             return result;
         }
 
-        private static string BuildMemberPartialBody(MemberSource src, HashSet<string> shellKeys, Action<string> log)
+        private static Dictionary<string, string> CollectSharedFieldsFromSources(IList<MemberSource> sources, HashSet<string> shellNames)
+        {
+            var fieldByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (sources == null) return fieldByName;
+            foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
+            {
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                string norm = NormalizeNewlines(src.Code);
+                norm = UnwrapEmbeddedClass(norm);
+                norm = StripAllOutDeclarations(norm).CleanedText;
+                foreach (string decl in ExtractFieldDeclarations(norm))
+                {
+                    var names = ExtractFieldNamesFromLine(decl).ToList();
+                    if (names.Count == 0) continue;
+                    if (names.Any(n => shellNames.Contains(n) || fieldByName.ContainsKey(n))) continue;
+                    foreach (string n in names)
+                        fieldByName[n] = decl;
+                }
+            }
+            return fieldByName;
+        }
+
+        private static string InjectSharedFieldsBeforeEndClass(string shell, Dictionary<string, string> fieldByName, List<string> hostStubs)
+        {
+            if (fieldByName.Count == 0 && hostStubs.Count == 0) return shell;
+            string norm = NormalizeNewlines(shell);
+            int endClass = norm.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) endClass = norm.LastIndexOf("EndClass", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) return shell;
+
+            var sb = new StringBuilder(norm.Length + 4096);
+            sb.Append(norm.Substring(0, endClass));
+            sb.AppendLine();
+            sb.AppendLine("' --- RuleTrace: shared fields (all Members → shell partial) ---");
+            foreach (string decl in fieldByName.Values.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                sb.AppendLine(decl);
+            foreach (string stub in hostStubs)
+                sb.AppendLine(stub);
+            sb.AppendLine();
+            sb.Append(norm.Substring(endClass));
+            return sb.ToString().Replace("\n", "\r\n");
+        }
+
+        private static string BuildMemberPartialBody(MemberSource src, HashSet<string> shellMethodKeys, HashSet<string> shellFieldNames, Action<string> log)
         {
             string norm = NormalizeNewlines(src.Code);
             norm = UnwrapEmbeddedClass(norm);
@@ -1220,22 +1306,13 @@ namespace RuleTrace
             var methods = ExtractMethodBlocks(norm);
             if (methods.Count == 0) return string.Empty;
 
-            string primary = PickPrimaryMemberMethod(src, methods, shellKeys);
+            string primary = PickPrimaryMemberMethod(src, methods, shellMethodKeys);
             if (string.IsNullOrEmpty(primary)) return string.Empty;
 
             if (methods.Count > 1)
                 log("  member " + src.NidMember + " " + src.Name + ": 1 method/file '" + MethodKey(primary) + "' (" + methods.Count + " in XmlBody — others skipped)");
 
-            var sb = new StringBuilder();
-            foreach (string decl in ExtractFieldDeclarations(norm).Take(24))
-            {
-                var names = ExtractFieldNamesFromLine(decl).ToList();
-                if (names.Count == 0) continue;
-                if (names.Any(shellKeys.Contains)) continue;
-                sb.AppendLine(decl);
-            }
-            sb.AppendLine(primary);
-            return sb.ToString().Trim();
+            return primary.Trim();
         }
 
         /// <summary>One Sub/Function per Member row — by Name match, else first method not already in shell.</summary>

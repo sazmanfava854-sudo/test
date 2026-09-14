@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v18-per-member-partial";
+        public const string Label = "v18b-partial-shell-fields";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — per-member partial compile (no monolithic glue)";
+                return "RuleTrace " + Label + " (v" + v + ") — partial compile + shared fields in shell";
             }
         }
     }

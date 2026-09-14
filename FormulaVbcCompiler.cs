@@ -111,16 +111,64 @@ namespace RuleTrace
             List<string> refs = CollectReferences(dllFolder, log);
             log("VBC partial  : " + vbPaths.Count + " file(s), " + totalKb + " KB, " + refs.Count + " ref(s)");
 
+            string shellPath = vbPaths.FirstOrDefault(p => p != null && p.IndexOf("_00_shell.vb", StringComparison.OrdinalIgnoreCase) >= 0)
+                               ?? vbPaths[0];
             string[] paths = vbPaths.ToArray();
             outcome = TryCompileWithCodeDom(paths, dllPath, cacheFolder, refs, log);
+            if (!outcome.Ok)
+                outcome = TryRemedyPartialShell(shellPath, paths, dllPath, cacheFolder, refs, log, outcome);
+
             if (outcome.Ok) return outcome;
 
             log("VBC retry    : VBCodeProvider failed on partial set — trying vbc.exe ...");
             var exeOutcome = TryCompileWithVbcExe(paths, dllPath, dllFolder, log);
+            if (!exeOutcome.Ok)
+                exeOutcome = TryRemedyPartialShellExe(shellPath, paths, dllPath, dllFolder, log, exeOutcome);
+
             if (exeOutcome.Ok) return exeOutcome;
 
             foreach (string e in exeOutcome.Errors)
                 if (!outcome.Errors.Contains(e)) outcome.Errors.Add(e);
+            return outcome;
+        }
+
+        private static CompileOutcome TryRemedyPartialShell(
+            string shellPath, string[] paths, string dllPath, string cacheFolder,
+            List<string> refs, Action<string> log, CompileOutcome failed)
+        {
+            var outcome = failed;
+            for (int attempt = 0; attempt < 4 && !outcome.Ok; attempt++)
+            {
+                var missing = ExtractUndeclaredVariables(outcome.Errors);
+                if (missing.Count == 0) break;
+                log("VBC auto-fix : " + missing.Count + " undeclared in shell (" + string.Join(", ", missing.Take(8)) + (missing.Count > 8 ? "..." : "") + ")");
+                string shell = File.ReadAllText(shellPath, Encoding.UTF8);
+                string updated = FormulaMerger.InjectPropertyStubs(shell, missing);
+                if (updated.Length == shell.Length) break;
+                File.WriteAllText(shellPath, updated, Encoding.UTF8);
+                outcome = TryCompileWithCodeDom(paths, dllPath, cacheFolder, refs, log);
+                if (outcome.Ok) log("VBC auto-fix : partial compile OK after shell stubs");
+            }
+            return outcome;
+        }
+
+        private static CompileOutcome TryRemedyPartialShellExe(
+            string shellPath, string[] paths, string dllPath, string dllFolder,
+            Action<string> log, CompileOutcome failed)
+        {
+            var outcome = failed;
+            for (int attempt = 0; attempt < 4 && !outcome.Ok; attempt++)
+            {
+                var missing = ExtractUndeclaredVariables(outcome.Errors);
+                if (missing.Count == 0) break;
+                log("VBC auto-fix : vbc.exe — " + missing.Count + " undeclared in shell");
+                string shell = File.ReadAllText(shellPath, Encoding.UTF8);
+                string updated = FormulaMerger.InjectPropertyStubs(shell, missing);
+                if (updated.Length == shell.Length) break;
+                File.WriteAllText(shellPath, updated, Encoding.UTF8);
+                outcome = TryCompileWithVbcExe(paths, dllPath, dllFolder, log);
+                if (outcome.Ok) log("VBC auto-fix : partial compile OK (vbc.exe) after shell stubs");
+            }
             return outcome;
         }
 
@@ -159,13 +207,24 @@ namespace RuleTrace
         {
             var list = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (errors == null) return list.ToList();
-            var rx = new Regex(@"'(\w+)'\s+is\s+not\s+declared", RegexOptions.IgnoreCase);
+            var rxDecl = new Regex(@"'(\w+)'\s+is\s+not\s+declared", RegexOptions.IgnoreCase);
+            var rxType = new Regex(@"Type\s+'(\w+)'\s+is\s+not\s+defined", RegexOptions.IgnoreCase);
             foreach (string e in errors)
             {
                 if (string.IsNullOrWhiteSpace(e)) continue;
-                foreach (Match m in rx.Matches(e))
+                foreach (Match m in rxDecl.Matches(e))
                 {
                     string id = m.Groups[1].Value;
+                    if (!string.IsNullOrWhiteSpace(id) && Regex.IsMatch(id, @"^[A-Za-z_]\w*$"))
+                        list.Add(id);
+                }
+                foreach (Match m in rxType.Matches(e))
+                {
+                    string id = m.Groups[1].Value;
+                    if (id.Equals("DisplayName", StringComparison.OrdinalIgnoreCase)
+                        || id.Equals("ClsOut", StringComparison.OrdinalIgnoreCase)
+                        || id.Equals("clsOut", StringComparison.OrdinalIgnoreCase))
+                        continue;
                     if (!string.IsNullOrWhiteSpace(id) && Regex.IsMatch(id, @"^[A-Za-z_]\w*$"))
                         list.Add(id);
                 }
