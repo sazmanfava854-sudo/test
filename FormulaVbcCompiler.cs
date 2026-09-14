@@ -143,7 +143,7 @@ namespace RuleTrace
                 if (missing.Count == 0) break;
                 log("VBC auto-fix : " + missing.Count + " undeclared in shell (" + string.Join(", ", missing.Take(8)) + (missing.Count > 8 ? "..." : "") + ")");
                 string shell = File.ReadAllText(shellPath, Encoding.UTF8);
-                string updated = FormulaMerger.InjectPropertyStubs(shell, missing, true);
+                string updated = FormulaMerger.ApplyShellAutoFix(shell, missing, log);
                 if (updated.Length == shell.Length)
                 {
                     log("VBC auto-fix : could not inject stubs (no End Class in shell?) — skipped");
@@ -168,7 +168,7 @@ namespace RuleTrace
                 if (missing.Count == 0) break;
                 log("VBC auto-fix : vbc.exe — " + missing.Count + " undeclared in shell");
                 string shell = File.ReadAllText(shellPath, Encoding.UTF8);
-                string updated = FormulaMerger.InjectPropertyStubs(shell, missing, true);
+                string updated = FormulaMerger.ApplyShellAutoFix(shell, missing, log);
                 if (updated.Length == shell.Length)
                 {
                     log("VBC auto-fix : could not inject stubs into shell — skipped");

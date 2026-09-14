@@ -1398,7 +1398,32 @@ namespace RuleTrace
             }
 
             sb.AppendLine("End Class");
-            return sb.ToString();
+            return SanitizeWholeVb(sb.ToString());
+        }
+
+        private static string SanitizeWholeVb(string vb)
+        {
+            if (string.IsNullOrWhiteSpace(vb)) return vb;
+            return Regex.Replace(vb, @"\b(?:BIZ\.SC\.)?(?:clsOut|ClsOut)\b", "Object", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        public static string ApplyShellAutoFix(string shell, IList<string> missing, Action<string> log)
+        {
+            if (string.IsNullOrWhiteSpace(shell) || missing == null || missing.Count == 0) return shell;
+            var props = missing.Where(LooksLikeParameterProperty).ToList();
+            var methods = missing.Where(n => !LooksLikeParameterProperty(n)).ToList();
+            string updated = shell;
+            if (props.Count > 0)
+            {
+                updated = InjectPropertyStubs(updated, props, true);
+                log("VBC auto-fix : +" + props.Count + " property stub(s)");
+            }
+            if (methods.Count > 0)
+            {
+                updated = InjectMethodStubs(updated, methods);
+                log("VBC auto-fix : +" + methods.Count + " method stub(s): " + string.Join(", ", methods.Take(6)) + (methods.Count > 6 ? "..." : ""));
+            }
+            return updated;
         }
 
         private static List<string> DiscoverFormulaIdentifiers(string code)
