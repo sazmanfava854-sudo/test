@@ -86,6 +86,7 @@ namespace RuleTrace
 
         /// <summary>BizErrors of the last Run, in order (filled even when Watch filters the log).</summary>
         public readonly List<TraceEvent> LastTrace = new List<TraceEvent>();
+        public readonly List<MemberSource> LastMemberSources = new List<MemberSource>();
         /// <summary>ParametersValue snapshot after the last Run.</summary>
         public readonly Dictionary<string, string> LastParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>Compact "send this to support" block: build label + retry/merge/vbc lines only (no engine BC30269 noise, no inspect dump).</summary>
@@ -746,9 +747,27 @@ namespace RuleTrace
             }
 
             _log("");
+            try
+            {
+                LastMemberSources.Clear();
+                LastMemberSources.AddRange(GetMemberSources(nid));
+                if (string.Equals(r.Formula, "Solh", StringComparison.OrdinalIgnoreCase) || nid == 344)
+                    ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
+            }
+            catch (Exception ex)
+            {
+                _log("Chidman      : analysis skipped — " + ex.Message);
+            }
+
             _log("Done.");
             _summaryCapture = false;
             return hasStop ? 1 : 0;
+        }
+
+        public void AnalyzeChidmanMember(int nidRuleClass, int nidMember)
+        {
+            var sources = GetMemberSources(nidRuleClass);
+            ChidmanAnalyzer.Report(sources, LastTrace, nidMember, _log);
         }
 
         private object BuildFactory(RunRequest r)

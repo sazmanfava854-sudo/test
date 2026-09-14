@@ -176,8 +176,9 @@ namespace RuleTrace
             _shown = null;
             if (_sources.Count > 0)
             {
-                // show the largest member first (normally the main body of the formula)
-                ShowSource(_sources.OrderByDescending(m => m.Code.Length).First());
+                MemberSource prefer = _sources.FirstOrDefault(m => m.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId)
+                    ?? _sources.OrderByDescending(m => m.Code.Length).First();
+                ShowSource(prefer);
             }
             UpdateBar();
             if (_pos >= 0) GoTo(_pos);
@@ -189,6 +190,30 @@ namespace RuleTrace
         public void StepLast() { if (HasTrace) GoTo(_trace.Count - 1); }
         public void StepNext() { if (HasTrace) GoTo(Math.Min(_pos + 1, _trace.Count - 1)); }
         public void StepPrev() { if (HasTrace) GoTo(Math.Max(_pos - 1, 0)); }
+
+        public void FocusMember(int nidMember)
+        {
+            MemberSource m = _sources.FirstOrDefault(s => s.NidMember == nidMember);
+            if (m != null) ShowSource(m);
+        }
+
+        public void JumpToFirstChidmanTrace()
+        {
+            if (!HasTrace) return;
+            for (int i = 0; i < _trace.Count; i++)
+            {
+                TraceEvent e = _trace[i];
+                string k = (e.Key ?? "") + " " + (e.Title ?? "");
+                if (k.IndexOf("chidman", StringComparison.OrdinalIgnoreCase) >= 0
+                    || k.IndexOf("chandganeh", StringComparison.OrdinalIgnoreCase) >= 0
+                    || k.IndexOf("چیدمان", StringComparison.OrdinalIgnoreCase) >= 0
+                    || k.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    GoTo(i);
+                    return;
+                }
+            }
+        }
 
         private void GoTo(int i)
         {

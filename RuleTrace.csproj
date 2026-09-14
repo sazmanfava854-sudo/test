@@ -47,6 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BuildInfo.cs" />
+    <Compile Include="ChidmanAnalyzer.cs" />
     <Compile Include="DebugPanel.cs">
       <SubType>UserControl</SubType>
     </Compile>

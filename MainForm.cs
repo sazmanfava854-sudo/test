@@ -219,6 +219,7 @@ namespace RuleTrace
             _btnTestDb = Btn("تست اتصال DB", (s, e) => TestDb());
             _btnAnalyze = Btn("تحلیل Member", (s, e) => AnalyzeMembers());
             _btnInspect = Btn("بررسی موتور (ClsClass)", (s, e) => InspectEngine());
+            var btnChidman = Btn("تحلیل چیدمان (1288)", (s, e) => AnalyzeChidman());
             _btnClearLog = Btn("پاک کردن خروجی", (s, e) => _txtLog.Clear());
             _btnCopyLog = Btn("کپی خروجی", (s, e) => { if (_txtLog.TextLength > 0) Clipboard.SetText(_txtLog.Text); });
             _btnCopySummary = Btn("کپی خلاصه خطا", (s, e) => CopySummary());
@@ -226,7 +227,7 @@ namespace RuleTrace
             _btnCopySummary.Enabled = false;
             _btnSaveLog = Btn("ذخیره خروجی...", (s, e) => SaveLog());
             _btnToggleSettings = Btn("▲ پنهان کردن تنظیمات", (s, e) => ToggleSettings(!_grpSettings.Visible));
-            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnClearLog, _btnCopyLog, _btnCopySummary, _btnSaveLog, _btnToggleSettings }) p.Controls.Add(b);
+            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, btnChidman, _btnClearLog, _btnCopyLog, _btnCopySummary, _btnSaveLog, _btnToggleSettings }) p.Controls.Add(b);
             p.Controls.Add(new Label { Text = "کلیدها: F5 اجرا • F10 رویداد بعدی • Shift+F10 قبلی", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
             return p;
         }
@@ -396,6 +397,31 @@ namespace RuleTrace
         }
 
         /// <summary>Loads ClsClass through the Sara engine without running and dumps what it parsed from dbo.Member.</summary>
+        private void AnalyzeChidman()
+        {
+            int nid;
+            if (!TryFormulaId(out nid)) return;
+            _tabs.SelectedTab = _tabLog;
+            RunBackground("تحلیل Member 1288 (چیدمان)...", eng =>
+            {
+                Log("");
+                Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " ══════════");
+                eng.AnalyzeChidmanMember(nid, ChidmanAnalyzer.DefaultChidmanMemberId);
+                try
+                {
+                    var sources = eng.GetMemberSources(nid);
+                    _sourcesNid = nid;
+                    Ui(() =>
+                    {
+                        _debug.SetSources(sources);
+                        _debug.FocusMember(ChidmanAnalyzer.DefaultChidmanMemberId);
+                        _tabs.SelectedTab = _tabDebug;
+                    });
+                }
+                catch (Exception ex) { Log("WARN         : " + ex.Message); }
+            }, loadDlls: false);
+        }
+
         private void InspectEngine()
         {
             int nid;
@@ -468,7 +494,23 @@ namespace RuleTrace
                 summary.Add("Exit code    : " + code);
                 Ui(() => { _lastSummary = summary; _btnCopySummary.Enabled = summary.Count > 1; });
                 if (code == 4)
+                {
                     Log("برای ارسال خطا فقط دکمه «کپی خلاصه خطا» را بزنید و متن را paste کنید.");
+                    if (string.Equals(req.Formula, "Solh", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int nidSolh;
+                        if (FormulaEngine.FormulaMap.TryGetValue(req.Formula, out nidSolh))
+                        {
+                            try
+                            {
+                                eng.AnalyzeChidmanMember(nidSolh, ChidmanAnalyzer.DefaultChidmanMemberId);
+                                LoadSourcesInto(eng, nidSolh);
+                                Ui(() => { _debug.FocusMember(ChidmanAnalyzer.DefaultChidmanMemberId); _tabs.SelectedTab = _tabDebug; });
+                            }
+                            catch (Exception ex) { Log("WARN         : chidman analysis: " + ex.Message); }
+                        }
+                    }
+                }
 
                 if (code == 0 || code == 1)
                 {
@@ -486,6 +528,11 @@ namespace RuleTrace
                     Ui(() =>
                     {
                         _debug.SetTrace(trace, parms, req.Watch);
+                        if (string.Equals(req.Formula, "Solh", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _debug.FocusMember(ChidmanAnalyzer.DefaultChidmanMemberId);
+                            _debug.JumpToFirstChidmanTrace();
+                        }
                         if (trace.Count > 0) { _tabs.SelectedTab = _tabDebug; ToggleSettings(false); }
                     });
                     Log(trace.Count > 0
