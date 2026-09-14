@@ -148,8 +148,8 @@ namespace RuleTrace
             log("Merge shell  : after stripping stubs, M_Out decls=" + CountMOutDeclarations(shell) + ", shell methods=" + shellMethodCount);
 
             var shellNames = CollectDeclarationNames(shell);
+            EnrichDeclarationNamesFromText(shell, shellNames);
             var fieldByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var uniqueFieldDecls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int methodCount = 0;
             int fieldSkipped = 0;
             foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
@@ -166,14 +166,13 @@ namespace RuleTrace
 
                 foreach (string decl in ExtractFieldDeclarations(norm))
                 {
-                    var declNames = ParseFieldNames(decl).ToList();
+                    var declNames = ExtractFieldNamesFromLine(decl).ToList();
                     if (declNames.Count == 0) continue;
                     if (declNames.Any(n => shellNames.Contains(n) || fieldByName.ContainsKey(n)))
                     {
                         fieldSkipped++;
                         continue;
                     }
-                    uniqueFieldDecls.Add(decl);
                     foreach (string n in declNames)
                         fieldByName[n] = decl;
                 }
@@ -186,7 +185,7 @@ namespace RuleTrace
                 }
             }
             log("Merge methods: " + methodMap.Count + " unique Sub/Function (" + shellMethodCount + " shell + " + methodCount + " member block(s))");
-            log("Merge fields  : " + uniqueFieldDecls.Count + " unique (" + fieldSkipped + " skipped — already in shell or duplicate)");
+            log("Merge fields  : " + fieldByName.Count + " unique (" + fieldSkipped + " skipped — already in shell or duplicate)");
 
             int cap = shell.Length + (int)Math.Min(methodMap.Values.Sum(b => (long)b.Length), int.MaxValue - shell.Length - 8192) + 8192;
             var sb = new StringBuilder(cap);
@@ -200,10 +199,10 @@ namespace RuleTrace
             if (hostStubs.Count > 0)
                 log("Merge host   : " + hostStubs.Count + " runtime stub field(s) (Info8, …)");
 
-            if (uniqueFieldDecls.Count > 0 || hostStubs.Count > 0)
+            if (fieldByName.Count > 0 || hostStubs.Count > 0)
             {
                 sb.AppendLine("' --- RuleTrace: shared fields from Member XmlBody ---");
-                foreach (string decl in uniqueFieldDecls.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                foreach (string decl in fieldByName.Values.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                     sb.AppendLine(decl);
                 foreach (string decl in hostStubs)
                     sb.AppendLine(decl);
@@ -242,7 +241,8 @@ namespace RuleTrace
             sb.AppendLine();
 
             sb.AppendLine(shell.Substring(endClass));
-            string merged = sb.ToString();
+            string merged = DedupeFieldLinesByName(sb.ToString());
+            merged = RemoveOrphanPropertyAccessorLines(merged);
             int mOutDecls = CountMOutDeclarations(merged);
             int outProps = CountPropertyOutDeclarations(merged);
             log("Merged VB    : " + merged.Length + " chars, M_Out decls=" + mOutDecls + ", Property Out=" + outProps + " (expect 1 each)");
@@ -302,7 +302,7 @@ namespace RuleTrace
             return merged;
         }
 
-        private static readonly string[] RuntimeHostFieldNames = { "Info8", "Info", "MyInfo", "M_Info" };
+        private static readonly string[] RuntimeHostFieldNames = { "Info8", "Info", "MyInfo", "M_Info", "_OutList" };
 
         private static List<string> BuildRuntimeHostFieldStubs(HashSet<string> shellNames, Dictionary<string, string> fieldByName)
         {
@@ -310,7 +310,10 @@ namespace RuleTrace
             foreach (string name in RuntimeHostFieldNames)
             {
                 if (shellNames.Contains(name) || fieldByName.ContainsKey(name)) continue;
-                stubs.Add("Public " + name + " As Object");
+                if (name.StartsWith("_", StringComparison.Ordinal))
+                    stubs.Add("Private " + name + " As Object");
+                else
+                    stubs.Add("Public " + name + " As Object");
             }
             return stubs;
         }
@@ -329,7 +332,7 @@ namespace RuleTrace
                     kept.Add(line);
                     continue;
                 }
-                var names = ParseFieldNames(t).ToList();
+                var names = ExtractFieldNamesFromLine(t).ToList();
                 if (names.Count == 0)
                 {
                     kept.Add(line);
@@ -340,6 +343,45 @@ namespace RuleTrace
                 kept.Add(line);
             }
             return string.Join("\n", kept).Replace("\n", "\r\n");
+        }
+
+        /// <summary>Orphan Get/Set/End Property lines left when Property Out headers were stripped.</summary>
+        private static string RemoveOrphanPropertyAccessorLines(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+            var kept = new List<string>();
+            foreach (string line in NormalizeNewlines(text).Split('\n'))
+            {
+                string t = line.Trim();
+                int indent = line.Length - line.TrimStart().Length;
+                if (indent <= 4 && Regex.IsMatch(t, @"^(?:Get|End\s+Get|End\s+Set|Set\s*\(|End\s+Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    continue;
+                kept.Add(line);
+            }
+            return string.Join("\n", kept).Replace("\n", "\r\n");
+        }
+
+        private static readonly Regex FieldDeclFirstNameRx = new Regex(
+            @"^(?:Public|Private|Protected|Friend|Dim|Const)(?:\s+(?:ReadOnly|Shared))*\s+([\w_]+)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private static IEnumerable<string> ExtractFieldNamesFromLine(string line)
+        {
+            foreach (string n in ParseFieldNames(line))
+                yield return n;
+            if (string.IsNullOrWhiteSpace(line)) yield break;
+            Match m = FieldDeclFirstNameRx.Match(line.Trim());
+            if (m.Success) yield return m.Groups[1].Value;
+        }
+
+        private static void EnrichDeclarationNamesFromText(string text, HashSet<string> names)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            foreach (string line in NormalizeNewlines(text).Split('\n'))
+            {
+                foreach (string n in ExtractFieldNamesFromLine(line.Trim()))
+                    names.Add(n);
+            }
         }
 
         /// <summary>Class shell from ToString1 (~18KB). Never use ToString() — after inject it embeds all bodies (~1MB, 100× M_Out).</summary>
@@ -474,7 +516,7 @@ namespace RuleTrace
                 if (id.Length == 0) continue;
                 int paren = id.IndexOf('(');
                 if (paren > 0) id = id.Substring(0, paren).Trim();
-                if (id.Length > 0 && char.IsLetter(id[0])) yield return id;
+                if (id.Length > 0 && (char.IsLetter(id[0]) || id[0] == '_')) yield return id;
             }
         }
 
@@ -492,7 +534,7 @@ namespace RuleTrace
             foreach (string line in NormalizeNewlines(vb).Split('\n'))
             {
                 string t = line.Trim();
-                foreach (string name in ParseFieldNames(t))
+                foreach (string name in ExtractFieldNamesFromLine(t))
                     names.Add(name);
                 Match prop = Regex.Match(t, @"^(?:(?:Public|Private|Protected|Friend)\s+)+Property\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                 if (prop.Success && !prop.Groups[1].Value.Equals("Out", StringComparison.OrdinalIgnoreCase))
