@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "merge-v13-auto-declare-parameters";
+        public const string Label = "merge-v14-property-stubs-order";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — auto-declare formula parameters & vbc auto-remedy";
+                return "RuleTrace " + Label + " (v" + v + ") — single-pass unique properties & types";
             }
         }
     }

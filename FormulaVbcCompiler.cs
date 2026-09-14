@@ -64,6 +64,16 @@ namespace RuleTrace
             }
             if (exeOutcome.Ok) return exeOutcome;
 
+            // Log the actual vbc.exe errors so the user and diagnostic summary have full visibility
+            if (exeOutcome.Errors.Count > 0)
+            {
+                int shown = 0;
+                foreach (string e in exeOutcome.Errors)
+                {
+                    if (shown++ < 25) log("  " + e);
+                }
+            }
+
             foreach (string e in exeOutcome.Errors)
                 if (!outcome.Errors.Contains(e)) outcome.Errors.Add(e);
             return outcome;

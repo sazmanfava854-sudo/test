@@ -274,7 +274,7 @@ namespace RuleTrace
             return PrependStandardImports(merged);
         }
 
-        /// <summary>Ensure Guid, Serializable, Exception, List, DataView resolve under vbc.</summary>
+        /// <summary>Ensure Guid, Serializable, Exception, List, DataView, MapArr, SegmentArr resolve under vbc.</summary>
         private static string PrependStandardImports(string merged)
         {
             string norm = NormalizeNewlines(merged);
@@ -303,7 +303,35 @@ namespace RuleTrace
                 sb.Append(merged);
                 result = sb.ToString();
             }
-            return FixSerializableAttribute(result);
+            result = FixSerializableAttribute(result);
+            return EnsureCommonTypeAliases(result);
+        }
+
+        private static string EnsureCommonTypeAliases(string merged)
+        {
+            if (string.IsNullOrWhiteSpace(merged)) return merged;
+            // MapArr and SegmentArr are internal structure aliases used in some Sara formulas
+            var aliases = new[]
+            {
+                "Imports MapArr = System.Object",
+                "Imports SegmentArr = System.Object"
+            };
+            string norm = NormalizeNewlines(merged);
+            var sb = new StringBuilder();
+            foreach (var a in aliases)
+            {
+                string aliasName = a.Split('=')[0].Replace("Imports", "").Trim();
+                if (Regex.IsMatch(norm, @"^\s*Imports\s+" + Regex.Escape(aliasName) + @"\s*=", RegexOptions.Multiline | RegexOptions.IgnoreCase))
+                    continue;
+                sb.AppendLine(a);
+            }
+            if (sb.Length > 0)
+            {
+                sb.AppendLine();
+                sb.Append(merged);
+                return sb.ToString();
+            }
+            return merged;
         }
 
         /// <summary>Match whole import line — avoid skipping System when System.Data exists.</summary>
@@ -410,9 +438,16 @@ namespace RuleTrace
         public static string InjectPropertyStubs(string vb, IEnumerable<string> names)
         {
             if (string.IsNullOrWhiteSpace(vb)) return vb;
+            var declared = CollectDeclarationNames(vb);
+            EnrichDeclarationNamesFromText(vb, declared);
+
             var list = (names ?? Enumerable.Empty<string>())
                 .Where(n => !string.IsNullOrWhiteSpace(n) && Regex.IsMatch(n.Trim(), @"^[A-Za-z_]\w*$"))
                 .Select(n => n.Trim())
+                .Where(n => !declared.Contains(n)
+                            && !n.Equals("M_Out", StringComparison.OrdinalIgnoreCase)
+                            && !n.Equals("Out", StringComparison.OrdinalIgnoreCase)
+                            && !RuntimeHostFieldNames.Any(h => h.Equals(n, StringComparison.OrdinalIgnoreCase)))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             if (list.Count == 0) return vb;
@@ -428,7 +463,7 @@ namespace RuleTrace
             sb.AppendLine("' --- RuleTrace: auto-generated parameter properties ---");
             foreach (string name in list.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
             {
-                sb.AppendLine("Public Property [" + name + "] As Object");
+                sb.AppendLine("Public Property " + name + " As Object");
             }
             sb.AppendLine();
             sb.Append(norm.Substring(endClass));
@@ -700,9 +735,13 @@ namespace RuleTrace
                 string t = line.Trim();
                 foreach (string name in ExtractFieldNamesFromLine(t))
                     names.Add(name);
-                Match prop = Regex.Match(t, @"^(?:(?:Public|Private|Protected|Friend)\s+)+Property\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-                if (prop.Success && !prop.Groups[1].Value.Equals("Out", StringComparison.OrdinalIgnoreCase))
-                    names.Add(prop.Groups[1].Value);
+                Match prop = Regex.Match(t, @"^(?:(?:Public|Private|Protected|Friend)\s+)+Property\s+(\[?\w+\]?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (prop.Success)
+                {
+                    string pName = prop.Groups[1].Value.Trim('[', ']');
+                    if (!pName.Equals("Out", StringComparison.OrdinalIgnoreCase))
+                        names.Add(pName);
+                }
             }
             return names;
         }
