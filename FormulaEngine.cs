@@ -123,7 +123,7 @@ namespace RuleTrace
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) || t.IndexOf("BC30269", StringComparison.Ordinal) >= 0
                 || t.IndexOf("BC30260", StringComparison.Ordinal) >= 0 || t.IndexOf("BC30201", StringComparison.Ordinal) >= 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Retry", "Inject", "After inject", "  ClsFunction", "Partial", "Member filter", "Engine compile", "Engine err", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Retry", "Inject", "API ", "Engine compile", "Engine err", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "Compile ", "Compiling", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -758,7 +758,6 @@ namespace RuleTrace
                 return 3;
             }
 
-            object compilerErrors = Get(result, "CompilerErrors");
             DiagnoseEngineResult(result, cacheFolder);
             object cacheHost = TryCacheRunHost(result, cacheFolder, r.Formula);
             if (cacheHost != null)
@@ -766,13 +765,21 @@ namespace RuleTrace
                 result = cacheHost;
                 _log("Phase 2      : اجرا از DLL موجود در Cache موتور (بدون vbc)");
             }
-            else if (HasCompilerErrors(compilerErrors) && !HasLiveInstance(result))
+            else if (!HasLiveInstance(result))
             {
-                _log("Phase 2      : موتور Sara کامپایل نکرد — نمونه فرمول Nothing است؛ SetMyInfo صدا زده نمی‌شود");
-                _log("               Cache DLL هم پیدا نشد. ReCompile را خاموش بگذارید یا یک‌بار فرمول را از UI سارا کامپایل کنید.");
-                _summaryCapture = false;
-                PrintSummary();
-                return 4;
+                object injected = TryInjectEngineCompile(result, nid, cityGuid, cacheFolder);
+                if (injected != null && HasLiveInstance(injected))
+                {
+                    result = injected;
+                    _log("Phase 2      : بعد از تزریق XmlBody موتور نمونه ساخت");
+                }
+                else
+                {
+                    _log("Phase 2      : Instanc/M_Assm هنوز Nothing — SetMyInfo صدا زده نمی‌شود");
+                    _summaryCapture = false;
+                    PrintSummary();
+                    return 4;
+                }
             }
 
             ReportCache(cacheFolder);
@@ -978,7 +985,14 @@ namespace RuleTrace
             }
 
             object errors = Get(result, "CompilerErrors");
-            _log("Compile      : HasErrors=" + HasCompilerErrors(errors) + " liveInstance=" + HasLiveInstance(result));
+            _log("Compile      : HasErrors=" + HasCompilerErrors(errors) + " liveInstance=" + HasLiveInstance(result)
+                 + " Instanc=" + (Get(result, "Instanc") == null && Get(result, "M_Instanc") == null ? "null" : "set")
+                 + " M_Assm=" + (Get(result, "M_Assm") == null ? "null" : Get(result, "M_Assm").GetType().Name));
+            if (errors != null)
+            {
+                _log("Diagnose     : CompilerErrors type=" + errors.GetType().FullName
+                     + " Count=" + (Get(errors, "Count") ?? Get(errors, "Length") ?? "?"));
+            }
             LogCompilerErrors(errors, 8);
 
             foreach (MemberInfo mi in t.GetMembers(AnyInstance | BindingFlags.DeclaredOnly))
@@ -1006,27 +1020,109 @@ namespace RuleTrace
 
         private static bool HasLiveInstance(object result)
         {
-            if (result == null || result is DirectFormulaHost) return result is DirectFormulaHost;
-            Type t = result.GetType();
-            foreach (string name in new[] { "Instance", "Out", "Formula", "Compiled", "Obj", "Object", "M_Out", "FormulaObject", "CompiledAssembly", "Assembly" })
+            if (result == null) return false;
+            if (result is DirectFormulaHost) return true;
+            object inst = Get(result, "Instanc") ?? Get(result, "M_Instanc") ?? Get(result, "Instance");
+            object asm = Get(result, "M_Assm") ?? Get(result, "Assm");
+            if (asm is Assembly) return true;
+            return inst != null;
+        }
+
+        /// <summary>Copy XmlBody into the engine ClsClass, then ask Sara to compile. No local vbc.</summary>
+        private object TryInjectEngineCompile(object result, int nid, Guid cityGuid, string cacheFolder)
+        {
+            object cls = Get(result, "ClassDesinger") ?? Get(result, "M_ClassDesinger");
+            if (cls == null)
             {
-                object v = Get(result, name);
-                if (v == null) continue;
-                if (v is string) continue;
-                if (v is bool || v is int || v is Guid) continue;
-                return true;
+                _log("Inject       : ClassDesinger is null");
+                return null;
             }
-            foreach (FieldInfo f in t.GetFields(AnyInstance))
+
+            List<MemberSource> sources;
+            try { sources = GetMemberSources(nid); }
+            catch (Exception ex)
             {
-                if (f.FieldType.IsPrimitive || f.FieldType == typeof(string) || f.FieldType == typeof(Guid)) continue;
-                if (f.Name.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                if (f.Name.IndexOf("ClassDesing", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                object v = null;
-                try { v = f.GetValue(result); } catch { continue; }
-                if (v != null && !(v is IEnumerable && !(v is string) && !(v is IDictionary)))
-                    return true;
+                _log("Inject       : cannot read dbo.Member — " + FirstLine(ex.Message));
+                return null;
             }
-            return false;
+            if (sources == null || sources.Count == 0)
+            {
+                _log("Inject       : no Member rows");
+                return null;
+            }
+
+            _log("Inject       : " + sources.Count + " member(s), " + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB XmlBody → ClsFunction.Body");
+            int n = FormulaMerger.InjectBodies(cls, sources, _log);
+            _log("Inject       : " + n + "/" + sources.Count + " Body set");
+            FormulaMerger.LogFunctionBodies(cls, _log, 8);
+            LogDesignerSourceLen(cls, "after inject");
+            LogCompileSurface(cls, "ClsClass");
+            LogCompileSurface(result, "ClsRunRuleResult");
+
+            object compiled = TryEngineNativeCompile(cls, cacheFolder);
+            if (compiled != null && HasLiveInstance(compiled))
+            {
+                _log("Inject       : engine compile produced live Instanc/M_Assm");
+                return compiled;
+            }
+
+            foreach (MethodInfo m in result.GetType().GetMethods(AnyInstance))
+            {
+                if (m.Name.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (m.GetParameters().Length > 2) continue;
+                try
+                {
+                    InvokeEngineMethod(result, m);
+                    _log("Inject       : ClsRunRuleResult." + m.Name + " invoked, live=" + HasLiveInstance(result));
+                    if (HasLiveInstance(result)) return result;
+                }
+                catch (Exception ex) { _log("Inject       : " + m.Name + " — " + FirstLine(ex.Message)); }
+            }
+
+            if (HasLiveInstance(result))
+            {
+                _log("Inject       : original ClsRunRuleResult now has live instance");
+                return result;
+            }
+            return compiled;
+        }
+
+        private void LogDesignerSourceLen(object cls, string tag)
+        {
+            foreach (string name in new[] { "ToString1", "Code", "M_Code" })
+            {
+                object v = Get(cls, name);
+                string s = v as string;
+                if (!string.IsNullOrEmpty(s))
+                    _log("Inject src   : " + tag + " " + name + " len=" + s.Length);
+            }
+            try
+            {
+                MethodInfo m = cls.GetType().GetMethod("GetStrOutClass", AnyInstance);
+                if (m != null && m.GetParameters().Length == 0)
+                {
+                    string s = m.Invoke(cls, null) as string;
+                    _log("Inject src   : " + tag + " GetStrOutClass len=" + (s == null ? 0 : s.Length));
+                }
+            }
+            catch (Exception ex) { _log("Inject src   : GetStrOutClass — " + FirstLine(ex.Message)); }
+        }
+
+        private void LogCompileSurface(object o, string label)
+        {
+            if (o == null) return;
+            foreach (MethodInfo m in o.GetType().GetMethods(AnyInstance | AnyStatic))
+            {
+                string n = m.Name ?? "";
+                if (n.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) < 0
+                    && n.IndexOf("Assm", StringComparison.OrdinalIgnoreCase) < 0
+                    && n.IndexOf("Dll", StringComparison.OrdinalIgnoreCase) < 0
+                    && n.IndexOf("GetStr", StringComparison.OrdinalIgnoreCase) < 0
+                    && !n.Equals("ToString1", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (m.DeclaringType == typeof(object)) continue;
+                _log("API " + label + ": " + (m.IsStatic ? "static " : "") + m.Name + "(" + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name)) + ")");
+            }
         }
 
         private object TryCacheRunHost(object result, string cacheFolder, string formula)
@@ -1205,7 +1301,7 @@ namespace RuleTrace
                         object ret = InvokeEngineMethod(cls, m);
                         if (ret == null) continue;
                         _log("Engine compile: " + tCls.Name + "." + m.Name + "() -> " + ret.GetType().Name);
-                        if (!HasCompilerErrors(Get(ret, "CompilerErrors")))
+                        if (HasLiveInstance(ret) || !HasCompilerErrors(Get(ret, "CompilerErrors")))
                             return ret;
                     }
                     catch (Exception ex)
@@ -1225,11 +1321,13 @@ namespace RuleTrace
                         object[] args = BuildCtorArgs(c, cls, cacheFolder);
                         if (args == null) continue;
                         object ret = c.Invoke(args);
-                        if (ret != null && !HasCompilerErrors(Get(ret, "CompilerErrors")))
+                        if (ret != null && (HasLiveInstance(ret) || !HasCompilerErrors(Get(ret, "CompilerErrors"))))
                         {
-                            _log("Engine compile: ClsRunRuleResult ctor OK");
+                            _log("Engine compile: ClsRunRuleResult ctor OK live=" + HasLiveInstance(ret));
                             return ret;
                         }
+                        if (ret != null)
+                            _log("Engine compile: ClsRunRuleResult ctor HasErrors live=" + HasLiveInstance(ret));
                     }
                     catch { }
                 }
@@ -1245,7 +1343,7 @@ namespace RuleTrace
                     try
                     {
                         object ret = InvokeEngineMethod(null, m, cls);
-                        if (ret != null && !HasCompilerErrors(Get(ret, "CompilerErrors")))
+                        if (ret != null && (HasLiveInstance(ret) || !HasCompilerErrors(Get(ret, "CompilerErrors"))))
                         {
                             _log("Engine compile: ClsCommon." + m.Name + " OK");
                             return ret;
@@ -1255,7 +1353,7 @@ namespace RuleTrace
                 }
             }
 
-            _log("Engine compile: no native API succeeded — falling back to per-member partial vbc");
+            _log("Engine compile: no native compile API produced Instanc/M_Assm");
             return null;
         }
 
