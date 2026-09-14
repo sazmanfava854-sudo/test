@@ -1243,16 +1243,10 @@ namespace RuleTrace
             string partialDir = Path.Combine(cacheFolder, "partial");
             Directory.CreateDirectory(partialDir);
 
-            var memberFiles = new List<KeyValuePair<MemberSource, string>>();
-            int methodCount = 0;
-            foreach (MemberSource src in members)
-            {
-                if (string.IsNullOrWhiteSpace(src.Code)) continue;
-                string body = BuildMemberPartialBody(src, shellMethodKeys, shellNames, log);
-                if (string.IsNullOrWhiteSpace(body)) continue;
-                memberFiles.Add(new KeyValuePair<MemberSource, string>(src, body));
-                methodCount += ExtractMethodBlocks(NormalizeNewlines(body)).Count;
-            }
+            var assignedMethodKeys = new HashSet<string>(shellMethodKeys, StringComparer.OrdinalIgnoreCase);
+            var memberFiles = CollectMemberPartialBodies(members, assignedMethodKeys, log);
+            int methodCount = assignedMethodKeys.Count - shellMethodKeys.Count;
+            log("Partial methods: " + methodCount + " unique Sub/Function in " + memberFiles.Count + " member file(s) (shell has " + shellMethodKeys.Count + ")");
 
             string combinedForParams = string.Join("\n", shellMethods)
                 + "\n" + string.Join("\n", memberFiles.Select(kv => kv.Value));
@@ -1355,7 +1349,10 @@ namespace RuleTrace
             {
                 sb.AppendLine("' --- shared fields ---");
                 foreach (string decl in fieldByName.Values.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
-                    sb.AppendLine(decl.Trim());
+                {
+                    string safe = SanitizeFieldLine(decl);
+                    if (!string.IsNullOrWhiteSpace(safe)) sb.AppendLine(safe);
+                }
                 sb.AppendLine();
             }
             if (hostStubs.Count > 0)
@@ -1461,41 +1458,79 @@ namespace RuleTrace
             return sb.ToString().Replace("\n", "\r\n");
         }
 
-        private static string BuildMemberPartialBody(MemberSource src, HashSet<string> shellMethodKeys, HashSet<string> shellFieldNames, Action<string> log)
+        /// <summary>Each Member → partial file with all its Sub/Function not already in shell (deduped globally).</summary>
+        private static List<KeyValuePair<MemberSource, string>> CollectMemberPartialBodies(
+            IList<MemberSource> members, HashSet<string> assignedMethodKeys, Action<string> log)
         {
-            string norm = NormalizeNewlines(src.Code);
-            norm = UnwrapEmbeddedClass(norm);
-            norm = StripAllOutDeclarations(norm).CleanedText;
+            var files = new List<KeyValuePair<MemberSource, string>>();
+            foreach (MemberSource src in members.OrderBy(s => s.NidMember))
+            {
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                string norm = NormalizeNewlines(src.Code);
+                norm = UnwrapEmbeddedClass(norm);
+                norm = StripAllOutDeclarations(norm).CleanedText;
 
-            var methods = ExtractMethodBlocks(norm);
-            if (methods.Count == 0) return string.Empty;
-
-            string primary = PickPrimaryMemberMethod(src, methods, shellMethodKeys);
-            if (string.IsNullOrEmpty(primary)) return string.Empty;
-
-            if (methods.Count > 1)
-                log("  member " + src.NidMember + " " + src.Name + ": 1 method/file '" + MethodKey(primary) + "' (" + methods.Count + " in XmlBody — others skipped)");
-
-            return primary.Trim();
+                var picked = new List<string>();
+                foreach (string block in ExtractMethodBlocks(norm))
+                {
+                    string key = MethodKey(block);
+                    if (string.IsNullOrEmpty(key) || assignedMethodKeys.Contains(key)) continue;
+                    assignedMethodKeys.Add(key);
+                    picked.Add(block.Trim());
+                }
+                if (picked.Count == 0) continue;
+                files.Add(new KeyValuePair<MemberSource, string>(src, string.Join("\r\n\r\n", picked)));
+            }
+            return files;
         }
 
-        /// <summary>One Sub/Function per Member row — by Name match, else first method not already in shell.</summary>
-        private static string PickPrimaryMemberMethod(MemberSource src, List<string> methods, HashSet<string> shellKeys)
+        private static string SanitizeFieldLine(string decl)
         {
-            if (!string.IsNullOrWhiteSpace(src.Name))
-            {
-                string match = methods.FirstOrDefault(m => MethodKey(m).Equals(src.Name, StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(match)) return match;
-            }
+            if (string.IsNullOrWhiteSpace(decl)) return null;
+            string t = decl.Trim();
+            if (t.IndexOf("Property Out", StringComparison.OrdinalIgnoreCase) >= 0) return null;
+            if (Regex.IsMatch(t, @"\bM_Out\b", RegexOptions.IgnoreCase)) return null;
+            if (Regex.IsMatch(t, @"^\s*Out\s*($|=)", RegexOptions.IgnoreCase)) return null;
+            t = Regex.Replace(t, @"\b(?:BIZ\.SC\.)?(?:clsOut|ClsOut)\b", "Object", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (Regex.IsMatch(t, @"^\s*(?:Public|Private|Protected|Friend|Dim)\s+Out\b", RegexOptions.IgnoreCase)) return null;
+            return t;
+        }
 
-            foreach (string block in methods)
-            {
-                string key = MethodKey(block);
-                if (string.IsNullOrEmpty(key)) continue;
-                if (!shellKeys.Contains(key)) return block;
-            }
+        public static string InjectMethodStubs(string vb, IEnumerable<string> names)
+        {
+            if (string.IsNullOrWhiteSpace(vb)) return vb;
+            var list = (names ?? Enumerable.Empty<string>())
+                .Where(n => !string.IsNullOrWhiteSpace(n) && Regex.IsMatch(n, @"^[A-Za-z_]\w*$"))
+                .Where(n => !LooksLikeParameterProperty(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (list.Count == 0) return vb;
 
-            return string.Empty;
+            string norm = NormalizeNewlines(vb);
+            int endClass = norm.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) return vb;
+
+            var sb = new StringBuilder(norm.Length + list.Count * 80);
+            sb.Append(norm.Substring(0, endClass));
+            sb.AppendLine();
+            sb.AppendLine("' --- RuleTrace: method stubs (compile-only) ---");
+            foreach (string name in list)
+            {
+                sb.AppendLine("Public Sub " + name + "(Optional ByVal ParamArray args() As Object)");
+                sb.AppendLine("End Sub");
+                sb.AppendLine();
+            }
+            sb.Append(norm.Substring(endClass));
+            return sb.ToString().Replace("\n", "\r\n");
+        }
+
+        private static bool LooksLikeParameterProperty(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            return name.StartsWith("P_", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("PM_", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("PP_", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ExtractClassName(string shell)

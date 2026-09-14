@@ -880,8 +880,9 @@ namespace RuleTrace
                     return engineResult;
                 }
 
-                var filterKw = InferMemberFilterKeywords(nid, r);
-                FormulaMerger.PartialCompileSet partial = FormulaMerger.BuildPartialMemberFiles(shellCls, cls, sources, cacheFolder, _log, filterKw);
+                // Compile needs ALL members/methods — Run calls InsertChidman, SetUsefulHeight, etc.
+                _log("Retry compile: all " + sources.Count + " members (no keyword filter for vbc)");
+                FormulaMerger.PartialCompileSet partial = FormulaMerger.BuildPartialMemberFiles(shellCls, cls, sources, cacheFolder, _log, null);
                 if (partial.FilePaths.Count <= 1)
                 {
                     _log("Retry skip   : no member partial files produced");
