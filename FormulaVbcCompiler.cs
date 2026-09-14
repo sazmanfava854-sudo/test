@@ -122,11 +122,13 @@ namespace RuleTrace
                     p.WaitForExit(300000);
                     if (p.ExitCode != 0)
                     {
+                        int shown = 0;
                         foreach (string line in (stdout + "\n" + stderr).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                         {
-                            if (line.IndexOf("error", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                            outcome.Errors.Add("vbc.exe : " + line);
-                            if (outcome.Errors.Count <= 25) log("  " + line);
+                            string t = line.Trim();
+                            if (t.Length == 0) continue;
+                            outcome.Errors.Add("vbc.exe : " + t);
+                            if (shown++ < 25) log("  " + t);
                         }
                         if (outcome.Errors.Count == 0)
                         {
@@ -179,7 +181,7 @@ namespace RuleTrace
                 foreach (CompilerError e in cr.Errors)
                 {
                     if (e.IsWarning) continue;
-                    string line = "  vbc : " + e.ErrorText;
+                    string line = "  vbc : (" + e.Line + "," + e.Column + ") " + e.ErrorText;
                     outcome.Errors.Add(line);
                     if (shown++ < 25) log(line);
                 }
