@@ -114,6 +114,141 @@ namespace RuleTrace
             }
         }
 
+        /// <summary>Copy the current Member row as a new Version (active). Other versions of the same NidMember are deactivated.</summary>
+        public static MemberRow InsertNewVersion(string ruleEngineConn, int nidClass, int nidMember, int fromVersion, string newCode)
+        {
+            MemberRow src = Get(ruleEngineConn, nidClass, nidMember, fromVersion);
+            if (src == null) throw new InvalidOperationException("Member not found: " + nidMember + " v" + fromVersion);
+            string newXml = MemberXml.SetBodyText(src.XmlBody, newCode ?? src.Code, src.Name);
+
+            using (var c = new SqlConnection(ruleEngineConn))
+            {
+                c.Open();
+                int nextVer = src.Version;
+                for (;;)
+                {
+                    nextVer++;
+                    using (var cmdExists = new SqlCommand(
+                        "SELECT COUNT(*) FROM dbo.Member WHERE NidClass=@nid AND NidMember=@mid AND Version=@ver", c))
+                    {
+                        cmdExists.Parameters.AddWithValue("@nid", nidClass);
+                        cmdExists.Parameters.AddWithValue("@mid", nidMember);
+                        cmdExists.Parameters.AddWithValue("@ver", nextVer);
+                        if (Convert.ToInt32(cmdExists.ExecuteScalar()) == 0) break;
+                    }
+                    if (nextVer > src.Version + 1000)
+                        throw new InvalidOperationException("cannot allocate new Version for Member " + nidMember);
+                }
+
+                var cols = ListColumns(c);
+                var values = ReadRowValues(c, nidClass, nidMember, fromVersion);
+                if (values.Count == 0) throw new InvalidOperationException("SELECT * returned no row");
+
+                SetCol(values, cols, "Version", nextVer);
+                SetCol(values, cols, "XmlBody", newXml);
+                SetCol(values, cols, "isActive", 1);
+                if (HasCol(cols, "EncryptXmlBody")) values["EncryptXmlBody"] = DBNull.Value;
+
+                var insertCols = cols.Where(x => !x.IsIdentity && values.ContainsKey(x.Name)).ToList();
+                string names = string.Join(",", insertCols.Select(x => "[" + x.Name + "]"));
+                string parms = string.Join(",", insertCols.Select(x => "@p" + x.Name));
+                using (var cmd = new SqlCommand("INSERT INTO dbo.Member (" + names + ") VALUES (" + parms + ")", c) { CommandTimeout = 120 })
+                {
+                    foreach (var col in insertCols)
+                        cmd.Parameters.AddWithValue("@p" + col.Name, values[col.Name] ?? DBNull.Value);
+                    cmd.ExecuteNonQuery();
+                }
+
+                using (var cmdOff = new SqlCommand(
+                    "UPDATE dbo.Member SET isActive=0 WHERE NidClass=@nid AND NidMember=@mid AND Version<>@ver", c))
+                {
+                    cmdOff.Parameters.AddWithValue("@nid", nidClass);
+                    cmdOff.Parameters.AddWithValue("@mid", nidMember);
+                    cmdOff.Parameters.AddWithValue("@ver", nextVer);
+                    cmdOff.ExecuteNonQuery();
+                }
+
+                return Get(ruleEngineConn, nidClass, nidMember, nextVer);
+            }
+        }
+
+        public static void Delete(string ruleEngineConn, int nidClass, int nidMember, int version)
+        {
+            using (var c = new SqlConnection(ruleEngineConn))
+            using (var cmd = new SqlCommand(
+                @"DELETE FROM dbo.Member WHERE NidClass=@nid AND NidMember=@mid AND Version=@ver", c))
+            {
+                cmd.Parameters.AddWithValue("@nid", nidClass);
+                cmd.Parameters.AddWithValue("@mid", nidMember);
+                cmd.Parameters.AddWithValue("@ver", version);
+                c.Open();
+                int n = cmd.ExecuteNonQuery();
+                if (n != 1) throw new InvalidOperationException("DELETE affected " + n + " row(s)");
+            }
+        }
+
+        private sealed class ColInfo
+        {
+            public string Name;
+            public bool IsIdentity;
+        }
+
+        private static List<ColInfo> ListColumns(SqlConnection c)
+        {
+            var list = new List<ColInfo>();
+            using (var cmd = new SqlCommand(
+                @"SELECT COLUMN_NAME,
+                         ISNULL(COLUMNPROPERTY(OBJECT_ID(QUOTENAME(TABLE_SCHEMA)+'.'+QUOTENAME(TABLE_NAME)), COLUMN_NAME, 'IsIdentity'),0)
+                  FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='Member'
+                  ORDER BY ORDINAL_POSITION", c))
+            using (var r = cmd.ExecuteReader())
+            {
+                while (r.Read())
+                    list.Add(new ColInfo { Name = Convert.ToString(r.GetValue(0)), IsIdentity = Convert.ToInt32(r.GetValue(1)) == 1 });
+            }
+            return list;
+        }
+
+        private static Dictionary<string, object> ReadRowValues(SqlConnection c, int nidClass, int nidMember, int version)
+        {
+            var values = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            using (var cmd = new SqlCommand(
+                "SELECT * FROM dbo.Member WHERE NidClass=@nid AND NidMember=@mid AND Version=@ver", c))
+            {
+                cmd.Parameters.AddWithValue("@nid", nidClass);
+                cmd.Parameters.AddWithValue("@mid", nidMember);
+                cmd.Parameters.AddWithValue("@ver", version);
+                using (var r = cmd.ExecuteReader())
+                {
+                    if (!r.Read()) return values;
+                    for (int i = 0; i < r.FieldCount; i++)
+                        values[r.GetName(i)] = r.IsDBNull(i) ? (object)DBNull.Value : r.GetValue(i);
+                }
+            }
+            return values;
+        }
+
+        private static bool HasCol(List<ColInfo> cols, string name)
+        {
+            return cols.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void SetCol(Dictionary<string, object> values, List<ColInfo> cols, string name, object value)
+        {
+            string key = values.Keys.FirstOrDefault(k => k.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (key == null)
+            {
+                if (!HasCol(cols, name)) return;
+                key = name;
+            }
+            object current;
+            if (values.TryGetValue(key, out current) && current != null && current != DBNull.Value && current is string)
+                values[key] = Convert.ToString(value);
+            else
+                values[key] = value ?? DBNull.Value;
+        }
+
         private static MemberRow ReadRow(IDataRecord r, int nidClass)
         {
             string xml = r.IsDBNull(6) ? "" : r.GetString(6);
@@ -225,6 +360,23 @@ namespace RuleTrace
         {
             if (text == null) return string.Empty;
             return text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n");
+        }
+
+        /// <summary>XML Body extract/replace round-trip used by Phase 1 CRUD.</summary>
+        public static string SelfTest()
+        {
+            const string xml = "<Member><Name>Run</Name><Body>Sub Run()\r\nEnd Sub</Body></Member>";
+            string name;
+            string code = ExtractCode(xml, out name);
+            if (name != "Run") throw new InvalidOperationException("SelfTest: Name=" + name);
+            if (code.IndexOf("Sub Run()", StringComparison.Ordinal) < 0) throw new InvalidOperationException("SelfTest: extract Body failed");
+            string xml2 = SetBodyText(xml, "Sub Run()\r\n  Dim x = 1\r\nEnd Sub", name);
+            string name2;
+            string code2 = ExtractCode(xml2, out name2);
+            if (code2.IndexOf("Dim x = 1", StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException("SelfTest: round-trip Body failed");
+            if (name2 != "Run") throw new InvalidOperationException("SelfTest: Name lost");
+            return "MemberXml SelfTest OK — extract/save Body round-trip";
         }
     }
 }

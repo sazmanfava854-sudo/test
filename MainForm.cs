@@ -22,7 +22,8 @@ namespace RuleTrace
         private CheckBox _chkRecompile, _chkClearCache, _chkAllParams;
         private ListView _lvCases;
         // actions
-        private Button _btnBrowse, _btnDetect, _btnTestDb, _btnLookup, _btnAnalyze, _btnInspect, _btnRun, _btnClearLog, _btnSaveLog, _btnCopyLog, _btnCopySummary;
+        private Button _btnBrowse, _btnDetect, _btnTestDb, _btnLookup, _btnAnalyze, _btnInspect, _btnRun, _btnCombine, _btnClearLog, _btnSaveLog, _btnCopyLog, _btnCopySummary;
+        private CheckBox _chkPhase2;
         private List<string> _lastSummary = new List<string>();
         private TextBox _txtLog;
         private TabControl _tabs;
@@ -43,7 +44,11 @@ namespace RuleTrace
             KeyPreview = true;
             BuildUi();
             LoadFromSettings();
-            Shown += (s, e) => _codeEditor.OnShown();
+            Shown += (s, e) =>
+            {
+                _codeEditor.OnShown();
+                Log("مرحله ۱ فعال است: تب «ویرایش کد» → دکمه «ترکیب DB + DLL». اجرا/کامپایل خاموش است مگر وقتی «فعال‌سازی مرحله ۲» تیک بخورد.");
+            };
         }
 
         /// <summary>VS-style keys: F10/F11 next step, Shift+F10 previous, F5 run (or run-to-end when a trace exists), Ctrl+Home first.</summary>
@@ -64,7 +69,12 @@ namespace RuleTrace
                     break;
                 case Keys.F5:
                     if (_debug.HasTrace && _tabs.SelectedTab == _tabDebug) _debug.StepLast();
-                    else if (_running == 0) RunFormula();
+                    else if (_chkPhase2 != null && _chkPhase2.Checked && _running == 0) RunFormula();
+                    else
+                    {
+                        _tabs.SelectedTab = _tabCode;
+                        _codeEditor.Combine();
+                    }
                     return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
@@ -215,9 +225,28 @@ namespace RuleTrace
         private Control BuildActionBar()
         {
             var p = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(0, 4, 0, 4) };
+            _btnCombine = Btn("ترکیب DB + DLL", (s, e) =>
+            {
+                _tabs.SelectedTab = _tabCode;
+                _codeEditor.SyncFormula(_cboFormula.Text);
+                _codeEditor.Combine();
+            });
+            _btnCombine.Font = new Font(Font, FontStyle.Bold);
+            _btnCombine.Height = 34;
+            _btnCombine.Width = 160;
+
+            _chkPhase2 = new CheckBox { Text = "فعال‌سازی مرحله ۲ (اجرا/کامپایل)", AutoSize = true, Margin = new Padding(12, 10, 8, 0) };
+            _chkPhase2.CheckedChanged += (s, e) =>
+            {
+                _btnRun.Enabled = _chkPhase2.Checked;
+                if (_chkPhase2.Checked)
+                    Log("WARN: مرحله ۲ روشن شد — «اجرا و دیباگ» دوباره vbc/موتور را صدا می‌زند و هنوز خطا دارد.");
+            };
+
             _btnRun = Btn("▶  اجرا و دیباگ", (s, e) => RunFormula());
-            _btnRun.Font = new Font(Font, FontStyle.Bold);
-            _btnRun.Height = 34; _btnRun.Width = 160;
+            _btnRun.Height = 34;
+            _btnRun.Width = 150;
+            _btnRun.Enabled = false;
             _btnTestDb = Btn("تست اتصال DB", (s, e) => TestDb());
             _btnAnalyze = Btn("تحلیل Member", (s, e) => AnalyzeMembers());
             _btnInspect = Btn("بررسی موتور (ClsClass)", (s, e) => InspectEngine());
@@ -229,8 +258,9 @@ namespace RuleTrace
             _btnCopySummary.Enabled = false;
             _btnSaveLog = Btn("ذخیره خروجی...", (s, e) => SaveLog());
             _btnToggleSettings = Btn("▲ پنهان کردن تنظیمات", (s, e) => ToggleSettings(!_grpSettings.Visible));
-            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, btnChidman, _btnClearLog, _btnCopyLog, _btnCopySummary, _btnSaveLog, _btnToggleSettings }) p.Controls.Add(b);
-            p.Controls.Add(new Label { Text = "کلیدها: F5 اجرا • F10 رویداد بعدی • Shift+F10 قبلی", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
+            foreach (var c in new Control[] { _btnCombine, _chkPhase2, _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, btnChidman, _btnClearLog, _btnCopyLog, _btnCopySummary, _btnSaveLog, _btnToggleSettings })
+                p.Controls.Add(c);
+            p.Controls.Add(new Label { Text = "F5 = ترکیب DB+DLL   (اجرا فقط با تیک مرحله ۲)", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
             return p;
         }
 
@@ -463,6 +493,15 @@ namespace RuleTrace
 
         private void RunFormula()
         {
+            if (_chkPhase2 == null || !_chkPhase2.Checked)
+            {
+                _tabs.SelectedTab = _tabCode;
+                MessageBox.Show(this,
+                    "الان مرحله ۱ است: ترکیب کد RuleEngine با DLL و ویرایش/ذخیره.\n\nدکمه «اجرا و دیباگ» کامپایل می‌کند و هنوز مرحله ۲ است — به همین خاطر خطاهای vbc (clsOut و ...) می‌آید.\n\nاز تب «ویرایش کد» و دکمه «ترکیب DB + DLL» استفاده کنید.",
+                    "RuleTrace — مرحله ۱", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             var req = new RunRequest
             {
                 Formula = _cboFormula.Text.Trim(),
@@ -611,7 +650,8 @@ namespace RuleTrace
         {
             _status.Text = status;
             _progress.Visible = busy;
-            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnLookup }) b.Enabled = !busy;
+            foreach (var b in new[] { _btnCombine, _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnLookup }) b.Enabled = !busy;
+            if (!busy && _chkPhase2 != null) _btnRun.Enabled = _chkPhase2.Checked;
             UseWaitCursor = busy;
         }
 

@@ -7,6 +7,7 @@ using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace RuleTrace
@@ -47,6 +48,17 @@ namespace RuleTrace
         public int Version;
         public bool IsActive;
         public override string ToString() { return NidMember + "  " + Name + "  " + Meta; }
+    }
+
+    /// <summary>Public type from a Sara DLL (Phase 1 catalog — not compiled).</summary>
+    internal sealed class DllTypeRow
+    {
+        public string Assembly;
+        public string Name;
+        public string FullName;
+        public string Kind;
+        public int PublicMembers;
+        public override string ToString() { return Name + "  [" + Assembly + "]"; }
     }
 
     /// <summary>
@@ -187,6 +199,96 @@ namespace RuleTrace
             _log("  BIZ.SC               " + _sc.GetName().Version);
             if (_sa != null) _log("  BIZ.SA               " + _sa.GetName().Version);
             FormulaMerger.PatchEngineFlags(_safa, _log);
+        }
+
+        /// <summary>Public types from loaded Sara DLLs for the Phase 1 workspace (no compile).</summary>
+        public List<DllTypeRow> CatalogDllTypes()
+        {
+            if (_safa == null || _sc == null) LoadAssemblies();
+            var list = new List<DllTypeRow>();
+            foreach (Assembly asm in new[] { _sc, _safa, _sa })
+            {
+                if (asm == null) continue;
+                Type[] types = Type.EmptyTypes;
+                try { types = asm.GetExportedTypes(); }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = (ex.Types ?? Type.EmptyTypes).Where(t => t != null).ToArray();
+                }
+                catch
+                {
+                    try { types = asm.GetTypes(); }
+                    catch (ReflectionTypeLoadException ex2)
+                    {
+                        types = (ex2.Types ?? Type.EmptyTypes).Where(t => t != null).ToArray();
+                    }
+                    catch { types = Type.EmptyTypes; }
+                }
+                string asmName = asm.GetName().Name;
+                foreach (Type t in types)
+                {
+                    if (t == null || !t.IsPublic || t.IsNested) continue;
+                    string kind = t.IsEnum ? "enum" : t.IsInterface ? "interface" : t.IsValueType ? "struct" : "class";
+                    int n = 0;
+                    try
+                    {
+                        n = t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly).Length;
+                    }
+                    catch { }
+                    list.Add(new DllTypeRow
+                    {
+                        Assembly = asmName,
+                        Name = t.Name,
+                        FullName = t.FullName ?? t.Name,
+                        Kind = kind,
+                        PublicMembers = n,
+                    });
+                }
+            }
+            return list.OrderBy(x => x.Assembly).ThenBy(x => x.Name).ToList();
+        }
+
+        public string DescribeDllType(string fullName)
+        {
+            if (string.IsNullOrWhiteSpace(fullName)) return "";
+            if (_safa == null || _sc == null) LoadAssemblies();
+            Type t = null;
+            foreach (Assembly asm in new[] { _sc, _safa, _sa })
+            {
+                if (asm == null) continue;
+                t = asm.GetType(fullName, false);
+                if (t != null) break;
+            }
+            if (t == null) return "Type not found: " + fullName;
+
+            var sb = new StringBuilder();
+            sb.AppendLine(t.FullName);
+            sb.AppendLine("Assembly: " + t.Assembly.GetName().Name + " " + t.Assembly.GetName().Version);
+            sb.AppendLine("Kind    : " + (t.IsEnum ? "enum" : t.IsInterface ? "interface" : t.IsClass ? "class" : t.IsValueType ? "struct" : "?"));
+            sb.AppendLine();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            int shown = 0;
+            try
+            {
+                foreach (PropertyInfo p in t.GetProperties(flags))
+                {
+                    if (shown++ >= 80) { sb.AppendLine("..."); break; }
+                    sb.AppendLine("Property " + p.Name + " As " + (p.PropertyType == null ? "?" : p.PropertyType.Name));
+                }
+                foreach (FieldInfo f in t.GetFields(flags))
+                {
+                    if (shown++ >= 80) { sb.AppendLine("..."); break; }
+                    sb.AppendLine("Field    " + f.Name + " As " + (f.FieldType == null ? "?" : f.FieldType.Name));
+                }
+                foreach (MethodInfo m in t.GetMethods(flags))
+                {
+                    if (m.IsSpecialName) continue;
+                    if (shown++ >= 80) { sb.AppendLine("..."); break; }
+                    sb.AppendLine("Sub/Fn   " + m.Name + "(" + m.GetParameters().Length + ") As " + (m.ReturnType == null ? "Void" : m.ReturnType.Name));
+                }
+            }
+            catch (Exception ex) { sb.AppendLine("describe error: " + ex.Message); }
+            return sb.ToString();
         }
 
         private static void InstallResolver(string dir)
