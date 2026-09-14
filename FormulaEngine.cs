@@ -870,7 +870,7 @@ namespace RuleTrace
                 _log("After inject (ClsFunction.Body lengths):");
                 FormulaMerger.LogFunctionBodies(cls, _log, 5);
 
-                string merged = FormulaMerger.BuildMergedVb(shellCls, sources, _log);
+                string merged = FormulaMerger.BuildMergedVb(shellCls, cls, sources, _log);
                 FormulaMerger.SaveMergedFile(merged, cacheFolder, _log);
                 DateTime t0 = DateTime.UtcNow;
                 _log("Retry compile: vbc (VBCodeProvider) on merged source...");

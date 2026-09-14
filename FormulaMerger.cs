@@ -117,8 +117,47 @@ namespace RuleTrace
             return new List<object>();
         }
 
-        /// <summary>Build one VB source: full class shell (ToString1) once + stripped member Sub/Function bodies inside.</summary>
-        public static string BuildMergedVb(object cls, IList<MemberSource> sources, Action<string> log)
+        /// <summary>Build merged VB: prefer injected ToString1 (full engine output); fallback manual shell+XmlBody merge.</summary>
+        public static string BuildMergedVb(object shellCls, object injectedCls, IList<MemberSource> sources, Action<string> log)
+        {
+            string injected = GetInjectedClassSource(injectedCls, log);
+            if (IsValidInjectedSource(injected))
+                return BuildFromInjectedSource(injected, log);
+            log("Merge path   : manual shell+XmlBody (injected source len=" + (injected == null ? 0 : injected.Length) + ")");
+            return BuildMergedVbManual(shellCls, sources, log);
+        }
+
+        private static string GetInjectedClassSource(object cls, Action<string> log)
+        {
+            string s = ReadStringMember(cls, "ToString1");
+            if (IsValidInjectedSource(s)) { log("Merge source : ToString1 len=" + s.Length); return s; }
+            s = ReadStringMember(cls, "ToString");
+            if (IsValidInjectedSource(s)) { log("Merge source : ToString() len=" + s.Length); return s; }
+            s = InvokeString(cls, "GetStrOutClass");
+            if (IsValidInjectedSource(s)) { log("Merge source : GetStrOutClass len=" + s.Length); return s; }
+            return ReadStringMember(cls, "ToString1");
+        }
+
+        /// <summary>Engine ToString1 after XmlBody inject — keep structure, only fix Out/M_Out duplicates.</summary>
+        private static string BuildFromInjectedSource(string injected, Action<string> log)
+        {
+            var stripped = StripAllOutDeclarations(NormalizeNewlines(injected));
+            string body = DedupeFieldLinesByName(stripped.CleanedText);
+            string merged = InsertCanonicalOutBlock(body, stripped.FirstMOut, stripped.FirstPropOut);
+            int mOutDecls = CountMOutDeclarations(merged);
+            int outProps = CountPropertyOutDeclarations(merged);
+            log("Merged VB    : " + merged.Length + " chars, M_Out decls=" + mOutDecls + ", Property Out=" + outProps + " (injected path)");
+            return PrependStandardImports(merged);
+        }
+
+        private static bool IsValidInjectedSource(string s)
+        {
+            return !string.IsNullOrEmpty(s) && s.Length >= 50000 && s.Length <= 6000000
+                && s.IndexOf("End Class", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>Fallback: ToString1 shell once + stripped member Sub/Function bodies.</summary>
+        private static string BuildMergedVbManual(object cls, IList<MemberSource> sources, Action<string> log)
         {
             string shellSource;
             string shell = GetClassShell(cls, out shellSource);
@@ -215,34 +254,10 @@ namespace RuleTrace
                 sb.AppendLine();
             }
 
-            sb.AppendLine("' --- RuleTrace: canonical Out / M_Out (single copy) ---");
-            if (!string.IsNullOrEmpty(canonicalMOut))
-                sb.AppendLine(canonicalMOut);
-            else
-                sb.AppendLine("Private M_Out As ClsOut");
-            sb.AppendLine();
-
-            if (!string.IsNullOrEmpty(canonicalPropOut))
-                sb.AppendLine(canonicalPropOut);
-            else
-            {
-                sb.AppendLine("Public Property Out() As ClsOut");
-                sb.AppendLine("    Get");
-                sb.AppendLine("        If M_Out Is Nothing Then");
-                sb.AppendLine("            M_Out = New ClsOut()");
-                sb.AppendLine("        End If");
-                sb.AppendLine("        Return M_Out");
-                sb.AppendLine("    End Get");
-                sb.AppendLine("    Set(ByVal Value As ClsOut)");
-                sb.AppendLine("        M_Out = Value");
-                sb.AppendLine("    End Set");
-                sb.AppendLine("End Property");
-            }
-            sb.AppendLine();
-
-            sb.AppendLine(shell.Substring(endClass));
-            string merged = DedupeFieldLinesByName(sb.ToString());
-            merged = RemoveOrphanPropertyAccessorLines(merged);
+            string merged = InsertCanonicalOutBlock(
+                sb.ToString() + shell.Substring(endClass),
+                canonicalMOut, canonicalPropOut);
+            merged = DedupeFieldLinesByName(merged);
             int mOutDecls = CountMOutDeclarations(merged);
             int outProps = CountPropertyOutDeclarations(merged);
             log("Merged VB    : " + merged.Length + " chars, M_Out decls=" + mOutDecls + ", Property Out=" + outProps + " (expect 1 each)");
@@ -264,6 +279,8 @@ namespace RuleTrace
                 "System.Xml",
                 "System.Linq",
                 "Microsoft.VisualBasic",
+                "BIZ.SC",
+                "BIZ.SA",
             };
             var sb = new StringBuilder();
             foreach (string ns in imports)
@@ -345,20 +362,41 @@ namespace RuleTrace
             return string.Join("\n", kept).Replace("\n", "\r\n");
         }
 
-        /// <summary>Orphan Get/Set/End Property lines left when Property Out headers were stripped.</summary>
-        private static string RemoveOrphanPropertyAccessorLines(string text)
+        private static string InsertCanonicalOutBlock(string text, string canonicalMOut, string canonicalPropOut)
         {
-            if (string.IsNullOrWhiteSpace(text)) return text;
-            var kept = new List<string>();
-            foreach (string line in NormalizeNewlines(text).Split('\n'))
+            string norm = NormalizeNewlines(text);
+            int endClass = norm.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) endClass = norm.LastIndexOf("EndClass", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) throw new InvalidOperationException("End Class not found in merged source");
+
+            var sb = new StringBuilder(norm.Length + 512);
+            sb.Append(norm.Substring(0, endClass));
+            sb.AppendLine();
+            sb.AppendLine("' --- RuleTrace: canonical Out / M_Out (single copy) ---");
+            if (!string.IsNullOrEmpty(canonicalMOut))
+                sb.AppendLine(canonicalMOut);
+            else
+                sb.AppendLine("Private M_Out As ClsOut");
+            sb.AppendLine();
+            if (!string.IsNullOrEmpty(canonicalPropOut))
+                sb.AppendLine(canonicalPropOut);
+            else
             {
-                string t = line.Trim();
-                int indent = line.Length - line.TrimStart().Length;
-                if (indent <= 4 && Regex.IsMatch(t, @"^(?:Get|End\s+Get|End\s+Set|Set\s*\(|End\s+Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-                    continue;
-                kept.Add(line);
+                sb.AppendLine("Public Property Out() As ClsOut");
+                sb.AppendLine("    Get");
+                sb.AppendLine("        If M_Out Is Nothing Then");
+                sb.AppendLine("            M_Out = New ClsOut()");
+                sb.AppendLine("        End If");
+                sb.AppendLine("        Return M_Out");
+                sb.AppendLine("    End Get");
+                sb.AppendLine("    Set(ByVal Value As ClsOut)");
+                sb.AppendLine("        M_Out = Value");
+                sb.AppendLine("    End Set");
+                sb.AppendLine("End Property");
             }
-            return string.Join("\n", kept).Replace("\n", "\r\n");
+            sb.AppendLine();
+            sb.Append(norm.Substring(endClass));
+            return sb.ToString().Replace("\n", "\r\n");
         }
 
         private static readonly Regex FieldDeclFirstNameRx = new Regex(
@@ -367,8 +405,12 @@ namespace RuleTrace
 
         private static IEnumerable<string> ExtractFieldNamesFromLine(string line)
         {
-            foreach (string n in ParseFieldNames(line))
-                yield return n;
+            var names = ParseFieldNames(line).ToList();
+            if (names.Count > 0)
+            {
+                foreach (string n in names) yield return n;
+                yield break;
+            }
             if (string.IsNullOrWhiteSpace(line)) yield break;
             Match m = FieldDeclFirstNameRx.Match(line.Trim());
             if (m.Success) yield return m.Groups[1].Value;
