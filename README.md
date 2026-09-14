@@ -1,6 +1,32 @@
 # RuleTrace — Sara Formula Debugger (UI)
 
-دیباگر فرمول‌های Sara بدون UI اصلی. کاربر NidProc/NidWorkItem را وارد می‌کند، فرمول (Solh, Rule, Income, ...) اجرا می‌شود و خروجی `AddError` / `BizErrors` و مقدار متغیر Watch نمایش داده می‌شود.
+دیباگر فرمول‌های Sara بدون UI اصلی.
+
+## مرحله ۱ — ویرایش کد Member (CRUD) + DLL
+
+**هدف این مرحله:** ترکیب کد `RuleEngine.dbo.Member` با DLLهای Sara و **ویرایش/ذخیره** کد — بدون اجرا، کامپایل، یا پیدا کردن باگ.
+
+1. تنظیمات: پوشه DLL (`dll10`) و connection string **RuleEngine** را در بالای پنجره پر کنید.
+2. تب **«ویرایش کد (مرحله ۱)»** را باز کنید (تب پیش‌فرض).
+3. فرمول را انتخاب کنید (مثلاً `Solh` = NidClass 344).
+4. **بارگذاری DLLها** — DLLهای `BIZ.SC.DLL` و `SafaClassDesingerNew.dll` از پوشه مشخص‌شده load می‌شوند.
+5. **بارگذاری از DB** — لیست Memberها از `dbo.Member` می‌آید؛ Member 1288 (چیدمان) زرد highlight می‌شود.
+6. Member را انتخاب کنید → کد VB از `<Body>` داخل `XmlBody` در ویرایشگر نمایش داده می‌شود.
+7. ویرایش کنید → **ذخیره در DB** → فقط `XmlBody/<Body>` همان Member/Version به‌روز می‌شود.
+
+| عمل | وضعیت |
+|-----|--------|
+| Read (لیست + باز کردن کد) | ✓ |
+| Update (ذخیره در DB) | ✓ |
+| Create / Delete Member | بعداً (مرحله بعد) |
+
+**مراحل بعدی (فعلاً لازم نیست):** مرحله ۲ = اجرای فرمول با کد inject‌شده؛ مرحله ۳ = دیباگ چیدمان/صلح.
+
+---
+
+## مرحله ۲+ — اجرا و دیباگ
+
+کاربر NidProc/NidWorkItem را وارد می‌کند، فرمول (Solh, Rule, Income, ...) اجرا می‌شود و خروجی `AddError` / `BizErrors` و مقدار متغیر Watch نمایش داده می‌شود.
 
 ## ساختار
 
@@ -10,6 +36,8 @@ ruletrace/
   RuleTrace.csproj      ← WinForms, .NET 4.7.2, بدون reference به DLLهای Sara
   Program.cs            ← نقطه شروع
   MainForm.cs           ← UI
+  CodeEditorPanel.cs    ← مرحله ۱: CRUD کد Member از RuleEngine + بارگذاری DLL
+  MemberRepository.cs   ← خواندن/نوشتن dbo.Member (XmlBody/Body)
   FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule + Inspect موتور
   DebugPanel.cs         ← تب «دیباگ مرحله‌ای» (F10 / Shift+F10 / F5) روی trace فرمول
   UserSettings.cs       ← ذخیره تنظیمات UI در bin\RuleTrace.user.ini

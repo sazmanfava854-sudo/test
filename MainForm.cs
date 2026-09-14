@@ -26,7 +26,8 @@ namespace RuleTrace
         private List<string> _lastSummary = new List<string>();
         private TextBox _txtLog;
         private TabControl _tabs;
-        private TabPage _tabLog, _tabDebug;
+        private TabPage _tabCode, _tabLog, _tabDebug;
+        private CodeEditorPanel _codeEditor;
         private DebugPanel _debug;
         private GroupBox _grpSettings;
         private Button _btnToggleSettings;
@@ -42,6 +43,7 @@ namespace RuleTrace
             KeyPreview = true;
             BuildUi();
             LoadFromSettings();
+            Shown += (s, e) => _codeEditor.OnShown();
         }
 
         /// <summary>VS-style keys: F10/F11 next step, Shift+F10 previous, F5 run (or run-to-end when a trace exists), Ctrl+Home first.</summary>
@@ -253,17 +255,22 @@ namespace RuleTrace
                 ForeColor = Color.Gainsboro,
             };
 
+            _codeEditor = new CodeEditorPanel(_settings, Log);
             _debug = new DebugPanel();
             _debug.LoadSourcesRequested += () => LoadSources(force: true);
             _debug.RunRequested += RunFormula;
 
             _tabs = new TabControl { Dock = DockStyle.Fill };
+            _tabCode = new TabPage("ویرایش کد (مرحله ۱)");
+            _tabCode.Controls.Add(_codeEditor);
             _tabLog = new TabPage("خروجی (Log)");
             _tabLog.Controls.Add(_txtLog);
             _tabDebug = new TabPage("دیباگ مرحله‌ای — F10");
             _tabDebug.Controls.Add(_debug);
+            _tabs.TabPages.Add(_tabCode);
             _tabs.TabPages.Add(_tabLog);
             _tabs.TabPages.Add(_tabDebug);
+            _tabs.SelectedTab = _tabCode;
             return _tabs;
         }
 
@@ -317,6 +324,8 @@ namespace RuleTrace
             _settings.LastWatch = _txtWatch.Text.Trim();
             _settings.LastFormula = _cboFormula.Text.Trim();
             try { _settings.Save(); } catch (Exception ex) { Log("WARN: cannot save settings: " + ex.Message); }
+            _codeEditor?.RefreshSettings(_settings);
+            _codeEditor?.SyncFormula(_settings.LastFormula);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
