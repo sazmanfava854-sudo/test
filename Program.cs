@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace RuleTrace
@@ -8,6 +9,12 @@ namespace RuleTrace
         [STAThread]
         private static void Main(string[] args)
         {
+            if (args != null && args.Any(a => string.Equals(a, "--self-test", StringComparison.OrdinalIgnoreCase)))
+            {
+                Environment.ExitCode = SelfTest.Run();
+                return;
+            }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 

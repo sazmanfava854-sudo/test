@@ -4,33 +4,24 @@
 
 ## مرحله ۱ — ترکیب کد RuleEngine + DLL (فقط خواندن)
 
-این برنامه **عیب‌یابی** است. کد `dbo.Member` را از RuleEngine کنار نوع‌های DLL می‌گذارد تا دیده شود. **چیزی در دیتابیس ذخیره / حذف نمی‌شود.**
+این برنامه **عیب‌یابی** است. کد `dbo.Member` را از RuleEngine کنار نوع‌های DLL می‌گذارد. **چیزی در دیتابیس ذخیره نمی‌شود.**
 
-**روی «اجرا و دیباگ» نزنید.** آن دکمه مرحله ۲ است (کامپایل vbc) و هنوز خطا می‌دهد.
+## مرحله ۲ — اجرا بدون بازنویسی VB (`v21-no-vb-rewrite`)
 
-1. `build.cmd` — عنوان پنجره باید `v19c-phase1-inspect` باشد
-2. پوشه DLL (`dll10`) و connection **RuleEngine**
-3. تب **«کد فرمول (مرحله ۱)»**
-4. **«ترکیب DB + DLL»** (یا F5)
-5. Member را انتخاب کنید → کد VB فقط برای مشاهده
+RuleTrace دیگر کد Memberها را به یک فایل VB نمی‌چسباند و `Compile(ToString1)` / vbc نمی‌کند. آن معماری خطاهای BC30269 (Out/M_Out تکراری) و BC30289 (متد داخل متد) می‌ساخت و همگرا نمی‌شد.
 
-**مراحل بعدی:** مرحله ۲ = اجرا با موتور Sara (بدون vbc).
+اجرا یعنی:
 
-## مرحله ۲ — اجرا با موتور Sara
+1. `ClsCommon.RunRule` همان موتور Sara
+2. اگر `Instanc` ساخته شد → `SetMyInfo` + `Run`
+3. اگر نه → جستجوی DLL از قبل کامپایل‌شده در Cache / `dll10` (`*Solh*.dll` / پوشه `344`)
+4. اگر هیچ‌کدام نبود → تحلیل ایستای Member 1288 (چیدمان / If Solh / Exit) بدون اجرا
 
-هدف: فرمول را مثل Sara اجرا کنید و `BizErrors` / Watch را ببینید. **vbc محلی صدا زده نمی‌شود.**
+برای اجرای زنده: یک‌بار Solh را در **UI سارا** کامپایل کنید تا DLL در Cache ساخته شود، بعد RuleTrace همان را لود می‌کند.
 
-1. `build.cmd` — عنوان باید `v20-phase2-engine-run` باشد
-2. NidProc را پر کنید (جستجو در Sara)
-3. فرمول `Solh` — Watch مثلاً `Calc_Chandganeh`
-4. **ReCompile خاموش** (تا Cache موتور Sara استفاده شود)
-5. دکمه **«اجرا (موتور Sara)»** یا F5
+`build.cmd` — عنوان پنجره باید `v21-no-vb-rewrite` باشد. NidProc را پر کنید. **ReCompile خاموش.**
 
-اگر اجرا شد، تب «دیباگ مرحله‌ای» رویدادهای AddError را نشان می‌دهد.
-
-اگر موتور خطا داد: خروجی **کپی خلاصه خطا** را بفرستید. باید خطوط `Engine err` و `Diagnose` را ببینید — نه `vbc :`.
-
-Build: `v20b-phase2-setmyinfo`
+اگر Instanc نبود: تب دیباگ روی Member 1288 باز می‌شود. خروجی **کپی خلاصه خطا** باید خطوط `Arch` و `Chidman` را نشان دهد — نه ۵۸ خط `Engine err`.
 
 ---
 
@@ -48,7 +39,8 @@ ruletrace/
   MainForm.cs           ← UI
   CodeEditorPanel.cs    ← مرحله ۱: مشاهده کد Member از RuleEngine + نوع‌های DLL (فقط خواندن)
   MemberRepository.cs   ← خواندن dbo.Member (XmlBody/Body)
-  FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule + Inspect موتور
+  FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule یا host DLL از Cache
+  ChidmanAnalyzer.cs    ← تحلیل ایستای Member 1288 (چیدمان / Solh guards) بدون کامپایل VB
   DebugPanel.cs         ← تب «دیباگ مرحله‌ای» (F10 / Shift+F10 / F5) روی trace فرمول
   UserSettings.cs       ← ذخیره تنظیمات UI در bin\RuleTrace.user.ini
   MemberAnalyzer.cs     ← تحلیل جدول Member (نسخه‌ها، ساختار XML)
@@ -80,9 +72,9 @@ build.cmd
 4. **تست اتصال DB** → باید `[RuleEngine] OK` و `[Sara] OK` ببینید
 5. **NidWorkItem** (مثلاً `11314989`) یا کد نوسازی → «جستجو در Sara» → NidProc پر می‌شود
 6. فرمول `Solh`، Watch `Calc_Chandganeh`
-7. **اجرا و دیباگ**
+7. **اجرا (موتور Sara)** — ReCompile را خاموش بگذارید
 
-اولین بار **Recompile** را تیک بزنید (چند دقیقه). Cache در `پوشه Cache محلی` ساخته می‌شود. بارهای بعد بدون Recompile.
+اگر Instanc ساخته نشد، تب دیباگ Member 1288 را نشان می‌دهد. برای اجرای زنده، یک‌بار Solh را در UI سارا کامپایل کنید.
 
 ## دیباگ مرحله‌ای (F10) — تب «دیباگ مرحله‌ای»
 
@@ -105,30 +97,21 @@ build.cmd
 
 ## تشخیص خطای کامپایل (BC30269 / M_Out)
 
-خروجی فعلی: فایل merge‌شده فقط ~۳۳۰ خط است در حالی که ۲۰ XML حدود ۳.۶ MB است و خطاها هر ۱۶ خط تکرار می‌شوند؛ یعنی موتور برای هر Member فقط **پوسته کلاس** را می‌نویسد و بدنه کد را نمی‌خواند. ابزارها:
+موتور Sara هنگام `RunRule` اغلب **پوسته خالی** می‌سازد: `EncryptXmlBody` پر است، `ClsFunction.Body` خالی می‌ماند، ۲۰ پوسته `M_Out` کنار هم merge می‌شود → BC30269.
 
-- **تحلیل Member**: نسخه‌ها/`isActive` هر `NidMember`، حجم `Body` / `XmlBody` / `EncryptXmlBody` و ساختار عناصر XML (کجا کد است، کجا نام).
-- **بررسی موتور (ClsClass)**: `ClsClass(344, CityGuid, false)` را دقیقاً مانند `RunRule` می‌سازد و لیست Memberهایی که موتور خوانده (نام، اندازه Body، نسخه) و فیلدهای static `ClsCommon` را چاپ می‌کند. بعد از هر خطای کامپایل خودکار اجرا می‌شود.
+RuleTrace **دیگر این پوسته را sanitize / Compile / vbc نمی‌کند.** آن حلقه به BC30289 («Statement cannot appear within a method body») می‌رسید و تمام نمی‌شد.
 
-**علت رایج (تأیید شده با تحلیل Member شما):** کد VB در `XmlBody/<Body>` خوانا است (~۳۶۰K کاراکتر) اما `EncryptXmlBody` هم پر است؛ موتور `2012.5` هنگام compile از مسیر رمزنگاری می‌خواند، `ClsFunction.Body` خالی می‌ماند و ۲۰ پوسته `M_Out` کنار هم merge می‌شود.
+عیب‌یابی چیدمان صلح بدون کامپایل:
 
-RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، سپس **هر Member را جدا** کامپایل می‌کند (مدل Sara: اول `Run`، بعد Memberها به ترتیب — کدها به هم چسبانده نمی‌شوند). در Log باید ببینید:
+- دکمه **تحلیل چیدمان (1288)** یا اجرای Solh وقتی Instanc نیست
+- If/Exit نزدیک `InsertChidman` و شرط‌های `Solh` / `صلح` / `GetPeace`
+- تب دیباگ: کد Member 1288 از `dbo.Member.XmlBody`
+
+برای اجرای زنده: DLL کامپایل‌شده Sara در
 
 ```
-RuleTrace v18-per-member-partial ... — per-member partial compile (no monolithic glue)
-Retry model  : Sara runs Run first, then each Member in order ...
-Engine compile: (تلاش کامپایل بومی موتور)
-Partial shell: ToString1 len=~18000 -> ...\partial\Solh_00_shell.vb
-Partial files: 1 shell + 20 member file(s), N method(s) — NOT glued into RuleTrace_merged.vb
-Retry compile: vbc on 21 partial file(s) in partial\ ...
-VBC OK       : N_Solh.Solh -> ...\Solh_ruletrace.dll
+Desktop\dll10\SafaFormulaCache\{CityGuid}\344\
 ```
-
-برای مسیر **صلح در چیدمان** (مثلاً Watch=`Calc_Chandganeh` یا EntryPoint شامل chidman): فقط Memberهای مرتبط فیلتر می‌شوند — نیازی به کامپایل همهٔ ۲۰ Member نیست.
-
-اگر هنوز `GetStrOutClass len=1226` یا `Compile try : RunRule` می‌بینید، ZIP/branch قدیمی است — از `cursor/ruletrace-standalone-88fc` دوباره `build.cmd` بزنید.
-
-اگر retry هم خطا داد: DLL دقیق سرور Sara یا کلید `FormulaEncryptionCode` سرور لازم است.
 
 ## اخطار آنتی‌ویروس
 
@@ -153,7 +136,7 @@ Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Desktop\dll10"
 |-----|--------------|
 | `Login failed for user 'hService'` | فایل‌های `*.dll.config` کنار DLLها — RuleTrace خودکار آن‌ها را `.bak` می‌کند |
 | `BC2017 could not find c:\dll10\BIZ.SC.DLL` | vbc داخل موتور به `c:\dll10` نیاز دارد — RuleTrace خودکار sync می‌کند؛ اگر دسترسی نبود یک بار as Administrator اجرا کنید |
-| `BC30269 'Out' has multiple definitions` / `M_Out` | موتور بدنه Memberها را نمی‌خواند (بخش «تشخیص خطای کامپایل») — خروجی «تحلیل Member» و «بررسی موتور» را بفرستید؛ احتمالاً DLL دقیق سرور Sara لازم است |
+| `BC30269 'Out' has multiple definitions` / `M_Out` | موتور پوسته خالی ساخت — RuleTrace دیگر VB را بازنویسی نمی‌کند؛ Solh را یک‌بار در UI سارا کامپایل کنید یا تحلیل ایستای 1288 را ببینید |
 | اخطار آنتی‌ویروس | false positive (exe بدون امضا + کامپایل داینامیک) — پوشه را Exclude کنید (بخش «اخطار آنتی‌ویروس») |
 | `RunRule returned null` | اتصال RuleEngine یا `CnRuleString` |
 

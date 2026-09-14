@@ -120,15 +120,17 @@ namespace RuleTrace
         {
             if (string.IsNullOrWhiteSpace(m)) return false;
             string t = m.TrimStart();
+            // v21: do not copy BC30269/BC30289 floods into the paste-summary.
             if (t.StartsWith("Engine err", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Engine compile", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Inject", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Sanitize", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Merge", StringComparison.OrdinalIgnoreCase)
-                || t.StartsWith("API ", StringComparison.OrdinalIgnoreCase))
-                return true;
+                || t.StartsWith("API ", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase))
+                return false;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "Compile ", "Compiling", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "Phase ", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -713,7 +715,7 @@ namespace RuleTrace
 
         // ───────────────────────────── Run ─────────────────────────────
 
-        /// <returns>0 ok, 1 stop-error in BizErrors, 3 null result, 4 compile errors</returns>
+        /// <returns>0 ok, 1 stop-error in BizErrors, 2 no live instance (static debug), 3 null result, 4 runtime/engine error</returns>
         public int Run(RunRequest r)
         {
             int nid;
@@ -764,27 +766,30 @@ namespace RuleTrace
             }
 
             DiagnoseEngineResult(result, cacheFolder);
+            LogEngineMemberBodies(result);
+            _log("Arch         : RuleTrace VB را بازنویسی/کامپایل نمی‌کند — فقط RunRule موتور یا DLL از قبل آماده‌شده");
+
             object cacheHost = TryCacheRunHost(result, cacheFolder, r.Formula);
             if (cacheHost != null)
             {
                 result = cacheHost;
-                _log("Phase 2      : اجرا از DLL موجود در Cache موتور (بدون vbc)");
+                _log("Arch         : اجرا از DLL کامپایل‌شده موجود");
             }
             else if (!HasLiveInstance(result))
             {
-                object injected = TryInjectEngineCompile(result, nid, cityGuid, cacheFolder);
-                if (injected != null && HasLiveInstance(injected))
+                _log("Arch         : موتور پوسته خالی ساخت (Instanc=Nothing). RuleTrace دیگر ToString1 را نمی‌چسباند.");
+                _log("Arch         : یک‌بار Solh را در UI سارا کامپایل کنید تا DLL در Cache ساخته شود، یا همان DLL را در پوشه dll10 بگذارید.");
+                try
                 {
-                    result = injected;
-                    _log("Phase 2      : بعد از تزریق XmlBody موتور نمونه ساخت");
+                    LastMemberSources.Clear();
+                    LastMemberSources.AddRange(GetMemberSources(nid));
+                    if (nid == 344 || string.Equals(r.Formula, "Solh", StringComparison.OrdinalIgnoreCase))
+                        ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
                 }
-                else
-                {
-                    _log("Phase 2      : Instanc/M_Assm هنوز Nothing — SetMyInfo صدا زده نمی‌شود");
-                    _summaryCapture = false;
-                    PrintSummary();
-                    return 4;
-                }
+                catch (Exception ex) { _log("Arch         : static analysis — " + FirstLine(ex.Message)); }
+                _summaryCapture = false;
+                PrintSummary();
+                return 2;
             }
 
             ReportCache(cacheFolder);
@@ -978,49 +983,40 @@ namespace RuleTrace
         {
             if (result == null) return;
             Type t = result.GetType();
-            _log("Result type  : " + t.FullName);
-            foreach (MethodInfo m in t.GetMethods(AnyInstance))
-            {
-                if (m.DeclaringType == typeof(object)) continue;
-                if (m.Name.IndexOf("SetMyInfo", StringComparison.OrdinalIgnoreCase) < 0
-                    && m.Name.IndexOf("SetParam", StringComparison.OrdinalIgnoreCase) < 0
-                    && !m.Name.Equals("Run", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                _log("Result meth  : " + m.Name + "(" + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name)) + ")");
-            }
-
+            bool live = HasLiveInstance(result);
             object errors = Get(result, "CompilerErrors");
-            _log("Compile      : HasErrors=" + HasCompilerErrors(errors) + " liveInstance=" + HasLiveInstance(result)
+            _log("Result type  : " + t.FullName);
+            _log("Compile      : HasErrors=" + HasCompilerErrors(errors) + " liveInstance=" + live
                  + " Instanc=" + (Get(result, "Instanc") == null && Get(result, "M_Instanc") == null ? "null" : "set")
                  + " M_Assm=" + (Get(result, "M_Assm") == null ? "null" : Get(result, "M_Assm").GetType().Name));
-            if (errors != null)
+            if (!live && HasCompilerErrors(errors))
             {
-                _log("Diagnose     : CompilerErrors type=" + errors.GetType().FullName
-                     + " Count=" + (Get(errors, "Count") ?? Get(errors, "Length") ?? "?"));
+                object count = Get(errors, "Count") ?? Get(errors, "Length");
+                _log("Arch         : موتور پوسته خالی ساخت (CompilerErrors=" + count + "). RuleTrace این VB را اصلاح نمی‌کند.");
+                LogCompilerErrors(errors, 2);
             }
-            LogCompilerErrors(errors, 8);
-
-            foreach (MemberInfo mi in t.GetMembers(AnyInstance | BindingFlags.DeclaredOnly))
-            {
-                FieldInfo f = mi as FieldInfo;
-                PropertyInfo p = mi as PropertyInfo;
-                if (f == null && p == null) continue;
-                if (p != null && p.GetIndexParameters().Length > 0) continue;
-                object v = null;
-                Try(() => v = f != null ? f.GetValue(result) : p.GetValue(result, null));
-                if (v == errors) continue;
-                string name = mi.Name;
-                if (name.IndexOf("Compiler", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                _log("Diagnose     : " + name + " = " + Short(v));
-            }
+            object nid = Get(result, "NidRuleClass");
+            if (nid != null) _log("Diagnose     : NidRuleClass = " + nid);
 
             if (Directory.Exists(cacheFolder))
             {
                 string[] dlls = Directory.GetFiles(cacheFolder, "*.dll", SearchOption.AllDirectories);
                 _log("Diagnose     : cache dll count=" + dlls.Length + " in " + cacheFolder);
-                foreach (string d in dlls.Take(12))
+                foreach (string d in dlls.Take(8))
                     _log("Diagnose     : " + d + "  " + new FileInfo(d).Length + " bytes");
             }
+        }
+
+        private void LogEngineMemberBodies(object result)
+        {
+            object cls = Get(result, "ClassDesinger") ?? Get(result, "M_ClassDesinger");
+            if (cls == null) return;
+            _log("Arch         : ClsFunction.Body lengths after RunRule (0 = موتور کد Member را نخوانده):");
+            FormulaMerger.LogFunctionBodies(cls, _log, 20);
+            object code = Get(result, "Code");
+            string s = code as string;
+            if (!string.IsNullOrEmpty(s))
+                _log("Arch         : ClsRunRuleResult.Code len=" + s.Length + (s.Length < 40000 ? " (پوسته خالی — نه کد Member)" : ""));
         }
 
         private static bool HasLiveInstance(object result)
@@ -1033,7 +1029,10 @@ namespace RuleTrace
             return inst != null;
         }
 
-        /// <summary>Copy XmlBody into the engine ClsClass, then ask Sara to compile. No local vbc.</summary>
+        /// <summary>
+        /// v21: NOT called from Run(). Injecting XmlBody then Compile(ToString1) produced BC30289 forever
+        /// (methods nested inside methods). Kept only so Inspect / archaeology can still find the old path.
+        /// </summary>
         private object TryInjectEngineCompile(object result, int nid, Guid cityGuid, string cacheFolder)
         {
             object cls = Get(result, "ClassDesinger") ?? Get(result, "M_ClassDesinger");
@@ -1305,8 +1304,11 @@ namespace RuleTrace
             CollectCacheDlls(cacheFolder, files);
             string parent = Path.GetDirectoryName(cacheFolder);
             if (!string.IsNullOrEmpty(parent)) CollectCacheDlls(parent, files);
-            if (!string.IsNullOrWhiteSpace(_s.DllPath))
-                CollectCacheDlls(Path.Combine(_s.DllPath, "SafaFormulaCache"), files);
+            CollectCacheDlls(_s.CachePath, files);
+            CollectNamedFormulaDlls(_s.DllPath, formula, files);
+            CollectNamedFormulaDlls(@"c:\dll10", formula, files);
+
+            _log("Arch         : scanning " + files.Distinct(StringComparer.OrdinalIgnoreCase).Count() + " candidate DLL(s) for precompiled " + formula);
 
             foreach (string dll in files.Distinct(StringComparer.OrdinalIgnoreCase))
             {
@@ -1345,6 +1347,28 @@ namespace RuleTrace
                 into.AddRange(Directory.GetFiles(folder, "*.dll", SearchOption.AllDirectories)
                     .OrderByDescending(f => (Path.GetFileName(f) ?? "").IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0)
                     .ThenByDescending(f => new FileInfo(f).Length));
+            }
+            catch { }
+        }
+
+        /// <summary>Only name-matching formula DLLs in the Sara folder (never load every BIZ.*.dll).</summary>
+        private static void CollectNamedFormulaDlls(string folder, string formula, List<string> into)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
+            try
+            {
+                foreach (string dll in Directory.GetFiles(folder, "*.dll", SearchOption.TopDirectoryOnly))
+                {
+                    string fn = Path.GetFileName(dll) ?? "";
+                    if (fn.StartsWith("BIZ.", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (fn.IndexOf("SafaClass", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    if (fn.IndexOf("Newtonsoft", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    bool nameHint = (!string.IsNullOrWhiteSpace(formula) && fn.IndexOf(formula, StringComparison.OrdinalIgnoreCase) >= 0)
+                        || fn.IndexOf("344", StringComparison.OrdinalIgnoreCase) >= 0
+                        || fn.IndexOf("ruletrace", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (nameHint) into.Add(dll);
+                }
+                CollectCacheDlls(Path.Combine(folder, "SafaFormulaCache"), into);
             }
             catch { }
         }
@@ -1425,7 +1449,7 @@ namespace RuleTrace
             if (shown > max) _log("Engine err  : ... (" + shown + " errors total)");
         }
 
-        /// <summary>Inject XmlBody into ClsFunction; compile per-member partial files (Sara model) — never glue all XmlBody into one VB.</summary>
+        /// <summary>v21: NOT called from Run(). Local vbc glue of 20 Member files is the architecture that never converged.</summary>
         private object TryInjectedCompile(int nid, Guid cityGuid, bool recompile, string cacheFolder, RunRequest r)
         {
             try

@@ -58,6 +58,7 @@ namespace RuleTrace
                 log("  chidman AddError: " + chidmanAddErrors.Count + " line(s) in Member " + nidMember);
 
             ReportCallers(sources, focus, methods, log);
+            ReportSolhGuards(focus, sources, log);
             ReportGuardsNearChidman(focus, log);
             ReportTrace(trace, sources, nidMember, log);
         }
@@ -109,6 +110,70 @@ namespace RuleTrace
             }
         }
 
+        /// <summary>Lines where Solh/صلح/Peace may skip layout announcement — the original settlement-chidman bug.</summary>
+        private static void ReportSolhGuards(MemberSource focus, IList<MemberSource> sources, Action<string> log)
+        {
+            log("");
+            log("  Solh/صلح guards (may skip chidman announcement):");
+            int shown = 0;
+            shown += DumpSolhGuardLines(focus, "Member " + focus.NidMember, log, 18);
+            var run = sources.FirstOrDefault(s => s != focus && (
+                (s.Name ?? "").Equals("Run", StringComparison.OrdinalIgnoreCase)
+                || Regex.IsMatch(s.Code ?? "", @"\b(?:Public\s+)?Sub\s+Run\s*\(", RegexOptions.IgnoreCase)));
+            if (run != null)
+                shown += DumpSolhGuardLines(run, "Run Member " + run.NidMember, log, 10);
+            if (shown == 0)
+                log("    (no If/Exit mentioning Solh/صلح/Peace/GetPeace — مسیر skip شاید با نام دیگر است)");
+        }
+
+        private static int DumpSolhGuardLines(MemberSource src, string label, Action<string> log, int max)
+        {
+            if (src == null || string.IsNullOrWhiteSpace(src.Code)) return 0;
+            string[] lines = Normalize(src.Code).Split('\n');
+            int shown = 0;
+            bool header = false;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string t = lines[i].Trim();
+                if (t.Length == 0 || t.StartsWith("'")) continue;
+                if (!LooksLikeSolhGuard(t)) continue;
+                if (!header)
+                {
+                    log("    -- " + label + " --");
+                    header = true;
+                }
+                int from = Math.Max(0, i);
+                int to = Math.Min(lines.Length - 1, i + 3);
+                for (int j = from; j <= to; j++)
+                {
+                    if (shown >= max)
+                    {
+                        log("    ... (truncated)");
+                        return shown;
+                    }
+                    string mark = j == i ? ">>" : "  ";
+                    log("    " + mark + " L" + (j + 1) + ": " + Trunc(lines[j].Trim(), 110));
+                    shown++;
+                }
+            }
+            return shown;
+        }
+
+        private static bool LooksLikeSolhGuard(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return false;
+            bool isIf = line.StartsWith("If ", StringComparison.OrdinalIgnoreCase)
+                || line.StartsWith("ElseIf ", StringComparison.OrdinalIgnoreCase)
+                || line.IndexOf(" Exit ", StringComparison.OrdinalIgnoreCase) >= 0
+                || line.StartsWith("Exit ", StringComparison.OrdinalIgnoreCase);
+            if (!isIf) return false;
+            string[] tokens = { "solh", "صلح", "peace", "getpeace", "chidman", "chideman", "chandganeh", "چیدمان", "masir", "مسیر" };
+            string lower = line.ToLowerInvariant();
+            foreach (string tok in tokens)
+                if (lower.IndexOf(tok, StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
+
         private static void ReportGuardsNearChidman(MemberSource focus, Action<string> log)
         {
             log("");
@@ -144,8 +209,9 @@ namespace RuleTrace
             log("  BizErrors trace (chidman/solh related):");
             if (trace == null || trace.Count == 0)
             {
-                log("    (no trace — فرمول را اجرا کنید)");
-                log("    اگر compile خطا داد، تا رفع vbc اجرای واقعی و اعلام چیدمان در Sara انجام نمی‌شود.");
+                log("    (no live trace — Instanc موتور Nothing است)");
+                log("    عیب‌یابی بدون اجرا: If/Exit نزدیک InsertChidman را در همین Member ببینید.");
+                log("    اجرای زنده وقتی ممکن است که UI سارا یک‌بار Solh را کامپایل کند و DLL در Cache باشد.");
                 return;
             }
 
@@ -230,7 +296,7 @@ namespace RuleTrace
         {
             var list = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(code)) return list.ToList();
-            foreach (Match m in Regex.Matches(code, @"(?:Public|Private|Protected|Friend)?\s*(?:Sub|Function)\s+(\w+)", RegexOptions.IgnoreCase))
+            foreach (Match m in Regex.Matches(code, @"(?m)^\s*(?:Public|Private|Protected|Friend)?\s*(?:Sub|Function)\s+(\w+)", RegexOptions.IgnoreCase))
                 list.Add(m.Groups[1].Value);
             return list.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         }

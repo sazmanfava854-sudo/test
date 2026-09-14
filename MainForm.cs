@@ -46,7 +46,7 @@ namespace RuleTrace
             Shown += (s, e) =>
             {
                 _codeEditor.OnShown();
-                Log("مرحله ۲: «اجرا (موتور Sara)» — بدون vbc. ReCompile را خاموش بگذارید مگر لازم باشد.");
+                Log("مرحله ۲: اجرا = موتور Sara یا DLL از قبل کامپایل‌شده. RuleTrace دیگر VB را بازنویسی نمی‌کند.");
             };
         }
 
@@ -245,7 +245,7 @@ namespace RuleTrace
             _btnToggleSettings = Btn("▲ پنهان کردن تنظیمات", (s, e) => ToggleSettings(!_grpSettings.Visible));
             foreach (var c in new Control[] { _btnCombine, _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, btnChidman, _btnClearLog, _btnCopyLog, _btnCopySummary, _btnSaveLog, _btnToggleSettings })
                 p.Controls.Add(c);
-            p.Controls.Add(new Label { Text = "F5 = اجرا با موتور Sara   •   ترکیب = فقط مشاهده کد", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
+            p.Controls.Add(new Label { Text = "F5 = اجرا (موتور/DLL)   •   بدون Instanc = تحلیل ایستای Member 1288", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
             return p;
         }
 
@@ -513,14 +513,31 @@ namespace RuleTrace
                 Log("");
                 Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " ══════════");
                 int code = eng.Run(req);
-                Log("Exit code    : " + code + (code == 0 ? " (OK)" : code == 1 ? " (Stop error in BizErrors)" : code == 4 ? " (compile errors)" : ""));
+                Log("Exit code    : " + code + (code == 0 ? " (OK)" : code == 1 ? " (Stop error in BizErrors)" : code == 2 ? " (no live instance — static debug)" : code == 4 ? " (runtime/engine error)" : ""));
                 var summary = eng.Summary.ToList();
                 summary.Add("Exit code    : " + code);
                 Ui(() => { _lastSummary = summary; _btnCopySummary.Enabled = summary.Count > 1; });
-                if (code == 4)
+                if (code == 2 || code == 4)
                 {
-                    Log("موتور Sara نتوانست اجرا کند. vbc محلی دیگر صدا زده نمی‌شود.");
-                    Log("اگر Cache فرمول از Sara موجود است، ReCompile را خاموش بگذارید و دوباره اجرا کنید.");
+                    if (code == 2)
+                    {
+                        Log("معماری: RuleTrace دیگر VB را چسب نمی‌زند و Compile نمی‌کند.");
+                        Log("موتور Sara پوسته خالی ساخت. اگر UI سارا فرمول را کامپایل کرده، DLL را در dll10 یا Cache بگذارید.");
+                    }
+                    if (string.Equals(req.Formula, "Solh", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(req.Formula, "344", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            LoadSourcesInto(eng, 344);
+                            Ui(() =>
+                            {
+                                _debug.FocusMember(ChidmanAnalyzer.DefaultChidmanMemberId);
+                                _tabs.SelectedTab = _tabDebug;
+                            });
+                        }
+                        catch (Exception ex) { Log("WARN         : " + ex.Message); }
+                    }
                 }
 
                 if (code == 0 || code == 1)

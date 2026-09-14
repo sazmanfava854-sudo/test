@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v20e-phase2-sanitize";
+        public const string Label = "v21-no-vb-rewrite";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — مرحله ۲: Sanitize ToString1 + Compile موتور";
+                return "RuleTrace " + Label + " (v" + v + ") — عیب‌یابی: بدون بازنویسی VB";
             }
         }
     }
