@@ -7,7 +7,7 @@ using System.Xml.Linq;
 
 namespace RuleTrace
 {
-    /// <summary>Phase 1 — read/write dbo.Member in RuleEngine (XmlBody / Body). No compile, no merge.</summary>
+    /// <summary>Read dbo.Member in RuleEngine (XmlBody / Body). UI is inspect-only; write helpers are unused in Phase 1.</summary>
     internal sealed class MemberRow
     {
         public int NidClass;

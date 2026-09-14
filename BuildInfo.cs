@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v19b-phase1-crud-workspace";
+        public const string Label = "v19c-phase1-inspect";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — مرحله ۱: ترکیب DB+DLL و CRUD (بدون کامپایل)";
+                return "RuleTrace " + Label + " (v" + v + ") — عیب‌یابی: ترکیب DB+DLL فقط خواندنی";
             }
         }
     }

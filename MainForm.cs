@@ -47,7 +47,7 @@ namespace RuleTrace
             Shown += (s, e) =>
             {
                 _codeEditor.OnShown();
-                Log("مرحله ۱ فعال است: تب «ویرایش کد» → دکمه «ترکیب DB + DLL». اجرا/کامپایل خاموش است مگر وقتی «فعال‌سازی مرحله ۲» تیک بخورد.");
+                Log("عیب‌یابی: تب «کد فرمول» → «ترکیب DB + DLL». فقط خواندن است؛ در RuleEngine چیزی ذخیره نمی‌شود.");
             };
         }
 
@@ -291,7 +291,7 @@ namespace RuleTrace
             _debug.RunRequested += RunFormula;
 
             _tabs = new TabControl { Dock = DockStyle.Fill };
-            _tabCode = new TabPage("ویرایش کد (مرحله ۱)");
+            _tabCode = new TabPage("کد فرمول (مرحله ۱)");
             _tabCode.Controls.Add(_codeEditor);
             _tabLog = new TabPage("خروجی (Log)");
             _tabLog.Controls.Add(_txtLog);
@@ -497,7 +497,7 @@ namespace RuleTrace
             {
                 _tabs.SelectedTab = _tabCode;
                 MessageBox.Show(this,
-                    "الان مرحله ۱ است: ترکیب کد RuleEngine با DLL و ویرایش/ذخیره.\n\nدکمه «اجرا و دیباگ» کامپایل می‌کند و هنوز مرحله ۲ است — به همین خاطر خطاهای vbc (clsOut و ...) می‌آید.\n\nاز تب «ویرایش کد» و دکمه «ترکیب DB + DLL» استفاده کنید.",
+                    "این برنامه عیب‌یابی است، نه ویرایشگر دیتابیس.\n\nمرحله ۱: کد RuleEngine را کنار DLL ببینید (فقط خواندن).\n«اجرا و دیباگ» کامپایل است و هنوز مرحله ۲ — خطاهای vbc از همانجاست.\n\nاز تب «کد فرمول» و دکمه «ترکیب DB + DLL» استفاده کنید.",
                     "RuleTrace — مرحله ۱", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }

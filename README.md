@@ -2,33 +2,19 @@
 
 دیباگر فرمول‌های Sara بدون UI اصلی.
 
-## مرحله ۱ — ترکیب کد RuleEngine + DLL و CRUD
+## مرحله ۱ — ترکیب کد RuleEngine + DLL (فقط خواندن)
 
-**هدف این مرحله:** کد `RuleEngine.dbo.Member` را کنار نوع‌های DLLهای Sara بگذارید و **CRUD** کنید. اجرا و کامپایل خاموش است.
+این برنامه **عیب‌یابی** است. کد `dbo.Member` را از RuleEngine کنار نوع‌های DLL می‌گذارد تا دیده شود. **چیزی در دیتابیس ذخیره / حذف نمی‌شود.**
 
-**روی «اجرا و دیباگ» نزنید.** آن دکمه مرحله ۲ است (کامپایل vbc) و هنوز خطا می‌دهد (`clsOut` و ...). دکمه به‌صورت پیش‌فرض غیرفعال است.
+**روی «اجرا و دیباگ» نزنید.** آن دکمه مرحله ۲ است (کامپایل vbc) و هنوز خطا می‌دهد.
 
-1. `build.cmd` — باید در عنوان پنجره `v19b-phase1-crud-workspace` ببینید
-2. پوشه DLL (`dll10`) و connection **RuleEngine** را پر کنید
-3. تب **«ویرایش کد (مرحله ۱)»**
-4. دکمه **«ترکیب DB + DLL»** (یا F5)
-5. سمت چپ بالا: لیست Member از DB — سمت چپ پایین: نوع‌های public DLL (مثل `ClsOut`)
-6. Member را انتخاب کنید → کد VB در ویرایشگر
-7. CRUD:
-   - **ذخیره در DB** = Update روی `XmlBody/<Body>`
-   - **نسخه جدید** = Create (نسخه قبلی همان Member غیرفعال می‌شود)
-   - **فعال/غیرفعال** = Update `isActive`
-   - **حذف نسخه** = Delete همان Version
+1. `build.cmd` — عنوان پنجره باید `v19c-phase1-inspect` باشد
+2. پوشه DLL (`dll10`) و connection **RuleEngine**
+3. تب **«کد فرمول (مرحله ۱)»**
+4. **«ترکیب DB + DLL»** (یا F5)
+5. Member را انتخاب کنید → کد VB فقط برای مشاهده
 
-| عمل | دکمه |
-|-----|------|
-| Combine | ترکیب DB + DLL |
-| Read | بارگذاری از DB + انتخاب Member |
-| Update | ذخیره در DB / فعال‌غیرفعال |
-| Create | نسخه جدید |
-| Delete | حذف نسخه |
-
-**مراحل بعدی:** مرحله ۲ = اجرا با تیک «فعال‌سازی مرحله ۲»؛ مرحله ۳ = دیباگ چیدمان.
+**مراحل بعدی:** مرحله ۲ = اجرا (با تیک مرحله ۲)؛ مرحله ۳ = دیباگ چیدمان.
 
 ---
 
@@ -44,8 +30,8 @@ ruletrace/
   RuleTrace.csproj      ← WinForms, .NET 4.7.2, بدون reference به DLLهای Sara
   Program.cs            ← نقطه شروع
   MainForm.cs           ← UI
-  CodeEditorPanel.cs    ← مرحله ۱: CRUD کد Member از RuleEngine + بارگذاری DLL
-  MemberRepository.cs   ← خواندن/نوشتن dbo.Member (XmlBody/Body)
+  CodeEditorPanel.cs    ← مرحله ۱: مشاهده کد Member از RuleEngine + نوع‌های DLL (فقط خواندن)
+  MemberRepository.cs   ← خواندن dbo.Member (XmlBody/Body)
   FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule + Inspect موتور
   DebugPanel.cs         ← تب «دیباگ مرحله‌ای» (F10 / Shift+F10 / F5) روی trace فرمول
   UserSettings.cs       ← ذخیره تنظیمات UI در bin\RuleTrace.user.ini
