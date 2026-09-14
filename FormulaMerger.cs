@@ -128,15 +128,26 @@ namespace RuleTrace
             int rawShellMOut = CountOccurrences(shell, "M_Out");
             log("Merge shell  : " + shellSource + " len=" + shell.Length + ", M_Out=" + rawShellMOut);
 
-            shell = StripMethodsFromShell(shell);
             var shellOut = StripAllOutDeclarations(shell);
             shell = shellOut.CleanedText;
             string canonicalMOut = shellOut.FirstMOut;
             string canonicalPropOut = shellOut.FirstPropOut;
-            log("Merge shell  : after stripping stubs, M_Out decls=" + CountMOutDeclarations(shell));
 
-            var shellNames = CollectFieldNames(shell);
             var methodMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string shellNorm = NormalizeNewlines(shell);
+            foreach (string block in ExtractMethodBlocks(shellNorm))
+            {
+                string key = MethodKey(block);
+                if (string.IsNullOrEmpty(key)) continue;
+                methodMap[key] = block.Replace("\n", "\r\n");
+            }
+            int shellMethodCount = methodMap.Count;
+
+            shell = StripMethodsFromShell(shell);
+            shell = DedupeFieldLinesByName(shell);
+            log("Merge shell  : after stripping stubs, M_Out decls=" + CountMOutDeclarations(shell) + ", shell methods=" + shellMethodCount);
+
+            var shellNames = CollectDeclarationNames(shell);
             var fieldByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var uniqueFieldDecls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int methodCount = 0;
@@ -170,11 +181,11 @@ namespace RuleTrace
                 {
                     string key = MethodKey(block);
                     if (string.IsNullOrEmpty(key)) continue;
-                    methodMap[key] = block;
+                    methodMap[key] = block.Replace("\n", "\r\n");
                     methodCount++;
                 }
             }
-            log("Merge methods: " + methodMap.Count + " unique Sub/Function from " + methodCount + " block(s)");
+            log("Merge methods: " + methodMap.Count + " unique Sub/Function (" + shellMethodCount + " shell + " + methodCount + " member block(s))");
             log("Merge fields  : " + uniqueFieldDecls.Count + " unique (" + fieldSkipped + " skipped — already in shell or duplicate)");
 
             int cap = shell.Length + (int)Math.Min(methodMap.Values.Sum(b => (long)b.Length), int.MaxValue - shell.Length - 8192) + 8192;
@@ -185,10 +196,16 @@ namespace RuleTrace
 
             sb.Append(shell.Substring(0, endClass));
             sb.AppendLine();
-            if (uniqueFieldDecls.Count > 0)
+            var hostStubs = BuildRuntimeHostFieldStubs(shellNames, fieldByName);
+            if (hostStubs.Count > 0)
+                log("Merge host   : " + hostStubs.Count + " runtime stub field(s) (Info8, …)");
+
+            if (uniqueFieldDecls.Count > 0 || hostStubs.Count > 0)
             {
                 sb.AppendLine("' --- RuleTrace: shared fields from Member XmlBody ---");
                 foreach (string decl in uniqueFieldDecls.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                    sb.AppendLine(decl);
+                foreach (string decl in hostStubs)
                     sb.AppendLine(decl);
                 sb.AppendLine();
             }
@@ -234,25 +251,25 @@ namespace RuleTrace
             return PrependStandardImports(merged);
         }
 
-        /// <summary>Ensure Serializable, List, DataView, iif/val resolve under vbc.</summary>
+        /// <summary>Ensure Guid, Serializable, Exception, List, DataView resolve under vbc.</summary>
         private static string PrependStandardImports(string merged)
         {
             string norm = NormalizeNewlines(merged);
             var imports = new[]
             {
-                "Imports System",
-                "Imports System.Collections.Generic",
-                "Imports System.Data",
-                "Imports System.Runtime.Serialization",
-                "Imports System.Xml",
-                "Imports System.Linq",
-                "Imports Microsoft.VisualBasic",
+                "System",
+                "System.Collections.Generic",
+                "System.Data",
+                "System.Runtime.Serialization",
+                "System.Xml",
+                "System.Linq",
+                "Microsoft.VisualBasic",
             };
             var sb = new StringBuilder();
-            foreach (string imp in imports)
+            foreach (string ns in imports)
             {
-                if (norm.IndexOf(imp, StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                sb.AppendLine(imp);
+                if (HasImportLine(norm, ns)) continue;
+                sb.AppendLine("Imports " + ns);
             }
             string result = merged;
             if (sb.Length > 0)
@@ -264,9 +281,65 @@ namespace RuleTrace
             return FixSerializableAttribute(result);
         }
 
+        /// <summary>Match whole import line — avoid skipping System when System.Data exists.</summary>
+        private static bool HasImportLine(string norm, string ns)
+        {
+            foreach (string line in norm.Split('\n'))
+            {
+                string t = line.Trim();
+                if (!t.StartsWith("Imports ", StringComparison.OrdinalIgnoreCase)) continue;
+                string rest = t.Substring(8).Trim();
+                if (rest.Equals(ns, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
         private static string FixSerializableAttribute(string merged)
         {
-            return Regex.Replace(merged, @"<\s*Serializable\s*>", "<Serializable()>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            merged = Regex.Replace(merged, @"<\s*Serializable\s*>", "<System.SerializableAttribute()>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            merged = Regex.Replace(merged, @"<\s*Serializable\s*\(\s*\)\s*>", "<System.SerializableAttribute()>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            merged = Regex.Replace(merged, @"<\s*SerializableAttribute\s*>", "<System.SerializableAttribute()>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            return merged;
+        }
+
+        private static readonly string[] RuntimeHostFieldNames = { "Info8", "Info", "MyInfo", "M_Info" };
+
+        private static List<string> BuildRuntimeHostFieldStubs(HashSet<string> shellNames, Dictionary<string, string> fieldByName)
+        {
+            var stubs = new List<string>();
+            foreach (string name in RuntimeHostFieldNames)
+            {
+                if (shellNames.Contains(name) || fieldByName.ContainsKey(name)) continue;
+                stubs.Add("Public " + name + " As Object");
+            }
+            return stubs;
+        }
+
+        /// <summary>Keep first Dim/Private/Public field per identifier (VB case-insensitive).</summary>
+        private static string DedupeFieldLinesByName(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var kept = new List<string>();
+            foreach (string line in NormalizeNewlines(text).Split('\n'))
+            {
+                string t = line.Trim();
+                if (t.Length == 0 || !IsFieldDeclarationLine(t))
+                {
+                    kept.Add(line);
+                    continue;
+                }
+                var names = ParseFieldNames(t).ToList();
+                if (names.Count == 0)
+                {
+                    kept.Add(line);
+                    continue;
+                }
+                if (names.Any(n => seen.Contains(n))) continue;
+                foreach (string n in names) seen.Add(n);
+                kept.Add(line);
+            }
+            return string.Join("\n", kept).Replace("\n", "\r\n");
         }
 
         /// <summary>Class shell from ToString1 (~18KB). Never use ToString() — after inject it embeds all bodies (~1MB, 100× M_Out).</summary>
@@ -412,14 +485,18 @@ namespace RuleTrace
             return m.Success ? m.Index : -1;
         }
 
-        private static HashSet<string> CollectFieldNames(string vb)
+        private static HashSet<string> CollectDeclarationNames(string vb)
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(vb)) return names;
             foreach (string line in NormalizeNewlines(vb).Split('\n'))
             {
-                foreach (string name in ParseFieldNames(line.Trim()))
+                string t = line.Trim();
+                foreach (string name in ParseFieldNames(t))
                     names.Add(name);
+                Match prop = Regex.Match(t, @"^(?:(?:Public|Private|Protected|Friend)\s+)+Property\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (prop.Success && !prop.Groups[1].Value.Equals("Out", StringComparison.OrdinalIgnoreCase))
+                    names.Add(prop.Groups[1].Value);
             }
             return names;
         }
