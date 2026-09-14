@@ -463,6 +463,12 @@ namespace RuleTrace
             return merged;
         }
 
+        private static string QualifyClsOutReferences(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return line;
+            return Regex.Replace(line, @"\bclsOut\b", "BIZ.SC.ClsOut", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
         private static string EnsureCommonTypeAliases(string merged)
         {
             if (string.IsNullOrWhiteSpace(merged)) return merged;
@@ -568,12 +574,12 @@ namespace RuleTrace
             sb.AppendLine();
             sb.AppendLine("' --- RuleTrace: canonical Out / M_Out (single copy) ---");
             if (!string.IsNullOrEmpty(canonicalMOut))
-                sb.AppendLine(canonicalMOut);
+                sb.AppendLine(QualifyClsOutReferences(canonicalMOut));
             else
                 sb.AppendLine("Private M_Out As BIZ.SC.ClsOut");
             sb.AppendLine();
             if (!string.IsNullOrEmpty(canonicalPropOut))
-                sb.AppendLine(canonicalPropOut);
+                sb.AppendLine(QualifyClsOutReferences(canonicalPropOut));
             else
             {
                 sb.AppendLine("Public Property Out() As BIZ.SC.ClsOut");
@@ -1206,9 +1212,7 @@ namespace RuleTrace
             result.ClassName = className;
 
             var shellOut = StripAllOutDeclarations(shell);
-            shell = EnsurePartialClassDeclaration(shellOut.CleanedText, className);
-
-            string shellNorm = NormalizeNewlines(shell);
+            string shellNorm = NormalizeNewlines(shellOut.CleanedText);
             var shellMethods = ExtractMethodBlocks(shellNorm);
             var shellMethodKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (string block in shellMethods)
@@ -1217,21 +1221,12 @@ namespace RuleTrace
                 if (!string.IsNullOrEmpty(key)) shellMethodKeys.Add(key);
             }
 
-            shell = StripMethodsFromShell(shell);
-            shell = InsertCanonicalOutBlock(shell, shellOut.FirstMOut, shellOut.FirstPropOut);
-
-            var shellNames = CollectStrictDeclarationNames(shell);
+            var shellNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var fieldByName = CollectSharedFieldsFromSources(sources, shellNames);
+            CollectFieldDeclarationsFromText(shellNorm, shellNames, fieldByName);
             var hostStubs = BuildRuntimeHostFieldStubs(shellNames, fieldByName);
-            shell = InjectSharedFieldsBeforeEndClass(shell, fieldByName, hostStubs);
             if (fieldByName.Count > 0 || hostStubs.Count > 0)
                 log("Partial fields: " + fieldByName.Count + " from XmlBody + " + hostStubs.Count + " host stub(s) in shell");
-
-            if (shellMethods.Count > 0)
-            {
-                shell = AppendMethodsBeforeEndClass(shell, shellMethods);
-                log("Partial shell: " + shellMethods.Count + " shell method(s) moved after fields");
-            }
 
             var members = sources.OrderBy(s => s.NidMember).ToList();
             if (filterKeywords != null)
@@ -1259,19 +1254,25 @@ namespace RuleTrace
                 methodCount += ExtractMethodBlocks(NormalizeNewlines(body)).Count;
             }
 
-            string combinedForParams = shell + "\n" + string.Join("\n", memberFiles.Select(kv => kv.Value));
+            string combinedForParams = string.Join("\n", shellMethods)
+                + "\n" + string.Join("\n", memberFiles.Select(kv => kv.Value));
             var missingParams = DiscoverUndeclaredParameters(combinedForParams, injectedCls ?? shellCls, sources, log);
-            if (missingParams.Count > 0)
+            foreach (string n in DiscoverFormulaIdentifiers(combinedForParams))
             {
-                log("Partial params: " + missingParams.Count + " property stub(s) in shell (" + string.Join(", ", missingParams.Take(8)) + (missingParams.Count > 8 ? "..." : "") + ")");
-                shell = InjectPropertyStubs(shell, missingParams);
+                if (!missingParams.Contains(n, StringComparer.OrdinalIgnoreCase))
+                    missingParams.Add(n);
             }
+            if (missingParams.Count > 0)
+                log("Partial params: " + missingParams.Count + " property stub(s) in shell (" + string.Join(", ", missingParams.Take(8)) + (missingParams.Count > 8 ? "..." : "") + ")");
+
+            shell = BuildCleanPartialShell(className, fieldByName, hostStubs, missingParams, shellMethods);
+            log("Partial shell: clean rebuild from " + shellSource + ", methods=" + shellMethodKeys.Count + ", len=" + shell.Length);
 
             string shellPath = Path.Combine(partialDir, className + "_00_shell.vb");
             File.WriteAllText(shellPath, PrependStandardImports(shell), Encoding.UTF8);
             result.FilePaths.Add(shellPath);
             result.ShellPath = shellPath;
-            log("Partial shell: " + shellSource + " len=" + shell.Length + ", methods=" + shellMethodKeys.Count + " -> " + shellPath);
+            log("Partial shell: -> " + shellPath);
 
             foreach (var kv in memberFiles)
             {
@@ -1306,16 +1307,116 @@ namespace RuleTrace
                 string norm = NormalizeNewlines(src.Code);
                 norm = UnwrapEmbeddedClass(norm);
                 norm = StripAllOutDeclarations(norm).CleanedText;
-                foreach (string decl in ExtractFieldDeclarations(norm))
-                {
-                    var names = ExtractFieldNamesFromLine(decl).ToList();
-                    if (names.Count == 0) continue;
-                    if (names.Any(n => shellNames.Contains(n) || fieldByName.ContainsKey(n))) continue;
-                    foreach (string n in names)
-                        fieldByName[n] = decl;
-                }
+                CollectFieldDeclarationsFromText(norm, shellNames, fieldByName);
             }
             return fieldByName;
+        }
+
+        private static void CollectFieldDeclarationsFromText(string norm, HashSet<string> shellNames, Dictionary<string, string> fieldByName)
+        {
+            if (string.IsNullOrWhiteSpace(norm)) return;
+            foreach (string decl in ExtractFieldDeclarations(norm))
+            {
+                if (!IsSafeFieldDecl(decl)) continue;
+                var names = ExtractFieldNamesFromLine(decl).ToList();
+                if (names.Count == 0) continue;
+                if (names.Any(n => shellNames.Contains(n) || fieldByName.ContainsKey(n))) continue;
+                foreach (string n in names)
+                {
+                    fieldByName[n] = decl;
+                    shellNames.Add(n);
+                }
+            }
+        }
+
+        private static bool IsSafeFieldDecl(string line)
+        {
+            string t = (line ?? string.Empty).Trim();
+            if (t.Length == 0) return false;
+            if (!IsFieldDeclarationLine(t)) return false;
+            if (t.IndexOf("End Class", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (Regex.IsMatch(t, @"\bClass\b", RegexOptions.IgnoreCase)) return false;
+            return true;
+        }
+
+        /// <summary>One Partial Class block — avoids stray End Class in ToString1 that leaves methods at file scope.</summary>
+        private static string BuildCleanPartialShell(
+            string className,
+            Dictionary<string, string> fieldByName,
+            List<string> hostStubs,
+            IList<string> propertyStubs,
+            List<string> methodBlocks)
+        {
+            var sb = new StringBuilder(36000);
+            sb.AppendLine("Partial Public Class " + className);
+            sb.AppendLine();
+
+            if (fieldByName.Count > 0)
+            {
+                sb.AppendLine("' --- shared fields ---");
+                foreach (string decl in fieldByName.Values.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                    sb.AppendLine(decl.Trim());
+                sb.AppendLine();
+            }
+            if (hostStubs.Count > 0)
+            {
+                foreach (string stub in hostStubs)
+                    sb.AppendLine(stub);
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("' --- Out (Object stub for vbc) ---");
+            sb.AppendLine("Private M_Out As Object");
+            sb.AppendLine("Public Property Out() As Object");
+            sb.AppendLine("    Get");
+            sb.AppendLine("        If M_Out Is Nothing Then M_Out = New Object()");
+            sb.AppendLine("        Return M_Out");
+            sb.AppendLine("    End Get");
+            sb.AppendLine("    Set(ByVal Value As Object)");
+            sb.AppendLine("        M_Out = Value");
+            sb.AppendLine("    End Set");
+            sb.AppendLine("End Property");
+            sb.AppendLine();
+
+            if (propertyStubs != null && propertyStubs.Count > 0)
+            {
+                sb.AppendLine("' --- parameter properties ---");
+                foreach (string name in propertyStubs.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    if (name.Equals("Out", StringComparison.OrdinalIgnoreCase) || name.Equals("M_Out", StringComparison.OrdinalIgnoreCase)) continue;
+                    sb.AppendLine("Public Property " + name + " As Object");
+                }
+                sb.AppendLine();
+            }
+
+            if (methodBlocks != null && methodBlocks.Count > 0)
+            {
+                sb.AppendLine("' --- shell methods ---");
+                foreach (string block in methodBlocks)
+                {
+                    sb.AppendLine(block.Trim());
+                    sb.AppendLine();
+                }
+            }
+
+            sb.AppendLine("End Class");
+            return sb.ToString();
+        }
+
+        private static List<string> DiscoverFormulaIdentifiers(string code)
+        {
+            var list = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(code)) return list.ToList();
+            var rx = new Regex(
+                @"\b(PP_[A-Za-z0-9_]+|PM_[A-Za-z0-9_]+|P_[A-Za-z0-9_]+|M_[A-Za-z0-9_]+|IsM[A-Za-z0-9_]+|TmpDto[A-Za-z0-9_]+|MaxFloor_[A-Za-z0-9_]+|AdminSafa|logfilefj|Logfilefj|solhnameh)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            foreach (Match m in rx.Matches(code))
+            {
+                string id = m.Groups[1].Value;
+                if (!string.IsNullOrWhiteSpace(id)) list.Add(id);
+            }
+            return list.ToList();
         }
 
         private static string AppendMethodsBeforeEndClass(string shell, List<string> methodBlocks)
