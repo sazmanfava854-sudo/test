@@ -141,9 +141,9 @@ namespace RuleTrace
         /// <summary>Engine ToString1 after XmlBody inject — keep structure, only fix Out/M_Out duplicates.</summary>
         private static string BuildFromInjectedSource(string injected, Action<string> log)
         {
+            log("Merge path   : injected full class, M_Out=" + CountOccurrences(injected, "M_Out"));
             var stripped = StripAllOutDeclarations(NormalizeNewlines(injected));
-            string body = DedupeFieldLinesByName(stripped.CleanedText);
-            string merged = InsertCanonicalOutBlock(body, stripped.FirstMOut, stripped.FirstPropOut);
+            string merged = InsertCanonicalOutBlock(stripped.CleanedText, stripped.FirstMOut, stripped.FirstPropOut);
             int mOutDecls = CountMOutDeclarations(merged);
             int outProps = CountPropertyOutDeclarations(merged);
             log("Merged VB    : " + merged.Length + " chars, M_Out decls=" + mOutDecls + ", Property Out=" + outProps + " (injected path)");
@@ -511,7 +511,7 @@ namespace RuleTrace
         {
             if (!Regex.IsMatch(t, @"^(?:Public|Private|Protected|Friend|Dim|Const)\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 return false;
-            if (Regex.IsMatch(t, @"\b(?:Sub|Function|Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            if (Regex.IsMatch(t, @"\b(?:Sub|Function|Property|Class|Structure|Enum|Interface|Event|Delegate)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 return false;
             if (Regex.IsMatch(t, @"\bPrivate\s+M_Out\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) return false;
             if (t.IndexOf("Property Out", StringComparison.OrdinalIgnoreCase) >= 0) return false;
