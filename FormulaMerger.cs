@@ -133,11 +133,17 @@ namespace RuleTrace
             log("Merge shell  : after stripping stub methods, M_Out=" + shellMOutAfter);
 
             var methodMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var fieldSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int methodCount = 0;
             foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
             {
                 if (string.IsNullOrWhiteSpace(src.Code)) continue;
-                foreach (string block in ExtractMethodBlocks(StripDuplicateClassShell(src.Code)))
+                string norm = NormalizeNewlines(src.Code);
+                norm = UnwrapEmbeddedClass(norm);
+                norm = RemoveMOutPropertyBlocks(norm);
+                foreach (string decl in ExtractFieldDeclarations(norm))
+                    fieldSet.Add(decl);
+                foreach (string block in ExtractMethodBlocks(norm))
                 {
                     string key = MethodKey(block);
                     if (string.IsNullOrEmpty(key)) continue;
@@ -146,6 +152,7 @@ namespace RuleTrace
                 }
             }
             log("Merge methods: " + methodMap.Count + " unique Sub/Function from " + methodCount + " block(s)");
+            log("Merge fields  : " + fieldSet.Count + " shared Dim/Private/Public field(s) from members");
 
             int cap = shell.Length + (int)Math.Min(methodMap.Values.Sum(b => (long)b.Length), int.MaxValue - shell.Length - 4096) + 4096;
             var sb = new StringBuilder(cap);
@@ -155,6 +162,13 @@ namespace RuleTrace
 
             sb.Append(shell.Substring(0, endClass));
             sb.AppendLine();
+            if (fieldSet.Count > 0)
+            {
+                sb.AppendLine("' --- RuleTrace: shared fields from Member XmlBody ---");
+                foreach (string decl in fieldSet.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                    sb.AppendLine(decl);
+                sb.AppendLine();
+            }
             sb.AppendLine("' --- RuleTrace: Member XmlBody methods (class shells stripped) ---");
             foreach (var kv in methodMap.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
             {
@@ -167,6 +181,35 @@ namespace RuleTrace
             log("Merged VB    : " + merged.Length + " chars, M_Out=" + totalMOut + " (expect 1–2)");
             if (totalMOut > 3)
                 log("WARN merge   : still " + totalMOut + " M_Out — send RuleTrace_merged.vb");
+            return PrependStandardImports(merged);
+        }
+
+        /// <summary>Ensure Serializable, List, DataView, iif/val resolve under vbc.</summary>
+        private static string PrependStandardImports(string merged)
+        {
+            string norm = NormalizeNewlines(merged);
+            var imports = new[]
+            {
+                "Imports System",
+                "Imports System.Collections.Generic",
+                "Imports System.Data",
+                "Imports System.Runtime.Serialization",
+                "Imports System.Xml",
+                "Imports System.Linq",
+                "Imports Microsoft.VisualBasic",
+            };
+            var sb = new StringBuilder();
+            foreach (string imp in imports)
+            {
+                if (norm.IndexOf(imp, StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                sb.AppendLine(imp);
+            }
+            if (sb.Length > 0)
+            {
+                sb.AppendLine();
+                sb.Append(merged);
+                return sb.ToString();
+            }
             return merged;
         }
 
@@ -233,8 +276,35 @@ namespace RuleTrace
             if (methods.Count == 0) return shell.Replace("\n", "\r\n");
             foreach (string block in methods)
                 norm = norm.Replace(block, string.Empty);
-            norm = RemoveMOutPropertyBlocks(norm);
             return norm.Replace("\n", "\r\n").Trim();
+        }
+
+        /// <summary>Class-level Dim/Private/Public fields from member bodies (TempMasahat, TmpDt, …).</summary>
+        private static IEnumerable<string> ExtractFieldDeclarations(string norm)
+        {
+            if (string.IsNullOrWhiteSpace(norm)) yield break;
+            foreach (string block in ExtractMethodBlocks(norm))
+                norm = norm.Replace(NormalizeNewlines(block).Replace("\r\n", "\n"), string.Empty);
+
+            foreach (string line in norm.Split('\n'))
+            {
+                string t = line.Trim();
+                if (t.Length == 0 || t.StartsWith("'")) continue;
+                if (IsShellLine(t)) continue;
+                if (!IsFieldDeclarationLine(t)) continue;
+                yield return t;
+            }
+        }
+
+        private static bool IsFieldDeclarationLine(string t)
+        {
+            if (!Regex.IsMatch(t, @"^(?:Public|Private|Protected|Friend|Dim|Const)\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return false;
+            if (Regex.IsMatch(t, @"\b(?:Sub|Function|Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return false;
+            if (t.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (t.IndexOf("Property Out", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return true;
         }
 
         private static string NormalizeNewlines(string code)

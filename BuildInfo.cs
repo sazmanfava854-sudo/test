@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "merge-v3-vbc-fix";
+        public const string Label = "merge-v4-vbc-refs";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — ToString1 shell + vbc.exe fallback";
+                return "RuleTrace " + Label + " (v" + v + ") — imports + field merge + deduped refs";
             }
         }
     }

@@ -240,47 +240,59 @@ namespace RuleTrace
         private static List<string> CollectReferences(string dllFolder, Action<string> log)
         {
             var list = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // Formula DLLs only — do NOT glob dll10/*.dll (duplicate System.ServiceModel etc. breaks vbc.exe BC2000).
             if (Directory.Exists(dllFolder))
             {
                 foreach (string name in new[] { "BIZ.SC.dll", "BIZ.SA.dll", "SafaClassDesingerNew.dll", "Newtonsoft.Json.dll" })
-                    AddRef(list, seen, Path.Combine(dllFolder, name));
-                foreach (string f in Directory.GetFiles(dllFolder, "*.dll"))
-                    AddRef(list, seen, f);
+                    AddRef(list, seenPaths, seenNames, Path.Combine(dllFolder, name));
             }
 
-            // Use typeof(...).Assembly.Location — never Assembly.Load("System.Core") which throws on some hosts.
-            AddTypeRef(list, seen, typeof(object));
-            AddTypeRef(list, seen, typeof(System.Linq.Enumerable));
-            AddTypeRef(list, seen, typeof(System.Data.DataTable));
-            AddTypeRef(list, seen, typeof(System.Xml.XmlDocument));
-            AddTypeRef(list, seen, typeof(System.Xml.Linq.XDocument));
-            AddTypeRef(list, seen, typeof(System.ComponentModel.Component));
-            AddTypeRef(list, seen, typeof(Microsoft.VisualBasic.Strings));
-            AddTypeRef(list, seen, typeof(System.Configuration.ConfigurationManager));
+            AddTypeRef(list, seenPaths, seenNames, typeof(object));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Linq.Enumerable));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Data.DataTable));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Xml.XmlDocument));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Xml.Linq.XDocument));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.ComponentModel.Component));
+            AddTypeRef(list, seenPaths, seenNames, typeof(Microsoft.VisualBasic.Strings));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Runtime.Serialization.SerializableAttribute));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Configuration.ConfigurationManager));
 
+            log("VBC refs     : " + list.Count + " assemblies (deduped by name)");
             if (list.Count < 5)
                 log("VBC warn     : only " + list.Count + " refs resolved — check .NET Framework install");
             return list;
         }
 
-        private static void AddTypeRef(List<string> list, HashSet<string> seen, Type t)
+        private static void AddTypeRef(List<string> list, HashSet<string> seenPaths, HashSet<string> seenNames, Type t)
         {
             try
             {
                 if (t == null) return;
                 string loc = t.Assembly.Location;
-                if (!string.IsNullOrEmpty(loc)) AddRef(list, seen, loc);
+                if (!string.IsNullOrEmpty(loc)) AddRef(list, seenPaths, seenNames, loc);
             }
             catch { }
         }
 
-        private static void AddRef(List<string> list, HashSet<string> seen, string path)
+        private static void AddRef(List<string> list, HashSet<string> seenPaths, HashSet<string> seenNames, string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
             string full = Path.GetFullPath(path);
-            if (seen.Add(full)) list.Add(full);
+            if (!seenPaths.Add(full)) return;
+            try
+            {
+                string asmName = AssemblyName.GetAssemblyName(full).Name;
+                if (!seenNames.Add(asmName))
+                {
+                    seenPaths.Remove(full);
+                    return;
+                }
+            }
+            catch { }
+            list.Add(full);
         }
 
         /// <summary>Run compiled formula via DirectFormulaHost (reliable; avoids broken ClsRunRuleResult after vbc).</summary>
