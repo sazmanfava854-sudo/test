@@ -117,14 +117,34 @@ namespace RuleTrace
             return new List<object>();
         }
 
-        /// <summary>Build merged VB: prefer injected ToString1 (full engine output); fallback manual shell+XmlBody merge.</summary>
+        /// <summary>Build merged VB: shell ToString1 (~18KB) + XmlBody member methods when DB sources exist; injected ToString1 is structurally broken for vbc.</summary>
         public static string BuildMergedVb(object shellCls, object injectedCls, IList<MemberSource> sources, Action<string> log)
         {
+            if (HasSubstantialXmlBodySources(sources))
+            {
+                log("Merge path   : shell ToString1 + XmlBody member methods (skip injected ToString1)");
+                return ApplyParameterStubsIfNeeded(BuildMergedVbManual(shellCls, sources, log), injectedCls, sources, log);
+            }
+
             string injected = GetInjectedClassSource(injectedCls, log);
             if (IsValidInjectedSource(injected))
                 return BuildFromInjectedSource(injected, injectedCls, sources, log);
             log("Merge path   : manual shell+XmlBody (injected source len=" + (injected == null ? 0 : injected.Length) + ")");
-            return BuildMergedVbManual(shellCls, sources, log);
+            return ApplyParameterStubsIfNeeded(BuildMergedVbManual(shellCls, sources, log), injectedCls, sources, log);
+        }
+
+        private static bool HasSubstantialXmlBodySources(IList<MemberSource> sources)
+        {
+            return sources != null && sources.Count > 0
+                && sources.Any(s => !string.IsNullOrWhiteSpace(s.Code) && s.Code.Length >= 50);
+        }
+
+        private static string ApplyParameterStubsIfNeeded(string merged, object cls, IList<MemberSource> sources, Action<string> log)
+        {
+            var missingParams = DiscoverUndeclaredParameters(merged, cls, sources, log);
+            if (missingParams.Count == 0) return merged;
+            log("Merge params : " + missingParams.Count + " parameter properties added (" + string.Join(", ", missingParams.Take(8)) + (missingParams.Count > 8 ? "..." : "") + ")");
+            return InjectPropertyStubs(merged, missingParams);
         }
 
         private static string GetInjectedClassSource(object cls, Action<string> log)
