@@ -123,7 +123,7 @@ namespace RuleTrace
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) || t.IndexOf("BC30269", StringComparison.Ordinal) >= 0
                 || t.IndexOf("BC30260", StringComparison.Ordinal) >= 0 || t.IndexOf("BC30201", StringComparison.Ordinal) >= 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Retry", "Inject", "After inject", "  ClsFunction", "Partial", "Member filter", "Engine compile", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "RunRule", "Run FAILED", "SetMyInfo", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Retry", "Inject", "After inject", "  ClsFunction", "Partial", "Member filter", "Engine compile", "Engine err", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -759,26 +759,20 @@ namespace RuleTrace
             }
 
             object compilerErrors = Get(result, "CompilerErrors");
-            if (HasCompilerErrors(compilerErrors))
+            DiagnoseEngineResult(result, cacheFolder);
+            object cacheHost = TryCacheRunHost(result, cacheFolder, r.Formula);
+            if (cacheHost != null)
             {
-                _log("");
-                _log("Phase 2      : موتور Sara خطا داد — vbc محلی صدا زده نمی‌شود");
-                LogCompilerErrors(compilerErrors, 15);
-                SaveMergedVb(compilerErrors, cacheFolder);
-                object designer = Get(result, "ClassDesinger");
-                if (designer == null)
-                {
-                    _log("Compile      : FAILED — ClassDesinger خالی است؛ اجرا ممکن نیست");
-                    _log("               ReCompile را خاموش بگذارید تا Cache موتور Sara استفاده شود.");
-                    _summaryCapture = false;
-                    PrintSummary();
-                    return 4;
-                }
-                _log("Compile      : ClassDesinger موجود است — اجرا با همان نتیجه موتور (بدون vbc)");
+                result = cacheHost;
+                _log("Phase 2      : اجرا از DLL موجود در Cache موتور (بدون vbc)");
             }
-            else
+            else if (HasCompilerErrors(compilerErrors) && !HasLiveInstance(result))
             {
-                _log("Compile      : OK");
+                _log("Phase 2      : موتور Sara کامپایل نکرد — نمونه فرمول Nothing است؛ SetMyInfo صدا زده نمی‌شود");
+                _log("               Cache DLL هم پیدا نشد. ReCompile را خاموش بگذارید یا یک‌بار فرمول را از UI سارا کامپایل کنید.");
+                _summaryCapture = false;
+                PrintSummary();
+                return 4;
             }
 
             ReportCache(cacheFolder);
@@ -968,6 +962,147 @@ namespace RuleTrace
             foreach (string f in files.Take(10)) _log("Cached       : " + f);
         }
 
+        private void DiagnoseEngineResult(object result, string cacheFolder)
+        {
+            if (result == null) return;
+            Type t = result.GetType();
+            _log("Result type  : " + t.FullName);
+            foreach (MethodInfo m in t.GetMethods(AnyInstance))
+            {
+                if (m.DeclaringType == typeof(object)) continue;
+                if (m.Name.IndexOf("SetMyInfo", StringComparison.OrdinalIgnoreCase) < 0
+                    && m.Name.IndexOf("SetParam", StringComparison.OrdinalIgnoreCase) < 0
+                    && !m.Name.Equals("Run", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                _log("Result meth  : " + m.Name + "(" + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name)) + ")");
+            }
+
+            object errors = Get(result, "CompilerErrors");
+            _log("Compile      : HasErrors=" + HasCompilerErrors(errors) + " liveInstance=" + HasLiveInstance(result));
+            LogCompilerErrors(errors, 8);
+
+            foreach (MemberInfo mi in t.GetMembers(AnyInstance | BindingFlags.DeclaredOnly))
+            {
+                FieldInfo f = mi as FieldInfo;
+                PropertyInfo p = mi as PropertyInfo;
+                if (f == null && p == null) continue;
+                if (p != null && p.GetIndexParameters().Length > 0) continue;
+                object v = null;
+                Try(() => v = f != null ? f.GetValue(result) : p.GetValue(result, null));
+                if (v == errors) continue;
+                string name = mi.Name;
+                if (name.IndexOf("Compiler", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                _log("Diagnose     : " + name + " = " + Short(v));
+            }
+
+            if (Directory.Exists(cacheFolder))
+            {
+                string[] dlls = Directory.GetFiles(cacheFolder, "*.dll", SearchOption.AllDirectories);
+                _log("Diagnose     : cache dll count=" + dlls.Length + " in " + cacheFolder);
+                foreach (string d in dlls.Take(12))
+                    _log("Diagnose     : " + d + "  " + new FileInfo(d).Length + " bytes");
+            }
+        }
+
+        private static bool HasLiveInstance(object result)
+        {
+            if (result == null || result is DirectFormulaHost) return result is DirectFormulaHost;
+            Type t = result.GetType();
+            foreach (string name in new[] { "Instance", "Out", "Formula", "Compiled", "Obj", "Object", "M_Out", "FormulaObject", "CompiledAssembly", "Assembly" })
+            {
+                object v = Get(result, name);
+                if (v == null) continue;
+                if (v is string) continue;
+                if (v is bool || v is int || v is Guid) continue;
+                return true;
+            }
+            foreach (FieldInfo f in t.GetFields(AnyInstance))
+            {
+                if (f.FieldType.IsPrimitive || f.FieldType == typeof(string) || f.FieldType == typeof(Guid)) continue;
+                if (f.Name.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (f.Name.IndexOf("ClassDesing", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                object v = null;
+                try { v = f.GetValue(result); } catch { continue; }
+                if (v != null && !(v is IEnumerable && !(v is string) && !(v is IDictionary)))
+                    return true;
+            }
+            return false;
+        }
+
+        private object TryCacheRunHost(object result, string cacheFolder, string formula)
+        {
+            var files = new List<string>();
+            CollectCacheDlls(cacheFolder, files);
+            string parent = Path.GetDirectoryName(cacheFolder);
+            if (!string.IsNullOrEmpty(parent)) CollectCacheDlls(parent, files);
+            if (!string.IsNullOrWhiteSpace(_s.DllPath))
+                CollectCacheDlls(Path.Combine(_s.DllPath, "SafaFormulaCache"), files);
+
+            foreach (string dll in files.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                string fn = Path.GetFileName(dll) ?? "";
+                if (fn.IndexOf("partial", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (dll.IndexOf("\\partial\\", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (fn.StartsWith("BIZ.", StringComparison.OrdinalIgnoreCase)) continue;
+                if (fn.IndexOf("SafaClass", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (fn.IndexOf("Newtonsoft", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                try
+                {
+                    Assembly asm = Assembly.LoadFrom(dll);
+                    Type type = FindFormulaType(asm, formula);
+                    if (type == null) continue;
+                    _log("Cache DLL    : " + dll + " -> " + type.FullName);
+                    return new DirectFormulaHost
+                    {
+                        ClassDesigner = Get(result, "ClassDesinger"),
+                        Assembly = asm,
+                        FormulaType = type,
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _log("Cache DLL    : skip " + fn + " — " + FirstLine(ex.Message));
+                }
+            }
+            return null;
+        }
+
+        private static void CollectCacheDlls(string folder, List<string> into)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
+            try
+            {
+                into.AddRange(Directory.GetFiles(folder, "*.dll", SearchOption.AllDirectories)
+                    .OrderByDescending(f => (Path.GetFileName(f) ?? "").IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ThenByDescending(f => new FileInfo(f).Length));
+            }
+            catch { }
+        }
+
+        private static Type FindFormulaType(Assembly asm, string formula)
+        {
+            Type[] types;
+            try { types = asm.GetExportedTypes(); }
+            catch (ReflectionTypeLoadException ex) { types = (ex.Types ?? Type.EmptyTypes).Where(t => t != null).ToArray(); }
+            catch { return null; }
+
+            var cands = new List<Type>();
+            foreach (Type t in types)
+            {
+                if (t == null || t.IsAbstract || !t.IsClass) continue;
+                MethodInfo run = t.GetMethod("Run", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (run == null) continue;
+                cands.Add(t);
+            }
+            if (cands.Count == 0) return null;
+            if (!string.IsNullOrWhiteSpace(formula))
+            {
+                Type named = cands.FirstOrDefault(t => t.Name.IndexOf(formula, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (named != null) return named;
+            }
+            return cands[0];
+        }
+
         private static bool HasCompilerErrors(object compilerErrors)
         {
             return compilerErrors != null && Convert.ToBoolean(Get(compilerErrors, "HasErrors") ?? false);
@@ -979,14 +1114,14 @@ namespace RuleTrace
             var en = compilerErrors as IEnumerable;
             if (en == null || compilerErrors is string)
             {
-                _log("  " + compilerErrors);
+                _log("Engine err  : " + compilerErrors);
                 return;
             }
             int shown = 0;
             foreach (object e in en)
             {
                 if (e == null || object.ReferenceEquals(e, compilerErrors)) continue;
-                if (shown++ < max) _log("  " + e);
+                if (shown++ < max) _log("Engine err  : " + e);
             }
             if (shown > max) _log("  ... (" + shown + " errors total)");
             if (shown == 0) _log("  " + compilerErrors);
