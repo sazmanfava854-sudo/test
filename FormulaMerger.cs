@@ -143,7 +143,7 @@ namespace RuleTrace
         {
             log("Merge path   : injected full class, M_Out=" + CountOccurrences(injected, "M_Out"));
             var stripped = StripAllOutDeclarations(NormalizeNewlines(injected));
-            string body = MoveOrphanCodeIntoClass(stripped.CleanedText, log);
+            string body = MergePreClassMethodsIntoClass(stripped.CleanedText, log);
             string merged = InsertCanonicalOutBlock(body, stripped.FirstMOut, stripped.FirstPropOut);
 
             var missingParams = DiscoverUndeclaredParameters(merged, cls, sources, log);
@@ -170,10 +170,10 @@ namespace RuleTrace
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         /// <summary>
-        /// ToString1 emits member bodies (SetParam assignments, Sub/Function) BEFORE the Class line, so they are at
-        /// file scope and cannot see class properties (BC30451 at the top of the file). Relocate them into the class.
+        /// ToString1 puts ~20 member Sub/Function bodies before the Class line (file scope). Merge complete method
+        /// blocks only — never dump raw lines (causes BC30289 nested-in-method errors).
         /// </summary>
-        private static string MoveOrphanCodeIntoClass(string vb, Action<string> log)
+        private static string MergePreClassMethodsIntoClass(string vb, Action<string> log)
         {
             if (string.IsNullOrWhiteSpace(vb)) return vb;
             string[] lines = NormalizeNewlines(vb).Split('\n');
@@ -216,28 +216,52 @@ namespace RuleTrace
                 else orphanAfter.Add(lines[i]);
             }
 
+            string innerText = string.Join("\n", lines.Skip(classIdx + 1).Take(endClassIdx - classIdx - 1));
+            var orphanMethods = ExtractMethodBlocks(string.Join("\n", orphanBefore));
+            var innerMethods = ExtractMethodBlocks(innerText);
+            var afterMethods = ExtractMethodBlocks(string.Join("\n", orphanAfter));
+
             if (orphanBefore.Count == 0 && orphanAfter.Count == 0)
             {
                 log("Merge struct : class scope already correct (Class at line " + (classIdx + 1) + ")");
                 return vb;
             }
+            if (orphanMethods.Count == 0 && afterMethods.Count == 0)
+                log("WARN merge   : " + orphanBefore.Count + " pre-Class line(s) but no Sub/Function blocks extracted — check attributes");
 
-            log("Merge struct : moved " + orphanBefore.Count + " line(s) from before Class and "
-                + orphanAfter.Count + " line(s) from after End Class into the class body");
+            var methodMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string block in innerMethods)
+            {
+                string key = MethodKey(block);
+                if (!string.IsNullOrEmpty(key)) methodMap[key] = block;
+            }
+            int added = 0, replaced = 0;
+            foreach (string block in orphanMethods.Concat(afterMethods))
+            {
+                string key = MethodKey(block);
+                if (string.IsNullOrEmpty(key)) continue;
+                if (!methodMap.ContainsKey(key)) { methodMap[key] = block; added++; }
+                else if (block.Length > methodMap[key].Length) { methodMap[key] = block; replaced++; }
+            }
 
-            var sb = new StringBuilder(vb.Length + 512);
+            string classShell = StripMethodsFromShell(innerText);
+
+            log("Merge struct : merged " + orphanMethods.Count + " pre-Class method block(s) into class ("
+                + added + " new, " + replaced + " replaced with longer body)");
+
+            var sb = new StringBuilder(vb.Length + 8192);
             foreach (string l in header) sb.Append(l).Append('\n');
             sb.Append(lines[classIdx]).Append('\n');
-            if (orphanBefore.Count > 0)
+            sb.Append(classShell);
+            if (!classShell.EndsWith("\n", StringComparison.Ordinal)) sb.Append('\n');
+            if (methodMap.Count > 0)
             {
-                sb.Append("' --- RuleTrace: relocated pre-Class member code ---").Append('\n');
-                foreach (string l in orphanBefore) sb.Append(l).Append('\n');
-            }
-            for (int i = classIdx + 1; i < endClassIdx; i++) sb.Append(lines[i]).Append('\n');
-            if (orphanAfter.Count > 0)
-            {
-                sb.Append("' --- RuleTrace: relocated post-Class member code ---").Append('\n');
-                foreach (string l in orphanAfter) sb.Append(l).Append('\n');
+                sb.AppendLine("' --- RuleTrace: member Sub/Function from pre-Class region ---");
+                foreach (var kv in methodMap.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine(kv.Value);
+                    sb.AppendLine();
+                }
             }
             sb.Append(lines[endClassIdx]).Append('\n');
             foreach (string l in trailer) sb.Append(l).Append('\n');
@@ -976,13 +1000,16 @@ namespace RuleTrace
             string[] lines = norm.Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
-                if (!IsMethodStartLine(lines[i])) continue;
+                if (!LineDeclaresMethod(lines[i])) continue;
+                int start = i;
+                while (start > 0 && IsMethodAttributeOrBlankLine(lines[start - 1]))
+                    start--;
                 int depth = 0;
                 var sb = new StringBuilder();
-                for (int j = i; j < lines.Length; j++)
+                for (int j = start; j < lines.Length; j++)
                 {
                     sb.Append(lines[j]).Append('\n');
-                    if (IsMethodStartLine(lines[j]))
+                    if (LineDeclaresMethod(lines[j]))
                         depth++;
                     else if (IsMethodEndLine(lines[j]))
                     {
@@ -1001,11 +1028,22 @@ namespace RuleTrace
             return blocks;
         }
 
-        private static bool IsMethodStartLine(string line)
+        /// <summary>True when line declares Sub/Function (may follow &lt;DisplayName&gt; on same or prior line).</summary>
+        private static bool LineDeclaresMethod(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return false;
             string t = line.TrimStart();
-            return Regex.IsMatch(t, @"^(?:(?:Public|Private|Protected|Friend|Partial)\s+)*(?:Overrides\s+)?(?:Sub|Function)\s+\w+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (Regex.IsMatch(t, @"^End\s+(?:Sub|Function)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return false;
+            return Regex.IsMatch(t, @"(?:Sub|Function)\s+\w+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static bool IsMethodStartLine(string line) => LineDeclaresMethod(line);
+
+        private static bool IsMethodAttributeOrBlankLine(string line)
+        {
+            string t = (line ?? string.Empty).Trim();
+            return t.Length == 0 || t.StartsWith("<", StringComparison.Ordinal);
         }
 
         private static bool IsMethodEndLine(string line)

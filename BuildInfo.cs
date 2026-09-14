@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "merge-v15-class-scope-fix";
+        public const string Label = "merge-v16-method-blocks-only";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — relocate pre-Class member code into class body";
+                return "RuleTrace " + Label + " (v" + v + ") — merge pre-Class Sub/Function blocks only";
             }
         }
     }
