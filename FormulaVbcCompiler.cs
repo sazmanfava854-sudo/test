@@ -267,7 +267,7 @@ namespace RuleTrace
             return list;
         }
 
-        /// <summary>vbc.exe auto-references mscorlib/System/System.Core — pass only formula DLLs + extras.</summary>
+        /// <summary>vbc.exe auto-references mscorlib/System/System.Core/System.Data — formula DLLs only.</summary>
         private static List<string> CollectReferencesForVbcExe(string dllFolder, Action<string> log)
         {
             var list = new List<string>();
@@ -280,9 +280,7 @@ namespace RuleTrace
                     AddRef(list, seenPaths, seenNames, Path.Combine(dllFolder, name));
             }
 
-            AddTypeRef(list, seenPaths, seenNames, typeof(System.Data.DataTable));
-            AddTypeRef(list, seenPaths, seenNames, typeof(System.Xml.XmlDocument));
-            log("VBC exe refs : " + list.Count + " assemblies (implicit mscorlib/System.Core omitted)");
+            log("VBC exe refs : " + list.Count + " formula DLL(s) only (framework refs implicit)");
             return list;
         }
 

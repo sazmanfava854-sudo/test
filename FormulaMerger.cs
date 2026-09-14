@@ -129,8 +129,9 @@ namespace RuleTrace
             log("Merge shell  : " + shellSource + " len=" + shell.Length + ", M_Out=" + shellMOut);
 
             shell = StripMethodsFromShell(shell);
-            int shellMOutAfter = CountOccurrences(shell, "M_Out");
-            log("Merge shell  : after stripping stub methods, M_Out=" + shellMOutAfter);
+            shell = StripShellOutArtifacts(shell);
+            int shellMOutAfter = CountMOutDeclarations(shell);
+            log("Merge shell  : after stripping stubs, M_Out decls=" + shellMOutAfter);
 
             var shellNames = CollectFieldNames(shell);
             var methodMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -161,7 +162,8 @@ namespace RuleTrace
                 {
                     string key = MethodKey(block);
                     if (string.IsNullOrEmpty(key)) continue;
-                    methodMap[key] = block;
+                    string cleaned = RemoveMOutPropertyBlocks(NormalizeNewlines(block));
+                    methodMap[key] = cleaned.Replace("\n", "\r\n");
                     methodCount++;
                 }
             }
@@ -190,11 +192,12 @@ namespace RuleTrace
                 sb.AppendLine();
             }
             sb.AppendLine(shell.Substring(endClass));
-            string merged = RemoveDuplicateMOutDeclarations(sb.ToString());
-            int totalMOut = CountOccurrences(merged, "M_Out");
-            log("Merged VB    : " + merged.Length + " chars, M_Out=" + totalMOut + " (expect 1–2)");
-            if (totalMOut > 3)
-                log("WARN merge   : still " + totalMOut + " M_Out — send RuleTrace_merged.vb");
+            string merged = RemoveDuplicateOutArtifacts(sb.ToString());
+            int mOutDecls = CountMOutDeclarations(merged);
+            int outProps = CountPropertyOutDeclarations(merged);
+            log("Merged VB    : " + merged.Length + " chars, M_Out decls=" + mOutDecls + ", Property Out=" + outProps + " (expect 1 each)");
+            if (mOutDecls > 1 || outProps > 1)
+                log("WARN merge   : duplicate Out/M_Out — send RuleTrace_merged.vb");
             return PrependStandardImports(merged);
         }
 
@@ -218,13 +221,19 @@ namespace RuleTrace
                 if (norm.IndexOf(imp, StringComparison.OrdinalIgnoreCase) >= 0) continue;
                 sb.AppendLine(imp);
             }
+            string result = merged;
             if (sb.Length > 0)
             {
                 sb.AppendLine();
                 sb.Append(merged);
-                return sb.ToString();
+                result = sb.ToString();
             }
-            return merged;
+            return FixSerializableAttribute(result);
+        }
+
+        private static string FixSerializableAttribute(string merged)
+        {
+            return Regex.Replace(merged, @"<\s*Serializable\s*>", "<Serializable()>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
         /// <summary>Class shell from ToString1 (~18KB). Never use ToString() — after inject it embeds all bodies (~1MB, 100× M_Out).</summary>
@@ -286,11 +295,16 @@ namespace RuleTrace
         {
             if (string.IsNullOrWhiteSpace(shell)) return shell;
             string norm = NormalizeNewlines(shell);
-            var methods = ExtractMethodBlocks(norm);
-            if (methods.Count == 0) return shell.Replace("\n", "\r\n");
-            foreach (string block in methods)
-                norm = norm.Replace(block, string.Empty);
+            foreach (string block in ExtractMethodBlocks(norm))
+                norm = norm.Replace(NormalizeNewlines(block).Replace("\r\n", "\n"), string.Empty);
             return norm.Replace("\n", "\r\n").Trim();
+        }
+
+        /// <summary>Shell ToString1 often embeds 20× Private M_Out + Property Out — keep first of each only.</summary>
+        private static string StripShellOutArtifacts(string shell)
+        {
+            if (string.IsNullOrWhiteSpace(shell)) return shell;
+            return RemoveDuplicateOutArtifacts(NormalizeNewlines(shell)).Replace("\n", "\r\n").Trim();
         }
 
         /// <summary>Class-level Dim/Private/Public fields from member bodies (TempMasahat, TmpDt, …).</summary>
@@ -403,61 +417,86 @@ namespace RuleTrace
 
         private static string RemoveMOutPropertyBlocks(string norm)
         {
-            norm = Regex.Replace(norm, @"(?ms)^\s*Private\s+M_Out\b[^\n]*\n?", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            norm = Regex.Replace(norm, @"(?m)^\s*Private\s+M_Out\b[^\n]*\n?", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            norm = Regex.Replace(norm, @"(?m)^\s*Public\s+Property\s+Out\b[^\n]*\n?", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            norm = Regex.Replace(norm, @"(?m)^\s*Private\s+Property\s+Out\b[^\n]*\n?", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             norm = Regex.Replace(norm, @"(?ms)^\s*Public\s+Property\s+Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             norm = Regex.Replace(norm, @"(?ms)^\s*Private\s+Property\s+Out\b.*?^End\s+Property\s*", "", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             return norm;
         }
 
-        /// <summary>Keep first Private M_Out + first Public Property Out; drop duplicate declarations.</summary>
-        private static string RemoveDuplicateMOutDeclarations(string merged)
+        /// <summary>Keep first Private M_Out + first Public Property Out (auto-property or Get/Set block).</summary>
+        private static string RemoveDuplicateOutArtifacts(string text)
         {
-            string norm = NormalizeNewlines(merged);
-            norm = KeepFirstLineStartingWith(norm, "Private M_Out");
-            norm = KeepFirstPropertyBlock(norm, "Public Property Out");
-            return norm.Replace("\n", "\r\n");
-        }
-
-        private static string KeepFirstLineStartingWith(string text, string prefix)
-        {
-            bool kept = false;
+            bool keptMOut = false;
+            bool keptPropOut = false;
+            bool skippingDupProp = false;
+            bool keepingPropBlock = false;
             var lines = new List<string>();
-            foreach (string line in text.Split('\n'))
-            {
-                if (line.TrimStart().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (kept) continue;
-                    kept = true;
-                }
-                lines.Add(line);
-            }
-            return string.Join("\n", lines);
-        }
-
-        private static string KeepFirstPropertyBlock(string text, string propertyPrefix)
-        {
-            bool kept = false;
-            bool skipping = false;
-            var lines = new List<string>();
-            foreach (string line in text.Split('\n'))
+            foreach (string line in NormalizeNewlines(text).Split('\n'))
             {
                 string t = line.TrimStart();
-                if (t.StartsWith(propertyPrefix, StringComparison.OrdinalIgnoreCase))
+                if (skippingDupProp)
                 {
-                    if (kept) { skipping = true; continue; }
-                    kept = true;
-                    skipping = false;
+                    if (t.StartsWith("End Property", StringComparison.OrdinalIgnoreCase)) skippingDupProp = false;
+                    continue;
+                }
+                if (keepingPropBlock)
+                {
+                    lines.Add(line);
+                    if (t.StartsWith("End Property", StringComparison.OrdinalIgnoreCase)) keepingPropBlock = false;
+                    continue;
+                }
+                if (t.StartsWith("Private M_Out", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (keptMOut) continue;
+                    keptMOut = true;
                     lines.Add(line);
                     continue;
                 }
-                if (skipping)
+                if (IsPropertyOutLine(t))
                 {
-                    if (t.StartsWith("End Property", StringComparison.OrdinalIgnoreCase)) skipping = false;
+                    if (keptPropOut)
+                    {
+                        if (IsAutoPropertyOutLine(t)) continue;
+                        skippingDupProp = true;
+                        continue;
+                    }
+                    keptPropOut = true;
+                    lines.Add(line);
+                    if (!IsAutoPropertyOutLine(t)) keepingPropBlock = true;
                     continue;
                 }
                 lines.Add(line);
             }
             return string.Join("\n", lines);
+        }
+
+        private static bool IsPropertyOutLine(string t)
+        {
+            return Regex.IsMatch(t, @"^Public\s+Property\s+Out\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static bool IsAutoPropertyOutLine(string t)
+        {
+            return Regex.IsMatch(t, @"^Public\s+Property\s+Out\b.*\bAs\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                && !Regex.IsMatch(t, @"\bGet\b|\bSet\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static int CountMOutDeclarations(string text)
+        {
+            int n = 0;
+            foreach (string line in NormalizeNewlines(text).Split('\n'))
+                if (line.TrimStart().StartsWith("Private M_Out", StringComparison.OrdinalIgnoreCase)) n++;
+            return n;
+        }
+
+        private static int CountPropertyOutDeclarations(string text)
+        {
+            int n = 0;
+            foreach (string line in NormalizeNewlines(text).Split('\n'))
+                if (IsPropertyOutLine(line.TrimStart())) n++;
+            return n;
         }
 
         private static List<string> ExtractMethodBlocks(string norm)
