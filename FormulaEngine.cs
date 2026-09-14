@@ -120,10 +120,13 @@ namespace RuleTrace
         {
             if (string.IsNullOrWhiteSpace(m)) return false;
             string t = m.TrimStart();
-            if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) || t.IndexOf("BC30269", StringComparison.Ordinal) >= 0
-                || t.IndexOf("BC30260", StringComparison.Ordinal) >= 0 || t.IndexOf("BC30201", StringComparison.Ordinal) >= 0)
-                return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Retry", "Inject", "API ", "Engine compile", "Engine err", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "Compile ", "Compiling", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            if (t.StartsWith("Engine err", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Engine compile", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Inject", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("API ", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Phase ", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "Compile ", "Compiling", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -1059,7 +1062,14 @@ namespace RuleTrace
             LogCompileSurface(cls, "ClsClass");
             LogCompileSurface(result, "ClsRunRuleResult");
 
-            object compiled = TryEngineNativeCompile(cls, cacheFolder);
+            object compiled = TryCompileToString1(result, cls, cacheFolder);
+            if (compiled != null && HasLiveInstance(compiled))
+            {
+                _log("Inject       : Compile(ToString1, ImportsDll) produced live Instanc/M_Assm");
+                return compiled;
+            }
+
+            compiled = TryEngineNativeCompile(cls, cacheFolder);
             if (compiled != null && HasLiveInstance(compiled))
             {
                 _log("Inject       : engine compile produced live Instanc/M_Assm");
@@ -1085,6 +1095,163 @@ namespace RuleTrace
                 return result;
             }
             return compiled;
+        }
+
+        /// <summary>Sara API: ClsRunRuleResult.Compile(vbSource, ImportsDll). ToString1 after inject is the full class (~1.8MB).</summary>
+        private object TryCompileToString1(object result, object cls, string cacheFolder)
+        {
+            string source = Get(cls, "ToString1") as string;
+            if (string.IsNullOrEmpty(source) || source.Length < 20000)
+            {
+                _log("Engine compile: ToString1 missing/short (" + (source == null ? 0 : source.Length) + ")");
+                return null;
+            }
+
+            try
+            {
+                string dump = Path.Combine(cacheFolder, "Solh_ToString1.vb");
+                File.WriteAllText(dump, source, Encoding.UTF8);
+                _log("Engine compile: wrote " + dump + " (" + source.Length + " chars)");
+            }
+            catch (Exception ex) { _log("Engine compile: cannot write ToString1 — " + FirstLine(ex.Message)); }
+
+            MethodInfo compile = null;
+            foreach (MethodInfo m in result.GetType().GetMethods(AnyInstance))
+            {
+                if (!m.Name.Equals("Compile", StringComparison.OrdinalIgnoreCase)) continue;
+                ParameterInfo[] ps = m.GetParameters();
+                if (ps.Length == 2 && ps[0].ParameterType == typeof(string))
+                {
+                    compile = m;
+                    break;
+                }
+            }
+            if (compile == null)
+            {
+                _log("Engine compile: Compile(String, List) not found on ClsRunRuleResult");
+                return null;
+            }
+
+            Type listType = compile.GetParameters()[1].ParameterType;
+            object imports = Get(cls, "ImportsDll");
+            _log("Engine compile: Compile(" + compile.GetParameters()[0].ParameterType.Name + ", " + listType.Name + ")");
+            LogList("ImportsDll", imports);
+
+            object listArg = CoerceImportList(listType, imports);
+            if (listArg == null)
+            {
+                _log("Engine compile: could not build ImportsDll argument");
+                return null;
+            }
+            LogList("Compile arg", listArg);
+
+            object ret = null;
+            try
+            {
+                ret = compile.Invoke(result, new object[] { source, listArg });
+                _log("Engine compile: Compile() returned " + (ret == null ? "null" : ret.GetType().Name + " " + Short(ret)));
+            }
+            catch (TargetInvocationException tie)
+            {
+                Exception inner = tie.InnerException ?? tie;
+                _log("Engine compile: Compile() FAILED " + inner.GetType().Name + ": " + FirstLine(inner.Message));
+                return null;
+            }
+
+            if (ret != null && Get(result, "Instanc") == null && Get(result, "M_Instanc") == null)
+            {
+                TrySet(result, "Instanc", ret);
+                TrySet(result, "M_Instanc", ret);
+            }
+            if (ret is Assembly)
+            {
+                TrySet(result, "M_Assm", ret);
+            }
+
+            object errors = Get(result, "CompilerErrors");
+            _log("Engine compile: after Compile live=" + HasLiveInstance(result)
+                 + " Instanc=" + (Get(result, "Instanc") == null && Get(result, "M_Instanc") == null ? "null" : "set")
+                 + " M_Assm=" + (Get(result, "M_Assm") == null ? "null" : Get(result, "M_Assm").GetType().Name)
+                 + " HasErrors=" + HasCompilerErrors(errors)
+                 + " Count=" + (Get(errors, "Count") ?? "?"));
+            LogCompilerErrors(errors, 12);
+
+            if (HasLiveInstance(result)) return result;
+
+            Assembly asm = ret as Assembly ?? Get(result, "M_Assm") as Assembly;
+            if (asm != null)
+            {
+                Type formulaType = FindFormulaType(asm, "Solh") ?? FindFormulaType(asm, null);
+                if (formulaType != null)
+                {
+                    _log("Engine compile: wrapping " + formulaType.FullName + " from compiled assembly");
+                    return new DirectFormulaHost { ClassDesigner = cls, Assembly = asm, FormulaType = formulaType };
+                }
+            }
+            return null;
+        }
+
+        private void LogList(string label, object list)
+        {
+            if (list == null) { _log("Engine compile: " + label + " = null"); return; }
+            var en = list as IEnumerable;
+            if (en == null || list is string)
+            {
+                _log("Engine compile: " + label + " = " + list.GetType().Name);
+                return;
+            }
+            int n = 0;
+            var preview = new List<string>();
+            foreach (object item in en)
+            {
+                if (item == null || object.ReferenceEquals(item, list)) continue;
+                n++;
+                if (preview.Count < 12) preview.Add(Convert.ToString(item));
+            }
+            _log("Engine compile: " + label + " " + list.GetType().Name + " count=" + n
+                 + (preview.Count == 0 ? "" : " [" + string.Join(", ", preview) + (n > preview.Count ? ", ..." : "") + "]"));
+        }
+
+        private object CoerceImportList(Type listType, object imports)
+        {
+            if (listType.IsInstanceOfType(imports)) return imports;
+
+            Type itemType = typeof(string);
+            if (listType.IsGenericType)
+            {
+                Type[] ga = listType.GetGenericArguments();
+                if (ga.Length == 1) itemType = ga[0];
+            }
+
+            object created;
+            try { created = Activator.CreateInstance(listType); }
+            catch
+            {
+                try { created = Activator.CreateInstance(typeof(List<>).MakeGenericType(itemType)); }
+                catch { return imports; }
+            }
+            var addable = created as IList;
+            if (addable == null) return imports ?? created;
+
+            if (imports is IEnumerable && !(imports is string))
+            {
+                foreach (object item in (IEnumerable)imports)
+                {
+                    if (item == null || object.ReferenceEquals(item, imports)) continue;
+                    try { addable.Add(itemType.IsInstanceOfType(item) ? item : Convert.ToString(item)); } catch { }
+                }
+            }
+            if (addable.Count == 0)
+            {
+                foreach (string name in new[] { "BIZ.SC.dll", "BIZ.SA.dll", "SafaClassDesingerNew.dll", "Newtonsoft.Json.dll" })
+                {
+                    string path = FindFile(_s.DllPath, name);
+                    if (path == null) continue;
+                    object val = itemType == typeof(string) ? (object)path : path;
+                    try { addable.Add(val); } catch { }
+                }
+            }
+            return created;
         }
 
         private void LogDesignerSourceLen(object cls, string tag)
@@ -1207,20 +1374,48 @@ namespace RuleTrace
         private void LogCompilerErrors(object compilerErrors, int max)
         {
             if (compilerErrors == null) return;
-            var en = compilerErrors as IEnumerable;
+            int shown = 0;
+            int count = 0;
+            Try(() => count = Convert.ToInt32(Get(compilerErrors, "Count") ?? 0));
+            if (count > 0)
+            {
+                PropertyInfo item = compilerErrors.GetType().GetProperty("Item", new[] { typeof(int) });
+                for (int i = 0; i < count && shown < max; i++)
+                {
+                    object e = null;
+                    try
+                    {
+                        if (item != null) e = item.GetValue(compilerErrors, new object[] { i });
+                    }
+                    catch { }
+                    if (e == null) continue;
+                    string num = Convert.ToString(Get(e, "ErrorNumber") ?? "");
+                    string text = Convert.ToString(Get(e, "ErrorText") ?? e);
+                    _log("Engine err  : " + (string.IsNullOrEmpty(num) ? "" : num + " ") + FirstLine(text));
+                    shown++;
+                }
+                if (count > shown) _log("Engine err  : ... (" + count + " errors total)");
+                if (shown > 0) return;
+            }
+
+            IEnumerable en = compilerErrors as IEnumerable;
             if (en == null || compilerErrors is string)
             {
-                _log("Engine err  : " + compilerErrors);
+                _log("Engine err  : " + FirstLine(Convert.ToString(compilerErrors)));
                 return;
             }
-            int shown = 0;
             foreach (object e in en)
             {
                 if (e == null || object.ReferenceEquals(e, compilerErrors)) continue;
-                if (shown++ < max) _log("Engine err  : " + e);
+                if (shown < max)
+                {
+                    string num = Convert.ToString(Get(e, "ErrorNumber") ?? "");
+                    string text = Convert.ToString(Get(e, "ErrorText") ?? e);
+                    _log("Engine err  : " + (string.IsNullOrEmpty(num) ? "" : num + " ") + FirstLine(text));
+                }
+                shown++;
             }
-            if (shown > max) _log("  ... (" + shown + " errors total)");
-            if (shown == 0) _log("  " + compilerErrors);
+            if (shown > max) _log("Engine err  : ... (" + shown + " errors total)");
         }
 
         /// <summary>Inject XmlBody into ClsFunction; compile per-member partial files (Sara model) — never glue all XmlBody into one VB.</summary>
