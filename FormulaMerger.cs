@@ -50,8 +50,8 @@ namespace RuleTrace
             return null;
         }
 
-        /// <summary>Creates ClsClass and copies XmlBody &lt;Body&gt; text into each ClsFunction (by NidFunction).</summary>
-        public static object CreateClassWithBodies(Assembly safa, int nid, Guid cityGuid, bool recompile, IList<MemberSource> sources, Action<string> log)
+        /// <summary>Creates ClsClass without injecting member bodies (use for class shell / ToString1).</summary>
+        public static object CreateClass(Assembly safa, int nid, Guid cityGuid, bool recompile)
         {
             Type tCls = safa.GetType("SafaClassDesingerNew.ClsClass", true);
             ConstructorInfo ctor = tCls.GetConstructors(AnyInstance).FirstOrDefault(c => c.GetParameters().Length == 3)
@@ -68,8 +68,13 @@ namespace RuleTrace
                 else if (pt == typeof(string)) args[i] = cityGuid.ToString("D");
                 else args[i] = Convert.ChangeType(nid, pt);
             }
+            return ctor.Invoke(args);
+        }
 
-            object cls = ctor.Invoke(args);
+        /// <summary>Creates ClsClass and copies XmlBody &lt;Body&gt; text into each ClsFunction (by NidFunction).</summary>
+        public static object CreateClassWithBodies(Assembly safa, int nid, Guid cityGuid, bool recompile, IList<MemberSource> sources, Action<string> log)
+        {
+            object cls = CreateClass(safa, nid, cityGuid, recompile);
             int injected = InjectBodies(cls, sources, log);
             log("Inject       : " + injected + "/" + sources.Count + " ClsFunction.Body set from XmlBody <Body>");
             return cls;
@@ -115,11 +120,11 @@ namespace RuleTrace
         /// <summary>Build one VB source: full class shell (ToString1) once + stripped member Sub/Function bodies inside.</summary>
         public static string BuildMergedVb(object cls, IList<MemberSource> sources, Action<string> log)
         {
-            string shell = GetClassShell(cls);
+            string shellSource;
+            string shell = GetClassShell(cls, out shellSource);
             if (shell.Length < 500)
                 throw new InvalidOperationException("class shell too short — ToString1 / GetStrOutClass empty");
 
-            string shellSource = shell.Length > 5000 ? "ToString1" : (shell.Length > 1500 ? "mixed" : "GetStrOutClass");
             int shellMOut = CountOccurrences(shell, "M_Out");
             log("Merge shell  : " + shellSource + " len=" + shell.Length + ", M_Out=" + shellMOut);
 
@@ -165,18 +170,28 @@ namespace RuleTrace
             return merged;
         }
 
-        /// <summary>Full VB class header from ClsClass.ToString1 (~18KB); GetStrOutClass is only ~1KB and unusable.</summary>
-        private static string GetClassShell(object cls)
+        /// <summary>Class shell from ToString1 (~18KB). Never use ToString() — after inject it embeds all bodies (~1MB, 100× M_Out).</summary>
+        private static string GetClassShell(object cls, out string source)
         {
-            string best = string.Empty;
-            foreach (string name in new[] { "ToString1", "ToString", "ClassSource", "FullText" })
+            source = "none";
+            string s = ReadStringMember(cls, "ToString1");
+            if (IsReasonableShell(s)) { source = "ToString1"; return s; }
+
+            s = InvokeString(cls, "GetStrOutClass");
+            if (!string.IsNullOrEmpty(s) && s.Length >= 200 && s.Length <= 250000) { source = "GetStrOutClass"; return s; }
+
+            foreach (string name in new[] { "ClassSource", "FullText" })
             {
-                string s = ReadStringMember(cls, name);
-                if (s != null && s.Length > best.Length) best = s;
+                s = ReadStringMember(cls, name);
+                if (IsReasonableShell(s)) { source = name; return s; }
             }
-            string getStr = InvokeString(cls, "GetStrOutClass");
-            if (!string.IsNullOrEmpty(getStr) && getStr.Length > best.Length) best = getStr;
-            return best ?? string.Empty;
+            return string.Empty;
+        }
+
+        private static bool IsReasonableShell(string s)
+        {
+            return !string.IsNullOrEmpty(s) && s.Length >= 500 && s.Length <= 250000
+                && s.IndexOf("End Class", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string ReadStringMember(object o, string name)

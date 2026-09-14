@@ -2,9 +2,12 @@ using System;
 using System.CodeDom.Compiler;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.VisualBasic;
 
 namespace RuleTrace
@@ -33,25 +36,142 @@ namespace RuleTrace
             Directory.CreateDirectory(cacheFolder);
             string vbPath = Path.Combine(cacheFolder, "RuleTrace_merged.vb");
             string dllPath = Path.Combine(cacheFolder, "Solh_ruletrace.dll");
-            File.WriteAllText(vbPath, mergedVb, System.Text.Encoding.UTF8);
+            File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
 
-            var refs = CollectReferences(dllFolder);
+            List<string> refs = CollectReferences(dllFolder, log);
             log("VBC compile  : " + refs.Count + " reference DLL(s), source " + (mergedVb.Length / 1024) + " KB");
 
-            var parms = new CompilerParameters
+            outcome = TryCompileWithCodeDom(vbPath, dllPath, cacheFolder, refs, log);
+            if (outcome.Ok) return outcome;
+
+            log("VBC retry    : VBCodeProvider failed — trying vbc.exe ...");
+            var exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, refs, log);
+            if (exeOutcome.Ok) return exeOutcome;
+
+            foreach (string e in exeOutcome.Errors)
+                if (!outcome.Errors.Contains(e)) outcome.Errors.Add(e);
+            return outcome;
+        }
+
+        private static CompileOutcome TryCompileWithCodeDom(string vbPath, string dllPath, string cacheFolder, List<string> refs, Action<string> log)
+        {
+            var outcome = new CompileOutcome();
+            try
             {
-                GenerateExecutable = false,
-                GenerateInMemory = false,
-                OutputAssembly = dllPath,
-                CompilerOptions = "/optionstrict- /optioninfer+ /nowarn:42016,42017,42018,42019,42032",
-                TempFiles = new TempFileCollection(cacheFolder, false),
-            };
-            foreach (string r in refs) parms.ReferencedAssemblies.Add(r);
+                var parms = new CompilerParameters
+                {
+                    GenerateExecutable = false,
+                    GenerateInMemory = false,
+                    OutputAssembly = dllPath,
+                    CompilerOptions = "/optionstrict- /optioninfer+ /nowarn:42016,42017,42018,42019,42032",
+                    TempFiles = new TempFileCollection(cacheFolder, false),
+                };
+                foreach (string r in refs) parms.ReferencedAssemblies.Add(r);
 
-            CompilerResults cr;
-            using (var prov = new VBCodeProvider())
-                cr = prov.CompileAssemblyFromFile(parms, vbPath);
+                CompilerResults cr;
+                using (var prov = new VBCodeProvider())
+                    cr = prov.CompileAssemblyFromFile(parms, vbPath);
 
+                return FinishCompileOutcome(cr, dllPath, log, outcome);
+            }
+            catch (Exception ex)
+            {
+                string msg = ex.Message;
+                if (ex.InnerException != null) msg += " — " + ex.InnerException.Message;
+                outcome.Errors.Add("VBCodeProvider: " + msg);
+                log("VBC warn     : " + msg);
+                return outcome;
+            }
+        }
+
+        private static CompileOutcome TryCompileWithVbcExe(string vbPath, string dllPath, List<string> refs, Action<string> log)
+        {
+            var outcome = new CompileOutcome();
+            string vbc = FindVbcExe();
+            if (string.IsNullOrEmpty(vbc))
+            {
+                outcome.Errors.Add("vbc.exe not found");
+                log("VBC warn     : vbc.exe not found under .NET Framework");
+                return outcome;
+            }
+
+            var args = new StringBuilder();
+            args.Append("/nologo /target:library /optionstrict- /optioninfer+ ");
+            args.Append("/out:\"").Append(dllPath).Append("\" ");
+            foreach (string r in refs)
+                args.Append("/reference:\"").Append(r).Append("\" ");
+            args.Append("\"").Append(vbPath).Append("\"");
+
+            log("VBC exe      : " + vbc);
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = vbc,
+                    Arguments = args.ToString(),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+                using (var p = Process.Start(psi))
+                {
+                    string stdout = p.StandardOutput.ReadToEnd();
+                    string stderr = p.StandardError.ReadToEnd();
+                    p.WaitForExit(300000);
+                    if (p.ExitCode != 0)
+                    {
+                        foreach (string line in (stdout + "\n" + stderr).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            if (line.IndexOf("error", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                            outcome.Errors.Add("vbc.exe : " + line);
+                            if (outcome.Errors.Count <= 25) log("  " + line);
+                        }
+                        if (outcome.Errors.Count == 0)
+                        {
+                            outcome.Errors.Add("vbc.exe exit " + p.ExitCode);
+                            log("VBC FAILED   : vbc.exe exit " + p.ExitCode);
+                        }
+                        return outcome;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                outcome.Errors.Add("vbc.exe: " + ex.Message);
+                log("VBC warn     : " + ex.Message);
+                return outcome;
+            }
+
+            if (!File.Exists(dllPath))
+            {
+                outcome.Errors.Add("vbc.exe produced no DLL");
+                return outcome;
+            }
+
+            try
+            {
+                outcome.Assembly = Assembly.LoadFrom(dllPath);
+                outcome.OutputPath = dllPath;
+                outcome.FormulaType = FindFormulaType(outcome.Assembly);
+                if (outcome.FormulaType == null)
+                {
+                    outcome.Errors.Add("no formula type with Run() in vbc.exe output");
+                    return outcome;
+                }
+                log("VBC OK       : " + outcome.FormulaType.FullName + " -> " + dllPath + " (vbc.exe)");
+                return outcome;
+            }
+            catch (Exception ex)
+            {
+                outcome.Errors.Add("load DLL: " + ex.Message);
+                log("VBC warn     : " + ex.Message);
+                return outcome;
+            }
+        }
+
+        private static CompileOutcome FinishCompileOutcome(CompilerResults cr, string dllPath, Action<string> log, CompileOutcome outcome)
+        {
             if (cr.Errors.HasErrors)
             {
                 int shown = 0;
@@ -66,7 +186,12 @@ namespace RuleTrace
                 return outcome;
             }
 
-            outcome.Assembly = cr.CompiledAssembly ?? (File.Exists(dllPath) ? Assembly.LoadFrom(dllPath) : null);
+            outcome.Assembly = cr.CompiledAssembly;
+            if (outcome.Assembly == null && File.Exists(dllPath))
+            {
+                try { outcome.Assembly = Assembly.LoadFrom(dllPath); }
+                catch (Exception ex) { outcome.Errors.Add("load DLL: " + ex.Message); return outcome; }
+            }
             outcome.OutputPath = dllPath;
             if (outcome.Assembly == null)
             {
@@ -74,10 +199,7 @@ namespace RuleTrace
                 return outcome;
             }
 
-            outcome.FormulaType = outcome.Assembly.GetTypes()
-                .FirstOrDefault(t => t.IsClass && !t.IsAbstract && t.IsPublic && t.GetMethods().Any(m => m.Name.Equals("Run", StringComparison.OrdinalIgnoreCase)))
-                ?? outcome.Assembly.GetTypes().FirstOrDefault(t => t.IsClass && t.IsPublic && t.Name.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0);
-
+            outcome.FormulaType = FindFormulaType(outcome.Assembly);
             if (outcome.FormulaType == null)
             {
                 outcome.Errors.Add("no formula type with Run() in compiled assembly");
@@ -89,7 +211,33 @@ namespace RuleTrace
             return outcome;
         }
 
-        private static List<string> CollectReferences(string dllFolder)
+        private static Type FindFormulaType(Assembly asm)
+        {
+            return asm.GetTypes()
+                .FirstOrDefault(t => t.IsClass && !t.IsAbstract && t.IsPublic && t.GetMethods().Any(m => m.Name.Equals("Run", StringComparison.OrdinalIgnoreCase)))
+                ?? asm.GetTypes().FirstOrDefault(t => t.IsClass && t.IsPublic && t.Name.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static string FindVbcExe()
+        {
+            string rt = RuntimeEnvironment.GetRuntimeDirectory();
+            string path = Path.Combine(rt, "vbc.exe");
+            if (File.Exists(path)) return path;
+
+            string windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            foreach (string rel in new[]
+            {
+                @"Microsoft.NET\Framework64\v4.0.30319\vbc.exe",
+                @"Microsoft.NET\Framework\v4.0.30319\vbc.exe",
+            })
+            {
+                path = Path.Combine(windir, rel);
+                if (File.Exists(path)) return path;
+            }
+            return null;
+        }
+
+        private static List<string> CollectReferences(string dllFolder, Action<string> log)
         {
             var list = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -102,12 +250,30 @@ namespace RuleTrace
                     AddRef(list, seen, f);
             }
 
-            AddRef(list, seen, typeof(object).Assembly.Location);
-            AddRef(list, seen, typeof(System.Data.DataTable).Assembly.Location);
-            AddRef(list, seen, typeof(Microsoft.VisualBasic.Strings).Assembly.Location);
-            AddRef(list, seen, Assembly.Load("System.Core").Location);
-            AddRef(list, seen, Assembly.Load("System.Xml").Location);
+            // Use typeof(...).Assembly.Location — never Assembly.Load("System.Core") which throws on some hosts.
+            AddTypeRef(list, seen, typeof(object));
+            AddTypeRef(list, seen, typeof(System.Linq.Enumerable));
+            AddTypeRef(list, seen, typeof(System.Data.DataTable));
+            AddTypeRef(list, seen, typeof(System.Xml.XmlDocument));
+            AddTypeRef(list, seen, typeof(System.Xml.Linq.XDocument));
+            AddTypeRef(list, seen, typeof(System.ComponentModel.Component));
+            AddTypeRef(list, seen, typeof(Microsoft.VisualBasic.Strings));
+            AddTypeRef(list, seen, typeof(System.Configuration.ConfigurationManager));
+
+            if (list.Count < 5)
+                log("VBC warn     : only " + list.Count + " refs resolved — check .NET Framework install");
             return list;
+        }
+
+        private static void AddTypeRef(List<string> list, HashSet<string> seen, Type t)
+        {
+            try
+            {
+                if (t == null) return;
+                string loc = t.Assembly.Location;
+                if (!string.IsNullOrEmpty(loc)) AddRef(list, seen, loc);
+            }
+            catch { }
         }
 
         private static void AddRef(List<string> list, HashSet<string> seen, string path)

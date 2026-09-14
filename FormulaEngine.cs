@@ -819,11 +819,13 @@ namespace RuleTrace
                 }
 
                 _log("Retry        : " + sources.Count + " member(s), " + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB VB from XmlBody");
-                object cls = FormulaMerger.CreateClassWithBodies(_safa, nid, cityGuid, true, sources, _log);
+                object shellCls = FormulaMerger.CreateClass(_safa, nid, cityGuid, false);
+                object cls = FormulaMerger.CreateClass(_safa, nid, cityGuid, true);
+                FormulaMerger.InjectBodies(cls, sources, _log);
                 _log("After inject (ClsFunction.Body lengths):");
                 FormulaMerger.LogFunctionBodies(cls, _log, 5);
 
-                string merged = FormulaMerger.BuildMergedVb(cls, sources, _log);
+                string merged = FormulaMerger.BuildMergedVb(shellCls, sources, _log);
                 FormulaMerger.SaveMergedFile(merged, cacheFolder, _log);
                 DateTime t0 = DateTime.UtcNow;
                 _log("Retry compile: vbc (VBCodeProvider) on merged source...");
