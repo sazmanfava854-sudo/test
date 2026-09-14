@@ -1259,7 +1259,7 @@ namespace RuleTrace
             var missingParams = DiscoverUndeclaredParameters(combinedForParams, injectedCls ?? shellCls, sources, log);
             foreach (string n in DiscoverFormulaIdentifiers(combinedForParams))
             {
-                if (!missingParams.Contains(n, StringComparer.OrdinalIgnoreCase))
+                if (!missingParams.Any(x => x.Equals(n, StringComparison.OrdinalIgnoreCase)))
                     missingParams.Add(n);
             }
             if (missingParams.Count > 0)

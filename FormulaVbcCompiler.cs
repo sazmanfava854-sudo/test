@@ -144,7 +144,12 @@ namespace RuleTrace
                 log("VBC auto-fix : " + missing.Count + " undeclared in shell (" + string.Join(", ", missing.Take(8)) + (missing.Count > 8 ? "..." : "") + ")");
                 string shell = File.ReadAllText(shellPath, Encoding.UTF8);
                 string updated = FormulaMerger.InjectPropertyStubs(shell, missing, true);
-                if (updated.Length == shell.Length) break;
+                if (updated.Length == shell.Length)
+                {
+                    log("VBC auto-fix : could not inject stubs (no End Class in shell?) — skipped");
+                    break;
+                }
+                log("VBC auto-fix : shell +" + (updated.Length - shell.Length) + " chars");
                 File.WriteAllText(shellPath, updated, Encoding.UTF8);
                 outcome = TryCompileWithCodeDom(paths, dllPath, cacheFolder, refs, log);
                 if (outcome.Ok) log("VBC auto-fix : partial compile OK after shell stubs");
@@ -164,7 +169,12 @@ namespace RuleTrace
                 log("VBC auto-fix : vbc.exe — " + missing.Count + " undeclared in shell");
                 string shell = File.ReadAllText(shellPath, Encoding.UTF8);
                 string updated = FormulaMerger.InjectPropertyStubs(shell, missing, true);
-                if (updated.Length == shell.Length) break;
+                if (updated.Length == shell.Length)
+                {
+                    log("VBC auto-fix : could not inject stubs into shell — skipped");
+                    break;
+                }
+                log("VBC auto-fix : shell +" + (updated.Length - shell.Length) + " chars");
                 File.WriteAllText(shellPath, updated, Encoding.UTF8);
                 outcome = TryCompileWithVbcExe(paths, dllPath, dllFolder, log);
                 if (outcome.Ok) log("VBC auto-fix : partial compile OK (vbc.exe) after shell stubs");
