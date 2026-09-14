@@ -45,7 +45,7 @@ namespace RuleTrace
             if (outcome.Ok) return outcome;
 
             log("VBC retry    : VBCodeProvider failed — trying vbc.exe ...");
-            var exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, refs, log);
+            var exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
             if (exeOutcome.Ok) return exeOutcome;
 
             foreach (string e in exeOutcome.Errors)
@@ -84,7 +84,7 @@ namespace RuleTrace
             }
         }
 
-        private static CompileOutcome TryCompileWithVbcExe(string vbPath, string dllPath, List<string> refs, Action<string> log)
+        private static CompileOutcome TryCompileWithVbcExe(string vbPath, string dllPath, string dllFolder, Action<string> log)
         {
             var outcome = new CompileOutcome();
             string vbc = FindVbcExe();
@@ -95,6 +95,7 @@ namespace RuleTrace
                 return outcome;
             }
 
+            List<string> refs = CollectReferencesForVbcExe(dllFolder, log);
             var args = new StringBuilder();
             args.Append("/nologo /target:library /optionstrict- /optioninfer+ ");
             args.Append("/out:\"").Append(dllPath).Append("\" ");
@@ -263,6 +264,25 @@ namespace RuleTrace
             log("VBC refs     : " + list.Count + " assemblies (deduped by name)");
             if (list.Count < 5)
                 log("VBC warn     : only " + list.Count + " refs resolved — check .NET Framework install");
+            return list;
+        }
+
+        /// <summary>vbc.exe auto-references mscorlib/System/System.Core — pass only formula DLLs + extras.</summary>
+        private static List<string> CollectReferencesForVbcExe(string dllFolder, Action<string> log)
+        {
+            var list = new List<string>();
+            var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (Directory.Exists(dllFolder))
+            {
+                foreach (string name in new[] { "BIZ.SC.dll", "BIZ.SA.dll", "SafaClassDesingerNew.dll", "Newtonsoft.Json.dll" })
+                    AddRef(list, seenPaths, seenNames, Path.Combine(dllFolder, name));
+            }
+
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Data.DataTable));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Xml.XmlDocument));
+            log("VBC exe refs : " + list.Count + " assemblies (implicit mscorlib/System.Core omitted)");
             return list;
         }
 

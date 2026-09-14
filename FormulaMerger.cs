@@ -132,9 +132,12 @@ namespace RuleTrace
             int shellMOutAfter = CountOccurrences(shell, "M_Out");
             log("Merge shell  : after stripping stub methods, M_Out=" + shellMOutAfter);
 
+            var shellNames = CollectFieldNames(shell);
             var methodMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var fieldSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var fieldByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var uniqueFieldDecls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int methodCount = 0;
+            int fieldSkipped = 0;
             foreach (MemberSource src in sources.OrderBy(s => s.NidMember))
             {
                 if (string.IsNullOrWhiteSpace(src.Code)) continue;
@@ -142,7 +145,18 @@ namespace RuleTrace
                 norm = UnwrapEmbeddedClass(norm);
                 norm = RemoveMOutPropertyBlocks(norm);
                 foreach (string decl in ExtractFieldDeclarations(norm))
-                    fieldSet.Add(decl);
+                {
+                    var declNames = ParseFieldNames(decl).ToList();
+                    if (declNames.Count == 0) continue;
+                    if (declNames.Any(n => shellNames.Contains(n) || fieldByName.ContainsKey(n)))
+                    {
+                        fieldSkipped++;
+                        continue;
+                    }
+                    uniqueFieldDecls.Add(decl);
+                    foreach (string n in declNames)
+                        fieldByName[n] = decl;
+                }
                 foreach (string block in ExtractMethodBlocks(norm))
                 {
                     string key = MethodKey(block);
@@ -152,7 +166,7 @@ namespace RuleTrace
                 }
             }
             log("Merge methods: " + methodMap.Count + " unique Sub/Function from " + methodCount + " block(s)");
-            log("Merge fields  : " + fieldSet.Count + " shared Dim/Private/Public field(s) from members");
+            log("Merge fields  : " + uniqueFieldDecls.Count + " unique (" + fieldSkipped + " skipped — already in shell or duplicate)");
 
             int cap = shell.Length + (int)Math.Min(methodMap.Values.Sum(b => (long)b.Length), int.MaxValue - shell.Length - 4096) + 4096;
             var sb = new StringBuilder(cap);
@@ -162,10 +176,10 @@ namespace RuleTrace
 
             sb.Append(shell.Substring(0, endClass));
             sb.AppendLine();
-            if (fieldSet.Count > 0)
+            if (uniqueFieldDecls.Count > 0)
             {
                 sb.AppendLine("' --- RuleTrace: shared fields from Member XmlBody ---");
-                foreach (string decl in fieldSet.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                foreach (string decl in uniqueFieldDecls.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
                     sb.AppendLine(decl);
                 sb.AppendLine();
             }
@@ -302,9 +316,72 @@ namespace RuleTrace
                 return false;
             if (Regex.IsMatch(t, @"\b(?:Sub|Function|Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 return false;
-            if (t.IndexOf("M_Out", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (Regex.IsMatch(t, @"\bPrivate\s+M_Out\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) return false;
             if (t.IndexOf("Property Out", StringComparison.OrdinalIgnoreCase) >= 0) return false;
             return true;
+        }
+
+        private static readonly Regex FieldDeclHeadRx = new Regex(
+            @"^(?:Public|Private|Protected|Friend|Dim|Const)(?:\s+(?:ReadOnly|Shared))*\s+",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        /// <summary>First identifier on a field line (VB names are case-insensitive).</summary>
+        private static bool TryParseFieldName(string line, out string name)
+        {
+            name = null;
+            foreach (string n in ParseFieldNames(line))
+            {
+                name = n;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>All identifiers declared on one line (Dim a, b As Integer → a, b).</summary>
+        private static IEnumerable<string> ParseFieldNames(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) yield break;
+            string t = line.Trim();
+            Match head = FieldDeclHeadRx.Match(t);
+            if (!head.Success) yield break;
+
+            string rest = t.Substring(head.Length);
+            int asIdx = IndexOfWord(rest, "As");
+            int eqIdx = IndexOfWord(rest, "="); // Const x = 1
+            int end = rest.Length;
+            if (asIdx >= 0) end = asIdx;
+            else if (eqIdx >= 0) end = eqIdx;
+
+            string namesPart = rest.Substring(0, end).Trim();
+            if (namesPart.Length == 0) yield break;
+
+            foreach (string part in namesPart.Split(','))
+            {
+                string id = part.Trim();
+                if (id.Length == 0) continue;
+                int paren = id.IndexOf('(');
+                if (paren > 0) id = id.Substring(0, paren).Trim();
+                if (id.Length > 0 && char.IsLetter(id[0])) yield return id;
+            }
+        }
+
+        private static int IndexOfWord(string text, string word)
+        {
+            var rx = new Regex(@"\b" + word + @"\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            Match m = rx.Match(text);
+            return m.Success ? m.Index : -1;
+        }
+
+        private static HashSet<string> CollectFieldNames(string vb)
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(vb)) return names;
+            foreach (string line in NormalizeNewlines(vb).Split('\n'))
+            {
+                foreach (string name in ParseFieldNames(line.Trim()))
+                    names.Add(name);
+            }
+            return names;
         }
 
         private static string NormalizeNewlines(string code)
@@ -332,25 +409,55 @@ namespace RuleTrace
             return norm;
         }
 
-        /// <summary>Last resort: keep first Private M_Out + first Public Property Out only.</summary>
+        /// <summary>Keep first Private M_Out + first Public Property Out; drop duplicate declarations.</summary>
         private static string RemoveDuplicateMOutDeclarations(string merged)
         {
             string norm = NormalizeNewlines(merged);
-            norm = KeepFirstMatch(norm, @"(?ms)^\s*Private\s+M_Out\b[^\n]*\n");
-            norm = KeepFirstMatch(norm, @"(?ms)^\s*Public\s+Property\s+Out\b.*?^End\s+Property\s*");
+            norm = KeepFirstLineStartingWith(norm, "Private M_Out");
+            norm = KeepFirstPropertyBlock(norm, "Public Property Out");
             return norm.Replace("\n", "\r\n");
         }
 
-        private static string KeepFirstMatch(string text, string pattern)
+        private static string KeepFirstLineStartingWith(string text, string prefix)
         {
-            var rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            Match first = rx.Match(text);
-            if (!first.Success) return text;
-            string kept = first.Value;
-            text = rx.Replace(text, string.Empty);
-            int insertAt = text.IndexOf("End Class", StringComparison.OrdinalIgnoreCase);
-            if (insertAt < 0) return kept + text;
-            return text.Insert(insertAt, kept);
+            bool kept = false;
+            var lines = new List<string>();
+            foreach (string line in text.Split('\n'))
+            {
+                if (line.TrimStart().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (kept) continue;
+                    kept = true;
+                }
+                lines.Add(line);
+            }
+            return string.Join("\n", lines);
+        }
+
+        private static string KeepFirstPropertyBlock(string text, string propertyPrefix)
+        {
+            bool kept = false;
+            bool skipping = false;
+            var lines = new List<string>();
+            foreach (string line in text.Split('\n'))
+            {
+                string t = line.TrimStart();
+                if (t.StartsWith(propertyPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (kept) { skipping = true; continue; }
+                    kept = true;
+                    skipping = false;
+                    lines.Add(line);
+                    continue;
+                }
+                if (skipping)
+                {
+                    if (t.StartsWith("End Property", StringComparison.OrdinalIgnoreCase)) skipping = false;
+                    continue;
+                }
+                lines.Add(line);
+            }
+            return string.Join("\n", lines);
         }
 
         private static List<string> ExtractMethodBlocks(string norm)

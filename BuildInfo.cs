@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "merge-v5-summary";
+        public const string Label = "merge-v6-dedupe-fields";
 
         public static string Banner
         {
