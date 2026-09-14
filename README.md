@@ -74,17 +74,19 @@ build.cmd
 
 **علت رایج (تأیید شده با تحلیل Member شما):** کد VB در `XmlBody/<Body>` خوانا است (~۳۶۰K کاراکتر) اما `EncryptXmlBody` هم پر است؛ موتور `2012.5` هنگام compile از مسیر رمزنگاری می‌خواند، `ClsFunction.Body` خالی می‌ماند و ۲۰ پوسته `M_Out` کنار هم merge می‌شود.
 
-RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، پوسته `ToString1` را یک‌بار می‌گیرد، فقط `Sub`/`Function`ها را merge می‌کند (`RuleTrace_merged.vb` در cache) و با **vbc** کامپایل می‌کند (نه `RunRule` دوباره). در Log باید ببینید:
+RuleTrace بعد از `BC30269` خودکار **retry** می‌کند: متن `<Body>` را از DB inject می‌کند، سپس **هر Member را جدا** کامپایل می‌کند (مدل Sara: اول `Run`، بعد Memberها به ترتیب — کدها به هم چسبانده نمی‌شوند). در Log باید ببینید:
 
 ```
-RuleTrace merge-v17-shell-xmlbody ... — shell ToString1 + XmlBody (skip injected ToString1)
-Merge path   : shell ToString1 + XmlBody member methods (skip injected ToString1)
-Merge shell  : ToString1 len=~18000
-Merge methods: N unique Sub/Function (M shell + K member block(s))
-Merged VB    : ... M_Out decls=1, Property Out=1 (expect 1 each)
-Retry compile: vbc (VBCodeProvider) on merged source...
+RuleTrace v18-per-member-partial ... — per-member partial compile (no monolithic glue)
+Retry model  : Sara runs Run first, then each Member in order ...
+Engine compile: (تلاش کامپایل بومی موتور)
+Partial shell: ToString1 len=~18000 -> ...\partial\Solh_00_shell.vb
+Partial files: 1 shell + 20 member file(s), N method(s) — NOT glued into RuleTrace_merged.vb
+Retry compile: vbc on 21 partial file(s) in partial\ ...
 VBC OK       : N_Solh.Solh -> ...\Solh_ruletrace.dll
 ```
+
+برای مسیر **صلح در چیدمان** (مثلاً Watch=`Calc_Chandganeh` یا EntryPoint شامل chidman): فقط Memberهای مرتبط فیلتر می‌شوند — نیازی به کامپایل همهٔ ۲۰ Member نیست.
 
 اگر هنوز `GetStrOutClass len=1226` یا `Compile try : RunRule` می‌بینید، ZIP/branch قدیمی است — از `cursor/ruletrace-standalone-88fc` دوباره `build.cmd` بزنید.
 

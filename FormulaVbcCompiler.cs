@@ -42,7 +42,7 @@ namespace RuleTrace
             List<string> refs = CollectReferences(dllFolder, log);
             log("VBC compile  : " + refs.Count + " reference DLL(s), source " + (mergedVb.Length / 1024) + " KB");
 
-            outcome = TryCompileWithCodeDom(vbPath, dllPath, cacheFolder, refs, log);
+            outcome = TryCompileWithCodeDom(new[] { vbPath }, dllPath, cacheFolder, refs, log);
             if (!outcome.Ok)
             {
                 outcome = TryRemedyAndRecompile(ref mergedVb, outcome, vbPath, dllPath, cacheFolder, refs, log);
@@ -50,7 +50,7 @@ namespace RuleTrace
             if (outcome.Ok) return outcome;
 
             log("VBC retry    : VBCodeProvider failed — trying vbc.exe ...");
-            var exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
+            var exeOutcome = TryCompileWithVbcExe(new[] { vbPath }, dllPath, dllFolder, log);
             if (!exeOutcome.Ok)
             {
                 var missing = ExtractUndeclaredVariables(exeOutcome.Errors);
@@ -62,7 +62,7 @@ namespace RuleTrace
                     {
                         mergedVb = updated;
                         File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
-                        exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
+                        exeOutcome = TryCompileWithVbcExe(new[] { vbPath }, dllPath, dllFolder, log);
                     }
                     else
                     {
@@ -81,6 +81,43 @@ namespace RuleTrace
                     if (shown++ < 25) log("  " + e);
                 }
             }
+
+            foreach (string e in exeOutcome.Errors)
+                if (!outcome.Errors.Contains(e)) outcome.Errors.Add(e);
+            return outcome;
+        }
+
+        /// <summary>Compile partial-class VB files (shell + one file per Member) — Sara model, not one glued file.</summary>
+        public static CompileOutcome CompileFiles(IList<string> vbPaths, string cacheFolder, string dllFolder, Action<string> log)
+        {
+            var outcome = new CompileOutcome();
+            if (vbPaths == null || vbPaths.Count == 0)
+            {
+                outcome.Errors.Add("no VB files");
+                return outcome;
+            }
+            foreach (string p in vbPaths)
+            {
+                if (string.IsNullOrWhiteSpace(p) || !File.Exists(p))
+                {
+                    outcome.Errors.Add("missing VB file: " + p);
+                    return outcome;
+                }
+            }
+
+            Directory.CreateDirectory(cacheFolder);
+            string dllPath = Path.Combine(cacheFolder, "Solh_ruletrace.dll");
+            long totalKb = vbPaths.Sum(p => new FileInfo(p).Length) / 1024;
+            List<string> refs = CollectReferences(dllFolder, log);
+            log("VBC partial  : " + vbPaths.Count + " file(s), " + totalKb + " KB, " + refs.Count + " ref(s)");
+
+            string[] paths = vbPaths.ToArray();
+            outcome = TryCompileWithCodeDom(paths, dllPath, cacheFolder, refs, log);
+            if (outcome.Ok) return outcome;
+
+            log("VBC retry    : VBCodeProvider failed on partial set — trying vbc.exe ...");
+            var exeOutcome = TryCompileWithVbcExe(paths, dllPath, dllFolder, log);
+            if (exeOutcome.Ok) return exeOutcome;
 
             foreach (string e in exeOutcome.Errors)
                 if (!outcome.Errors.Contains(e)) outcome.Errors.Add(e);
@@ -108,7 +145,7 @@ namespace RuleTrace
                 mergedVb = updated;
                 File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
 
-                outcome = TryCompileWithCodeDom(vbPath, dllPath, cacheFolder, refs, log);
+                outcome = TryCompileWithCodeDom(new[] { vbPath }, dllPath, cacheFolder, refs, log);
                 if (outcome.Ok)
                 {
                     log("VBC auto-fix : compile OK after adding property stub(s)!");
@@ -136,7 +173,7 @@ namespace RuleTrace
             return list.ToList();
         }
 
-        private static CompileOutcome TryCompileWithCodeDom(string vbPath, string dllPath, string cacheFolder, List<string> refs, Action<string> log)
+        private static CompileOutcome TryCompileWithCodeDom(string[] vbPaths, string dllPath, string cacheFolder, List<string> refs, Action<string> log)
         {
             var outcome = new CompileOutcome();
             try
@@ -153,7 +190,7 @@ namespace RuleTrace
 
                 CompilerResults cr;
                 using (var prov = new VBCodeProvider())
-                    cr = prov.CompileAssemblyFromFile(parms, vbPath);
+                    cr = prov.CompileAssemblyFromFile(parms, vbPaths);
 
                 return FinishCompileOutcome(cr, dllPath, log, outcome);
             }
@@ -167,7 +204,7 @@ namespace RuleTrace
             }
         }
 
-        private static CompileOutcome TryCompileWithVbcExe(string vbPath, string dllPath, string dllFolder, Action<string> log)
+        private static CompileOutcome TryCompileWithVbcExe(string[] vbPaths, string dllPath, string dllFolder, Action<string> log)
         {
             var outcome = new CompileOutcome();
             string vbc = FindVbcExe();
@@ -184,7 +221,8 @@ namespace RuleTrace
             args.Append("/out:\"").Append(dllPath).Append("\" ");
             foreach (string r in refs)
                 args.Append("/reference:\"").Append(r).Append("\" ");
-            args.Append("\"").Append(vbPath).Append("\"");
+            foreach (string p in vbPaths)
+                args.Append("\"").Append(p).Append("\" ");
 
             log("VBC exe      : " + vbc);
             try

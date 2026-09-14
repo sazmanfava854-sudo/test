@@ -110,7 +110,7 @@ namespace RuleTrace
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) || t.IndexOf("BC30269", StringComparison.Ordinal) >= 0
                 || t.IndexOf("BC30260", StringComparison.Ordinal) >= 0 || t.IndexOf("BC30201", StringComparison.Ordinal) >= 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Retry", "Inject", "After inject", "  ClsFunction", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Retry", "Inject", "After inject", "  ClsFunction", "Partial", "Member filter", "Engine compile", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -654,13 +654,13 @@ namespace RuleTrace
                     LogCompilerErrors(compilerErrors, 3);
                     SaveMergedVb(compilerErrors, cacheFolder);
                     _log("");
-                    _log("=== RETRY: XmlBody inject + merge + vbc ===");
+                    _log("=== RETRY: XmlBody inject + per-member partial vbc (no monolithic glue) ===");
                     retried = true;
-                    object retry = TryInjectedCompile(nid, cityGuid, r.ReCompile, cacheFolder);
+                    object retry = TryInjectedCompile(nid, cityGuid, r.ReCompile, cacheFolder, r);
                     if (retry != null && (retry is DirectFormulaHost || !HasCompilerErrors(Get(retry, "CompilerErrors"))))
                     {
                         result = retry;
-                        _log("Retry        : compile OK (XmlBody + ToString1 shell + vbc)");
+                        _log("Retry        : compile OK (per-member partial / engine native)");
                     }
                 }
 
@@ -669,8 +669,8 @@ namespace RuleTrace
                     if (retried)
                     {
                         _log("");
-                        _log("Compile      : FAILED — vbc نتوانست merged VB را کامپایل کند (خطوط «vbc :» بالا)");
-                        _log("               فایل: " + Path.Combine(cacheFolder, "RuleTrace_merged.vb"));
+                        _log("Compile      : FAILED — vbc نتوانست partial VB را کامپایل کند (خطوط «vbc :» بالا)");
+                        _log("               فایل‌ها: " + Path.Combine(cacheFolder, "partial"));
                         _summaryCapture = false;
                         PrintSummary();
                         return 4;
@@ -851,8 +851,8 @@ namespace RuleTrace
             if (shown > max) _log("  ... (" + shown + " errors total)");
         }
 
-        /// <summary>Inject XmlBody bodies into ClsFunction, build single merged VB, call engine compile APIs.</summary>
-        private object TryInjectedCompile(int nid, Guid cityGuid, bool recompile, string cacheFolder)
+        /// <summary>Inject XmlBody into ClsFunction; compile per-member partial files (Sara model) — never glue all XmlBody into one VB.</summary>
+        private object TryInjectedCompile(int nid, Guid cityGuid, bool recompile, string cacheFolder, RunRequest r)
         {
             try
             {
@@ -864,26 +864,42 @@ namespace RuleTrace
                 }
 
                 _log("Retry        : " + sources.Count + " member(s), " + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB VB from XmlBody");
+                _log("Retry model  : Sara runs Run first, then each Member in order — only variable values change; codes are NOT one glued file");
                 object shellCls = FormulaMerger.CreateClass(_safa, nid, cityGuid, false);
                 object cls = FormulaMerger.CreateClass(_safa, nid, cityGuid, true);
                 FormulaMerger.InjectBodies(cls, sources, _log);
                 _log("After inject (ClsFunction.Body lengths):");
                 FormulaMerger.LogFunctionBodies(cls, _log, 5);
 
-                string merged = FormulaMerger.BuildMergedVb(shellCls, cls, sources, _log);
-                FormulaMerger.SaveMergedFile(merged, cacheFolder, _log);
                 DateTime t0 = DateTime.UtcNow;
-                _log("Retry compile: vbc (VBCodeProvider) on merged source...");
-                var vbc = FormulaVbcCompiler.Compile(merged, cacheFolder, _s.DllPath, _log);
+
+                object engineResult = TryEngineNativeCompile(cls, cacheFolder);
+                if (engineResult != null && (engineResult is DirectFormulaHost || !HasCompilerErrors(Get(engineResult, "CompilerErrors"))))
+                {
+                    _log("Retry compile: engine native OK in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
+                    return engineResult;
+                }
+
+                var filterKw = InferMemberFilterKeywords(nid, r);
+                FormulaMerger.PartialCompileSet partial = FormulaMerger.BuildPartialMemberFiles(shellCls, sources, cacheFolder, _log, filterKw);
+                if (partial.FilePaths.Count <= 1)
+                {
+                    _log("Retry skip   : no member partial files produced");
+                    return null;
+                }
+
+                _log("Retry compile: vbc on " + partial.FilePaths.Count + " partial file(s) in partial\\ ...");
+                var vbc = FormulaVbcCompiler.CompileFiles(partial.FilePaths, cacheFolder, _s.DllPath, _log);
                 object result = null;
                 if (vbc.Ok)
                     result = FormulaVbcCompiler.CreateRunHost(_safa, cls, vbc, _log);
                 else if (vbc.Errors.Count > 0)
                     _log("VBC FAILED   : see vbc errors above");
+
                 if (result != null)
                     _log("Retry compile: done in " + (DateTime.UtcNow - t0).TotalSeconds.ToString("0.0") + "s");
                 else
-                    _log("Retry compile: vbc failed — send RuleTrace_merged.vb from cache folder");
+                    _log("Retry compile: partial vbc failed — send cache\\" + nid + "\\partial\\ folder (not RuleTrace_merged.vb)");
                 return result;
             }
             catch (Exception ex)
@@ -891,6 +907,143 @@ namespace RuleTrace
                 _log("Retry FAILED : " + ex.Message);
                 return null;
             }
+        }
+
+        /// <summary>After XmlBody inject, ask SafaClassDesingerNew to compile ClsClass (same as Sara UI) before any local vbc.</summary>
+        private object TryEngineNativeCompile(object cls, string cacheFolder)
+        {
+            if (cls == null) return null;
+            Type tCls = cls.GetType();
+            TrySet(cls, "_ReCompile", true);
+            TrySet(cls, "ReCompile", true);
+
+            foreach (string methodName in new[] { "Compile", "ReCompile", "RunCompile", "CompileClass", "Build", "CreateDll", "DoCompile", "SaveCompile" })
+            {
+                foreach (MethodInfo m in tCls.GetMethods(AnyInstance))
+                {
+                    if (!m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (m.GetParameters().Length > 2) continue;
+                    try
+                    {
+                        object ret = InvokeEngineMethod(cls, m);
+                        if (ret == null) continue;
+                        _log("Engine compile: " + tCls.Name + "." + m.Name + "() -> " + ret.GetType().Name);
+                        if (!HasCompilerErrors(Get(ret, "CompilerErrors")))
+                            return ret;
+                    }
+                    catch (Exception ex)
+                    {
+                        _log("Engine compile: " + m.Name + " — " + FirstLine(ex.Message));
+                    }
+                }
+            }
+
+            Type tResult = _safa.GetType("SafaClassDesingerNew.ClsRunRuleResult", false);
+            if (tResult != null)
+            {
+                foreach (ConstructorInfo c in tResult.GetConstructors(AnyInstance))
+                {
+                    try
+                    {
+                        object[] args = BuildCtorArgs(c, cls, cacheFolder);
+                        if (args == null) continue;
+                        object ret = c.Invoke(args);
+                        if (ret != null && !HasCompilerErrors(Get(ret, "CompilerErrors")))
+                        {
+                            _log("Engine compile: ClsRunRuleResult ctor OK");
+                            return ret;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            Type tCommon = _safa.GetType("SafaClassDesingerNew.ClsCommon", false);
+            if (tCommon != null)
+            {
+                foreach (MethodInfo m in tCommon.GetMethods(AnyStatic))
+                {
+                    if (m.Name.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (m.GetParameters().Length > 3) continue;
+                    try
+                    {
+                        object ret = InvokeEngineMethod(null, m, cls);
+                        if (ret != null && !HasCompilerErrors(Get(ret, "CompilerErrors")))
+                        {
+                            _log("Engine compile: ClsCommon." + m.Name + " OK");
+                            return ret;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            _log("Engine compile: no native API succeeded — falling back to per-member partial vbc");
+            return null;
+        }
+
+        private static object[] BuildCtorArgs(ConstructorInfo c, object cls, string cacheFolder)
+        {
+            var ps = c.GetParameters();
+            var args = new object[ps.Length];
+            for (int i = 0; i < ps.Length; i++)
+            {
+                Type pt = ps[i].ParameterType;
+                if (pt.IsInstanceOfType(cls)) args[i] = cls;
+                else if (pt == typeof(string)) args[i] = cacheFolder ?? string.Empty;
+                else if (pt == typeof(bool)) args[i] = true;
+                else if (pt == typeof(int)) args[i] = 0;
+                else if (pt == typeof(Guid)) args[i] = Guid.Empty;
+                else return null;
+            }
+            return args;
+        }
+
+        private static object InvokeEngineMethod(object target, MethodInfo m, params object[] extra)
+        {
+            var ps = m.GetParameters();
+            var args = new object[ps.Length];
+            int ei = 0;
+            for (int i = 0; i < ps.Length; i++)
+            {
+                Type pt = ps[i].ParameterType;
+                if (pt == typeof(bool)) args[i] = true;
+                else if (pt == typeof(int)) args[i] = 0;
+                else if (pt == typeof(string)) args[i] = string.Empty;
+                else if (pt == typeof(Guid)) args[i] = Guid.Empty;
+                else if (ei < extra.Length && extra[ei] != null && pt.IsInstanceOfType(extra[ei])) args[i] = extra[ei++];
+                else if (extra.Length > 0 && extra[0] != null && pt.IsInstanceOfType(extra[0])) args[i] = extra[0];
+                else return null;
+            }
+            return m.Invoke(target, args);
+        }
+
+        private void TrySet(object o, string name, object value)
+        {
+            Type t = o.GetType();
+            PropertyInfo p = t.GetProperty(name, AnyInstance);
+            if (p != null && p.CanWrite) { try { p.SetValue(o, value, null); return; } catch { } }
+            FieldInfo f = t.GetField(name, AnyInstance);
+            if (f != null) { try { f.SetValue(o, value); } catch { } }
+        }
+
+        /// <summary>For Solh chidman path: compile/trace only members whose name/code matches (e.g. صلح در مسیر چیدمان).</summary>
+        private static IEnumerable<string> InferMemberFilterKeywords(int nid, RunRequest r)
+        {
+            if (nid != 344 || r == null) return null;
+            string ctx = ((r.Watch ?? "") + " " + (r.EntryPoint ?? "")).ToLowerInvariant();
+            if (ctx.IndexOf("chidman", StringComparison.Ordinal) < 0
+                && ctx.IndexOf("chandganeh", StringComparison.Ordinal) < 0
+                && ctx.IndexOf("masir", StringComparison.Ordinal) < 0
+                && ctx.IndexOf("layout", StringComparison.Ordinal) < 0
+                && ctx.IndexOf("solh", StringComparison.Ordinal) < 0)
+                return null;
+
+            return new[]
+            {
+                "chidman", "chid", "solh", "layout", "suggestion", "insertchidman",
+                "masir", "zabeteh", "run", "chandganeh", "peace", "صلح", "چیدمان", "مسیر"
+            };
         }
 
         private void SaveMergedVb(object compilerErrors, string cacheFolder)

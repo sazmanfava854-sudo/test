@@ -1125,6 +1125,175 @@ namespace RuleTrace
             catch (Exception ex) { log("WARN         : cannot write merged.vb: " + ex.Message); }
         }
 
+        /// <summary>One VB file per dbo.Member row (partial class) — matches Sara: Run first, then members in order; do not glue all XmlBody into one file.</summary>
+        internal sealed class PartialCompileSet
+        {
+            public string ClassName = "Solh";
+            public readonly List<string> FilePaths = new List<string>();
+            public int MemberFileCount;
+            public int MethodCount;
+        }
+
+        /// <summary>
+        /// Shell ToString1 = partial class #1; each Member = separate partial file with ONE primary Sub/Function.
+        /// Unlike BuildMergedVbManual, methods from different members are never concatenated into one class body.
+        /// </summary>
+        public static PartialCompileSet BuildPartialMemberFiles(
+            object shellCls, IList<MemberSource> sources, string cacheFolder, Action<string> log,
+            IEnumerable<string> filterKeywords = null)
+        {
+            var result = new PartialCompileSet();
+            if (sources == null || sources.Count == 0) return result;
+
+            string shellSource;
+            string shell = GetClassShell(shellCls, out shellSource);
+            if (shell.Length < 500)
+                throw new InvalidOperationException("class shell too short — ToString1 / GetStrOutClass empty");
+
+            string className = ExtractClassName(shell) ?? "Solh";
+            result.ClassName = className;
+
+            var shellOut = StripAllOutDeclarations(shell);
+            shell = EnsurePartialClassDeclaration(shellOut.CleanedText, className);
+            shell = InsertCanonicalOutBlock(shell, shellOut.FirstMOut, shellOut.FirstPropOut);
+
+            var shellKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string block in ExtractMethodBlocks(NormalizeNewlines(shell)))
+            {
+                string key = MethodKey(block);
+                if (!string.IsNullOrEmpty(key)) shellKeys.Add(key);
+            }
+
+            var members = sources.OrderBy(s => s.NidMember).ToList();
+            if (filterKeywords != null)
+            {
+                var kw = filterKeywords.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+                if (kw.Count > 0)
+                {
+                    int before = members.Count;
+                    members = members.Where(s => MemberMatchesKeywords(s, kw)).ToList();
+                    log("Member filter: " + members.Count + "/" + before + " member(s) — keywords: " + string.Join(", ", kw.Take(6)) + (kw.Count > 6 ? "..." : ""));
+                }
+            }
+
+            string partialDir = Path.Combine(cacheFolder, "partial");
+            Directory.CreateDirectory(partialDir);
+
+            string shellPath = Path.Combine(partialDir, className + "_00_shell.vb");
+            File.WriteAllText(shellPath, PrependStandardImports(shell), Encoding.UTF8);
+            result.FilePaths.Add(shellPath);
+            log("Partial shell: " + shellSource + " len=" + shell.Length + ", methods=" + shellKeys.Count + " -> " + shellPath);
+
+            int methodCount = 0;
+            foreach (MemberSource src in members)
+            {
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                string body = BuildMemberPartialBody(src, shellKeys, log);
+                if (string.IsNullOrWhiteSpace(body)) continue;
+
+                string safeName = SanitizeFileName(src.Name);
+                if (string.IsNullOrEmpty(safeName)) safeName = "m" + src.NidMember;
+                string path = Path.Combine(partialDir, className + "_member_" + src.NidMember + "_" + safeName + ".vb");
+
+                var sb = new StringBuilder();
+                sb.AppendLine("' RuleTrace partial — NidMember=" + src.NidMember + " " + src.Name + " (" + src.Meta + ")");
+                sb.AppendLine("Partial Public Class " + className);
+                sb.AppendLine(body);
+                sb.AppendLine("End Class");
+                File.WriteAllText(path, PrependStandardImports(sb.ToString()), Encoding.UTF8);
+                result.FilePaths.Add(path);
+                result.MemberFileCount++;
+                methodCount += ExtractMethodBlocks(NormalizeNewlines(body)).Count;
+            }
+
+            result.MethodCount = methodCount;
+            log("Partial files: 1 shell + " + result.MemberFileCount + " member file(s), " + methodCount + " method(s) — NOT glued into RuleTrace_merged.vb");
+            return result;
+        }
+
+        private static string BuildMemberPartialBody(MemberSource src, HashSet<string> shellKeys, Action<string> log)
+        {
+            string norm = NormalizeNewlines(src.Code);
+            norm = UnwrapEmbeddedClass(norm);
+            norm = StripAllOutDeclarations(norm).CleanedText;
+
+            var methods = ExtractMethodBlocks(norm);
+            if (methods.Count == 0) return string.Empty;
+
+            string primary = PickPrimaryMemberMethod(src, methods, shellKeys);
+            if (string.IsNullOrEmpty(primary)) return string.Empty;
+
+            if (methods.Count > 1)
+                log("  member " + src.NidMember + " " + src.Name + ": 1 method/file '" + MethodKey(primary) + "' (" + methods.Count + " in XmlBody — others skipped)");
+
+            var sb = new StringBuilder();
+            foreach (string decl in ExtractFieldDeclarations(norm).Take(24))
+            {
+                var names = ExtractFieldNamesFromLine(decl).ToList();
+                if (names.Count == 0) continue;
+                if (names.Any(shellKeys.Contains)) continue;
+                sb.AppendLine(decl);
+            }
+            sb.AppendLine(primary);
+            return sb.ToString().Trim();
+        }
+
+        /// <summary>One Sub/Function per Member row — by Name match, else first method not already in shell.</summary>
+        private static string PickPrimaryMemberMethod(MemberSource src, List<string> methods, HashSet<string> shellKeys)
+        {
+            if (!string.IsNullOrWhiteSpace(src.Name))
+            {
+                string match = methods.FirstOrDefault(m => MethodKey(m).Equals(src.Name, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(match)) return match;
+            }
+
+            foreach (string block in methods)
+            {
+                string key = MethodKey(block);
+                if (string.IsNullOrEmpty(key)) continue;
+                if (!shellKeys.Contains(key)) return block;
+            }
+
+            return string.Empty;
+        }
+
+        private static string ExtractClassName(string shell)
+        {
+            if (string.IsNullOrWhiteSpace(shell)) return null;
+            Match m = Regex.Match(shell, @"(?:Partial\s+)?(?:Public\s+|Private\s+|Friend\s+)?Class\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            return m.Success ? m.Groups[1].Value : null;
+        }
+
+        private static string EnsurePartialClassDeclaration(string shell, string className)
+        {
+            if (string.IsNullOrWhiteSpace(shell)) return shell;
+            if (shell.IndexOf("Partial", StringComparison.OrdinalIgnoreCase) >= 0) return shell;
+            return Regex.Replace(
+                shell,
+                @"\b((?:Public|Private|Friend)\s+)?Class\s+" + Regex.Escape(className) + @"\b",
+                "Partial Public Class " + className,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static bool MemberMatchesKeywords(MemberSource s, IList<string> keywords)
+        {
+            string hay = ((s.Name ?? "") + "\n" + (s.Code ?? "")).ToLowerInvariant();
+            foreach (string kw in keywords)
+            {
+                if (string.IsNullOrWhiteSpace(kw)) continue;
+                if (hay.IndexOf(kw.Trim().ToLowerInvariant(), StringComparison.Ordinal) >= 0) return true;
+            }
+            return false;
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+            foreach (char c in Path.GetInvalidFileNameChars())
+                name = name.Replace(c, '_');
+            return name.Length > 48 ? name.Substring(0, 48) : name;
+        }
+
         public static bool IsMOutDuplicateError(object compilerErrors)
         {
             if (compilerErrors == null) return false;
