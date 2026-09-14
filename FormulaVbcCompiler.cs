@@ -143,7 +143,7 @@ namespace RuleTrace
                 if (missing.Count == 0) break;
                 log("VBC auto-fix : " + missing.Count + " undeclared in shell (" + string.Join(", ", missing.Take(8)) + (missing.Count > 8 ? "..." : "") + ")");
                 string shell = File.ReadAllText(shellPath, Encoding.UTF8);
-                string updated = FormulaMerger.InjectPropertyStubs(shell, missing);
+                string updated = FormulaMerger.InjectPropertyStubs(shell, missing, true);
                 if (updated.Length == shell.Length) break;
                 File.WriteAllText(shellPath, updated, Encoding.UTF8);
                 outcome = TryCompileWithCodeDom(paths, dllPath, cacheFolder, refs, log);
@@ -163,7 +163,7 @@ namespace RuleTrace
                 if (missing.Count == 0) break;
                 log("VBC auto-fix : vbc.exe — " + missing.Count + " undeclared in shell");
                 string shell = File.ReadAllText(shellPath, Encoding.UTF8);
-                string updated = FormulaMerger.InjectPropertyStubs(shell, missing);
+                string updated = FormulaMerger.InjectPropertyStubs(shell, missing, true);
                 if (updated.Length == shell.Length) break;
                 File.WriteAllText(shellPath, updated, Encoding.UTF8);
                 outcome = TryCompileWithVbcExe(paths, dllPath, dllFolder, log);

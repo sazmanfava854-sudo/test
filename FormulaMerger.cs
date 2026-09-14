@@ -471,6 +471,7 @@ namespace RuleTrace
             {
                 "Imports MapArr = System.Object",
                 "Imports SegmentArr = System.Object",
+                "Imports clsOut = BIZ.SC.ClsOut",
                 "Imports ClsOut = BIZ.SC.ClsOut",
             };
             string norm = NormalizeNewlines(merged);
@@ -569,20 +570,20 @@ namespace RuleTrace
             if (!string.IsNullOrEmpty(canonicalMOut))
                 sb.AppendLine(canonicalMOut);
             else
-                sb.AppendLine("Private M_Out As ClsOut");
+                sb.AppendLine("Private M_Out As BIZ.SC.ClsOut");
             sb.AppendLine();
             if (!string.IsNullOrEmpty(canonicalPropOut))
                 sb.AppendLine(canonicalPropOut);
             else
             {
-                sb.AppendLine("Public Property Out() As ClsOut");
+                sb.AppendLine("Public Property Out() As BIZ.SC.ClsOut");
                 sb.AppendLine("    Get");
                 sb.AppendLine("        If M_Out Is Nothing Then");
-                sb.AppendLine("            M_Out = New ClsOut()");
+                sb.AppendLine("            M_Out = New BIZ.SC.ClsOut()");
                 sb.AppendLine("        End If");
                 sb.AppendLine("        Return M_Out");
                 sb.AppendLine("    End Get");
-                sb.AppendLine("    Set(ByVal Value As ClsOut)");
+                sb.AppendLine("    Set(ByVal Value As BIZ.SC.ClsOut)");
                 sb.AppendLine("        M_Out = Value");
                 sb.AppendLine("    End Set");
                 sb.AppendLine("End Property");
@@ -594,9 +595,14 @@ namespace RuleTrace
 
         public static string InjectPropertyStubs(string vb, IEnumerable<string> names)
         {
+            return InjectPropertyStubs(vb, names, false);
+        }
+
+        /// <param name="force">When true (vbc auto-fix), ignore false-positive declaration detection.</param>
+        public static string InjectPropertyStubs(string vb, IEnumerable<string> names, bool force)
+        {
             if (string.IsNullOrWhiteSpace(vb)) return vb;
-            var declared = CollectDeclarationNames(vb);
-            EnrichDeclarationNamesFromText(vb, declared);
+            var declared = force ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : CollectStrictDeclarationNames(vb);
 
             var list = (names ?? Enumerable.Empty<string>())
                 .Where(n => !string.IsNullOrWhiteSpace(n) && Regex.IsMatch(n.Trim(), @"^[A-Za-z_]\w*$"))
@@ -604,7 +610,7 @@ namespace RuleTrace
                 .Where(n => !declared.Contains(n)
                             && !n.Equals("M_Out", StringComparison.OrdinalIgnoreCase)
                             && !n.Equals("Out", StringComparison.OrdinalIgnoreCase)
-                            && !RuntimeHostFieldNames.Any(h => h.Equals(n, StringComparison.OrdinalIgnoreCase)))
+                            && (!force || !RuntimeHostFieldNames.Any(h => h.Equals(n, StringComparison.OrdinalIgnoreCase))))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             if (list.Count == 0) return vb;
@@ -650,8 +656,7 @@ namespace RuleTrace
             foreach (string n in DiscoverParameterNamesFromCode(code))
                 candidates.Add(n);
 
-            var declared = CollectDeclarationNames(code);
-            EnrichDeclarationNamesFromText(code, declared);
+            var declared = CollectStrictDeclarationNames(code);
 
             var missing = new List<string>();
             foreach (string name in candidates.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
@@ -743,9 +748,37 @@ namespace RuleTrace
             if (string.IsNullOrWhiteSpace(text)) return;
             foreach (string line in NormalizeNewlines(text).Split('\n'))
             {
-                foreach (string n in ExtractFieldNamesFromLine(line.Trim()))
+                string t = line.Trim();
+                if (!IsFieldDeclarationLine(t) && !IsPropertyDeclarationLine(t)) continue;
+                foreach (string n in ExtractFieldNamesFromLine(t))
                     names.Add(n);
+                Match prop = PropertyDeclRx.Match(t);
+                if (prop.Success)
+                {
+                    string pName = prop.Groups[1].Value.Trim('[', ']');
+                    if (!pName.Equals("Out", StringComparison.OrdinalIgnoreCase))
+                        names.Add(pName);
+                }
             }
+        }
+
+        private static readonly Regex PropertyDeclRx = new Regex(
+            @"^(?:(?:Public|Private|Protected|Friend)\s+)+Property\s+(\[?\w+\]?)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private static bool IsPropertyDeclarationLine(string t)
+        {
+            return !string.IsNullOrWhiteSpace(t) && PropertyDeclRx.IsMatch(t.Trim());
+        }
+
+        /// <summary>Field/property declarations only — never Dim inside Sub bodies.</summary>
+        private static HashSet<string> CollectStrictDeclarationNames(string vb)
+        {
+            var names = CollectDeclarationNames(vb);
+            var strict = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            EnrichDeclarationNamesFromText(vb, strict);
+            foreach (string n in strict) names.Add(n);
+            return names;
         }
 
         /// <summary>Class shell from ToString1 (~18KB). Never use ToString() — after inject it embeds all bodies (~1MB, 100× M_Out).</summary>
@@ -1174,22 +1207,31 @@ namespace RuleTrace
 
             var shellOut = StripAllOutDeclarations(shell);
             shell = EnsurePartialClassDeclaration(shellOut.CleanedText, className);
-            shell = InsertCanonicalOutBlock(shell, shellOut.FirstMOut, shellOut.FirstPropOut);
 
+            string shellNorm = NormalizeNewlines(shell);
+            var shellMethods = ExtractMethodBlocks(shellNorm);
             var shellMethodKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string block in ExtractMethodBlocks(NormalizeNewlines(shell)))
+            foreach (string block in shellMethods)
             {
                 string key = MethodKey(block);
                 if (!string.IsNullOrEmpty(key)) shellMethodKeys.Add(key);
             }
 
-            var shellNames = CollectDeclarationNames(shell);
-            EnrichDeclarationNamesFromText(shell, shellNames);
+            shell = StripMethodsFromShell(shell);
+            shell = InsertCanonicalOutBlock(shell, shellOut.FirstMOut, shellOut.FirstPropOut);
+
+            var shellNames = CollectStrictDeclarationNames(shell);
             var fieldByName = CollectSharedFieldsFromSources(sources, shellNames);
             var hostStubs = BuildRuntimeHostFieldStubs(shellNames, fieldByName);
             shell = InjectSharedFieldsBeforeEndClass(shell, fieldByName, hostStubs);
             if (fieldByName.Count > 0 || hostStubs.Count > 0)
                 log("Partial fields: " + fieldByName.Count + " from XmlBody + " + hostStubs.Count + " host stub(s) in shell");
+
+            if (shellMethods.Count > 0)
+            {
+                shell = AppendMethodsBeforeEndClass(shell, shellMethods);
+                log("Partial shell: " + shellMethods.Count + " shell method(s) moved after fields");
+            }
 
             var members = sources.OrderBy(s => s.NidMember).ToList();
             if (filterKeywords != null)
@@ -1274,6 +1316,27 @@ namespace RuleTrace
                 }
             }
             return fieldByName;
+        }
+
+        private static string AppendMethodsBeforeEndClass(string shell, List<string> methodBlocks)
+        {
+            if (methodBlocks == null || methodBlocks.Count == 0) return shell;
+            string norm = NormalizeNewlines(shell);
+            int endClass = norm.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) endClass = norm.LastIndexOf("EndClass", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) return shell;
+
+            var sb = new StringBuilder(norm.Length + methodBlocks.Sum(b => b.Length) + 64);
+            sb.Append(norm.Substring(0, endClass));
+            sb.AppendLine();
+            sb.AppendLine("' --- RuleTrace: shell methods (after fields) ---");
+            foreach (string block in methodBlocks)
+            {
+                sb.AppendLine(block.Trim());
+                sb.AppendLine();
+            }
+            sb.Append(norm.Substring(endClass));
+            return sb.ToString().Replace("\n", "\r\n");
         }
 
         private static string InjectSharedFieldsBeforeEndClass(string shell, Dictionary<string, string> fieldByName, List<string> hostStubs)
