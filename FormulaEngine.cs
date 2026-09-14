@@ -123,6 +123,8 @@ namespace RuleTrace
             if (t.StartsWith("Engine err", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Engine compile", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Inject", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Sanitize", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Merge", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("API ", StringComparison.OrdinalIgnoreCase))
                 return true;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
@@ -1062,7 +1064,7 @@ namespace RuleTrace
             LogCompileSurface(cls, "ClsClass");
             LogCompileSurface(result, "ClsRunRuleResult");
 
-            object compiled = TryCompileToString1(result, cls, cacheFolder);
+            object compiled = TryCompileToString1(result, cls, sources, cacheFolder);
             if (compiled != null && HasLiveInstance(compiled))
             {
                 _log("Inject       : Compile(ToString1, ImportsDll) produced live Instanc/M_Assm");
@@ -1097,19 +1099,24 @@ namespace RuleTrace
             return compiled;
         }
 
-        /// <summary>Sara API: ClsRunRuleResult.Compile(vbSource, ImportsDll). ToString1 after inject is the full class (~1.8MB).</summary>
-        private object TryCompileToString1(object result, object cls, string cacheFolder)
+        /// <summary>Sara API: ClsRunRuleResult.Compile(vbSource, ImportsDll). Sanitize broken ToString1 first.</summary>
+        private object TryCompileToString1(object result, object cls, IList<MemberSource> sources, string cacheFolder)
         {
-            string source = Get(cls, "ToString1") as string;
+            string raw = Get(cls, "ToString1") as string;
+            string source = FormulaMerger.SanitizeInjectedToString1(cls, sources, _log);
+            if (string.IsNullOrEmpty(source))
+                source = raw;
             if (string.IsNullOrEmpty(source) || source.Length < 20000)
             {
                 _log("Engine compile: ToString1 missing/short (" + (source == null ? 0 : source.Length) + ")");
                 return null;
             }
+            _log("Engine compile: using sanitized source len=" + source.Length
+                 + (raw != null && raw.Length != source.Length ? " (raw " + raw.Length + ")" : ""));
 
             try
             {
-                string dump = Path.Combine(cacheFolder, "Solh_ToString1.vb");
+                string dump = Path.Combine(cacheFolder, "Solh_ToString1_clean.vb");
                 File.WriteAllText(dump, source, Encoding.UTF8);
                 _log("Engine compile: wrote " + dump + " (" + source.Length + " chars)");
             }

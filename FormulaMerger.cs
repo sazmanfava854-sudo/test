@@ -117,6 +117,19 @@ namespace RuleTrace
             return new List<object>();
         }
 
+        /// <summary>Fix structurally broken engine ToString1 (code outside methods, duplicate Out/M_Out) then compile that source.</summary>
+        public static string SanitizeInjectedToString1(object injectedCls, IList<MemberSource> sources, Action<string> log)
+        {
+            string injected = ReadStringMember(injectedCls, "ToString1");
+            if (string.IsNullOrEmpty(injected) || injected.Length < 20000)
+            {
+                if (log != null) log("Sanitize     : ToString1 too short (" + (injected == null ? 0 : injected.Length) + ")");
+                return null;
+            }
+            if (log != null) log("Sanitize     : ToString1 raw len=" + injected.Length);
+            return BuildFromInjectedSource(injected, injectedCls, sources, log ?? (m => { }));
+        }
+
         /// <summary>Build merged VB: shell ToString1 (~18KB) + XmlBody member methods when DB sources exist; injected ToString1 is structurally broken for vbc.</summary>
         public static string BuildMergedVb(object shellCls, object injectedCls, IList<MemberSource> sources, Action<string> log)
         {
