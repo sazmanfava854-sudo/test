@@ -122,7 +122,7 @@ namespace RuleTrace
         {
             string injected = GetInjectedClassSource(injectedCls, log);
             if (IsValidInjectedSource(injected))
-                return BuildFromInjectedSource(injected, log);
+                return BuildFromInjectedSource(injected, injectedCls, sources, log);
             log("Merge path   : manual shell+XmlBody (injected source len=" + (injected == null ? 0 : injected.Length) + ")");
             return BuildMergedVbManual(shellCls, sources, log);
         }
@@ -138,12 +138,20 @@ namespace RuleTrace
             return ReadStringMember(cls, "ToString1");
         }
 
-        /// <summary>Engine ToString1 after XmlBody inject — keep structure, only fix Out/M_Out duplicates.</summary>
-        private static string BuildFromInjectedSource(string injected, Action<string> log)
+        /// <summary>Engine ToString1 after XmlBody inject — keep structure, fix Out/M_Out duplicates, auto-declare parameters.</summary>
+        private static string BuildFromInjectedSource(string injected, object cls, IList<MemberSource> sources, Action<string> log)
         {
             log("Merge path   : injected full class, M_Out=" + CountOccurrences(injected, "M_Out"));
             var stripped = StripAllOutDeclarations(NormalizeNewlines(injected));
             string merged = InsertCanonicalOutBlock(stripped.CleanedText, stripped.FirstMOut, stripped.FirstPropOut);
+
+            var missingParams = DiscoverUndeclaredParameters(merged, cls, sources, log);
+            if (missingParams.Count > 0)
+            {
+                log("Merge params : " + missingParams.Count + " parameter properties added (" + string.Join(", ", missingParams.Take(8)) + (missingParams.Count > 8 ? "..." : "") + ")");
+                merged = InjectPropertyStubs(merged, missingParams);
+            }
+
             int mOutDecls = CountMOutDeclarations(merged);
             int outProps = CountPropertyOutDeclarations(merged);
             log("Merged VB    : " + merged.Length + " chars, M_Out decls=" + mOutDecls + ", Property Out=" + outProps + " (injected path)");
@@ -397,6 +405,120 @@ namespace RuleTrace
             sb.AppendLine();
             sb.Append(norm.Substring(endClass));
             return sb.ToString().Replace("\n", "\r\n");
+        }
+
+        public static string InjectPropertyStubs(string vb, IEnumerable<string> names)
+        {
+            if (string.IsNullOrWhiteSpace(vb)) return vb;
+            var list = (names ?? Enumerable.Empty<string>())
+                .Where(n => !string.IsNullOrWhiteSpace(n) && Regex.IsMatch(n.Trim(), @"^[A-Za-z_]\w*$"))
+                .Select(n => n.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (list.Count == 0) return vb;
+
+            string norm = NormalizeNewlines(vb);
+            int endClass = norm.LastIndexOf("End Class", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) endClass = norm.LastIndexOf("EndClass", StringComparison.OrdinalIgnoreCase);
+            if (endClass < 0) return vb;
+
+            var sb = new StringBuilder(norm.Length + list.Count * 45);
+            sb.Append(norm.Substring(0, endClass));
+            sb.AppendLine();
+            sb.AppendLine("' --- RuleTrace: auto-generated parameter properties ---");
+            foreach (string name in list.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.AppendLine("Public Property [" + name + "] As Object");
+            }
+            sb.AppendLine();
+            sb.Append(norm.Substring(endClass));
+            return sb.ToString().Replace("\n", "\r\n");
+        }
+
+        public static List<string> DiscoverUndeclaredParameters(string code, object cls, IList<MemberSource> sources, Action<string> log)
+        {
+            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (cls != null)
+            {
+                foreach (string n in DiscoverParameterNamesFromClass(cls))
+                    candidates.Add(n);
+            }
+
+            if (sources != null)
+            {
+                foreach (var src in sources)
+                {
+                    if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                    foreach (string n in DiscoverParameterNamesFromCode(src.Code))
+                        candidates.Add(n);
+                }
+            }
+
+            foreach (string n in DiscoverParameterNamesFromCode(code))
+                candidates.Add(n);
+
+            var declared = CollectDeclarationNames(code);
+            EnrichDeclarationNamesFromText(code, declared);
+
+            var missing = new List<string>();
+            foreach (string name in candidates.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                if (!Regex.IsMatch(name, @"^[A-Za-z_]\w*$")) continue;
+                if (declared.Contains(name)) continue;
+                if (name.Equals("M_Out", StringComparison.OrdinalIgnoreCase) || name.Equals("Out", StringComparison.OrdinalIgnoreCase)) continue;
+                if (RuntimeHostFieldNames.Any(h => h.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+                missing.Add(name);
+            }
+            return missing;
+        }
+
+        private static IEnumerable<string> DiscoverParameterNamesFromClass(object cls)
+        {
+            if (cls == null) yield break;
+            foreach (string name in new[] { "M_Parameter", "Parameters", "ParameterList", "UpdatedParameterList", "M_Property", "PropertyList", "UpdatedPropertyList" })
+            {
+                var en = GetMember(cls, name) as IEnumerable;
+                if (en == null) continue;
+                foreach (object item in en)
+                {
+                    if (item == null) continue;
+                    string n = Convert.ToString(GetMember(item, "Name") ?? GetMember(item, "M_Name") ?? GetMember(item, "ParameterName") ?? GetMember(item, "PropertyName") ?? item);
+                    if (!string.IsNullOrWhiteSpace(n) && Regex.IsMatch(n.Trim(), @"^[A-Za-z_]\w*$"))
+                        yield return n.Trim();
+                }
+            }
+        }
+
+        private static IEnumerable<string> DiscoverParameterNamesFromCode(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) yield break;
+            // Match variables with parameter prefix: PP_..., PM_..., P_... (e.g. PP_SatheEshghal, P_Vahed, P_M_Tejari)
+            var rxPrefixed = new Regex(@"\b(P[PM]_[A-Za-z0-9_]+|P_[A-Za-z0-9_]+)\b", RegexOptions.IgnoreCase);
+            foreach (Match m in rxPrefixed.Matches(text))
+            {
+                string id = m.Groups[1].Value;
+                if (!string.IsNullOrWhiteSpace(id)) yield return id;
+            }
+
+            // Match assignments like: PP_SatheEshghal = ... or P_Vahed = ... or Me.P_Vahed = ...
+            var rxAssign = new Regex(@"^\s*(?:Me\.)?([A-Za-z_]\w*)\s*=(?!=)", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+            foreach (Match m in rxAssign.Matches(text))
+            {
+                string id = m.Groups[1].Value;
+                if (!string.IsNullOrWhiteSpace(id) && (id.StartsWith("P", StringComparison.OrdinalIgnoreCase) || id.StartsWith("_", StringComparison.OrdinalIgnoreCase)))
+                    yield return id;
+            }
+
+            // Match Property declarations in member bodies (e.g. Public Property Foo As ...)
+            var rxProp = new Regex(@"(?:Public|Private|Protected|Friend)?\s*Property\s+([A-Za-z_]\w*)", RegexOptions.IgnoreCase);
+            foreach (Match m in rxProp.Matches(text))
+            {
+                string id = m.Groups[1].Value;
+                if (!string.IsNullOrWhiteSpace(id) && !id.Equals("Out", StringComparison.OrdinalIgnoreCase))
+                    yield return id;
+            }
         }
 
         private static readonly Regex FieldDeclFirstNameRx = new Regex(

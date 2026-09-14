@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.VisualBasic;
 
 namespace RuleTrace
@@ -42,15 +43,73 @@ namespace RuleTrace
             log("VBC compile  : " + refs.Count + " reference DLL(s), source " + (mergedVb.Length / 1024) + " KB");
 
             outcome = TryCompileWithCodeDom(vbPath, dllPath, cacheFolder, refs, log);
+            if (!outcome.Ok)
+            {
+                outcome = TryRemedyAndRecompile(ref mergedVb, outcome, vbPath, dllPath, cacheFolder, refs, log);
+            }
             if (outcome.Ok) return outcome;
 
             log("VBC retry    : VBCodeProvider failed — trying vbc.exe ...");
             var exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
+            if (!exeOutcome.Ok)
+            {
+                var missing = ExtractUndeclaredVariables(exeOutcome.Errors);
+                if (missing.Count > 0)
+                {
+                    log("VBC auto-fix : " + missing.Count + " undeclared variable(s) from vbc.exe — adding property stubs...");
+                    mergedVb = FormulaMerger.InjectPropertyStubs(mergedVb, missing);
+                    File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
+                    exeOutcome = TryCompileWithVbcExe(vbPath, dllPath, dllFolder, log);
+                }
+            }
             if (exeOutcome.Ok) return exeOutcome;
 
             foreach (string e in exeOutcome.Errors)
                 if (!outcome.Errors.Contains(e)) outcome.Errors.Add(e);
             return outcome;
+        }
+
+        private static CompileOutcome TryRemedyAndRecompile(
+            ref string mergedVb, CompileOutcome failedOutcome,
+            string vbPath, string dllPath, string cacheFolder,
+            List<string> refs, Action<string> log)
+        {
+            var outcome = failedOutcome;
+            for (int attempt = 0; attempt < 3 && !outcome.Ok; attempt++)
+            {
+                var missing = ExtractUndeclaredVariables(outcome.Errors);
+                if (missing.Count == 0) break;
+
+                log("VBC auto-fix : " + missing.Count + " undeclared variable(s) found (" + string.Join(", ", missing.Take(8)) + (missing.Count > 8 ? "..." : "") + ") — adding property stubs...");
+                mergedVb = FormulaMerger.InjectPropertyStubs(mergedVb, missing);
+                File.WriteAllText(vbPath, mergedVb, Encoding.UTF8);
+
+                outcome = TryCompileWithCodeDom(vbPath, dllPath, cacheFolder, refs, log);
+                if (outcome.Ok)
+                {
+                    log("VBC auto-fix : compile OK after adding property stub(s)!");
+                    return outcome;
+                }
+            }
+            return outcome;
+        }
+
+        private static List<string> ExtractUndeclaredVariables(IEnumerable<string> errors)
+        {
+            var list = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (errors == null) return list.ToList();
+            var rx = new Regex(@"'(\w+)'\s+is\s+not\s+declared", RegexOptions.IgnoreCase);
+            foreach (string e in errors)
+            {
+                if (string.IsNullOrWhiteSpace(e)) continue;
+                foreach (Match m in rx.Matches(e))
+                {
+                    string id = m.Groups[1].Value;
+                    if (!string.IsNullOrWhiteSpace(id) && Regex.IsMatch(id, @"^[A-Za-z_]\w*$"))
+                        list.Add(id);
+                }
+            }
+            return list.ToList();
         }
 
         private static CompileOutcome TryCompileWithCodeDom(string vbPath, string dllPath, string cacheFolder, List<string> refs, Action<string> log)
@@ -342,15 +401,24 @@ namespace RuleTrace
                 TrySet(_instance, n, factory);
         }
 
-        public void SetParam(string key, object value) { _params[key] = value; }
+        public void SetParam(string key, object value)
+        {
+            _params[key] = value;
+            if (_instance != null) TrySet(_instance, key, value);
+        }
 
         public object Run(string entry)
         {
             if (_instance == null) SetMyInfo(_factory);
-            MethodInfo m = FormulaType.GetMethod(entry ?? "Run", BindingFlags.Public | BindingFlags.Instance)
-                           ?? FormulaType.GetMethods(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(x => x.Name.Equals("Run", StringComparison.OrdinalIgnoreCase) && x.GetParameters().Length == 0);
-            if (m == null) throw new MissingMethodException(FormulaType.FullName + "." + entry);
-            return m.Invoke(_instance, null);
+            foreach (var kv in _params) TrySet(_instance, kv.Key, kv.Value);
+            string method = entry ?? "Run";
+            MethodInfo m = FormulaType.GetMethod(method, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                           ?? FormulaType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                               .FirstOrDefault(x => x.Name.Equals(method, StringComparison.OrdinalIgnoreCase));
+            if (m == null) throw new MissingMethodException(FormulaType.FullName + "." + method);
+            var ps = m.GetParameters();
+            object[] args = ps.Length == 0 ? null : new object[ps.Length];
+            return m.Invoke(_instance, args);
         }
 
         public IDictionary ParametersValue
@@ -364,17 +432,43 @@ namespace RuleTrace
                     if (p.GetIndexParameters().Length > 0) continue;
                     try { d[p.Name] = p.GetValue(_instance, null); } catch { }
                 }
+                foreach (FieldInfo f in FormulaType.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    try { if (!d.ContainsKey(f.Name)) d[f.Name] = f.GetValue(_instance); } catch { }
+                }
                 return d;
             }
         }
 
         private static void TrySet(object o, string name, object value)
         {
+            if (o == null || string.IsNullOrWhiteSpace(name)) return;
             Type t = o.GetType();
-            PropertyInfo p = t.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (p != null && p.CanWrite) { try { p.SetValue(o, value, null); } catch { } return; }
-            FieldInfo f = t.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (f != null) try { f.SetValue(o, value); } catch { }
+            PropertyInfo p = t.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (p != null && p.CanWrite)
+            {
+                try
+                {
+                    object v = value;
+                    if (v != null && p.PropertyType != typeof(object) && !p.PropertyType.IsAssignableFrom(v.GetType()))
+                        v = Convert.ChangeType(v, p.PropertyType);
+                    p.SetValue(o, v, null);
+                    return;
+                }
+                catch { }
+            }
+            FieldInfo f = t.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (f != null)
+            {
+                try
+                {
+                    object v = value;
+                    if (v != null && f.FieldType != typeof(object) && !f.FieldType.IsAssignableFrom(v.GetType()))
+                        v = Convert.ChangeType(v, f.FieldType);
+                    f.SetValue(o, v);
+                }
+                catch { }
+            }
         }
     }
 }
