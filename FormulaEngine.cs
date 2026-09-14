@@ -88,11 +88,41 @@ namespace RuleTrace
         public readonly List<TraceEvent> LastTrace = new List<TraceEvent>();
         /// <summary>ParametersValue snapshot after the last Run.</summary>
         public readonly Dictionary<string, string> LastParams = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Compact "send this to support" block: build label + retry/merge/vbc lines only (no engine BC30269 noise, no inspect dump).</summary>
+        public readonly List<string> Summary = new List<string>();
+        private bool _summaryCapture;
 
         public FormulaEngine(UserSettings settings, Action<string> log)
         {
             _s = settings;
-            _log = log ?? (m => { });
+            Action<string> inner = log ?? (m => { });
+            _log = m =>
+            {
+                inner(m);
+                if (_summaryCapture && IsSummaryLine(m)) Summary.Add(m);
+            };
+        }
+
+        private static bool IsSummaryLine(string m)
+        {
+            if (string.IsNullOrWhiteSpace(m)) return false;
+            string t = m.TrimStart();
+            if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) || t.IndexOf("BC30269", StringComparison.Ordinal) >= 0
+                || t.IndexOf("BC30260", StringComparison.Ordinal) >= 0 || t.IndexOf("BC30201", StringComparison.Ordinal) >= 0)
+                return false;
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Retry", "Inject", "After inject", "  ClsFunction", "Merge", "Merged", "VBC", "  vbc", "vbc.exe", "Run host", "Compile ", "Compiling", "ERROR", "FATAL", "WARN", "Exit code" })
+                if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private void PrintSummary()
+        {
+            if (Summary.Count == 0) return;
+            _log("");
+            _log("╔══════════ خلاصه برای ارسال (فقط این بخش را کپی کنید) ══════════╗");
+            foreach (string s in Summary) _log("║ " + s);
+            _log("╚═══════════════════════════════════════════════════════════════╝");
+            _log("دکمه «کپی خلاصه خطا» همین بخش را در clipboard می‌گذارد.");
         }
 
         // ───────────────────────────── DLL discovery ─────────────────────────────
@@ -586,6 +616,8 @@ namespace RuleTrace
             }
 
             Guid cityGuid = ResolveCityGuid();
+            Summary.Clear();
+            _summaryCapture = true;
             _log(BuildInfo.Banner);
             _log("Formula      : " + r.Formula + " (NidRuleClass=" + nid + ")");
             _log("CityGuid     : " + cityGuid);
@@ -614,12 +646,16 @@ namespace RuleTrace
             object compilerErrors = Get(result, "CompilerErrors");
             if (HasCompilerErrors(compilerErrors))
             {
+                bool retried = false;
                 if (FormulaMerger.IsMOutDuplicateError(compilerErrors))
                 {
                     _log("");
-                    _log("=== COMPILE ERRORS (M_Out duplicate — retry with XmlBody inject) ===");
-                    LogCompilerErrors(compilerErrors, 12);
+                    _log("=== موتور Sara: BC30269 (M_Out تکراری) — این خطا مهم نیست، RuleTrace خودش retry می‌کند ===");
+                    LogCompilerErrors(compilerErrors, 3);
                     SaveMergedVb(compilerErrors, cacheFolder);
+                    _log("");
+                    _log("=== RETRY: XmlBody inject + merge + vbc ===");
+                    retried = true;
                     object retry = TryInjectedCompile(nid, cityGuid, r.ReCompile, cacheFolder);
                     if (retry != null && (retry is DirectFormulaHost || !HasCompilerErrors(Get(retry, "CompilerErrors"))))
                     {
@@ -630,16 +666,24 @@ namespace RuleTrace
 
                 if (HasCompilerErrors(Get(result, "CompilerErrors")))
                 {
+                    if (retried)
+                    {
+                        _log("");
+                        _log("Compile      : FAILED — vbc نتوانست merged VB را کامپایل کند (خطوط «vbc :» بالا)");
+                        _log("               فایل: " + Path.Combine(cacheFolder, "RuleTrace_merged.vb"));
+                        _summaryCapture = false;
+                        PrintSummary();
+                        return 4;
+                    }
+
                     _log("");
                     _log("=== COMPILE ERRORS ===");
                     LogCompilerErrors(Get(result, "CompilerErrors"), 40);
                     SaveMergedVb(Get(result, "CompilerErrors"), cacheFolder);
                     _log("");
-                    _log("تشخیص: کد در XmlBody/<Body> موجود است (تحلیل Member) اما موتور هنگام merge بدنه را خالی می‌گذارد.");
-                    _log("        EncryptXmlBody پر است — احتمالاً موتور از رمزنگاری می‌خواند و روی PC decrypt نمی‌شود.");
-                    _log("        RuleTrace inject + merge را امتحان کرد؛ اگر باز خطا داد DLL دقیق سرور Sara لازم است.");
-                    try { InspectClass(nid, cityGuid); }
-                    catch (Exception ex) { _log("Inspect failed: " + ex.Message); }
+                    _log("تشخیص: خطای کامپایل موتور Sara که از نوع M_Out نیست — «بررسی موتور (ClsClass)» را دستی بزنید.");
+                    _summaryCapture = false;
+                    PrintSummary();
                     return 4;
                 }
             }
@@ -703,6 +747,7 @@ namespace RuleTrace
 
             _log("");
             _log("Done.");
+            _summaryCapture = false;
             return hasStop ? 1 : 0;
         }
 
@@ -968,7 +1013,7 @@ namespace RuleTrace
                         if (shown++ >= 40) { _log("      ... more items"); break; }
                         if (item == null) { _log("      [" + (shown - 1) + "] (null)"); continue; }
                         if (IsSimple(item.GetType())) { _log("      [" + (shown - 1) + "] " + Short(item)); continue; }
-                        _log("      [" + (shown - 1) + "] " + Summary(item));
+                        _log("      [" + (shown - 1) + "] " + OneLine(item));
                     }
                     continue;
                 }
@@ -980,13 +1025,13 @@ namespace RuleTrace
                 }
                 else
                 {
-                    _log("  " + name + " : " + vt.Name + " " + Summary(v));
+                    _log("  " + name + " : " + vt.Name + " " + OneLine(v));
                 }
             }
         }
 
         /// <summary>Single-line view of an engine object: all simple-valued members (name/type/version/active/body length).</summary>
-        private static string Summary(object item)
+        private static string OneLine(object item)
         {
             Type t = item.GetType();
             var parts = new List<string>();

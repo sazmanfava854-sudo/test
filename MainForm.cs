@@ -22,7 +22,8 @@ namespace RuleTrace
         private CheckBox _chkRecompile, _chkClearCache, _chkAllParams;
         private ListView _lvCases;
         // actions
-        private Button _btnBrowse, _btnDetect, _btnTestDb, _btnLookup, _btnAnalyze, _btnInspect, _btnRun, _btnClearLog, _btnSaveLog, _btnCopyLog;
+        private Button _btnBrowse, _btnDetect, _btnTestDb, _btnLookup, _btnAnalyze, _btnInspect, _btnRun, _btnClearLog, _btnSaveLog, _btnCopyLog, _btnCopySummary;
+        private List<string> _lastSummary = new List<string>();
         private TextBox _txtLog;
         private TabControl _tabs;
         private TabPage _tabLog, _tabDebug;
@@ -220,9 +221,12 @@ namespace RuleTrace
             _btnInspect = Btn("بررسی موتور (ClsClass)", (s, e) => InspectEngine());
             _btnClearLog = Btn("پاک کردن خروجی", (s, e) => _txtLog.Clear());
             _btnCopyLog = Btn("کپی خروجی", (s, e) => { if (_txtLog.TextLength > 0) Clipboard.SetText(_txtLog.Text); });
+            _btnCopySummary = Btn("کپی خلاصه خطا", (s, e) => CopySummary());
+            _btnCopySummary.Font = new Font(Font, FontStyle.Bold);
+            _btnCopySummary.Enabled = false;
             _btnSaveLog = Btn("ذخیره خروجی...", (s, e) => SaveLog());
             _btnToggleSettings = Btn("▲ پنهان کردن تنظیمات", (s, e) => ToggleSettings(!_grpSettings.Visible));
-            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnClearLog, _btnCopyLog, _btnSaveLog, _btnToggleSettings }) p.Controls.Add(b);
+            foreach (var b in new[] { _btnRun, _btnTestDb, _btnAnalyze, _btnInspect, _btnClearLog, _btnCopyLog, _btnCopySummary, _btnSaveLog, _btnToggleSettings }) p.Controls.Add(b);
             p.Controls.Add(new Label { Text = "کلیدها: F5 اجرا • F10 رویداد بعدی • Shift+F10 قبلی", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(12, 10, 0, 0) });
             return p;
         }
@@ -460,6 +464,11 @@ namespace RuleTrace
                 Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " ══════════");
                 int code = eng.Run(req);
                 Log("Exit code    : " + code + (code == 0 ? " (OK)" : code == 1 ? " (Stop error in BizErrors)" : code == 4 ? " (compile errors)" : ""));
+                var summary = eng.Summary.ToList();
+                summary.Add("Exit code    : " + code);
+                Ui(() => { _lastSummary = summary; _btnCopySummary.Enabled = summary.Count > 1; });
+                if (code == 4)
+                    Log("برای ارسال خطا فقط دکمه «کپی خلاصه خطا» را بزنید و متن را paste کنید.");
 
                 if (code == 0 || code == 1)
                 {
@@ -484,6 +493,16 @@ namespace RuleTrace
                         : "Debug        : فرمول هیچ AddError ثبت نکرد؛ چیزی برای مرحله‌ای رفتن نیست");
                 }
             }, loadDlls: true);
+        }
+
+        private void CopySummary()
+        {
+            if (_lastSummary == null || _lastSummary.Count == 0) { Log("خلاصه‌ای وجود ندارد — اول «اجرا» را بزنید."); return; }
+            var sb = new StringBuilder();
+            sb.AppendLine("=== RuleTrace summary ===");
+            foreach (string s in _lastSummary) sb.AppendLine(s);
+            Clipboard.SetText(sb.ToString());
+            Log("خلاصه خطا (" + _lastSummary.Count + " خط) کپی شد — همین را paste کنید.");
         }
 
         private void SaveLog()

@@ -257,7 +257,7 @@ namespace RuleTrace
             AddTypeRef(list, seenPaths, seenNames, typeof(System.Xml.Linq.XDocument));
             AddTypeRef(list, seenPaths, seenNames, typeof(System.ComponentModel.Component));
             AddTypeRef(list, seenPaths, seenNames, typeof(Microsoft.VisualBasic.Strings));
-            AddTypeRef(list, seenPaths, seenNames, typeof(System.Runtime.Serialization.SerializableAttribute));
+            AddTypeRef(list, seenPaths, seenNames, typeof(System.Runtime.Serialization.DataContractAttribute));
             AddTypeRef(list, seenPaths, seenNames, typeof(System.Configuration.ConfigurationManager));
 
             log("VBC refs     : " + list.Count + " assemblies (deduped by name)");

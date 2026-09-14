@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "merge-v4-vbc-refs";
+        public const string Label = "merge-v5-summary";
 
         public static string Banner
         {
