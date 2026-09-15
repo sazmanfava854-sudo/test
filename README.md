@@ -67,9 +67,9 @@ ruletrace/
 3. باید چاپ شود `Folder: ...` و بعد `OK -> ...\bin\RuleTrace.exe`
 4. عنوان پنجره: `v21c-cross-class`
 
-اگر ویندوز گفت cannot find `...\88fc(46)\build.cmd` آن پوشهٔ ZIP دیگر وجود ندارد. از Visual Studio: `RuleTrace.sln` را باز کنید → Build → Rebuild Solution (Ctrl+Shift+B) → Ctrl+F5.
+اگر ویندوز گفت cannot find پوشهٔ `(47)`: پرانتز مسیر را خراب می‌کند و ZIP دو لایه است. `build.cmd` را از Downloads اجرا نکنید.
 
-یا کل پوشه را به `C:\ruletrace` کپی کنید و `build.bat` را دابل‌کلیک کنید.
+کل محتویات پوشهٔ **داخلی** (جایی که `RuleTrace.sln` هست) را در Explorer به `C:\ruletrace` کپی کنید، بعد در Visual Studio همان `C:\ruletrace\RuleTrace.sln` را باز کنید → Ctrl+Shift+B → Ctrl+F5.
 
 ## استفاده
 

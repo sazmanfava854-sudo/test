@@ -1,38 +1,33 @@
-How to build RuleTrace (Windows)
+Windows error with GitHub ZIP (47)
 
-The error:
-  Windows cannot find
-  C:\Users\...\Downloads\test-cursor-ruletrace-standalone-88fc(46)\build.cmd
+Path like:
+  Downloads\test-cursor-ruletrace-standalone-88fc(47)\test-cursor-ruletrace-standalone-88fc
 
-means that ZIP folder is gone or incomplete. GitHub ZIP extract (46) is an old copy.
-Do not click a shortcut or a VS/Cursor run button that still points at (46).
+Two problems:
+  1. Nested folder — build.cmd is in the INNER folder, not in (47)
+  2. Parentheses (47) — cmd.exe treats (47) as grouping, so Windows
+     "cannot find" build.cmd even when the file exists
 
-------------------------------------------------
-EASIEST if Visual Studio is already open (MainForm.cs)
-------------------------------------------------
-1. File -> Open -> Project/Solution -> RuleTrace.sln
-   (the sln in the folder you can actually see in Explorer)
-2. Build menu -> Rebuild Solution   (Ctrl+Shift+B)
-3. Debug menu -> Start Without Debugging   (Ctrl+F5)
+DO THIS (Explorer, no script):
 
-Window title must be: v21c-cross-class
+1. Open the INNER folder (the one that contains RuleTrace.sln)
+2. Select all files (Ctrl+A)  OR  select the inner folder itself
+3. Copy (Ctrl+C)
+4. Open C:\
+5. New folder:  C:\ruletrace
+6. Paste (Ctrl+V) so you have:
+     C:\ruletrace\RuleTrace.sln
+     C:\ruletrace\build.cmd
+     C:\ruletrace\MainForm.cs
+7. In Visual Studio: File -> Open -> Project/Solution
+     C:\ruletrace\RuleTrace.sln
+8. Build -> Rebuild Solution     (Ctrl+Shift+B)
+9. Debug -> Start Without Debugging   (Ctrl+F5)
 
-------------------------------------------------
-Or: copy to a short path, then double-click
-------------------------------------------------
-1. In Explorer open Downloads. Find a folder that EXISTS
-   (not (46) if that one was deleted). Inside it you must see:
-     RuleTrace.sln
-     RuleTrace.csproj
-     build.cmd   OR   build.bat
-2. Copy that whole folder to  C:\ruletrace
-3. Double-click  C:\ruletrace\build.bat
+Do NOT double-click build.cmd under Downloads.
+Do NOT extract ZIP to (48) (49)...
 
-If Windows still blocks .cmd from Downloads, C:\ruletrace avoids that.
+If you must use cmd, quotes are required:
 
-------------------------------------------------
-Do NOT
-------------------------------------------------
-- cd to Downloads\ruletrace
-- keep extracting ZIP to (47) (48) ...
-- run a shortcut to a deleted (46) folder
+  cd /d "C:\Users\sadathoseini-sh\Downloads\test-cursor-ruletrace-standalone-88fc(47)\test-cursor-ruletrace-standalone-88fc"
+  .\build.cmd
