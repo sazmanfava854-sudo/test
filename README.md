@@ -1,196 +1,155 @@
-# HR Performance & Discipline Management System
+# RuleTrace — Sara Formula Debugger (UI)
 
-سیستم جامع مدیریت عملکرد و انضباط کارکنان برای شهرداری‌ها، سازمان‌های دولتی و شرکت‌های بزرگ.
+دیباگر فرمول‌های Sara بدون UI اصلی.
 
-**دانلود نسخه نهایی (v1.0.1-final):**  
-https://github.com/sazmanfava854-sudo/test/releases/download/v1.0.1-final/HRPerformance-System-v1.0.1-final.zip
+## مرحله ۱ — ترکیب کد RuleEngine + DLL (فقط خواندن)
 
-## Architecture
+این برنامه **عیب‌یابی** است. کد `dbo.Member` را از RuleEngine کنار نوع‌های DLL می‌گذارد. **چیزی در دیتابیس ذخیره نمی‌شود.**
+
+## مرحله ۲ — اجرا بدون بازنویسی VB (`v21c-cross-class`)
+
+RuleTrace دیگر کد Memberها را به یک فایل VB نمی‌چسباند.
+
+کلاس‌های فرمول **به هم وصل‌اند**. Member چیدمان `1288` در `ZabetehConvert` (NidClass **342**) است، نه در Solh/344. با انتخاب Solh این کلاس‌ها با هم خوانده می‌شوند: Rule 336، ZabetehConvert 342، Solh 344، Tavafogh 345، Global 432.
+
+`build.cmd` — عنوان باید `v21c-cross-class` باشد.
+
+RuleTrace دیگر کد Memberها را به یک فایل VB نمی‌چسباند و `Compile(ToString1)` / vbc نمی‌کند. آن معماری خطاهای BC30269 (Out/M_Out تکراری) و BC30289 (متد داخل متد) می‌ساخت و همگرا نمی‌شد.
+
+اجرا یعنی:
+
+1. `ClsCommon.RunRule` همان موتور Sara
+2. اگر `Instanc` ساخته شد → `SetMyInfo` + `Run`
+3. اگر نه → جستجوی DLL از قبل کامپایل‌شده در Cache / `dll10` (`*Solh*.dll` / پوشه `344`)
+4. اگر هیچ‌کدام نبود → تحلیل ایستای Member 1288 (چیدمان / If Solh / Exit) بدون اجرا — در **کپی خلاصه** با پیشوند `Chidman`
+
+برای اجرای زنده: یک‌بار Solh را در **UI سارا** کامپایل کنید تا DLL در Cache ساخته شود، بعد RuleTrace همان را لود می‌کند.
+
+`build.cmd` — عنوان پنجره باید `v21b-chidman-summary` باشد. NidProc را پر کنید. **ReCompile خاموش.**
+
+اگر Instanc نبود (کد خروج ۲): تب دیباگ روی Member 1288 باز می‌شود. خروجی **کپی خلاصه خطا** باید خطوط `Arch` و `Chidman` را نشان دهد — نه ۵۸ خط `Engine err`.
+
+---
+
+## مرحله ۲+ — اجرا و دیباگ
+
+کاربر NidProc/NidWorkItem را وارد می‌کند، فرمول (Solh, Rule, Income, ...) اجرا می‌شود و خروجی `AddError` / `BizErrors` و مقدار متغیر Watch نمایش داده می‌شود.
+
+## ساختار
 
 ```
-HRPerformance/
-├── database/           # SQL Server scripts (01-08)
-├── src/
-│   ├── HRPerformance.Domain/          # Entities, Enums, Interfaces
-│   ├── HRPerformance.Application/     # CQRS (MediatR), DTOs, Validators
-│   ├── HRPerformance.Infrastructure/  # EF Core, Repositories, Services
-│   └── HRPerformance.API/             # REST API, SignalR, Background Services
-└── frontend/
-    └── hr-performance-web/            # React + TypeScript + MUI (RTL)
+ruletrace/
+  RuleTrace.sln
+  RuleTrace.csproj      ← WinForms, .NET 4.7.2, بدون reference به DLLهای Sara
+  Program.cs            ← نقطه شروع
+  MainForm.cs           ← UI
+  CodeEditorPanel.cs    ← مرحله ۱: مشاهده کد Member از RuleEngine + نوع‌های DLL (فقط خواندن)
+  MemberRepository.cs   ← خواندن dbo.Member (XmlBody/Body)
+  FormulaEngine.cs      ← بارگذاری DLLها در زمان اجرا (reflection) + RunRule یا host DLL از Cache
+  ChidmanAnalyzer.cs    ← تحلیل ایستای Member 1288 (چیدمان / Solh guards) بدون کامپایل VB
+  DebugPanel.cs         ← تب «دیباگ مرحله‌ای» (F10 / Shift+F10 / F5) روی trace فرمول
+  UserSettings.cs       ← ذخیره تنظیمات UI در bin\RuleTrace.user.ini
+  MemberAnalyzer.cs     ← تحلیل جدول Member (نسخه‌ها، ساختار XML)
+  App.config            ← مقادیر پیش‌فرض
+  build.cmd             ← Build خودکار + اجرا
+  run.cmd               ← اجرای bin\RuleTrace.exe
+  bin\                  ← بعد از Build ساخته می‌شود
 ```
 
-## Tech Stack
+**نکته مهم:** پروژه هیچ reference به `BIZ.SC.DLL` / `SafaClassDesingerNew.dll` ندارد. DLLها **در زمان اجرا** از پوشه‌ای که در UI مشخص می‌کنید (پیش‌فرض `Desktop\dll10`) بارگذاری می‌شوند. بنابراین Build همیشه موفق است.
 
-### Backend
-- ASP.NET Core 8 Web API
-- Entity Framework Core 8 + SQL Server
-- JWT Authentication + Refresh Token
-- Clean Architecture + CQRS (MediatR)
-- FluentValidation, AutoMapper, Serilog
-- SignalR (real-time notifications)
-- Background Service (attendance sync every 5 min)
-
-### Frontend
-- React 18 + TypeScript + Vite
-- Material UI (RTL, Dark/Light theme)
-- Redux Toolkit, React Router, Axios
-- Chart.js, Persian date support, PWA
-
-## Quick Start (یک دستور — فقط .NET)
-
-> **نیاز به Node.js/npm ندارید.** فرانت‌اند از قبل بیلد شده و داخل API سرو می‌شود.
-
-### Windows
-
-**اولین بار (توصیه‌شده):**
-```powershell
-cd HRPerformance
-.\scripts\setup-windows.ps1
-```
-
-**اجرای برنامه:**
-```powershell
-.\start.ps1
-```
-
-یا دوبار کلیک روی `start.bat` — در اولین اجرا، restore پکیج‌ها به‌صورت خودکار انجام می‌شود.
-
-### Linux / macOS
-
-```bash
-cd HRPerformance
-./start.sh
-```
-
-سپس مرورگر را باز کنید:
-- **Application:** http://localhost:5000
-- **Swagger:** http://localhost:5000/swagger
-
-برای توقف: `Ctrl+C`
-
-### پیش‌نیازها
-
-| نرم‌افزار | نسخه | دانلود |
-|-----------|------|--------|
-| .NET SDK | **8.0** (شما: 8.0.401 ✅) | https://dotnet.microsoft.com/download/dotnet/8.0 |
-| SQL Server | 2019+ | برای دیتابیس (یک بار `npm run db:init` یا اسکریپت‌های SQL) |
-
-### رفع کندی Cursor / خطای NuGet (SSL)
-
-اگر در IDE پیام `unresolved dependencies` یا خطای SSL هنگام دانلود پکیج می‌بینید:
-
-```powershell
-# Windows — از ریشه پروژه
-.\scripts\restore-packages.ps1
-```
+## Build (یک دستور)
 
 ```cmd
-scripts\restore-packages.bat
+cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+build.cmd
 ```
 
-سپس Cursor را ببندید و دوباره پوشه پروژه را باز کنید. فقط `HRPerformance.sln` را باز کنید (نه چند solution همزمان).
+- MSBuild را خودکار پیدا می‌کند (VS 2019/2022/Build Tools/dotnet).
+- خروجی: `bin\RuleTrace.exe` و بعد از Build خودکار اجرا می‌شود.
 
-**علت رایج:** فایروال/آنتی‌ویروس/VPN اتصال به `api.nuget.org` را قطع می‌کند. در صورت نیاز:
-- `dotnet nuget locals all --clear` و restore مجدد
-- تنظیم پروکسی: `$env:HTTPS_PROXY='http://proxy:port'`
+در PowerShell: `.\build.cmd`
 
-**Node.js فقط برای توسعه‌دهندگان** که می‌خواهند UI را تغییر دهند — برای اجرای عادی لازم نیست.
+## استفاده
 
----
+1. **پوشه DLL**: `C:\Users\sadathoseini-sh\Desktop\dll10` (خودکار پیدا می‌شود؛ یا «انتخاب پوشه»)
+2. **RuleEngine / Sara**: connection stringها با `debugger` (از App.config پر شده)
+3. **CityGuid**: `06065CA7-8B68-491F-A002-2AC9CAC8AE34` (خالی = از `CI_City` خوانده می‌شود)
+4. **تست اتصال DB** → باید `[RuleEngine] OK` و `[Sara] OK` ببینید
+5. **NidWorkItem** (مثلاً `11314989`) یا کد نوسازی → «جستجو در Sara» → NidProc پر می‌شود
+6. فرمول `Solh`، Watch `Calc_Chandganeh`
+7. **اجرا (موتور Sara)** — ReCompile را خاموش بگذارید
 
-## توسعه UI (اختیاری — نیاز به Node.js)
+اگر Instanc ساخته نشد، تب دیباگ Member 1288 را نشان می‌دهد. برای اجرای زنده، یک‌بار Solh را در UI سارا کامپایل کنید.
 
-اگر می‌خواهید فرانت‌اند را ویرایش کنید:
+## دیباگ مرحله‌ای (F10) — تب «دیباگ مرحله‌ای»
 
-```bash
-cd HRPerformance/frontend/hr-performance-web
-npm install
-npm run dev
+فرمول‌های Sara کد VB هستند که موتور `SafaClassDesingerNew` در زمان اجرا کامپایل می‌کند؛ نمی‌توان مانند VS روی هر خط breakpoint گذاشت. به جای آن RuleTrace **اجرا را ضبط می‌کند و بعد مرحله‌به‌مرحله بازپخش می‌کند**:
+
+- هر `AddError` که فرمول ثبت می‌کند (همان `BizErrors`) یک **رویداد / گام** است.
+- بعد از اجرا، RuleTrace کد VB همه ردیف‌های `dbo.Member` را از DB می‌خواند و برای هر گام **خط متناظر در کد** را highlight می‌کند (خط `AddError("Key", ...)` با همان Key؛ در حلقه‌ها گام n به n‌امین رخداد می‌رود).
+- برای هر گام مقدار متغیر (`ParametersValue[Key]`) و مقدار Watch نمایش داده می‌شود.
+
+| کلید | عمل |
+|------|-----|
+| `F5` | اجرای فرمول (اگر trace وجود دارد و تب دیباگ فعال است: رفتن به آخر) |
+| `F10` / `F11` | گام بعدی |
+| `Shift+F10` | گام قبلی |
+| `Ctrl+Home` | گام اول |
+
+اگر Key در کد پیدا نشد (مثلاً Key به صورت متغیر ساخته می‌شود) فقط رویداد و مقدارها نمایش داده می‌شود. برای دیدن کد بدون اجرا: «بارگذاری کد از DB».
+
+**Breakpoint واقعی (اختیاری):** Visual Studio → Debug → Attach to Process → `RuleTrace.exe`، سپس اجرا. VS روی exception‌های داخل فرمول متوقف می‌شود؛ stepping خط‌به‌خط فقط اگر موتور با `/debug` کامپایل کند ممکن است.
+
+## تشخیص خطای کامپایل (BC30269 / M_Out)
+
+موتور Sara هنگام `RunRule` اغلب **پوسته خالی** می‌سازد: `EncryptXmlBody` پر است، `ClsFunction.Body` خالی می‌ماند، ۲۰ پوسته `M_Out` کنار هم merge می‌شود → BC30269.
+
+RuleTrace **دیگر این پوسته را sanitize / Compile / vbc نمی‌کند.** آن حلقه به BC30289 («Statement cannot appear within a method body») می‌رسید و تمام نمی‌شد.
+
+عیب‌یابی چیدمان صلح بدون کامپایل:
+
+- دکمه **تحلیل چیدمان (1288)** یا اجرای Solh وقتی Instanc نیست
+- If/Exit نزدیک `InsertChidman` و شرط‌های `Solh` / `صلح` / `GetPeace`
+- تب دیباگ: کد Member 1288 از `dbo.Member.XmlBody`
+
+برای اجرای زنده: DLL کامپایل‌شده Sara در
+
+```
+Desktop\dll10\SafaFormulaCache\{CityGuid}\344\
 ```
 
-بعد از تغییرات UI:
-```bash
-npm run build
-# فایل‌های dist را به src/HRPerformance.API/wwwroot کپی کنید
+## اخطار آنتی‌ویروس
+
+`RuleTrace.exe` امضای دیجیتال ندارد و در زمان اجرا DLL بارگذاری می‌کند، به `c:\dll10` کپی می‌کند و موتور Sara فایل `.vb` موقت کامپایل می‌کند — همین رفتار برای heuristics آنتی‌ویروس «مشکوک» است (false positive). راه‌حل: پوشه پروژه را Exclude کنید (Windows Security → Virus & threat protection → Exclusions) یا در PowerShell (Admin):
+
+```powershell
+Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Downloads\rule5"
+Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Desktop\dll10"
 ```
 
----
+## Cache محلی
 
-## Database Setup (دستی)
-
-```bash
-# Run scripts in order against SQL Server:
-sqlcmd -S localhost -i database/01_CreateDatabase.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/02_Tables.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/03_ForeignKeys.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/04_Indexes.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/05_Views.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/06_StoredProcedures.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/07_Triggers.sql
-sqlcmd -S localhost -d HRPerformanceDB -i database/08_SeedData.sql
+```
+{CachePath}\{CityGuid}\{NidRuleClass}\
 ```
 
-## Backend Setup (جداگانه - اختیاری)
+پیش‌فرض: `Desktop\dll10\SafaFormulaCache\06065CA7-...\344\`
 
-```bash
-cd HRPerformance
-dotnet run --project src/HRPerformance.API --launch-profile http
+## خطاهای رایج
+
+| خطا | علت / راه‌حل |
+|-----|--------------|
+| `Login failed for user 'hService'` | فایل‌های `*.dll.config` کنار DLLها — RuleTrace خودکار آن‌ها را `.bak` می‌کند |
+| `BC2017 could not find c:\dll10\BIZ.SC.DLL` | vbc داخل موتور به `c:\dll10` نیاز دارد — RuleTrace خودکار sync می‌کند؛ اگر دسترسی نبود یک بار as Administrator اجرا کنید |
+| `BC30269 'Out' has multiple definitions` / `M_Out` | موتور پوسته خالی ساخت — RuleTrace دیگر VB را بازنویسی نمی‌کند؛ Solh را یک‌بار در UI سارا کامپایل کنید یا تحلیل ایستای 1288 را ببینید |
+| اخطار آنتی‌ویروس | false positive (exe بدون امضا + کامپایل داینامیک) — پوشه را Exclude کنید (بخش «اخطار آنتی‌ویروس») |
+| `RunRule returned null` | اتصال RuleEngine یا `CnRuleString` |
+
+## اجرای مستقیم با پارامتر (اختیاری)
+
+```cmd
+bin\RuleTrace.exe --nidproc FA77A442-29CD-4DDC-ADEA-A3D3A6183F28 --formula Solh --watch Calc_Chandganeh
 ```
 
-API: `http://localhost:5000` | Swagger: `http://localhost:5000/swagger`
-
-## Frontend Setup (جداگانه - اختیاری)
-
-```bash
-cd HRPerformance/frontend/hr-performance-web
-npm run dev
-```
-
-Frontend: `http://localhost:3000` (proxies API to backend)
-
-## User Roles
-
-| Role | Access |
-|------|--------|
-| SuperAdministrator | Full system access |
-| OrganizationAdministrator | Org structure, policies, managers |
-| Manager | Subordinate employees only |
-| Employee | Own profile and scores |
-
-## Key Features
-
-- Dynamic organization hierarchy (unlimited levels)
-- Dynamic evaluation categories, items, and rule engine
-- Attendance integration (REST/SOAP/SQL View) with auto sync
-- Manual evaluations with attachments and workflow
-- Employee/Manager/Admin dashboards with charts
-- Ranking engine, appeals system, audit log
-- Smart alerts via SignalR
-- Reports (employee, department, attendance)
-- Excel/PDF export ready architecture
-
-## API Endpoints
-
-| Controller | Endpoints |
-|------------|-----------|
-| Auth | POST /api/auth/login, /refresh |
-| Employees | CRUD + search |
-| Dashboard | /employee, /manager, /admin |
-| Evaluations | Categories, rules, manual evaluations |
-| Appeals | Create, review, list |
-| Settings | Key-value settings, holidays |
-| Notifications | List, mark read |
-| Health | GET /api/health |
-
-## Security
-
-- JWT + Refresh Token rotation
-- Role-based authorization
-- Password hashing (ASP.NET Identity)
-- Rate limiting (AspNetCoreRateLimit)
-- Input validation (FluentValidation)
-- Full audit logging
-
-## License
-
-Proprietary - Enterprise HR Management System
+فقط فیلدها را پر می‌کند؛ اجرا با دکمه.
