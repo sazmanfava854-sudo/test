@@ -3,11 +3,13 @@
 
 خطای «Windows cannot find ... build.cmd»؟
 -----------------------------------------
-وقتی پروژه را با «Download ZIP» از GitHub می‌گیرید، مسیر شبیه این می‌شود:
+دو علت رایج:
 
-  Downloads\test-cursor-ruletrace-standalone-88fc(44)\...
+1) فایل build.cmd با پایان خط Linux (LF) ساخته شده — ویندوز با دوبار کلیک اجرا نمی‌کند.
+   راه‌حل: build.vbs یا install.cmd را بزنید، یا آخرین RuleTrace.zip را بگیرید.
 
-پرانتز (44) در cmd.exe باعث می‌شود build.cmd اجرا نشود — حتی اگر فایل در Explorer دیده شود.
+2) مسیر Downloads با پرانتز مثل (44) — cmd.exe خراب می‌شود.
+   راه‌حل: install.cmd (کپی به C:\ruletrace)
 
 راه‌حل سریع (پیشنهادی)
 -----------------------

@@ -143,7 +143,7 @@ Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Desktop\dll10"
 
 | خطا | علت / راه‌حل |
 |-----|--------------|
-| `Windows cannot find ... build.cmd` | مسیر Downloads با `(44)` یا ZIP تو در تو — `install.cmd` بزنید یا به `C:\ruletrace` کپی کنید |
+| `Windows cannot find ... build.cmd` | فایل `.cmd` با LF (نه CRLF) یا مسیر با `(44)` — `build.vbs` / `install.cmd` بزنید یا `RuleTrace.zip` جدید |
 | `Login failed for user 'hService'` | فایل‌های `*.dll.config` کنار DLLها — RuleTrace خودکار آن‌ها را `.bak` می‌کند |
 | `BC2017 could not find c:\dll10\BIZ.SC.DLL` | vbc داخل موتور به `c:\dll10` نیاز دارد — RuleTrace خودکار sync می‌کند؛ اگر دسترسی نبود یک بار as Administrator اجرا کنید |
 | `BC30269 'Out' has multiple definitions` / `M_Out` | موتور پوسته خالی ساخت — RuleTrace دیگر VB را بازنویسی نمی‌کند؛ Solh را یک‌بار در UI سارا کامپایل کنید یا تحلیل ایستای 1288 را ببینید |

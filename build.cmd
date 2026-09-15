@@ -42,7 +42,7 @@ if exist "%VSWHERE%" (
   for /f "usebackq delims=" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) do set "MSBUILD=%%i"
 )
 
-REM 2) well-known VS paths (quoted — Program Files has spaces)
+REM 2) well-known VS paths (quoted - Program Files has spaces)
 if not defined MSBUILD for %%p in (
   "%ProgramFiles%\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
   "%ProgramFiles%\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
