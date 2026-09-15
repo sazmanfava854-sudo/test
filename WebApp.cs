@@ -1,0 +1,418 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+
+namespace RuleTrace
+{
+    /// <summary>JSON API for the browser UI. Same engine as the old WinForms form; no VB rewrite.</summary>
+    internal sealed class WebApp
+    {
+        private readonly UserSettings _settings;
+        private readonly object _gate = new object();
+        private int _busy;
+
+        public WebApp(UserSettings settings)
+        {
+            _settings = settings ?? new UserSettings();
+        }
+
+        public UserSettings Settings { get { return _settings; } }
+
+        public Dictionary<string, object> Ping()
+        {
+            return new Dictionary<string, object>
+            {
+                { "ok", true },
+                { "banner", BuildInfo.Banner },
+                { "label", BuildInfo.Label },
+                { "version", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() },
+            };
+        }
+
+        public Dictionary<string, object> Bootstrap()
+        {
+            var formulas = new List<object>();
+            foreach (var kv in FormulaEngine.FormulaMap)
+                formulas.Add(new Dictionary<string, object> { { "name", kv.Key }, { "nid", kv.Value } });
+
+            return new Dictionary<string, object>
+            {
+                { "ok", true },
+                { "banner", BuildInfo.Banner },
+                { "label", BuildInfo.Label },
+                { "version", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString() },
+                { "formulas", formulas },
+                { "relatedSolh", FormulaEngine.RelatedNidClasses(344) },
+                { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
+                { "dllOk", FormulaEngine.IsDllFolder(_settings.DllPath) },
+                { "settings", SettingsMap() },
+            };
+        }
+
+        public Dictionary<string, object> SaveSettings(Dictionary<string, object> body)
+        {
+            ApplySettings(body);
+            try { _settings.Save(); }
+            catch (Exception ex)
+            {
+                return Fail("ذخیره تنظیمات: " + ex.Message);
+            }
+            return Ok("تنظیمات ذخیره شد.", SettingsMap());
+        }
+
+        public Dictionary<string, object> DetectDll()
+        {
+            var log = new List<string>();
+            string found = FormulaEngine.DetectDllPath(_settings.DllPath);
+            if (found == null)
+                return Result(false, log, "پوشه DLL پیدا نشد — مسیر را دستی وارد کنید.", null);
+            _settings.DllPath = found;
+            if (string.IsNullOrWhiteSpace(_settings.CachePath))
+                _settings.CachePath = Path.Combine(found, "SafaFormulaCache");
+            try { _settings.Save(); } catch { }
+            log.Add("DLL folder   : " + found);
+            return Ok("پوشه DLL پیدا شد.", new Dictionary<string, object> { { "settings", SettingsMap() } }, log);
+        }
+
+        public Dictionary<string, object> TestDb()
+        {
+            return Run("تست اتصال...", false, (eng, log) =>
+            {
+                int fail = eng.TestDatabases();
+                log.Add(fail == 0 ? "OK — هر دو دیتابیس با debugger در دسترس‌اند." : "FAILED — " + fail + " اتصال ناموفق.");
+                return new Dictionary<string, object> { { "fail", fail }, { "ok", fail == 0 } };
+            });
+        }
+
+        public Dictionary<string, object> Lookup(Dictionary<string, object> body)
+        {
+            string text = Json.Str(body, "text", _settings.LastLookup).Trim();
+            if (text.Length == 0) return Fail("NidWorkItem یا کد نوسازی را وارد کنید.");
+            _settings.LastLookup = text;
+            try { _settings.Save(); } catch { }
+            return Run("جستجو در Sara8M03...", false, (eng, log) =>
+            {
+                var rows = eng.LookupCases(text);
+                string nidProc = rows.Count > 0 ? rows[0][0] : string.Empty;
+                if (!string.IsNullOrEmpty(nidProc))
+                {
+                    _settings.LastNidProc = nidProc;
+                    try { _settings.Save(); } catch { }
+                }
+                log.Add(rows.Count == 0 ? "هیچ درخواستی پیدا نشد." : rows.Count + " درخواست پیدا شد — NidProc اولین مورد انتخاب شد.");
+                return new Dictionary<string, object>
+                {
+                    { "rows", rows },
+                    { "nidProc", nidProc },
+                    { "count", rows.Count },
+                    { "settings", SettingsMap() },
+                };
+            });
+        }
+
+        public Dictionary<string, object> Combine(Dictionary<string, object> body)
+        {
+            string formula = FormulaOf(body);
+            bool allVersions = Json.Bool(body, "allVersions", true);
+            int nid;
+            if (!TryFormulaId(formula, out nid)) return Fail("فرمول ناشناخته: " + formula);
+            return Run("ترکیب DB + DLL...", true, (eng, log) =>
+            {
+                var members = new List<object>();
+                var rows = new List<MemberRow>();
+                foreach (int n in FormulaEngine.RelatedNidClasses(nid))
+                    rows.AddRange(MemberRepository.List(_settings.RuleEngine, n, allVersions));
+                foreach (MemberRow row in rows)
+                {
+                    members.Add(new Dictionary<string, object>
+                    {
+                        { "nidClass", row.NidClass },
+                        { "className", FormulaEngine.ClassName(row.NidClass) },
+                        { "nidMember", row.NidMember },
+                        { "version", row.Version },
+                        { "active", row.IsActive },
+                        { "name", row.Name ?? string.Empty },
+                        { "chidman", row.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId },
+                        { "code", Cap(row.Code) },
+                        { "kb", (row.Code == null ? 0 : row.Code.Length / 1024) },
+                    });
+                }
+                List<DllTypeRow> types = new List<DllTypeRow>();
+                try { types = eng.CatalogDllTypes(); }
+                catch (Exception ex) { log.Add("DLL catalog  : " + ex.Message); }
+                var dll = types.Select(t => new Dictionary<string, object>
+                {
+                    { "name", t.Name },
+                    { "kind", t.Kind },
+                    { "assembly", t.Assembly },
+                    { "fullName", t.FullName },
+                    { "publicMembers", t.PublicMembers },
+                }).ToList();
+                log.Add("INSPECT      : " + members.Count + " Member row(s) from RuleEngine + " + dll.Count + " public type(s) from DLLs — read-only, no save, no compile");
+                return new Dictionary<string, object>
+                {
+                    { "members", members },
+                    { "dllTypes", dll },
+                    { "related", FormulaEngine.RelatedNidClasses(nid) },
+                };
+            });
+        }
+
+        public Dictionary<string, object> AnalyzeMembers(Dictionary<string, object> body)
+        {
+            string formula = FormulaOf(body);
+            int nid;
+            if (!TryFormulaId(formula, out nid)) return Fail("فرمول ناشناخته: " + formula);
+            return Run("تحلیل Member...", false, (eng, log) =>
+            {
+                MemberAnalyzer.Print(_settings.RuleEngine, nid, log.Add);
+                return new Dictionary<string, object> { { "nid", nid } };
+            });
+        }
+
+        public Dictionary<string, object> AnalyzeChidman(Dictionary<string, object> body)
+        {
+            string formula = FormulaOf(body);
+            int nid;
+            if (!TryFormulaId(formula, out nid)) return Fail("فرمول ناشناخته: " + formula);
+            return Run("تحلیل Member 1288 (چیدمان)...", false, (eng, log) =>
+            {
+                log.Add("");
+                log.Add("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " (cross-class) ══════════");
+                eng.AnalyzeChidmanMember(nid, ChidmanAnalyzer.DefaultChidmanMemberId);
+                return new Dictionary<string, object>
+                {
+                    { "members", PackSources(eng.LastMemberSources) },
+                    { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
+                };
+            });
+        }
+
+        public Dictionary<string, object> Inspect(Dictionary<string, object> body)
+        {
+            string formula = FormulaOf(body);
+            int nid;
+            if (!TryFormulaId(formula, out nid)) return Fail("فرمول ناشناخته: " + formula);
+            return Run("بررسی موتور...", true, (eng, log) =>
+            {
+                log.Add("");
+                log.Add("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " ENGINE INSPECT ══════════");
+                eng.InspectClass(nid, eng.ResolveCityGuid());
+                return new Dictionary<string, object> { { "nid", nid } };
+            });
+        }
+
+        public Dictionary<string, object> RunFormula(Dictionary<string, object> body)
+        {
+            var req = new RunRequest
+            {
+                Formula = FormulaOf(body),
+                NidProc = Json.Str(body, "nidProc").Trim(),
+                Watch = Json.Str(body, "watch", "Calc_Chandganeh").Trim(),
+                EntryPoint = Json.Str(body, "entry").Trim(),
+                ReCompile = Json.Bool(body, "recompile"),
+                ClearCache = Json.Bool(body, "clearCache"),
+                ShowAllParams = Json.Bool(body, "allParams"),
+                District = Json.Int(body, "district"),
+            };
+            ParseParams(Json.Str(body, "parameters"), req);
+            _settings.LastNidProc = req.NidProc;
+            _settings.LastFormula = req.Formula;
+            _settings.LastWatch = req.Watch;
+            try { _settings.Save(); } catch { }
+
+            return Run("اجرای فرمول " + req.Formula + " ...", true, (eng, log) =>
+            {
+                log.Add("");
+                log.Add("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " ══════════");
+                int code = eng.Run(req);
+                log.Add("Exit code    : " + code + (code == 0 ? " (OK)" : code == 1 ? " (Stop error in BizErrors)" : code == 2 ? " (no live instance — static debug)" : code == 4 ? " (runtime/engine error)" : ""));
+                if (code == 2)
+                {
+                    log.Add("معماری: RuleTrace دیگر VB را چسب نمی‌زند و Compile نمی‌کند.");
+                    log.Add("موتور Sara پوسته خالی ساخت. اگر UI سارا فرمول را کامپایل کرده، DLL را در dll10 یا Cache بگذارید.");
+                }
+                var summary = eng.Summary.ToList();
+                summary.Add("Exit code    : " + code);
+                var parms = new Dictionary<string, string>(eng.LastParams, StringComparer.OrdinalIgnoreCase);
+                var trace = eng.LastTrace.Select(t => new Dictionary<string, object>
+                {
+                    { "index", t.Index },
+                    { "action", t.Action },
+                    { "key", t.Key },
+                    { "title", t.Title },
+                }).ToList();
+                return new Dictionary<string, object>
+                {
+                    { "exitCode", code },
+                    { "summary", summary },
+                    { "trace", trace },
+                    { "params", parms },
+                    { "watch", req.Watch },
+                    { "members", PackSources(eng.LastMemberSources) },
+                    { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
+                    { "settings", SettingsMap() },
+                };
+            });
+        }
+
+        private Dictionary<string, object> Run(string title, bool loadDlls, Func<FormulaEngine, List<string>, Dictionary<string, object>> work)
+        {
+            if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
+                return Fail("یک عملیات در حال اجراست...");
+
+            var log = new List<string>();
+            try
+            {
+                log.Add(BuildInfo.Banner);
+                log.Add(title);
+                FormulaEngine eng;
+                lock (_gate)
+                {
+                    eng = new FormulaEngine(_settings, log.Add);
+                    if (loadDlls)
+                    {
+                        eng.LoadAssemblies();
+                        eng.ApplyConnections();
+                    }
+                    Dictionary<string, object> data = work(eng, log) ?? new Dictionary<string, object>();
+                    data["ok"] = true;
+                    data["log"] = log;
+                    return data;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Add("FATAL: " + ex.GetType().Name + ": " + ex.Message);
+                if (ex.InnerException != null) log.Add("  inner: " + ex.InnerException.Message);
+                log.Add(ex.StackTrace ?? string.Empty);
+                return Result(false, log, ex.Message, null);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _busy, 0);
+            }
+        }
+
+        private void ApplySettings(Dictionary<string, object> body)
+        {
+            if (body == null) return;
+            if (body.ContainsKey("dllPath")) _settings.DllPath = Json.Str(body, "dllPath").Trim();
+            if (body.ContainsKey("ruleEngine")) _settings.RuleEngine = Json.Str(body, "ruleEngine").Trim();
+            if (body.ContainsKey("sara")) _settings.Sara = Json.Str(body, "sara").Trim();
+            if (body.ContainsKey("cityGuid")) _settings.CityGuid = Json.Str(body, "cityGuid").Trim();
+            if (body.ContainsKey("cachePath")) _settings.CachePath = Json.Str(body, "cachePath").Trim();
+            if (body.ContainsKey("nidProc")) _settings.LastNidProc = Json.Str(body, "nidProc").Trim();
+            if (body.ContainsKey("formula")) _settings.LastFormula = Json.Str(body, "formula").Trim();
+            if (body.ContainsKey("watch")) _settings.LastWatch = Json.Str(body, "watch").Trim();
+            if (body.ContainsKey("lookup")) _settings.LastLookup = Json.Str(body, "lookup").Trim();
+        }
+
+        private Dictionary<string, object> SettingsMap()
+        {
+            return new Dictionary<string, object>
+            {
+                { "dllPath", _settings.DllPath ?? string.Empty },
+                { "ruleEngine", _settings.RuleEngine ?? string.Empty },
+                { "sara", _settings.Sara ?? string.Empty },
+                { "cityGuid", _settings.CityGuid ?? string.Empty },
+                { "cachePath", _settings.CachePath ?? string.Empty },
+                { "nidProc", _settings.LastNidProc ?? string.Empty },
+                { "formula", string.IsNullOrWhiteSpace(_settings.LastFormula) ? "Solh" : _settings.LastFormula },
+                { "watch", string.IsNullOrWhiteSpace(_settings.LastWatch) ? "Calc_Chandganeh" : _settings.LastWatch },
+                { "lookup", _settings.LastLookup ?? string.Empty },
+                { "dllOk", FormulaEngine.IsDllFolder(_settings.DllPath) },
+            };
+        }
+
+        private static string FormulaOf(Dictionary<string, object> body)
+        {
+            string f = Json.Str(body, "formula", "Solh").Trim();
+            return f.Length == 0 ? "Solh" : f;
+        }
+
+        private static bool TryFormulaId(string formula, out int nid)
+        {
+            if (FormulaEngine.FormulaMap.TryGetValue(formula ?? string.Empty, out nid)) return true;
+            return int.TryParse(formula, out nid) && nid > 0;
+        }
+
+        private static void ParseParams(string text, RunRequest req)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            foreach (string raw in text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string line = raw.Trim();
+                int eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                string key = line.Substring(0, eq).Trim();
+                string val = line.Substring(eq + 1).Trim();
+                if (key.StartsWith("factory:", StringComparison.OrdinalIgnoreCase))
+                    req.FactoryParameters[key.Substring(8).Trim()] = val;
+                else req.Parameters[key] = val;
+            }
+        }
+
+        private static List<object> PackSources(IList<MemberSource> sources)
+        {
+            var list = new List<object>();
+            if (sources == null) return list;
+            foreach (MemberSource s in sources)
+            {
+                list.Add(new Dictionary<string, object>
+                {
+                    { "nidClass", s.NidClass },
+                    { "className", FormulaEngine.ClassName(s.NidClass) },
+                    { "nidMember", s.NidMember },
+                    { "name", s.Name ?? string.Empty },
+                    { "meta", s.Meta ?? string.Empty },
+                    { "version", s.Version },
+                    { "active", s.IsActive },
+                    { "chidman", s.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId },
+                    { "code", Cap(s.Code) },
+                    { "label", s.ToString() },
+                });
+            }
+            return list;
+        }
+
+        private static string Cap(string code)
+        {
+            if (code == null) return string.Empty;
+            const int max = 400000;
+            if (code.Length <= max) return code;
+            return code.Substring(0, max) + "\n\n/* truncated " + (code.Length - max) + " chars */";
+        }
+
+        private static Dictionary<string, object> Ok(string message, Dictionary<string, object> extra = null, List<string> log = null)
+        {
+            return Result(true, log ?? new List<string> { message }, message, extra);
+        }
+
+        private static Dictionary<string, object> Fail(string message)
+        {
+            return Result(false, new List<string> { message }, message, null);
+        }
+
+        private static Dictionary<string, object> Result(bool ok, List<string> log, string message, Dictionary<string, object> extra)
+        {
+            var map = extra ?? new Dictionary<string, object>();
+            map["ok"] = ok;
+            map["message"] = message ?? string.Empty;
+            map["log"] = log ?? new List<string>();
+            return map;
+        }
+
+        public static string SummaryText(IList<string> summary)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("=== RuleTrace summary ===");
+            if (summary != null)
+                foreach (string s in summary) sb.AppendLine(s);
+            return sb.ToString();
+        }
+    }
+}

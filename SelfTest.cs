@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace RuleTrace
 {
-    /// <summary>Headless checks for v21 architecture. Run: RuleTrace.exe --self-test</summary>
+    /// <summary>Headless checks. Run: RuleTrace.exe --self-test</summary>
     internal static class SelfTest
     {
         public static int Run()
@@ -13,7 +13,10 @@ namespace RuleTrace
             int fail = 0;
             fail += ChidmanSolhGuard();
             fail += RelatedClassesSolh();
-            fail += BannerIsV21();
+            fail += BannerNoRewrite();
+            fail += JsonRoundtrip();
+            fail += WebUiEmbedded();
+            fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
             return fail == 0 ? 0 : 1;
         }
@@ -98,20 +101,103 @@ namespace RuleTrace
             return fail;
         }
 
-        private static int BannerIsV21()
+        private static int BannerNoRewrite()
         {
-            if (BuildInfo.Label.IndexOf("v21", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label is " + BuildInfo.Label + " (expected v21-*)");
-                return 1;
-            }
-            if (BuildInfo.Banner.IndexOf("بازنویسی", StringComparison.OrdinalIgnoreCase) < 0
-                && BuildInfo.Banner.IndexOf("v21", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Banner.IndexOf("بازنویسی", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
+            if (BuildInfo.Label.IndexOf("web", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22-web, got " + BuildInfo.Label);
+                return 1;
+            }
             return 0;
+        }
+
+        private static int JsonRoundtrip()
+        {
+            var src = new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "ok", true },
+                { "n", 1288 },
+                { "s", "چیدمان\nSolh" },
+            };
+            string json = Json.Encode(src);
+            var back = Json.ParseObject(json);
+            int fail = 0;
+            fail += Expect(json, "1288", "json number");
+            fail += Json.Bool(back, "ok") ? 0 : FailMsg("json bool");
+            fail += Json.Int(back, "n") == 1288 ? 0 : FailMsg("json int");
+            fail += (Json.Str(back, "s") ?? string.Empty).IndexOf("چیدمان", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("json unicode");
+            return fail;
+        }
+
+        private static int WebUiEmbedded()
+        {
+            string html;
+            try { html = WebHost.LoadHtml(); }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("FAIL: WebUi.html missing: " + ex.Message);
+                return 1;
+            }
+            int fail = 0;
+            fail += Expect(html, "عیب‌یاب فرمول سارا", "persian title");
+            fail += Expect(html, "/api/run", "run endpoint");
+            fail += Expect(html, "/api/analyze-chidman", "chidman endpoint");
+            fail += Expect(html, "dir=\"rtl\"", "rtl");
+            return fail;
+        }
+
+        private static int WebHostRoundtrip()
+        {
+            var app = new WebApp(new UserSettings
+            {
+                LastFormula = "Solh",
+                LastWatch = "Calc_Chandganeh",
+            });
+            using (var host = new WebHost(app))
+            {
+                try { host.Start(17991); }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("WARN: HttpListener not available here (" + ex.Message + ") — HTML/API still compiled");
+                    return 0;
+                }
+                try
+                {
+                    using (var wc = new System.Net.WebClient())
+                    {
+                        wc.Encoding = Encoding.UTF8;
+                        string html = wc.DownloadString(host.Url);
+                        string ping = wc.DownloadString(host.Url + "api/ping");
+                        string boot = wc.DownloadString(host.Url + "api/bootstrap");
+                        int fail = 0;
+                        fail += Expect(html, "RuleTrace", "served html");
+                        fail += Expect(ping, "\"ok\":true", "ping ok");
+                        fail += Expect(boot, "Solh", "bootstrap formulas");
+                        fail += Expect(boot, "v22-web", "bootstrap label");
+                        return fail;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("FAIL: web roundtrip: " + ex.Message);
+                    return 1;
+                }
+                finally
+                {
+                    host.Stop();
+                }
+            }
+        }
+
+        private static int FailMsg(string label)
+        {
+            Console.Error.WriteLine("FAIL: " + label);
+            return 1;
         }
 
         private static int Expect(string haystack, string needle, string label)
