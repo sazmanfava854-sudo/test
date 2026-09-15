@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RuleTrace</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --bg2: #0c1a2e;
+      --card: rgba(17, 32, 54, .86);
+      --line: rgba(94, 234, 212, .18);
+      --text: #e8f4ff;
+      --muted: #8aa0b8;
+      --teal: #2dd4bf;
+      --teal2: #14b8a6;
+      --gold: #fbbf24;
+      --danger: #fb7185;
+      --ok: #34d399;
+      --shadow: 0 22px 50px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Tahoma, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, rgba(45,212,191,.18), transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, rgba(251,191,36,.12), transparent 50%),
+        linear-gradient(180deg, var(--bg), var(--bg2) 40%, #081018);
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 18px 48px; }
+    header.app {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+      margin-bottom: 20px;
+    }
+    .brand { display: flex; gap: 14px; align-items: center; }
+    .logo {
+      width: 52px; height: 52px; border-radius: 16px;
+      background: linear-gradient(135deg, #2dd4bf, #0f766e);
+      display: grid; place-items: center; font-weight: 700; color: #042f2e;
+      box-shadow: 0 10px 24px rgba(20,184,166,.35);
+    }
+    h1 { margin: 0; font-size: 26px; letter-spacing: -.3px; }
+    .sub { color: var(--muted); margin-top: 4px; font-size: 13px; }
+    .badge {
+      background: rgba(45,212,191,.12); border: 1px solid var(--line);
+      color: var(--teal); padding: 8px 12px; border-radius: 999px; font-size: 12px;
+      white-space: nowrap;
+    }
+    .grid { display: grid; gap: 16px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 18px;
+      backdrop-filter: blur(10px);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 15px; color: var(--teal); font-weight: 700; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+    input, select, textarea {
+      width: 100%; background: #071422; color: var(--text);
+      border: 1px solid rgba(148,163,184,.25); border-radius: 12px;
+      padding: 10px 12px; font: 13px/1.5 Tahoma, Consolas, monospace;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(45,212,191,.15); }
+    textarea { min-height: 72px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row3 { display: grid; grid-template-columns: 1.2fr 1fr .7fr; gap: 12px; }
+    .checks { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+    .checks label { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); }
+    .checks input { width: auto; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    button {
+      appearance: none; border: 0; cursor: pointer; border-radius: 12px;
+      padding: 10px 14px; font: 13px Tahoma, sans-serif; color: #042f2e; background: var(--teal);
+      transition: transform .12s ease, filter .12s ease;
+    }
+    button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    button.ghost { background: #1e334d; color: var(--text); }
+    button.gold { background: var(--gold); }
+    button.danger { background: #be123c; color: white; }
+    button.ok { background: var(--ok); }
+    .status {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      color: var(--muted); font-size: 12px; margin-top: 10px;
+    }
+    .pill { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); display: inline-block; margin-left: 6px; }
+    .pill.ok { background: var(--ok); }
+    .pill.bad { background: var(--danger); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: right; padding: 8px; border-bottom: 1px solid rgba(148,163,184,.12); }
+    tr.sel { background: rgba(45,212,191,.12); }
+    tr:hover { background: rgba(255,255,255,.04); cursor: pointer; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    .tabs button { background: #132338; color: var(--muted); }
+    .tabs button.on { background: var(--teal); color: #042f2e; }
+    .log {
+      background: #050b14; color: #d1fae5; border-radius: 14px; padding: 14px;
+      height: 300px; overflow: auto; white-space: pre-wrap;
+      font: 12.5px/1.55 Consolas, "Courier New", monospace; direction: ltr; text-align: left;
+    }
+    .code {
+      background: #071018; border-radius: 14px; padding: 12px; height: 360px;
+      overflow: auto; white-space: pre; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left;
+      color: #e2e8f0;
+    }
+    .list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+    .split { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
+    .list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+    .list div {
+      padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,.1); cursor: pointer; font-size: 12px;
+    }
+    .list div:hover, .list div.on { background: rgba(45,212,191,.12); }
+    .busy {
+      position: fixed; inset: 0; background: rgba(2,6,23,.45); display: none; place-items: center; z-index: 20;
+    }
+    .busy.on { display: grid; }
+    .spinner {
+      width: 64px; height: 64px; border-radius: 50%;
+      border: 4px solid rgba(45,212,191,.2); border-top-color: var(--teal); animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast {
+      position: fixed; bottom: 18px; left: 18px; background: #134e4a; color: white;
+      padding: 10px 14px; border-radius: 12px; display: none; z-index: 30; max-width: 420px;
+    }
+    .toast.on { display: block; }
+    details summary { cursor: pointer; color: var(--muted); }
+    @media (max-width: 900px) {
+      .row, .row3, .split, header.app { grid-template-columns: 1fr; display: grid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="app">
+      <div class="brand">
+        <div class="logo">RT</div>
+        <div>
+          <h1>عیب‌یاب فرمول سارا</h1>
+          <div class="sub" id="banner">RuleTrace</div>
+        </div>
+      </div>
+      <div class="badge" id="ver">web</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <details open>
+          <summary><h2 style="display:inline">تنظیمات اتصال</h2></summary>
+          <div class="row" style="margin-top:12px">
+            <div>
+              <label>پوشه DLL (dll10)</label>
+              <input id="dllPath" />
+            </div>
+            <div>
+              <label>Cache محلی</label>
+              <input id="cachePath" />
+            </div>
+          </div>
+          <label>RuleEngine (DbRuleEngein)</label>
+          <input id="ruleEngine" />
+          <label>Sara (Sara8M03)</label>
+          <input id="sara" />
+          <div class="row">
+            <div>
+              <label>CityGuid مشهد</label>
+              <input id="cityGuid" />
+            </div>
+            <div>
+              <label>وضعیت DLL</label>
+              <div class="status" style="margin:8px 0 0"><span><i class="pill" id="dllPill"></i> <span id="dllLabel">نامشخص</span></span></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="ghost" id="btnSave">ذخیره تنظیمات</button>
+            <button class="ghost" id="btnDetect">پیدا کردن خودکار DLL</button>
+            <button class="ok" id="btnDb">تست اتصال دیتابیس</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>پرونده و فرمول</h2>
+        <div class="row3">
+          <div>
+            <label>NidWorkItem / کد نوسازی</label>
+            <input id="lookup" placeholder="مثلاً 11314989" />
+          </div>
+          <div>
+            <label>NidProc</label>
+            <input id="nidProc" />
+          </div>
+          <div>
+            <label>فرمول</label>
+            <select id="formula"></select>
+          </div>
+        </div>
+        <div class="row3">
+          <div>
+            <label>متغیر Watch</label>
+            <input id="watch" value="Calc_Chandganeh" />
+          </div>
+          <div>
+            <label>Entry (خالی = خودکار)</label>
+            <input id="entry" />
+          </div>
+          <div>
+            <label>ناحیه</label>
+            <input id="district" value="0" />
+          </div>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="recompile" /> ReCompile (کند)</label>
+          <label title="اگر تیک باشد DLL کامپایل‌شده Solh در Cache حذف می‌شود و Instanc ساخته نمی‌شود"><input type="checkbox" id="clearCache" /> پاک کردن Cache (DLL کامپایل‌شده حذف می‌شود)</label>
+          <label><input type="checkbox" id="allParams" /> همه ParametersValue</label>
+        </div>
+        <label>پارامترها (Name=Value هر خط)</label>
+        <textarea id="parameters" placeholder="NidProc=..."></textarea>
+        <div class="actions">
+          <button class="ghost" id="btnLookup">جستجو در Sara</button>
+          <button class="gold" id="btnHistory">بررسی فرمول از DB</button>
+          <button class="ghost" id="btnRun">اجرای موتور (اختیاری)</button>
+          <button class="ghost" id="btnChidman">تحلیل چیدمان ۱۲۸۸</button>
+          <button class="ghost" id="btnCombine">ترکیب DB + DLL</button>
+          <button class="ghost" id="btnMembers">تحلیل Member</button>
+          <button class="ghost" id="btnInspect">بررسی موتور</button>
+          <button class="ghost" id="btnCopy">کپی خلاصه</button>
+          <button class="ghost" id="btnClear">پاک کردن خروجی</button>
+          <button class="danger" id="btnQuit">خروج از برنامه</button>
+        </div>
+        <div class="status">
+          <span id="status">آماده — بدون CMD، فقط مرورگر</span>
+          <span>کلاس‌های مرتبط Solh: ۳۳۶ / ۳۴۲ / ۳۴۴ / ۳۴۵ / ۴۳۲</span>
+        </div>
+        <div style="margin-top:12px; overflow:auto">
+          <table id="cases">
+            <thead><tr><th>NidProc</th><th>NidWorkItem</th><th>گردش‌کار</th><th>تاریخ</th><th>متقاضی / نوسازی</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="tabs">
+          <button class="on" data-tab="log">خروجی</button>
+          <button data-tab="history">تاریخچه فرمول</button>
+          <button data-tab="code">کد Member</button>
+          <button data-tab="debug">دیباگ مرحله‌ای</button>
+          <button data-tab="summary">خلاصه خطا</button>
+        </div>
+        <div id="tab-log"><div class="log" id="log"></div></div>
+        <div id="tab-history" hidden>
+          <div style="overflow:auto; margin-bottom:10px">
+            <table id="histTable">
+              <thead><tr><th>NidHistory</th><th>کلاس</th><th>Member</th><th>ویرایشگر</th><th>تاریخ</th><th>ساعت</th><th>توضیح</th><th>Body</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <pre class="code" id="histCode">یک ردیف تاریخچه را انتخاب کنید</pre>
+        </div>
+        <div id="tab-code" hidden>
+          <div class="split">
+            <div class="list" id="memberList"></div>
+            <pre class="code" id="memberCode">عضوی انتخاب نشده</pre>
+          </div>
+        </div>
+        <div id="tab-debug" hidden>
+          <div class="actions">
+            <button class="ghost" id="dbgPrev">گام قبلی</button>
+            <button class="gold" id="dbgNext">گام بعدی</button>
+            <span class="sub" id="dbgMeta">بعد از اجرا، رویدادهای AddError اینجا می‌آید.</span>
+          </div>
+          <pre class="code" id="dbgView"></pre>
+        </div>
+        <div id="tab-summary" hidden><pre class="code" id="summary">هنوز اجرایی نشده</pre></div>
+      </section>
+    </div>
+  </div>
+  <div class="busy" id="busy"><div class="spinner"></div></div>
+  <div class="toast" id="toast"></div>
+<script>
+const $ = id => document.getElementById(id);
+let members = [];
+let trace = [];
+let paramsMap = {};
+let watchKey = "Calc_Chandganeh";
+let summaryLines = [];
+let step = 0;
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 2800);
+}
+function setBusy(on, status) {
+  $("busy").classList.toggle("on", !!on);
+  if (status) $("status").textContent = status;
+  document.querySelectorAll("button").forEach(b => { if (b.dataset.tab) return; b.disabled = !!on; });
+}
+function appendLog(lines) {
+  if (!lines) return;
+  const box = $("log");
+  const add = Array.isArray(lines) ? lines.join("\n") : String(lines);
+  box.textContent += (box.textContent ? "\n" : "") + add;
+  box.scrollTop = box.scrollHeight;
+}
+function payload() {
+  return {
+    dllPath: $("dllPath").value,
+    ruleEngine: $("ruleEngine").value,
+    sara: $("sara").value,
+    cityGuid: $("cityGuid").value,
+    cachePath: $("cachePath").value,
+    formula: $("formula").value,
+    nidProc: $("nidProc").value,
+    watch: $("watch").value,
+    lookup: $("lookup").value,
+    text: $("lookup").value,
+    entry: $("entry").value,
+    district: parseInt($("district").value || "0", 10) || 0,
+    recompile: $("recompile").checked,
+    clearCache: $("clearCache").checked,
+    allParams: $("allParams").checked,
+    parameters: $("parameters").value,
+    allVersions: true
+  };
+}
+function fillSettings(s) {
+  if (!s) return;
+  $("dllPath").value = s.dllPath || "";
+  $("ruleEngine").value = s.ruleEngine || "";
+  $("sara").value = s.sara || "";
+  $("cityGuid").value = s.cityGuid || "";
+  $("cachePath").value = s.cachePath || "";
+  $("nidProc").value = s.nidProc || $("nidProc").value;
+  $("watch").value = s.watch || $("watch").value;
+  $("lookup").value = s.lookup || "";
+  if (s.formula) $("formula").value = s.formula;
+  const ok = !!s.dllOk;
+  $("dllPill").className = "pill " + (ok ? "ok" : "bad");
+  $("dllLabel").textContent = ok ? "پوشه DLL معتبر است" : "پوشه DLL پیدا نشد";
+}
+async function api(path, body) {
+  setBusy(true, "در حال اجرا...");
+  try {
+    const r = await fetch(path, {
+      method: body === null ? "GET" : "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: body === null ? undefined : JSON.stringify(body || payload())
+    });
+    const j = await r.json();
+    appendLog(j.log);
+    if (j.message && !j.log) appendLog(j.message);
+    if (j.settings) fillSettings(j.settings);
+    if (j.ok === false) toast(j.message || "خطا");
+    return j;
+  } catch (e) {
+    appendLog("FATAL: " + e);
+    toast("ارتباط با میزبان وب قطع شد");
+    throw e;
+  } finally {
+    setBusy(false, "آماده");
+  }
+}
+function showMembers(list) {
+  members = list || [];
+  const box = $("memberList");
+  box.innerHTML = "";
+  members.forEach((m, i) => {
+    const d = document.createElement("div");
+    d.textContent = (m.className || m.nidClass) + " / " + m.nidMember + "  " + (m.name || "") + (m.chidman ? "  ★ چیدمان" : "");
+    d.onclick = () => {
+      box.querySelectorAll("div").forEach(x => x.classList.remove("on"));
+      d.classList.add("on");
+      $("memberCode").textContent = m.code || "";
+    };
+    if (m.chidman) d.style.color = "#fbbf24";
+    box.appendChild(d);
+    if (m.chidman || i === 0) d.click();
+  });
+}
+function showTrace(list, parms, watch) {
+  trace = list || [];
+  paramsMap = parms || {};
+  watchKey = watch || "Calc_Chandganeh";
+  step = 0;
+  renderStep();
+}
+function renderStep() {
+  if (!trace.length) {
+    $("dbgView").textContent = "رویدادی نیست. اول اجرا یا تحلیل چیدمان را بزنید.";
+    $("dbgMeta").textContent = "۰ رویداد";
+    return;
+  }
+  const t = trace[Math.max(0, Math.min(step, trace.length - 1))];
+  const watchVal = paramsMap[watchKey] || "";
+  $("dbgMeta").textContent = "گام " + (t.index != null ? t.index : step) + " از " + trace.length;
+  $("dbgView").textContent =
+    "[" + (t.action || "") + "] " + (t.key || "") + "\n" +
+    (t.title || "") + "\n\nWatch " + watchKey + " = " + watchVal;
+}
+function showSummary(lines) {
+  summaryLines = lines || [];
+  $("summary").textContent = summaryLines.length ? ("=== RuleTrace summary ===\n" + summaryLines.join("\n")) : "خالی";
+}
+
+$("btnSave").onclick = () => api("/api/settings", payload()).then(j => { if (j.ok) toast("ذخیره شد"); });
+$("btnDetect").onclick = () => api("/api/detect-dll", payload());
+$("btnDb").onclick = () => api("/api/test-db", payload()).then(j => toast(j.ok ? "اتصال دیتابیس OK" : "اتصال ناموفق"));
+$("btnLookup").onclick = async () => {
+  const j = await api("/api/lookup", payload());
+  const tb = $("cases").querySelector("tbody");
+  tb.innerHTML = "";
+  (j.rows || []).forEach((row, idx) => {
+    const tr = document.createElement("tr");
+    row.forEach(c => { const td = document.createElement("td"); td.textContent = c; tr.appendChild(td); });
+    tr.onclick = () => {
+      tb.querySelectorAll("tr").forEach(x => x.classList.remove("sel"));
+      tr.classList.add("sel");
+      $("nidProc").value = row[0] || "";
+    };
+    if (idx === 0) tr.classList.add("sel");
+    tb.appendChild(tr);
+  });
+  if (j.nidProc) $("nidProc").value = j.nidProc;
+};
+function showHistory(rows) {
+  const tb = $("histTable").querySelector("tbody");
+  tb.innerHTML = "";
+  (rows || []).forEach((h, idx) => {
+    const tr = document.createElement("tr");
+    [h.nidHistory, (h.className || h.nidClass) + "/" + h.nidClass, h.nidMember, h.modifyer, h.modifyDate, h.modifyTime, h.modifyDesc, h.bodyChars].forEach(c => {
+      const td = document.createElement("td"); td.textContent = c == null ? "" : String(c); tr.appendChild(td);
+    });
+    tr.onclick = () => {
+      tb.querySelectorAll("tr").forEach(x => x.classList.remove("sel"));
+      tr.classList.add("sel");
+      $("histCode").textContent = h.code || "(Body خالی — فقط لاگ تغییر است، مثل نمونه 337/1160)";
+    };
+    if (idx === 0) tr.classList.add("sel");
+    tb.appendChild(tr);
+  });
+  if (rows && rows[0]) $("histCode").textContent = rows[0].code || "(Body خالی — فقط لاگ تغییر)";
+}
+$("btnHistory").onclick = async () => {
+  const j = await api("/api/history", payload());
+  showHistory(j.history);
+  document.querySelector('[data-tab="history"]').click();
+  toast((j.history || []).length + " ردیف تاریخچه");
+};
+$("btnRun").onclick = async () => {
+  const p = payload();
+  if (p.clearCache) toast("توجه: پاک کردن Cache تیک دارد — DLL کامپایل‌شده Solh حذف می‌شود");
+  const j = await api("/api/run", p);
+  showMembers(j.members);
+  showTrace(j.trace, j.params, j.watch);
+  showSummary(j.summary);
+  toast("Exit " + (j.exitCode != null ? j.exitCode : "?"));
+};
+$("btnChidman").onclick = async () => {
+  const j = await api("/api/analyze-chidman", payload());
+  showMembers(j.members);
+  if (j.history) showHistory(j.history);
+  document.querySelector('[data-tab="code"]').click();
+};
+$("btnCombine").onclick = async () => {
+  const j = await api("/api/combine", payload());
+  showMembers(j.members);
+  document.querySelector('[data-tab="code"]').click();
+  toast((j.members || []).length + " Member");
+};
+$("btnMembers").onclick = () => api("/api/analyze-members", payload());
+$("btnInspect").onclick = () => api("/api/inspect", payload());
+$("btnCopy").onclick = async () => {
+  const text = $("summary").textContent || "";
+  try { await navigator.clipboard.writeText(text); toast("خلاصه کپی شد"); }
+  catch { toast("کپی دستی از تب خلاصه"); }
+};
+$("btnClear").onclick = () => { $("log").textContent = ""; };
+$("btnQuit").onclick = async () => {
+  try { await fetch("/api/shutdown", { method: "POST", body: "{}" }); } catch {}
+  document.body.innerHTML = "<div class='wrap'><h1>RuleTrace بسته شد</h1><p>این تب را ببندید.</p></div>";
+};
+$("dbgNext").onclick = () => { if (trace.length) { step = Math.min(trace.length - 1, step + 1); renderStep(); } };
+$("dbgPrev").onclick = () => { if (trace.length) { step = Math.max(0, step - 1); renderStep(); } };
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    ["log","history","code","debug","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
+  };
+});
+
+(async () => {
+  const j = await api("/api/bootstrap", null);
+  $("banner").textContent = j.banner || "RuleTrace";
+  $("ver").textContent = (j.label || "web") + "  v" + (j.version || "");
+  (j.formulas || []).forEach(f => {
+    const o = document.createElement("option");
+    o.value = f.name; o.textContent = f.name + " (" + f.nid + ")";
+    $("formula").appendChild(o);
+  });
+  fillSettings(j.settings);
+  appendLog("میزبان وب آماده است. CMD لازم نیست. Visual Studio → F5.");
+})();
+</script>
+</body>
+</html>

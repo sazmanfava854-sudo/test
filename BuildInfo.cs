@@ -4,14 +4,14 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v21c-cross-class";
+        public const string Label = "v22c-web-history";
 
         public static string Banner
         {
             get
             {
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
-                return "RuleTrace " + Label + " (v" + v + ") — عیب‌یابی: بدون بازنویسی VB";
+                return "RuleTrace " + Label + " (v" + v + ") — وب محلی، بدون CMD، بدون بازنویسی VB";
             }
         }
     }

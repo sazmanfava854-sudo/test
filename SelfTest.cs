@@ -5,15 +5,19 @@ using System.Text.RegularExpressions;
 
 namespace RuleTrace
 {
-    /// <summary>Headless checks for v21 architecture. Run: RuleTrace.exe --self-test</summary>
+    /// <summary>Headless checks. Run: RuleTrace.exe --self-test</summary>
     internal static class SelfTest
     {
         public static int Run()
         {
             int fail = 0;
             fail += ChidmanSolhGuard();
+            fail += ChidmanRealSolhStop();
             fail += RelatedClassesSolh();
-            fail += BannerIsV21();
+            fail += BannerNoRewrite();
+            fail += JsonRoundtrip();
+            fail += WebUiEmbedded();
+            fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
             return fail == 0 ? 0 : 1;
         }
@@ -76,6 +80,72 @@ namespace RuleTrace
             return fail;
         }
 
+        private static int ChidmanRealSolhStop()
+        {
+            var log = new List<string>();
+            var sources = new List<MemberSource>
+            {
+                new MemberSource
+                {
+                    NidClass = 344,
+                    NidMember = 1296,
+                    Name = "Run",
+                    Meta = "Solh",
+                    Code =
+                        "Public Sub Run()\r\n" +
+                        "  If Info8.GetRuleResultPeaceParameter().IsCallFromCrowd = True Then\r\n" +
+                        "    Iscrowd = True\r\n" +
+                        "  End If\r\n" +
+                        "  Info8.AddError(BIZ.SA.EumErrorAction.Stop, \"صلحنامه\", \"به دلیل عدم اعلام ضابطه امکان محاسبه صلحنامه نمی باشد\")\r\n" +
+                        "  InsertChidman()\r\n" +
+                        "End Sub\r\n",
+                },
+                new MemberSource
+                {
+                    NidClass = 342,
+                    NidMember = 1288,
+                    Name = "Run",
+                    Meta = "ZabetehConvert",
+                    Code =
+                        "Public Sub Run()\r\n" +
+                        "  logfileFJ(\"noise\")\r\n" +
+                        "  if tmpDto2.UsingArea>0 Then InsertChidman(tmpDto2)\r\n" +
+                        "End Sub\r\n" +
+                        "Public Sub InsertChidman(dto)\r\nEnd Sub\r\n",
+                },
+                new MemberSource
+                {
+                    NidClass = 336,
+                    NidMember = 1148,
+                    Name = "Run",
+                    Meta = "Rule",
+                    Code = "Public Sub Run()\r\n  logfileFJ(\"x\")\r\n  Info8.AddError(BIZ.SA.EumErrorAction.Stop, \"ضابطه\", \"ادرس برای ارسال به 137 معتبر نمی باشد\")\r\nEnd Sub\r\n",
+                },
+            };
+            ChidmanAnalyzer.Report(sources, new List<TraceEvent>(), 1288, log.Add);
+            string all = string.Join("\n", log);
+            Console.WriteLine(all);
+            int fail = 0;
+            fail += Expect(all, "یافته", "findings header");
+            fail += Expect(all, "صلحنامه", "solh stop key");
+            fail += Expect(all, "عدم اعلام ضابطه", "missing regulation message");
+            fail += Expect(all, "UsingArea", "InsertChidman UsingArea gate");
+            fail += Expect(all, "1296", "Solh Run member");
+            fail += Expect(all, "calls InsertChidman", "Solh calls InsertChidman");
+            fail += Expect(all, "Solh/Tavafogh صدا می‌زند", "cross-class callers first");
+            if (all.IndexOf("ادرس برای ارسال", StringComparison.Ordinal) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: generic Rule/1148 ضابطه error leaked into findings");
+                fail++;
+            }
+            if (all.IndexOf("calls logfileFJ", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: caller list still includes logfileFJ noise");
+                fail++;
+            }
+            return fail;
+        }
+
         private static int RelatedClassesSolh()
         {
             int[] rel = FormulaEngine.RelatedNidClasses(344);
@@ -98,20 +168,105 @@ namespace RuleTrace
             return fail;
         }
 
-        private static int BannerIsV21()
+        private static int BannerNoRewrite()
         {
-            if (BuildInfo.Label.IndexOf("v21", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label is " + BuildInfo.Label + " (expected v21-*)");
-                return 1;
-            }
-            if (BuildInfo.Banner.IndexOf("بازنویسی", StringComparison.OrdinalIgnoreCase) < 0
-                && BuildInfo.Banner.IndexOf("v21", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Banner.IndexOf("بازنویسی", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
+            if (BuildInfo.Label.IndexOf("web", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22-web, got " + BuildInfo.Label);
+                return 1;
+            }
             return 0;
+        }
+
+        private static int JsonRoundtrip()
+        {
+            var src = new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "ok", true },
+                { "n", 1288 },
+                { "s", "چیدمان\nSolh" },
+            };
+            string json = Json.Encode(src);
+            var back = Json.ParseObject(json);
+            int fail = 0;
+            fail += Expect(json, "1288", "json number");
+            fail += Json.Bool(back, "ok") ? 0 : FailMsg("json bool");
+            fail += Json.Int(back, "n") == 1288 ? 0 : FailMsg("json int");
+            fail += (Json.Str(back, "s") ?? string.Empty).IndexOf("چیدمان", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("json unicode");
+            return fail;
+        }
+
+        private static int WebUiEmbedded()
+        {
+            string html;
+            try { html = WebHost.LoadHtml(); }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("FAIL: WebUi.html missing: " + ex.Message);
+                return 1;
+            }
+            int fail = 0;
+            fail += Expect(html, "عیب‌یاب فرمول سارا", "persian title");
+            fail += Expect(html, "/api/run", "run endpoint");
+            fail += Expect(html, "/api/history", "history endpoint");
+            fail += Expect(html, "تاریخچه فرمول", "history tab");
+            fail += Expect(html, "بررسی فرمول از DB", "db-first button");
+            fail += Expect(html, "dir=\"rtl\"", "rtl");
+            return fail;
+        }
+
+        private static int WebHostRoundtrip()
+        {
+            var app = new WebApp(new UserSettings
+            {
+                LastFormula = "Solh",
+                LastWatch = "Calc_Chandganeh",
+            });
+            using (var host = new WebHost(app))
+            {
+                try { host.Start(17991); }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("WARN: HttpListener not available here (" + ex.Message + ") — HTML/API still compiled");
+                    return 0;
+                }
+                try
+                {
+                    using (var wc = new System.Net.WebClient())
+                    {
+                        wc.Encoding = Encoding.UTF8;
+                        string html = wc.DownloadString(host.Url);
+                        string ping = wc.DownloadString(host.Url + "api/ping");
+                        string boot = wc.DownloadString(host.Url + "api/bootstrap");
+                        int fail = 0;
+                        fail += Expect(html, "RuleTrace", "served html");
+                        fail += Expect(ping, "\"ok\":true", "ping ok");
+                        fail += Expect(boot, "Solh", "bootstrap formulas");
+                        fail += Expect(boot, "v22c-web-history", "bootstrap label");
+                        return fail;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("FAIL: web roundtrip: " + ex.Message);
+                    return 1;
+                }
+                finally
+                {
+                    host.Stop();
+                }
+            }
+        }
+
+        private static int FailMsg(string label)
+        {
+            Console.Error.WriteLine("FAIL: " + label);
+            return 1;
         }
 
         private static int Expect(string haystack, string needle, string label)
