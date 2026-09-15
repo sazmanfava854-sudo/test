@@ -2,8 +2,6 @@
 
 دیباگر فرمول‌های Sara بدون UI اصلی.
 
-پوشه‌بندی پروژه تخت است (همه فایل‌ها کنار `RuleTrace.sln`). اگر Build خراب شد، از ZIP گیت‌هاب `(49)` استفاده نکنید — همان پوشهٔ قبلی `Downloads\ruletrace` را در Visual Studio باز کنید.
-
 ## مرحله ۱ — ترکیب کد RuleEngine + DLL (فقط خواندن)
 
 این برنامه **عیب‌یابی** است. کد `dbo.Member` را از RuleEngine کنار نوع‌های DLL می‌گذارد. **چیزی در دیتابیس ذخیره نمی‌شود.**
@@ -62,16 +60,15 @@ ruletrace/
 
 ## Build (یک دستور)
 
-مسیر `Downloads\ruletrace` را در cmd ننویسید — اگر آن پوشه نباشد ویندوز می‌گوید cannot find the path.
+```cmd
+cd C:\Users\sadathoseini-sh\Downloads\ruletrace
+build.cmd
+```
 
-1. در Explorer پوشه‌ای را باز کنید که **همین فایل‌ها کنار هم** هستند: `build.cmd`، `RuleTrace.sln`، `RuleTrace.csproj`
-2. روی `build.cmd` دابل‌کلیک کنید
-3. باید چاپ شود `Folder: ...` و بعد `OK -> ...\bin\RuleTrace.exe`
-4. عنوان پنجره: `v21c-cross-class`
+- MSBuild را خودکار پیدا می‌کند (VS 2019/2022/Build Tools/dotnet).
+- خروجی: `bin\RuleTrace.exe` و بعد از Build خودکار اجرا می‌شود.
 
-اگر ویندوز گفت cannot find پوشهٔ `(47)`: پرانتز مسیر را خراب می‌کند و ZIP دو لایه است. `build.cmd` را از Downloads اجرا نکنید.
-
-کل محتویات پوشهٔ **داخلی** (جایی که `RuleTrace.sln` هست) را در Explorer به `C:\ruletrace` کپی کنید، بعد در Visual Studio همان `C:\ruletrace\RuleTrace.sln` را باز کنید → Ctrl+Shift+B → Ctrl+F5.
+در PowerShell: `.\build.cmd`
 
 ## استفاده
 
