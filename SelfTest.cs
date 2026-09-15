@@ -119,7 +119,7 @@ namespace RuleTrace
                     NidMember = 1148,
                     Name = "Run",
                     Meta = "Rule",
-                    Code = "Public Sub Run()\r\n  logfileFJ(\"x\")\r\nEnd Sub\r\n",
+                    Code = "Public Sub Run()\r\n  logfileFJ(\"x\")\r\n  Info8.AddError(BIZ.SA.EumErrorAction.Stop, \"ضابطه\", \"ادرس برای ارسال به 137 معتبر نمی باشد\")\r\nEnd Sub\r\n",
                 },
             };
             ChidmanAnalyzer.Report(sources, new List<TraceEvent>(), 1288, log.Add);
@@ -132,6 +132,12 @@ namespace RuleTrace
             fail += Expect(all, "UsingArea", "InsertChidman UsingArea gate");
             fail += Expect(all, "1296", "Solh Run member");
             fail += Expect(all, "calls InsertChidman", "Solh calls InsertChidman");
+            fail += Expect(all, "Solh/Tavafogh صدا می‌زند", "cross-class callers first");
+            if (all.IndexOf("ادرس برای ارسال", StringComparison.Ordinal) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: generic Rule/1148 ضابطه error leaked into findings");
+                fail++;
+            }
             if (all.IndexOf("calls logfileFJ", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 Console.Error.WriteLine("FAIL: caller list still includes logfileFJ noise");

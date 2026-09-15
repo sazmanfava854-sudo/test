@@ -17,7 +17,7 @@ namespace RuleTrace
         };
 
         /// <summary>Calls that actually announce layout. Logging helpers in Member 1288 (logfileFJ/plog*) are noise.</summary>
-        private static readonly string[] ChidmanCallHints = { "InsertChidman", "Chideman", "Chidman" };
+        private static readonly string[] ChidmanCallHints = { "InsertChidman", "InsertChidmanM", "InsertChidmanFront", "Chideman", "Chidman" };
 
         private static readonly string[] TraceKeyHints =
         {
@@ -105,49 +105,96 @@ namespace RuleTrace
         {
             log("");
             log("یافته:");
-            var stops = new List<string>();
-            var inserts = new List<string>();
+            var scoredStops = new List<KeyValuePair<int, string>>();
+            var solhCalls = new List<string>();
+            var gatedInternal = new List<string>();
+            int internalCalls = 0;
             foreach (MemberSource src in sources)
             {
                 if (string.IsNullOrWhiteSpace(src.Code)) continue;
                 string[] lines = Normalize(src.Code).Split('\n');
                 string loc = FormulaEngine.ClassName(src.NidClass) + "/" + src.NidClass + " Member " + src.NidMember + " " + src.Name;
+                bool sameAsFocus = src.NidClass == focus.NidClass && src.NidMember == focus.NidMember;
                 for (int i = 0; i < lines.Length; i++)
                 {
                     string t = lines[i].Trim();
                     if (t.Length == 0 || t.StartsWith("'")) continue;
-                    if (Regex.IsMatch(t, @"\bInsertChidman\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-                        && t.IndexOf("Sub ", StringComparison.OrdinalIgnoreCase) < 0
-                        && t.IndexOf("Function ", StringComparison.OrdinalIgnoreCase) < 0)
+
+                    int stopScore = SolhStopScore(src, t);
+                    if (stopScore > 0)
+                        scoredStops.Add(new KeyValuePair<int, string>(stopScore, loc + " L" + (i + 1) + ": " + Trunc(t, 110)));
+
+                    if (!IsInsertChidmanCall(t)) continue;
+                    if (sameAsFocus)
                     {
-                        string gate = "";
-                        if (t.IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0
-                            || (i > 0 && lines[i - 1].IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0))
-                            gate = "  [شرط UsingArea>0]";
-                        inserts.Add(loc + " L" + (i + 1) + ": " + Trunc(t, 100) + gate);
+                        internalCalls++;
+                        string gate = InsertGate(t);
+                        if (gate.Length > 0)
+                            gatedInternal.Add(loc + " L" + (i + 1) + ": " + Trunc(t, 90) + "  [" + gate + "]");
                     }
-                    if (t.IndexOf("AddError", StringComparison.OrdinalIgnoreCase) >= 0
-                        && (t.IndexOf("صلحنامه", StringComparison.Ordinal) >= 0
-                            || t.IndexOf("عدم اعلام", StringComparison.Ordinal) >= 0
-                            || t.IndexOf("ضابطه", StringComparison.Ordinal) >= 0))
-                        stops.Add(loc + " L" + (i + 1) + ": " + Trunc(t, 110));
+                    else
+                        solhCalls.Add(loc + " L" + (i + 1) + ": " + Trunc(t, 100));
                 }
             }
 
-            if (stops.Count > 0)
+            scoredStops.Sort((a, b) => b.Key.CompareTo(a.Key));
+            var topStops = scoredStops.Select(x => x.Value).Distinct().Take(6).ToList();
+            if (topStops.Count > 0)
             {
-                log("  Solh بدون اعلام ضابطه Stop می‌شود — همان پیام «چیدمان در مسیر صلح اعلام نمی‌گردد»:");
-                foreach (string s in stops.Take(6)) log("    " + s);
+                log("  توقف صلح اگر ضابطه/چیدمان اعلام نشده (نه خطاهای عمومی Rule/1148):");
+                foreach (string s in topStops) log("    " + s);
             }
-            else log("  (در XmlBody خط Stop «عدم اعلام ضابطه / صلحنامه» پیدا نشد)");
+            else log("  (خط Stop «صلحنامه / عدم اعلام ضابطه» در XmlBody نبود)");
 
-            if (inserts.Count > 0)
+            if (solhCalls.Count > 0)
             {
-                log("  فراخوانی InsertChidman (اعلام چیدمان):");
-                foreach (string s in inserts.Take(12)) log("    " + s);
-                if (inserts.Count > 12) log("    ... (" + inserts.Count + " call sites)");
+                log("  Solh/Tavafogh صدا می‌زند InsertChidman (اعلام از بیرون 1288):");
+                foreach (string s in solhCalls.Take(10)) log("    " + s);
+                if (solhCalls.Count > 10) log("    ... (" + solhCalls.Count + " call sites)");
             }
-            else log("  WARN: هیچ InsertChidman(...) در کلاس‌های مرتبط نیست.");
+            else log("  WARN: هیچ کلاس دیگری InsertChidman را صدا نمی‌زند.");
+
+            log("  داخل Member 1288: " + internalCalls + " فراخوانی InsertChidman (سازنده چیدمان؛ همه پارکینگ/صنعتی نیستند)");
+            if (gatedInternal.Count > 0)
+            {
+                log("  شرط‌های مهم داخل 1288 (UsingArea / Bar / NoInsert / esupkhadamat):");
+                foreach (string s in gatedInternal.Take(8)) log("    " + s);
+                if (gatedInternal.Count > 8) log("    ... (" + gatedInternal.Count + " gated sites)");
+            }
+        }
+
+        private static bool IsInsertChidmanCall(string t)
+        {
+            if (t.IndexOf("Sub ", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (t.IndexOf("Function ", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return Regex.IsMatch(t, @"\bInsertChidman(?:M|Front)?\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static string InsertGate(string t)
+        {
+            if (Regex.IsMatch(t, @"UsingArea\s*>\s*0", RegexOptions.IgnoreCase)) return "UsingArea>0";
+            if (Regex.IsMatch(t, @"Bar\s*>\s*0", RegexOptions.IgnoreCase)) return "Bar>0";
+            if (Regex.IsMatch(t, @"NoInsert\s*=\s*False", RegexOptions.IgnoreCase)) return "NoInsert=False";
+            if (t.IndexOf("esupkhadamat", StringComparison.OrdinalIgnoreCase) >= 0) return "esupkhadamat";
+            return "";
+        }
+
+        /// <summary>Prefer Solh «عدم اعلام ضابطه» over generic Rule/1148 «ضابطه» errors (137, فیش, ...).</summary>
+        private static int SolhStopScore(MemberSource src, string line)
+        {
+            if (line.IndexOf("AddError", StringComparison.OrdinalIgnoreCase) < 0) return 0;
+            bool peace = line.IndexOf("صلحنامه", StringComparison.Ordinal) >= 0;
+            bool missing = line.IndexOf("عدم اعلام", StringComparison.Ordinal) >= 0;
+            bool chidman = line.IndexOf("چیدمان", StringComparison.Ordinal) >= 0;
+            if (!peace && !missing && !chidman) return 0;
+            int s = 1;
+            if (missing) s += 8;
+            if (peace) s += 6;
+            if (chidman) s += 4;
+            if (src.NidClass == 344) s += 5;
+            if (src.NidClass == 342) s += 3;
+            if (src.NidClass == 336) s -= 4;
+            return s;
         }
 
         private static void ReportCallers(IList<MemberSource> sources, MemberSource focus, Action<string> log)
@@ -255,9 +302,10 @@ namespace RuleTrace
         private static int GuardPriority(string line)
         {
             if (string.IsNullOrEmpty(line)) return 0;
-            if (line.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0) return 5;
-            if (line.IndexOf("عدم اعلام", StringComparison.Ordinal) >= 0 || line.IndexOf("صلحنامه", StringComparison.Ordinal) >= 0) return 4;
-            if (line.IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0) return 3;
+            if (line.IndexOf("عدم اعلام", StringComparison.Ordinal) >= 0) return 7;
+            if (line.IndexOf("صلحنامه", StringComparison.Ordinal) >= 0) return 6;
+            if (Regex.IsMatch(line ?? "", @"UsingArea\s*>\s*0", RegexOptions.IgnoreCase)) return 5;
+            if (line.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0) return 4;
             if (line.IndexOf("AddError", StringComparison.OrdinalIgnoreCase) >= 0) return 2;
             return 1;
         }
