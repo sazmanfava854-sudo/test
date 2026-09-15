@@ -23,6 +23,9 @@ namespace RuleTrace
 
         public static void Report(IList<MemberSource> sources, IList<TraceEvent> trace, int nidMember, Action<string> log)
         {
+            Action<string> raw = log ?? (m => { });
+            log = m => Prefix(raw, m);
+
             if (sources == null || sources.Count == 0)
             {
                 log("Chidman      : (no Member sources — «بارگذاری کد از DB»)");
@@ -242,6 +245,19 @@ namespace RuleTrace
                 if (inMember.Count == 0 && related.Count > 0)
                     log("  NOTE         : chidman-related trace از Member دیگر آمده — مسیر اجرا از 1288 عبور نکرده");
             }
+        }
+
+        private static void Prefix(Action<string> log, string m)
+        {
+            if (log == null) return;
+            if (string.IsNullOrWhiteSpace(m))
+            {
+                log("Chidman      :");
+                return;
+            }
+            string t = m.TrimStart();
+            if (t.StartsWith("Chidman      :", StringComparison.OrdinalIgnoreCase)) log(t);
+            else log("Chidman      : " + t);
         }
 
         private static string LocateKeyInMember(string key, IList<MemberSource> sources, int nidMember)

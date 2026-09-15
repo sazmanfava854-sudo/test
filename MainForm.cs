@@ -47,7 +47,7 @@ namespace RuleTrace
             {
                 _codeEditor.OnShown();
                 Log(BuildInfo.Banner);
-                Log("اگر عنوان هنوز v20e-phase2-sanitize است، exe قدیمی است — دوباره build.cmd بزنید.");
+                Log("اگر عنوان هنوز v20e یا v21-no-vb-rewrite بدون b است، دوباره build.cmd بزنید.");
                 Log("مرحله ۲: اجرا = موتور Sara یا DLL از قبل کامپایل‌شده. RuleTrace دیگر VB را بازنویسی نمی‌کند.");
             };
         }

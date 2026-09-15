@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v21-no-vb-rewrite";
+        public const string Label = "v21b-chidman-summary";
 
         public static string Banner
         {

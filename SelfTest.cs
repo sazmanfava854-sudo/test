@@ -51,6 +51,7 @@ namespace RuleTrace
             Console.WriteLine(all);
 
             int fail = 0;
+            fail += Expect(all, "Chidman      :", "summary prefix");
             fail += Expect(all, "InsertChidman", "method name");
             fail += Expect(all, "If Solh Then", "Solh guard");
             fail += Expect(all, "Exit Sub", "early exit on Solh");

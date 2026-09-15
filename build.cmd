@@ -4,8 +4,8 @@ cd /d "%~dp0"
 title RuleTrace build
 
 echo ============================================
-echo  RuleTrace build  v21-no-vb-rewrite
-echo  (title must NOT say v20e-phase2-sanitize)
+echo  RuleTrace build  v21b-chidman-summary
+echo  (title must be v21b-chidman-summary, not v20e)
 echo ============================================
 
 set "MSBUILD="
@@ -57,7 +57,7 @@ if errorlevel 1 (
 echo.
 echo ============================================
 echo  OK  ->  %~dp0bin\RuleTrace.exe
-echo  Window title must be: RuleTrace v21-no-vb-rewrite
+echo  Window title must be: RuleTrace v21b-chidman-summary
 echo ============================================
 echo Starting RuleTrace...
 start "" "%~dp0bin\RuleTrace.exe"

@@ -130,7 +130,7 @@ namespace RuleTrace
                 || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase))
                 return false;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "Phase ", "Diagnose", "Result ", "Cache DLL", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -783,6 +783,14 @@ namespace RuleTrace
                 {
                     LastMemberSources.Clear();
                     LastMemberSources.AddRange(GetMemberSources(nid));
+                    _log("Arch         : static dbo.Member rows=" + LastMemberSources.Count
+                         + " (" + (LastMemberSources.Sum(s => (long)(s.Code == null ? 0 : s.Code.Length)) / 1024) + " KB XmlBody)");
+                    MemberSource focus = LastMemberSources.FirstOrDefault(s => s.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId);
+                    if (focus == null)
+                        _log("Arch         : Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " NOT FOUND — available: "
+                             + string.Join(",", LastMemberSources.Select(s => s.NidMember.ToString()).Take(20)));
+                    else
+                        _log("Arch         : Member " + focus.NidMember + " " + focus.Name + " codeLen=" + (focus.Code == null ? 0 : focus.Code.Length));
                     if (nid == 344 || string.Equals(r.Formula, "Solh", StringComparison.OrdinalIgnoreCase))
                         ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
                 }
@@ -1308,7 +1316,12 @@ namespace RuleTrace
             CollectNamedFormulaDlls(_s.DllPath, formula, files);
             CollectNamedFormulaDlls(@"c:\dll10", formula, files);
 
+            _log("Arch         : DLL folders cache=" + QuoteDir(cacheFolder)
+                 + " cachePath=" + QuoteDir(_s.CachePath)
+                 + " dll10=" + QuoteDir(_s.DllPath));
             _log("Arch         : scanning " + files.Distinct(StringComparer.OrdinalIgnoreCase).Count() + " candidate DLL(s) for precompiled " + formula);
+            if (files.Count == 0)
+                _log("Arch         : next = در UI سارا Solh را Compile کنید؛ DLL می‌آید کنار Cache بالا. بدون آن Instanc ساخته نمی‌شود.");
 
             foreach (string dll in files.Distinct(StringComparer.OrdinalIgnoreCase))
             {
@@ -1371,6 +1384,12 @@ namespace RuleTrace
                 CollectCacheDlls(Path.Combine(folder, "SafaFormulaCache"), into);
             }
             catch { }
+        }
+
+        private static string QuoteDir(string folder)
+        {
+            if (string.IsNullOrWhiteSpace(folder)) return "(empty)";
+            return (Directory.Exists(folder) ? "yes " : "no ") + folder;
         }
 
         private static Type FindFormulaType(Assembly asm, string formula)
