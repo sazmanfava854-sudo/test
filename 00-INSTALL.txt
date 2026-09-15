@@ -1,14 +1,20 @@
-این پوشه را از GitHub «Download ZIP» نگیرید — ویندوز پوشه تو در تو می‌سازد (49)(50)...
+چرا خراب شد؟
+پوشه‌بندی پروژه عوض نشده. همان فایل‌ها در ریشه هستند.
 
-کار درست:
+آنچه خراب شد: هر بار «Code → Download ZIP» از گیت‌هاب.
+ویندوز می‌سازد:  ...(49)\test-cursor-ruletrace-standalone-88fc\
+پرانتز (49) باعث می‌شود Windows cannot find build.cmd.
 
-1. فقط همین یک فایل را دانلود کنید:
-     RuleTrace.zip   (کنار این متن، در ریشه پروژه)
-2. روی RuleTrace.zip راست‌کلیک → Extract All
-3. مقصد را بنویسید:  C:\ruletrace
-4. باید این‌ها مستقیم دیده شوند (بدون پوشه اضافه):
-     C:\ruletrace\RuleTrace.sln
-     C:\ruletrace\MainForm.cs
-     C:\ruletrace\build.cmd
-5. Visual Studio → Open → C:\ruletrace\RuleTrace.sln
-6. Ctrl+Shift+B   سپس   Ctrl+F5
+تا وقتی از پوشه قدیمی کار می‌کردید درست بود:
+  C:\Users\sadathoseini-sh\Downloads\ruletrace
+
+ZIP شماره 46 و 47 و 49 را کنار بگذارید. ZIP جدید نگیرید.
+
+اگر پوشه ruletrace هنوز هست:
+  Visual Studio → Open →
+  C:\Users\sadathoseini-sh\Downloads\ruletrace\RuleTrace.sln
+  Ctrl+Shift+B   سپس   Ctrl+F5
+
+اگر آن پوشه نیست، محتویات پوشهٔ داخلی (49) را Copy کنید
+به یک پوشه بدون پرانتز:
+  C:\ruletrace\RuleTrace.sln

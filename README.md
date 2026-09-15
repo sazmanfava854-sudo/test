@@ -1,10 +1,8 @@
 # RuleTrace — Sara Formula Debugger (UI)
 
-**نصب:** فایل `RuleTrace.zip` را از ریشه همین پروژه دانلود کنید (نه دکمه سبز GitHub «Code → Download ZIP»). Extract به `C:\ruletrace`. باید `C:\ruletrace\RuleTrace.sln` را مستقیم ببینید. بعد Visual Studio → Rebuild (`Ctrl+Shift+B`).
-
 دیباگر فرمول‌های Sara بدون UI اصلی.
 
-دیباگر فرمول‌های Sara بدون UI اصلی.
+پوشه‌بندی پروژه تخت است (همه فایل‌ها کنار `RuleTrace.sln`). اگر Build خراب شد، از ZIP گیت‌هاب `(49)` استفاده نکنید — همان پوشهٔ قبلی `Downloads\ruletrace` را در Visual Studio باز کنید.
 
 ## مرحله ۱ — ترکیب کد RuleEngine + DLL (فقط خواندن)
 
