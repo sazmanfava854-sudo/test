@@ -98,16 +98,17 @@
     .tabs button.on { background: var(--teal); color: #042f2e; }
     .log {
       background: #050b14; color: #d1fae5; border-radius: 14px; padding: 14px;
-      min-height: 280px; max-height: 520px; overflow: auto; white-space: pre-wrap;
+      height: 300px; overflow: auto; white-space: pre-wrap;
       font: 12.5px/1.55 Consolas, "Courier New", monospace; direction: ltr; text-align: left;
     }
     .code {
-      background: #071018; border-radius: 14px; padding: 12px; min-height: 280px; max-height: 520px;
+      background: #071018; border-radius: 14px; padding: 12px; height: 360px;
       overflow: auto; white-space: pre; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left;
       color: #e2e8f0;
     }
+    .list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
     .split { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
-    .list { max-height: 520px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+    .list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
     .list div {
       padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,.1); cursor: pointer; font-size: 12px;
     }
