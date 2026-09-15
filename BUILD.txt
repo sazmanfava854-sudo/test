@@ -1,28 +1,38 @@
 How to build RuleTrace (Windows)
 
-Do NOT run:
-  cd C:\Users\...\Downloads\ruletrace
-That folder often does not exist. Windows then says it cannot find the path.
+The error:
+  Windows cannot find
+  C:\Users\...\Downloads\test-cursor-ruletrace-standalone-88fc(46)\build.cmd
 
-Do this:
+means that ZIP folder is gone or incomplete. GitHub ZIP extract (46) is an old copy.
+Do not click a shortcut or a VS/Cursor run button that still points at (46).
 
-1. In Explorer, open the folder that contains these files together:
-     build.cmd
+------------------------------------------------
+EASIEST if Visual Studio is already open (MainForm.cs)
+------------------------------------------------
+1. File -> Open -> Project/Solution -> RuleTrace.sln
+   (the sln in the folder you can actually see in Explorer)
+2. Build menu -> Rebuild Solution   (Ctrl+Shift+B)
+3. Debug menu -> Start Without Debugging   (Ctrl+F5)
+
+Window title must be: v21c-cross-class
+
+------------------------------------------------
+Or: copy to a short path, then double-click
+------------------------------------------------
+1. In Explorer open Downloads. Find a folder that EXISTS
+   (not (46) if that one was deleted). Inside it you must see:
      RuleTrace.sln
      RuleTrace.csproj
+     build.cmd   OR   build.bat
+2. Copy that whole folder to  C:\ruletrace
+3. Double-click  C:\ruletrace\build.bat
 
-2. Double-click build.cmd
+If Windows still blocks .cmd from Downloads, C:\ruletrace avoids that.
 
-3. The black window must print:
-     Folder:  (the real path on YOUR machine)
-     OK  ->  ...\bin\RuleTrace.exe
-
-4. RuleTrace window title must be:
-     v21c-cross-class
-
-If double-click does nothing: right-click build.cmd -> Run as administrator
-(only if dll10 copy needs admin). Usually a normal double-click is enough.
-
-If "MSBuild not found": install Visual Studio Build Tools
-  https://aka.ms/vs/17/release/vs_BuildTools.exe
-  workload: .NET desktop build tools
+------------------------------------------------
+Do NOT
+------------------------------------------------
+- cd to Downloads\ruletrace
+- keep extracting ZIP to (47) (48) ...
+- run a shortcut to a deleted (46) folder
