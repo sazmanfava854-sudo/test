@@ -1,0 +1,28 @@
+How to build RuleTrace (Windows)
+
+Do NOT run:
+  cd C:\Users\...\Downloads\ruletrace
+That folder often does not exist. Windows then says it cannot find the path.
+
+Do this:
+
+1. In Explorer, open the folder that contains these files together:
+     build.cmd
+     RuleTrace.sln
+     RuleTrace.csproj
+
+2. Double-click build.cmd
+
+3. The black window must print:
+     Folder:  (the real path on YOUR machine)
+     OK  ->  ...\bin\RuleTrace.exe
+
+4. RuleTrace window title must be:
+     v21c-cross-class
+
+If double-click does nothing: right-click build.cmd -> Run as administrator
+(only if dll10 copy needs admin). Usually a normal double-click is enough.
+
+If "MSBuild not found": install Visual Studio Build Tools
+  https://aka.ms/vs/17/release/vs_BuildTools.exe
+  workload: .NET desktop build tools

@@ -60,15 +60,14 @@ ruletrace/
 
 ## Build (یک دستور)
 
-```cmd
-cd C:\Users\sadathoseini-sh\Downloads\ruletrace
-build.cmd
-```
+مسیر `Downloads\ruletrace` را در cmd ننویسید — اگر آن پوشه نباشد ویندوز می‌گوید cannot find the path.
 
-- MSBuild را خودکار پیدا می‌کند (VS 2019/2022/Build Tools/dotnet).
-- خروجی: `bin\RuleTrace.exe` و بعد از Build خودکار اجرا می‌شود.
+1. در Explorer پوشه‌ای را باز کنید که **همین فایل‌ها کنار هم** هستند: `build.cmd`، `RuleTrace.sln`، `RuleTrace.csproj`
+2. روی `build.cmd` دابل‌کلیک کنید
+3. باید چاپ شود `Folder: ...` و بعد `OK -> ...\bin\RuleTrace.exe`
+4. عنوان پنجره: `v21c-cross-class`
 
-در PowerShell: `.\build.cmd`
+راهنمای کوتاه: فایل `BUILD.txt` کنار `build.cmd`.
 
 ## استفاده
 
