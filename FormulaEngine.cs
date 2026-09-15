@@ -158,7 +158,7 @@ namespace RuleTrace
                 || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase))
                 return false;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -806,8 +806,8 @@ namespace RuleTrace
             }
             else if (!HasLiveInstance(result))
             {
-                _log("Arch         : موتور پوسته خالی ساخت (Instanc=Nothing). RuleTrace دیگر ToString1 را نمی‌چسباند.");
-                _log("Arch         : یک‌بار Solh را در UI سارا کامپایل کنید تا DLL در Cache ساخته شود، یا همان DLL را در پوشه dll10 بگذارید.");
+                _log("Arch         : موتور پوسته خالی ساخت (Instanc=Nothing) — عیب‌یابی از dbo.Member و NidHistory ادامه می‌یابد.");
+                _log("Arch         : به DLL به‌روز نیاز نیست. تغییرات فرمول را در تاریخچه Member ببینید.");
                 try
                 {
                     LastMemberSources.Clear();
@@ -822,6 +822,12 @@ namespace RuleTrace
                         _log("Arch         : Member " + focus.NidMember + " class=" + focus.NidClass + " " + ClassName(focus.NidClass)
                              + " " + focus.Name + " codeLen=" + (focus.Code == null ? 0 : focus.Code.Length));
                     ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
+                    try
+                    {
+                        _log("Arch         : منبع حقیقت فرمول = dbo.Member + تاریخچه (NidHistory). DLL به‌روز برای این عیب‌یابی لازم نیست.");
+                        MemberHistory.Report(_s.RuleEngine, RelatedNidClasses(nid), _log);
+                    }
+                    catch (Exception hx) { _log("History      : " + FirstLine(hx.Message)); }
                 }
                 catch (Exception ex) { _log("Arch         : static analysis — " + FirstLine(ex.Message)); }
                 _summaryCapture = false;
@@ -1352,7 +1358,7 @@ namespace RuleTrace
                  + " dll10=" + QuoteDir(_s.DllPath));
             _log("Arch         : scanning " + files.Distinct(StringComparer.OrdinalIgnoreCase).Count() + " candidate DLL(s) for precompiled " + formula);
             if (files.Count == 0)
-                _log("Arch         : next = در UI سارا Solh را Compile کنید؛ DLL می‌آید کنار Cache بالا. بدون آن Instanc ساخته نمی‌شود.");
+                _log("Arch         : DLL کش خالی است — ادامه با بررسی dbo.Member و لاگ NidHistory (نه جستجوی DLL به‌روز).");
 
             foreach (string dll in files.Distinct(StringComparer.OrdinalIgnoreCase))
             {

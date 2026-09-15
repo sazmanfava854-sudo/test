@@ -343,8 +343,8 @@ namespace RuleTrace
             if (trace == null || trace.Count == 0)
             {
                 log("    (no live trace — Instanc موتور Nothing است)");
-                log("    عیب‌یابی بدون اجرا: If/Exit نزدیک InsertChidman را در همین Member ببینید.");
-                log("    اجرای زنده وقتی ممکن است که UI سارا یک‌بار Solh را کامپایل کند و DLL در Cache باشد.");
+                log("    عیب‌یابی بدون اجرا زنده: فرمول از dbo.Member و تاریخچه NidHistory خوانده شد.");
+                log("    DLL کش برای این مرحله لازم نیست.");
                 return;
             }
 

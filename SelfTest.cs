@@ -213,7 +213,9 @@ namespace RuleTrace
             int fail = 0;
             fail += Expect(html, "عیب‌یاب فرمول سارا", "persian title");
             fail += Expect(html, "/api/run", "run endpoint");
-            fail += Expect(html, "/api/analyze-chidman", "chidman endpoint");
+            fail += Expect(html, "/api/history", "history endpoint");
+            fail += Expect(html, "تاریخچه فرمول", "history tab");
+            fail += Expect(html, "بررسی فرمول از DB", "db-first button");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
             return fail;
         }
@@ -245,7 +247,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22-web", "bootstrap label");
+                        fail += Expect(boot, "v22c-web-history", "bootstrap label");
                         return fail;
                     }
                 }

@@ -221,7 +221,8 @@
         <textarea id="parameters" placeholder="NidProc=..."></textarea>
         <div class="actions">
           <button class="ghost" id="btnLookup">جستجو در Sara</button>
-          <button class="gold" id="btnRun">اجرای فرمول</button>
+          <button class="gold" id="btnHistory">بررسی فرمول از DB</button>
+          <button class="ghost" id="btnRun">اجرای موتور (اختیاری)</button>
           <button class="ghost" id="btnChidman">تحلیل چیدمان ۱۲۸۸</button>
           <button class="ghost" id="btnCombine">ترکیب DB + DLL</button>
           <button class="ghost" id="btnMembers">تحلیل Member</button>
@@ -245,11 +246,21 @@
       <section class="card">
         <div class="tabs">
           <button class="on" data-tab="log">خروجی</button>
+          <button data-tab="history">تاریخچه فرمول</button>
           <button data-tab="code">کد Member</button>
           <button data-tab="debug">دیباگ مرحله‌ای</button>
           <button data-tab="summary">خلاصه خطا</button>
         </div>
         <div id="tab-log"><div class="log" id="log"></div></div>
+        <div id="tab-history" hidden>
+          <div style="overflow:auto; margin-bottom:10px">
+            <table id="histTable">
+              <thead><tr><th>NidHistory</th><th>کلاس</th><th>Member</th><th>ویرایشگر</th><th>تاریخ</th><th>ساعت</th><th>توضیح</th><th>Body</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <pre class="code" id="histCode">یک ردیف تاریخچه را انتخاب کنید</pre>
+        </div>
         <div id="tab-code" hidden>
           <div class="split">
             <div class="list" id="memberList"></div>
@@ -417,6 +428,30 @@ $("btnLookup").onclick = async () => {
   });
   if (j.nidProc) $("nidProc").value = j.nidProc;
 };
+function showHistory(rows) {
+  const tb = $("histTable").querySelector("tbody");
+  tb.innerHTML = "";
+  (rows || []).forEach((h, idx) => {
+    const tr = document.createElement("tr");
+    [h.nidHistory, (h.className || h.nidClass) + "/" + h.nidClass, h.nidMember, h.modifyer, h.modifyDate, h.modifyTime, h.modifyDesc, h.bodyChars].forEach(c => {
+      const td = document.createElement("td"); td.textContent = c == null ? "" : String(c); tr.appendChild(td);
+    });
+    tr.onclick = () => {
+      tb.querySelectorAll("tr").forEach(x => x.classList.remove("sel"));
+      tr.classList.add("sel");
+      $("histCode").textContent = h.code || "(Body خالی — فقط لاگ تغییر است، مثل نمونه 337/1160)";
+    };
+    if (idx === 0) tr.classList.add("sel");
+    tb.appendChild(tr);
+  });
+  if (rows && rows[0]) $("histCode").textContent = rows[0].code || "(Body خالی — فقط لاگ تغییر)";
+}
+$("btnHistory").onclick = async () => {
+  const j = await api("/api/history", payload());
+  showHistory(j.history);
+  document.querySelector('[data-tab="history"]').click();
+  toast((j.history || []).length + " ردیف تاریخچه");
+};
 $("btnRun").onclick = async () => {
   const p = payload();
   if (p.clearCache) toast("توجه: پاک کردن Cache تیک دارد — DLL کامپایل‌شده Solh حذف می‌شود");
@@ -429,6 +464,7 @@ $("btnRun").onclick = async () => {
 $("btnChidman").onclick = async () => {
   const j = await api("/api/analyze-chidman", payload());
   showMembers(j.members);
+  if (j.history) showHistory(j.history);
   document.querySelector('[data-tab="code"]').click();
 };
 $("btnCombine").onclick = async () => {
@@ -455,7 +491,7 @@ document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
     b.classList.add("on");
-    ["log","code","debug","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
+    ["log","history","code","debug","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
   };
 });
 

@@ -33,7 +33,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 کلاس‌ها به هم وصل‌اند. Member چیدمان `1288` در `ZabetehConvert` (342) است نه Solh/344. با انتخاب Solh این کلاس‌ها با هم خوانده می‌شوند: Rule 336، ZabetehConvert 342، Solh 344، Tavafogh 345، Global 432.
 
-اگر Instanc نبود (کد خروج ۲): تب «تحلیل چیدمان» / کد Member 1288. برای اجرای زنده یک‌بار Solh را در UI سارا کامپایل کنید تا DLL در Cache ساخته شود.
+اگر Instanc نبود (کد خروج ۲): این طبیعی است. منبع عیب‌یابی `dbo.Member` و لاگ `NidHistory` است، نه DLL. دکمه **بررسی فرمول از DB** / تب تاریخچه.
 
 ## معماری اجرا (بدون تغییر نسبت به v21c)
 

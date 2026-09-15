@@ -128,6 +128,7 @@ namespace RuleTrace
                     case "/api/combine": result = _app.Combine(body); break;
                     case "/api/analyze-members": result = _app.AnalyzeMembers(body); break;
                     case "/api/analyze-chidman": result = _app.AnalyzeChidman(body); break;
+                    case "/api/history": result = _app.FormulaHistory(body); break;
                     case "/api/inspect": result = _app.Inspect(body); break;
                     case "/api/run": result = _app.RunFormula(body); break;
                     case "/api/shutdown":

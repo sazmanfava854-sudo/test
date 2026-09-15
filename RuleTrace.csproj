@@ -64,6 +64,7 @@
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="MemberHistory.cs" />
     <Compile Include="MemberAnalyzer.cs" />
     <Compile Include="MemberRepository.cs" />
     <Compile Include="Program.cs" />

@@ -178,15 +178,38 @@ namespace RuleTrace
             string formula = FormulaOf(body);
             int nid;
             if (!TryFormulaId(formula, out nid)) return Fail("فرمول ناشناخته: " + formula);
-            return Run("تحلیل Member 1288 (چیدمان)...", false, (eng, log) =>
+            return Run("تحلیل Member 1288 (چیدمان) از DB...", false, (eng, log) =>
             {
                 log.Add("");
-                log.Add("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " (cross-class) ══════════");
+                log.Add("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " (DB + history) ══════════");
                 eng.AnalyzeChidmanMember(nid, ChidmanAnalyzer.DefaultChidmanMemberId);
+                var hist = PackHistory(MemberHistory.List(_settings.RuleEngine, FormulaEngine.RelatedNidClasses(nid), 0, 40, log.Add));
                 return new Dictionary<string, object>
                 {
                     { "members", PackSources(eng.LastMemberSources) },
+                    { "history", hist },
                     { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
+                };
+            });
+        }
+
+        public Dictionary<string, object> FormulaHistory(Dictionary<string, object> body)
+        {
+            string formula = FormulaOf(body);
+            int nid;
+            if (!TryFormulaId(formula, out nid)) return Fail("فرمول ناشناخته: " + formula);
+            int member = Json.Int(body, "nidMember");
+            return Run("تاریخچه فرمول از DB...", false, (eng, log) =>
+            {
+                log.Add("Arch         : DLL جستجو نمی‌شود. منبع = جدول NidHistory در RuleEngine.");
+                var ids = new List<int>(FormulaEngine.RelatedNidClasses(nid));
+                MemberHistory.Report(_settings.RuleEngine, ids, log.Add);
+                var rows = MemberHistory.List(_settings.RuleEngine, ids, member, 80, log.Add);
+                return new Dictionary<string, object>
+                {
+                    { "table", MemberHistory.LastTable ?? "" },
+                    { "history", PackHistory(rows) },
+                    { "related", ids },
                 };
             });
         }
@@ -232,8 +255,8 @@ namespace RuleTrace
                 log.Add("Exit code    : " + code + (code == 0 ? " (OK)" : code == 1 ? " (Stop error in BizErrors)" : code == 2 ? " (no live instance — static debug)" : code == 4 ? " (runtime/engine error)" : ""));
                 if (code == 2)
                 {
-                    log.Add("معماری: RuleTrace دیگر VB را چسب نمی‌زند و Compile نمی‌کند.");
-                    log.Add("موتور Sara پوسته خالی ساخت. اگر UI سارا فرمول را کامپایل کرده، DLL را در dll10 یا Cache بگذارید.");
+                    log.Add("معماری: منبع فرمول dbo.Member + تاریخچه NidHistory است، نه DLL به‌روز.");
+                    log.Add("Instanc ساخته نشد — ادامه با بررسی متن فرمول و لاگ تغییرات در دیتابیس.");
                 }
                 var summary = eng.Summary.ToList();
                 summary.Add("Exit code    : " + code);
@@ -354,6 +377,35 @@ namespace RuleTrace
                     req.FactoryParameters[key.Substring(8).Trim()] = val;
                 else req.Parameters[key] = val;
             }
+        }
+
+        private static List<object> PackHistory(IList<HistoryRow> rows)
+        {
+            var list = new List<object>();
+            if (rows == null) return list;
+            foreach (HistoryRow h in rows)
+            {
+                list.Add(new Dictionary<string, object>
+                {
+                    { "nidHistory", h.NidHistory },
+                    { "nidClass", h.NidClass },
+                    { "className", FormulaEngine.ClassName(h.NidClass) },
+                    { "nidMember", h.NidMember },
+                    { "fromDate", h.FromDate ?? "" },
+                    { "toDate", h.ToDate ?? "" },
+                    { "enumType", h.EnumType ?? "" },
+                    { "active", h.IsActive },
+                    { "versionDateTime", h.VersionDateTime ?? "" },
+                    { "modifyer", h.Modifyer ?? "" },
+                    { "modifyDate", h.ModifyDate ?? "" },
+                    { "modifyTime", h.ModifyTime ?? "" },
+                    { "modifyDesc", h.ModifyDesc ?? "" },
+                    { "bodyChars", h.BodyChars },
+                    { "code", h.Code ?? "" },
+                    { "table", h.TableName ?? "" },
+                });
+            }
+            return list;
         }
 
         private static List<object> PackSources(IList<MemberSource> sources)
