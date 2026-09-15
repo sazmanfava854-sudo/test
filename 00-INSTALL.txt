@@ -1,0 +1,14 @@
+این پوشه را از GitHub «Download ZIP» نگیرید — ویندوز پوشه تو در تو می‌سازد (49)(50)...
+
+کار درست:
+
+1. فقط همین یک فایل را دانلود کنید:
+     RuleTrace.zip   (کنار این متن، در ریشه پروژه)
+2. روی RuleTrace.zip راست‌کلیک → Extract All
+3. مقصد را بنویسید:  C:\ruletrace
+4. باید این‌ها مستقیم دیده شوند (بدون پوشه اضافه):
+     C:\ruletrace\RuleTrace.sln
+     C:\ruletrace\MainForm.cs
+     C:\ruletrace\build.cmd
+5. Visual Studio → Open → C:\ruletrace\RuleTrace.sln
+6. Ctrl+Shift+B   سپس   Ctrl+F5

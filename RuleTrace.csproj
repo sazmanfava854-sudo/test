@@ -68,6 +68,7 @@
     <Compile Include="UserSettings.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="00-INSTALL.txt" />
     <None Include="App.config" />
     <None Include="BUILD.txt" />
     <None Include="build.bat" />
