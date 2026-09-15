@@ -16,9 +16,13 @@ namespace RuleTrace
             "insertFilterAsansor", "FnTafkikZamin", "FnArzZamin",
         };
 
+        /// <summary>Calls that actually announce layout. Logging helpers in Member 1288 (logfileFJ/plog*) are noise.</summary>
+        private static readonly string[] ChidmanCallHints = { "InsertChidman", "Chideman", "Chidman" };
+
         private static readonly string[] TraceKeyHints =
         {
             "chidman", "chid", "chandganeh", "چیدمان", "layout", "suggestion", "solh", "peace", "masir",
+            "صلحنامه", "ضابطه", "اعلام", "zabeteh",
         };
 
         public static void Report(IList<MemberSource> sources, IList<TraceEvent> trace, int nidMember, Action<string> log)
@@ -68,8 +72,9 @@ namespace RuleTrace
             else
                 log("  chidman AddError: " + chidmanAddErrors.Count + " line(s) in Member " + nidMember);
 
+            ReportFindings(sources, focus, log);
             ReportChidmanLocations(sources, log);
-            ReportCallers(sources, focus, methods, log);
+            ReportCallers(sources, focus, log);
             ReportSolhGuards(focus, sources, log);
             ReportGuardsNearChidman(focus, log);
             ReportTrace(trace, sources, nidMember, log);
@@ -96,17 +101,63 @@ namespace RuleTrace
             if (n == 0) log("    (none in loaded classes)");
         }
 
-        private static void ReportCallers(IList<MemberSource> sources, MemberSource focus, List<string> methods, Action<string> log)
+        private static void ReportFindings(IList<MemberSource> sources, MemberSource focus, Action<string> log)
         {
-            var targets = new HashSet<string>(methods, StringComparer.OrdinalIgnoreCase);
-            foreach (string h in MethodHints) targets.Add(h);
+            log("");
+            log("یافته:");
+            var stops = new List<string>();
+            var inserts = new List<string>();
+            foreach (MemberSource src in sources)
+            {
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                string[] lines = Normalize(src.Code).Split('\n');
+                string loc = FormulaEngine.ClassName(src.NidClass) + "/" + src.NidClass + " Member " + src.NidMember + " " + src.Name;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string t = lines[i].Trim();
+                    if (t.Length == 0 || t.StartsWith("'")) continue;
+                    if (Regex.IsMatch(t, @"\bInsertChidman\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                        && t.IndexOf("Sub ", StringComparison.OrdinalIgnoreCase) < 0
+                        && t.IndexOf("Function ", StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        string gate = "";
+                        if (t.IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0
+                            || (i > 0 && lines[i - 1].IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0))
+                            gate = "  [شرط UsingArea>0]";
+                        inserts.Add(loc + " L" + (i + 1) + ": " + Trunc(t, 100) + gate);
+                    }
+                    if (t.IndexOf("AddError", StringComparison.OrdinalIgnoreCase) >= 0
+                        && (t.IndexOf("صلحنامه", StringComparison.Ordinal) >= 0
+                            || t.IndexOf("عدم اعلام", StringComparison.Ordinal) >= 0
+                            || t.IndexOf("ضابطه", StringComparison.Ordinal) >= 0))
+                        stops.Add(loc + " L" + (i + 1) + ": " + Trunc(t, 110));
+                }
+            }
 
+            if (stops.Count > 0)
+            {
+                log("  Solh بدون اعلام ضابطه Stop می‌شود — همان پیام «چیدمان در مسیر صلح اعلام نمی‌گردد»:");
+                foreach (string s in stops.Take(6)) log("    " + s);
+            }
+            else log("  (در XmlBody خط Stop «عدم اعلام ضابطه / صلحنامه» پیدا نشد)");
+
+            if (inserts.Count > 0)
+            {
+                log("  فراخوانی InsertChidman (اعلام چیدمان):");
+                foreach (string s in inserts.Take(12)) log("    " + s);
+                if (inserts.Count > 12) log("    ... (" + inserts.Count + " call sites)");
+            }
+            else log("  WARN: هیچ InsertChidman(...) در کلاس‌های مرتبط نیست.");
+        }
+
+        private static void ReportCallers(IList<MemberSource> sources, MemberSource focus, Action<string> log)
+        {
             var callers = new List<string>();
             foreach (MemberSource src in sources)
             {
                 if (src.NidClass == focus.NidClass && src.NidMember == focus.NidMember) continue;
                 if (string.IsNullOrWhiteSpace(src.Code)) continue;
-                foreach (string name in targets)
+                foreach (string name in ChidmanCallHints)
                 {
                     if (Regex.IsMatch(src.Code, @"\b" + Regex.Escape(name) + @"\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                         callers.Add(FormulaEngine.ClassName(src.NidClass) + "/" + src.NidClass + " Member " + src.NidMember + " " + src.Name + " calls " + name);
@@ -114,7 +165,7 @@ namespace RuleTrace
             }
 
             log("");
-            log("  Who calls Member " + focus.NidMember + " methods:");
+            log("  Who calls InsertChidman/Chideman (not logfileFJ/plog):");
             if (callers.Count == 0)
             {
                 log("    (no call found in other Member XmlBody — ممکن است فقط موتور Sara این Member را جدا اجرا کند)");
@@ -122,25 +173,8 @@ namespace RuleTrace
             }
             else
             {
-                foreach (string c in callers.Distinct(StringComparer.OrdinalIgnoreCase).Take(20))
+                foreach (string c in callers.Distinct(StringComparer.OrdinalIgnoreCase).Take(24))
                     log("    " + c);
-            }
-
-            bool runCalls = sources.Any(s =>
-                s.NidMember != focus.NidMember
-                && Regex.IsMatch(s.Code ?? "", @"\bRun\s*\(", RegexOptions.IgnoreCase)
-                && targets.Any(t => Regex.IsMatch(s.Code, @"\b" + Regex.Escape(t) + @"\s*\(", RegexOptions.IgnoreCase)));
-            if (!runCalls)
-            {
-                var runMember = sources.FirstOrDefault(s => (s.Name ?? "").Equals("Run", StringComparison.OrdinalIgnoreCase)
-                    || Regex.IsMatch(s.Code ?? "", @"\b(?:Public\s+)?Sub\s+Run\s*\(", RegexOptions.IgnoreCase));
-                if (runMember != null)
-                {
-                    bool runHasChidman = MethodHints.Any(h =>
-                        Regex.IsMatch(runMember.Code ?? "", @"\b" + Regex.Escape(h) + @"\s*\(", RegexOptions.IgnoreCase));
-                    log("  Run member   : NidMember=" + runMember.NidMember + " " + runMember.Name
-                        + (runHasChidman ? " — calls chidman helper(s)" : " — does NOT call InsertChidman/Chideman (مسیر چیدمان شاید قطع شده)"));
-                }
             }
         }
 
@@ -170,11 +204,16 @@ namespace RuleTrace
             string[] lines = Normalize(src.Code).Split('\n');
             int shown = 0;
             bool header = false;
+            var hits = new List<int>();
             for (int i = 0; i < lines.Length; i++)
             {
                 string t = lines[i].Trim();
                 if (t.Length == 0 || t.StartsWith("'")) continue;
-                if (!LooksLikeSolhGuard(t)) continue;
+                if (LooksLikeSolhGuard(t)) hits.Add(i);
+            }
+            hits.Sort((a, b) => GuardPriority(lines[b].Trim()).CompareTo(GuardPriority(lines[a].Trim())));
+            foreach (int i in hits)
+            {
                 if (!header)
                 {
                     log("    -- " + label + " --");
@@ -203,31 +242,39 @@ namespace RuleTrace
             bool isIf = line.StartsWith("If ", StringComparison.OrdinalIgnoreCase)
                 || line.StartsWith("ElseIf ", StringComparison.OrdinalIgnoreCase)
                 || line.IndexOf(" Exit ", StringComparison.OrdinalIgnoreCase) >= 0
-                || line.StartsWith("Exit ", StringComparison.OrdinalIgnoreCase);
+                || line.StartsWith("Exit ", StringComparison.OrdinalIgnoreCase)
+                || line.IndexOf("AddError", StringComparison.OrdinalIgnoreCase) >= 0;
             if (!isIf) return false;
-            string[] tokens = { "solh", "صلح", "peace", "getpeace", "chidman", "chideman", "chandganeh", "چیدمان", "masir", "مسیر" };
+            string[] tokens = { "solh", "صلح", "peace", "getpeace", "chidman", "chideman", "chandganeh", "چیدمان", "masir", "مسیر", "ضابطه", "صلحنامه", "zabeteh", "usingarea", "crowd" };
             string lower = line.ToLowerInvariant();
             foreach (string tok in tokens)
                 if (lower.IndexOf(tok, StringComparison.Ordinal) >= 0) return true;
             return false;
         }
 
+        private static int GuardPriority(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return 0;
+            if (line.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0) return 5;
+            if (line.IndexOf("عدم اعلام", StringComparison.Ordinal) >= 0 || line.IndexOf("صلحنامه", StringComparison.Ordinal) >= 0) return 4;
+            if (line.IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0) return 3;
+            if (line.IndexOf("AddError", StringComparison.OrdinalIgnoreCase) >= 0) return 2;
+            return 1;
+        }
+
         private static void ReportGuardsNearChidman(MemberSource focus, Action<string> log)
         {
             log("");
-            log("  If/Exit near chidman helpers (Member " + focus.NidMember + "):");
+            log("  If/Exit near InsertChidman (Member " + focus.NidMember + "):");
             string[] lines = Normalize(focus.Code).Split('\n');
             int shown = 0;
             for (int i = 0; i < lines.Length; i++)
             {
                 string t = lines[i].Trim();
                 if (t.Length == 0 || t.StartsWith("'")) continue;
-                bool isChidmanLine = MethodHints.Any(h => t.IndexOf(h, StringComparison.OrdinalIgnoreCase) >= 0);
-                bool isGuard = t.StartsWith("If ", StringComparison.OrdinalIgnoreCase)
-                    || t.StartsWith("ElseIf ", StringComparison.OrdinalIgnoreCase)
-                    || t.IndexOf(" Exit ", StringComparison.OrdinalIgnoreCase) >= 0
-                    || t.StartsWith("Return", StringComparison.OrdinalIgnoreCase);
-                if (!isChidmanLine && !isGuard) continue;
+                bool isChidmanLine = ChidmanCallHints.Any(h =>
+                    Regex.IsMatch(t, @"\b" + Regex.Escape(h) + @"\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+                if (!isChidmanLine) continue;
 
                 int from = Math.Max(0, i - 2);
                 int to = Math.Min(lines.Length - 1, i + 2);
@@ -333,12 +380,14 @@ namespace RuleTrace
             var list = new List<AddErrLine>();
             if (m == null || string.IsNullOrWhiteSpace(m.Code)) return list;
             string[] lines = Normalize(m.Code).Split('\n');
-            var rx = new Regex(@"AddError\s*\(\s*""([^""]+)""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var rx = new Regex(@"AddError\s*\(\s*(?:[^""\n]*,\s*)*""([^""]+)""(?:\s*,\s*""([^""]*)"")?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             for (int i = 0; i < lines.Length; i++)
             {
                 Match match = rx.Match(lines[i]);
                 if (!match.Success) continue;
-                list.Add(new AddErrLine { Line = i + 1, Key = match.Groups[1].Value, Text = lines[i].Trim() });
+                string key = match.Groups[1].Value;
+                string title = match.Groups[2].Success ? match.Groups[2].Value : "";
+                list.Add(new AddErrLine { Line = i + 1, Key = key, Text = lines[i].Trim() + (title.Length == 0 ? "" : " | " + title) });
             }
             return list;
         }

@@ -12,6 +12,7 @@ namespace RuleTrace
         {
             int fail = 0;
             fail += ChidmanSolhGuard();
+            fail += ChidmanRealSolhStop();
             fail += RelatedClassesSolh();
             fail += BannerNoRewrite();
             fail += JsonRoundtrip();
@@ -74,6 +75,66 @@ namespace RuleTrace
             if (all.IndexOf("vbc", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 Console.Error.WriteLine("FAIL: static analysis still mentions vbc");
+                fail++;
+            }
+            return fail;
+        }
+
+        private static int ChidmanRealSolhStop()
+        {
+            var log = new List<string>();
+            var sources = new List<MemberSource>
+            {
+                new MemberSource
+                {
+                    NidClass = 344,
+                    NidMember = 1296,
+                    Name = "Run",
+                    Meta = "Solh",
+                    Code =
+                        "Public Sub Run()\r\n" +
+                        "  If Info8.GetRuleResultPeaceParameter().IsCallFromCrowd = True Then\r\n" +
+                        "    Iscrowd = True\r\n" +
+                        "  End If\r\n" +
+                        "  Info8.AddError(BIZ.SA.EumErrorAction.Stop, \"صلحنامه\", \"به دلیل عدم اعلام ضابطه امکان محاسبه صلحنامه نمی باشد\")\r\n" +
+                        "  InsertChidman()\r\n" +
+                        "End Sub\r\n",
+                },
+                new MemberSource
+                {
+                    NidClass = 342,
+                    NidMember = 1288,
+                    Name = "Run",
+                    Meta = "ZabetehConvert",
+                    Code =
+                        "Public Sub Run()\r\n" +
+                        "  logfileFJ(\"noise\")\r\n" +
+                        "  if tmpDto2.UsingArea>0 Then InsertChidman(tmpDto2)\r\n" +
+                        "End Sub\r\n" +
+                        "Public Sub InsertChidman(dto)\r\nEnd Sub\r\n",
+                },
+                new MemberSource
+                {
+                    NidClass = 336,
+                    NidMember = 1148,
+                    Name = "Run",
+                    Meta = "Rule",
+                    Code = "Public Sub Run()\r\n  logfileFJ(\"x\")\r\nEnd Sub\r\n",
+                },
+            };
+            ChidmanAnalyzer.Report(sources, new List<TraceEvent>(), 1288, log.Add);
+            string all = string.Join("\n", log);
+            Console.WriteLine(all);
+            int fail = 0;
+            fail += Expect(all, "یافته", "findings header");
+            fail += Expect(all, "صلحنامه", "solh stop key");
+            fail += Expect(all, "عدم اعلام ضابطه", "missing regulation message");
+            fail += Expect(all, "UsingArea", "InsertChidman UsingArea gate");
+            fail += Expect(all, "1296", "Solh Run member");
+            fail += Expect(all, "calls InsertChidman", "Solh calls InsertChidman");
+            if (all.IndexOf("calls logfileFJ", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: caller list still includes logfileFJ noise");
                 fail++;
             }
             return fail;

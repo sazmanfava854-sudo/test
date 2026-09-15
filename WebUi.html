@@ -214,7 +214,7 @@
         </div>
         <div class="checks">
           <label><input type="checkbox" id="recompile" /> ReCompile (کند)</label>
-          <label><input type="checkbox" id="clearCache" /> پاک کردن Cache</label>
+          <label title="اگر تیک باشد DLL کامپایل‌شده Solh در Cache حذف می‌شود و Instanc ساخته نمی‌شود"><input type="checkbox" id="clearCache" /> پاک کردن Cache (DLL کامپایل‌شده حذف می‌شود)</label>
           <label><input type="checkbox" id="allParams" /> همه ParametersValue</label>
         </div>
         <label>پارامترها (Name=Value هر خط)</label>
@@ -418,7 +418,9 @@ $("btnLookup").onclick = async () => {
   if (j.nidProc) $("nidProc").value = j.nidProc;
 };
 $("btnRun").onclick = async () => {
-  const j = await api("/api/run", payload());
+  const p = payload();
+  if (p.clearCache) toast("توجه: پاک کردن Cache تیک دارد — DLL کامپایل‌شده Solh حذف می‌شود");
+  const j = await api("/api/run", p);
   showMembers(j.members);
   showTrace(j.trace, j.params, j.watch);
   showSummary(j.summary);

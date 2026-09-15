@@ -688,6 +688,7 @@ namespace RuleTrace
                 {
                     Directory.Delete(folder, true);
                     _log("Cache        : cleared");
+                    _log("WARN         : ClearCache تیک خورده — DLL کامپایل‌شده Solh در این پوشه پاک شد. برای اجرای زنده تیک «پاک کردن Cache» را بردارید و دوباره اجرا کنید.");
                 }
                 Directory.CreateDirectory(folder);
             }

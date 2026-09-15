@@ -29,7 +29,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 2. تست اتصال دیتابیس — باید RuleEngine و Sara هر دو OK باشند
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
-5. **اجرای فرمول** — ReCompile خاموش
+5. **اجرای فرمول** — ReCompile خاموش، **پاک کردن Cache خاموش** (اگر تیک باشد DLL کامپایل‌شده Solh حذف می‌شود و Exit 2 می‌گیرید)
 
 کلاس‌ها به هم وصل‌اند. Member چیدمان `1288` در `ZabetehConvert` (342) است نه Solh/344. با انتخاب Solh این کلاس‌ها با هم خوانده می‌شوند: Rule 336، ZabetehConvert 342، Solh 344، Tavafogh 345، Global 432.
 
