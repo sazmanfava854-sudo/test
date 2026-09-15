@@ -68,9 +68,18 @@
     <Compile Include="UserSettings.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="00-INSTALL.txt" />
     <None Include="App.config" />
+    <None Include="build.bat" />
     <None Include="build.cmd" />
+    <None Include="build.vbs" />
+    <None Include="check-files.cmd" />
+    <None Include="build.ps1" />
+    <None Include="install.cmd" />
+    <None Include="install.ps1" />
     <None Include="README.md" />
+    <None Include="run.cmd" />
+    <None Include="RuleTrace.zip" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

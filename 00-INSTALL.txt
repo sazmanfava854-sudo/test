@@ -1,0 +1,40 @@
+راهنمای نصب RuleTrace (ویندوز)
+================================
+
+خطای «Windows cannot find ... build.cmd»؟
+-----------------------------------------
+دو علت رایج:
+
+1) فایل build.cmd با پایان خط Linux (LF) ساخته شده — ویندوز با دوبار کلیک اجرا نمی‌کند.
+   راه‌حل: build.vbs یا install.cmd را بزنید، یا آخرین RuleTrace.zip را بگیرید.
+
+2) مسیر Downloads با پرانتز مثل (44) — cmd.exe خراب می‌شود.
+   راه‌حل: install.cmd (کپی به C:\ruletrace)
+
+راه‌حل سریع (پیشنهادی)
+-----------------------
+1. داخل پوشه پروژه (همان جایی که RuleTrace.sln هست) دوبار کلیک کنید:
+     install.cmd
+2. پروژه به C:\ruletrace کپی و Build می‌شود.
+
+راه‌حل دستی
+------------
+1. پوشه داخلی ZIP را باز کنید (جایی که RuleTrace.sln و build.cmd هستند).
+2. همه فایل‌ها را Copy کنید.
+3. Paste در:  C:\ruletrace
+4. دوبار کلیک:  C:\ruletrace\build.cmd
+
+یا در PowerShell:
+  cd C:\ruletrace
+  .\build.ps1
+
+Visual Studio
+-------------
+File → Open → C:\ruletrace\RuleTrace.sln
+Build → Rebuild Solution (Ctrl+Shift+B)
+Debug → Start Without Debugging (Ctrl+F5)
+
+از GitHub ZIP مستقیم استفاده نکنید
+------------------------------------
+به‌جای Code → Download ZIP، اگر RuleTrace.zip در مخزن هست آن را Extract کنید
+مستقیم در C:\ruletrace (بدون پوشه تو در تو و بدون (44)).

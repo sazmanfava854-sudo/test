@@ -60,15 +60,18 @@ ruletrace/
 
 ## Build (یک دستور)
 
+**اگر از GitHub «Download ZIP» گرفتید** و خطا می‌بینید: `Windows cannot find ... build.cmd` — مسیر `Downloads\...(44)\...` پرانتز دارد و cmd.exe خراب می‌شود.
+
+**راه‌حل:** دوبار کلیک `install.cmd` (کپی به `C:\ruletrace` + Build) یا فایل `00-INSTALL.txt` را بخوانید.
+
 ```cmd
-cd C:\Users\sadathoseini-sh\Downloads\ruletrace
-build.cmd
+C:\ruletrace\build.cmd
 ```
 
 - MSBuild را خودکار پیدا می‌کند (VS 2019/2022/Build Tools/dotnet).
 - خروجی: `bin\RuleTrace.exe` و بعد از Build خودکار اجرا می‌شود.
 
-در PowerShell: `.\build.cmd`
+در PowerShell: `.\build.ps1` (برای مسیرهای دارای پرانتز بهتر از `build.cmd` است)
 
 ## استفاده
 
@@ -140,6 +143,7 @@ Add-MpPreference -ExclusionPath "C:\Users\sadathoseini-sh\Desktop\dll10"
 
 | خطا | علت / راه‌حل |
 |-----|--------------|
+| `Windows cannot find ... build.cmd` | فایل `.cmd` با LF (نه CRLF) یا مسیر با `(44)` — `build.vbs` / `install.cmd` بزنید یا `RuleTrace.zip` جدید |
 | `Login failed for user 'hService'` | فایل‌های `*.dll.config` کنار DLLها — RuleTrace خودکار آن‌ها را `.bak` می‌کند |
 | `BC2017 could not find c:\dll10\BIZ.SC.DLL` | vbc داخل موتور به `c:\dll10` نیاز دارد — RuleTrace خودکار sync می‌کند؛ اگر دسترسی نبود یک بار as Administrator اجرا کنید |
 | `BC30269 'Out' has multiple definitions` / `M_Out` | موتور پوسته خالی ساخت — RuleTrace دیگر VB را بازنویسی نمی‌کند؛ Solh را یک‌بار در UI سارا کامپایل کنید یا تحلیل ایستای 1288 را ببینید |
