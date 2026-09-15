@@ -4,7 +4,8 @@ cd /d "%~dp0"
 title RuleTrace build
 
 echo ============================================
-echo  RuleTrace build  (no Sara DLL needed here)
+echo  RuleTrace build  v21-no-vb-rewrite
+echo  (title must NOT say v20e-phase2-sanitize)
 echo ============================================
 
 set "MSBUILD="
@@ -56,6 +57,7 @@ if errorlevel 1 (
 echo.
 echo ============================================
 echo  OK  ->  %~dp0bin\RuleTrace.exe
+echo  Window title must be: RuleTrace v21-no-vb-rewrite
 echo ============================================
 echo Starting RuleTrace...
 start "" "%~dp0bin\RuleTrace.exe"
