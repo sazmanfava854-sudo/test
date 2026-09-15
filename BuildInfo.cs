@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v21b-chidman-summary";
+        public const string Label = "v21c-cross-class";
 
         public static string Banner
         {

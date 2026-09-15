@@ -41,13 +41,18 @@ namespace RuleTrace
     /// <summary>VB source of one dbo.Member row (extracted from XmlBody) shown in the debug panel.</summary>
     internal sealed class MemberSource
     {
+        public int NidClass;
         public int NidMember;
         public string Name;
         public string Meta;
         public string Code;
         public int Version;
         public bool IsActive;
-        public override string ToString() { return NidMember + "  " + Name + "  " + Meta; }
+        public override string ToString()
+        {
+            string cls = NidClass == 0 ? "" : FormulaEngine.ClassName(NidClass) + "/" + NidClass + " ";
+            return cls + NidMember + "  " + Name + "  " + Meta;
+        }
     }
 
     /// <summary>Public type from a Sara DLL (Phase 1 catalog — not compiled).</summary>
@@ -82,6 +87,29 @@ namespace RuleTrace
             { "ZabetehConvert", 342 },
             { "Nosazi_Calculate", 339 },
         };
+
+        /// <summary>Solh/Tavafogh/Rule/ZabetehConvert share members (e.g. chidman 1288 is class 342, not 344).</summary>
+        public static int[] RelatedNidClasses(int nid)
+        {
+            var set = new SortedSet<int>();
+            if (nid > 0) set.Add(nid);
+            set.Add(432);
+            int[] cluster = { 336, 342, 344, 345 };
+            bool inCluster = false;
+            foreach (int n in cluster) if (n == nid) { inCluster = true; break; }
+            if (inCluster)
+                foreach (int n in cluster) set.Add(n);
+            int[] ids = new int[set.Count];
+            set.CopyTo(ids);
+            return ids;
+        }
+
+        public static string ClassName(int nid)
+        {
+            foreach (var kv in FormulaMap)
+                if (kv.Value == nid) return kv.Key;
+            return "Class" + nid;
+        }
 
         private const BindingFlags AnyStatic = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
         private const BindingFlags AnyInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -782,17 +810,17 @@ namespace RuleTrace
                 try
                 {
                     LastMemberSources.Clear();
-                    LastMemberSources.AddRange(GetMemberSources(nid));
+                    LastMemberSources.AddRange(GetRelatedMemberSources(nid));
                     _log("Arch         : static dbo.Member rows=" + LastMemberSources.Count
                          + " (" + (LastMemberSources.Sum(s => (long)(s.Code == null ? 0 : s.Code.Length)) / 1024) + " KB XmlBody)");
                     MemberSource focus = LastMemberSources.FirstOrDefault(s => s.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId);
                     if (focus == null)
                         _log("Arch         : Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " NOT FOUND — available: "
-                             + string.Join(",", LastMemberSources.Select(s => s.NidMember.ToString()).Take(20)));
+                             + string.Join(",", LastMemberSources.Select(s => s.NidClass + "/" + s.NidMember).Take(30)));
                     else
-                        _log("Arch         : Member " + focus.NidMember + " " + focus.Name + " codeLen=" + (focus.Code == null ? 0 : focus.Code.Length));
-                    if (nid == 344 || string.Equals(r.Formula, "Solh", StringComparison.OrdinalIgnoreCase))
-                        ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
+                        _log("Arch         : Member " + focus.NidMember + " class=" + focus.NidClass + " " + ClassName(focus.NidClass)
+                             + " " + focus.Name + " codeLen=" + (focus.Code == null ? 0 : focus.Code.Length));
+                    ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
                 }
                 catch (Exception ex) { _log("Arch         : static analysis — " + FirstLine(ex.Message)); }
                 _summaryCapture = false;
@@ -884,7 +912,7 @@ namespace RuleTrace
             try
             {
                 LastMemberSources.Clear();
-                LastMemberSources.AddRange(GetMemberSources(nid));
+                LastMemberSources.AddRange(GetRelatedMemberSources(nid));
             }
             catch (Exception ex)
             {
@@ -898,7 +926,9 @@ namespace RuleTrace
 
         public void AnalyzeChidmanMember(int nidRuleClass, int nidMember)
         {
-            var sources = GetMemberSources(nidRuleClass);
+            var sources = GetRelatedMemberSources(nidRuleClass);
+            LastMemberSources.Clear();
+            LastMemberSources.AddRange(sources);
             ChidmanAnalyzer.Report(sources, LastTrace, nidMember, _log);
         }
 
@@ -1870,14 +1900,14 @@ namespace RuleTrace
                         {
                             while (r.Read())
                             {
-                                var m = new MemberSource { NidMember = Convert.ToInt32(r.GetValue(0)) };
+                                var m = new MemberSource { NidClass = nid, NidMember = Convert.ToInt32(r.GetValue(0)) };
                                 string xml = r.IsDBNull(6) ? string.Empty : r.GetString(6);
                                 string name;
                                 m.Code = ExtractCode(xml, out name);
                                 m.Name = name ?? "";
                                 m.Version = ParseInt(Str(r, 3));
                                 m.IsActive = ParseActive(Str(r, 2));
-                                m.Meta = "v" + m.Version + " active=" + m.IsActive + " type=" + Str(r, 1) + " " + Str(r, 4).Trim() + "→" + Str(r, 5).Trim()
+                                m.Meta = ClassName(nid) + "/" + nid + " v" + m.Version + " active=" + m.IsActive + " type=" + Str(r, 1) + " " + Str(r, 4).Trim() + "→" + Str(r, 5).Trim()
                                          + " (" + (m.Code.Length / 1024) + " KB)";
                                 list.Add(m);
                             }
@@ -1888,6 +1918,58 @@ namespace RuleTrace
                 catch (Exception ex) { last = ex; list.Clear(); }
             }
             throw last ?? new InvalidOperationException("Member query failed");
+        }
+
+        /// <summary>Primary formula plus related NidClass rows (Solh 344 uses ZabetehConvert 342 for chidman, etc.).</summary>
+        public List<MemberSource> GetRelatedMemberSources(int primaryNid)
+        {
+            var nids = new List<int>(RelatedNidClasses(primaryNid));
+            int chidClass = FindClassOfMember(ChidmanAnalyzer.DefaultChidmanMemberId);
+            if (chidClass > 0 && !nids.Contains(chidClass)) nids.Add(chidClass);
+
+            _log("Arch         : related NidClass=[" + string.Join(",", nids.Select(n => n + ":" + ClassName(n))) + "]");
+            var all = new List<MemberSource>();
+            foreach (int n in nids)
+            {
+                try
+                {
+                    var rows = GetMemberSources(n);
+                    _log("Arch         : class " + n + " " + ClassName(n) + " members=" + rows.Count
+                         + " (" + (rows.Sum(s => (long)(s.Code == null ? 0 : s.Code.Length)) / 1024) + " KB)");
+                    all.AddRange(rows);
+                }
+                catch (Exception ex)
+                {
+                    _log("Arch         : class " + n + " " + ClassName(n) + " skip — " + FirstLine(ex.Message));
+                }
+            }
+            return DedupeMemberSources(all);
+        }
+
+        /// <summary>NidClass that owns a NidMember (1288 is 342 ZabetehConvert, not 344 Solh).</summary>
+        public int FindClassOfMember(int nidMember)
+        {
+            string[] sqls =
+            {
+                "SELECT TOP 1 NidClass FROM dbo.Member WHERE NidMember=@mid ORDER BY CASE WHEN isActive=1 THEN 0 ELSE 1 END, Version DESC",
+                "SELECT TOP 1 NidClass FROM dbo.Member WHERE NidMember=@mid",
+            };
+            foreach (string sql in sqls)
+            {
+                try
+                {
+                    using (var c = new SqlConnection(_s.RuleEngine))
+                    using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 60 })
+                    {
+                        cmd.Parameters.AddWithValue("@mid", nidMember);
+                        c.Open();
+                        object v = cmd.ExecuteScalar();
+                        if (v != null && v != DBNull.Value) return Convert.ToInt32(v);
+                    }
+                }
+                catch { }
+            }
+            return 0;
         }
 
         private static string Str(IDataRecord r, int i)
@@ -1909,18 +1991,19 @@ namespace RuleTrace
                 || s.Equals("yes", StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>One row per NidMember — prefer active, then highest Version, then largest Body.</summary>
+        /// <summary>One row per NidClass+NidMember — prefer active, then highest Version, then largest Body.</summary>
         private static List<MemberSource> DedupeMemberSources(List<MemberSource> rows)
         {
             if (rows == null || rows.Count == 0) return rows ?? new List<MemberSource>();
             return rows
-                .GroupBy(m => m.NidMember)
+                .GroupBy(m => ((long)m.NidClass << 32) | (uint)m.NidMember)
                 .Select(g => g
                     .OrderByDescending(m => m.IsActive)
                     .ThenByDescending(m => m.Version)
                     .ThenByDescending(m => m.Code == null ? 0 : m.Code.Length)
                     .First())
-                .OrderBy(m => m.NidMember)
+                .OrderBy(m => m.NidClass)
+                .ThenBy(m => m.NidMember)
                 .ToList();
         }
 

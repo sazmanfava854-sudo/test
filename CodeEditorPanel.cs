@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -86,6 +87,7 @@ namespace RuleTrace
                 HideSelection = false,
                 Font = new Font("Segoe UI", 9F),
             };
+            _lvMembers.Columns.Add("Class", 90);
             _lvMembers.Columns.Add("Member", 70);
             _lvMembers.Columns.Add("Ver", 40);
             _lvMembers.Columns.Add("Act", 36);
@@ -202,13 +204,16 @@ namespace RuleTrace
 
             try
             {
-                var rows = MemberRepository.List(_settings.RuleEngine, nid, _chkAllVersions.Checked);
+                var rows = new List<MemberRow>();
+                foreach (int n in FormulaEngine.RelatedNidClasses(nid))
+                    rows.AddRange(MemberRepository.List(_settings.RuleEngine, n, _chkAllVersions.Checked));
                 _selecting = true;
                 _lvMembers.Items.Clear();
                 _current = null;
                 foreach (MemberRow row in rows)
                 {
-                    var item = new ListViewItem(row.NidMember.ToString()) { Tag = row };
+                    var item = new ListViewItem(FormulaEngine.ClassName(row.NidClass) + "/" + row.NidClass) { Tag = row };
+                    item.SubItems.Add(row.NidMember.ToString());
                     item.SubItems.Add(row.Version.ToString());
                     item.SubItems.Add(row.IsActive ? "1" : "0");
                     item.SubItems.Add(row.Name ?? "");
@@ -218,7 +223,8 @@ namespace RuleTrace
                     _lvMembers.Items.Add(item);
                 }
                 _selecting = false;
-                _log("INSPECT      : " + rows.Count + " Member row(s) NidClass=" + nid + " (read-only)");
+                _log("INSPECT      : " + rows.Count + " Member row(s) related to NidClass=" + nid
+                     + " [" + string.Join(",", FormulaEngine.RelatedNidClasses(nid)) + "] (read-only)");
                 _lblStatus.Text = rows.Count + " row(s) — DLL: " + (_dllOk ? "OK" : "not loaded");
                 if (_lvMembers.Items.Count > 0)
                 {

@@ -47,7 +47,7 @@ namespace RuleTrace
             {
                 _codeEditor.OnShown();
                 Log(BuildInfo.Banner);
-                Log("اگر عنوان هنوز v20e یا v21-no-vb-rewrite بدون b است، دوباره build.cmd بزنید.");
+                Log("اگر عنوان هنوز v21b است، دوباره build.cmd بزنید (v21c-cross-class).");
                 Log("مرحله ۲: اجرا = موتور Sara یا DLL از قبل کامپایل‌شده. RuleTrace دیگر VB را بازنویسی نمی‌کند.");
             };
         }
@@ -431,11 +431,11 @@ namespace RuleTrace
             RunBackground("تحلیل Member 1288 (چیدمان)...", eng =>
             {
                 Log("");
-                Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " ══════════");
+                Log("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " (cross-class) ══════════");
                 eng.AnalyzeChidmanMember(nid, ChidmanAnalyzer.DefaultChidmanMemberId);
                 try
                 {
-                    var sources = eng.GetMemberSources(nid);
+                    var sources = eng.LastMemberSources.ToList();
                     _sourcesNid = nid;
                     Ui(() =>
                     {
@@ -472,10 +472,10 @@ namespace RuleTrace
 
         private void LoadSourcesInto(FormulaEngine eng, int nid)
         {
-            var sources = eng.GetMemberSources(nid);
+            var sources = eng.GetRelatedMemberSources(nid);
             _sourcesNid = nid;
             Ui(() => _debug.SetSources(sources));
-            Log("Source       : " + sources.Count + " Member row(s) loaded into debug panel (" + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB)");
+            Log("Source       : " + sources.Count + " Member row(s) across related classes (" + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB)");
         }
 
         private void RunFormula()
@@ -526,20 +526,19 @@ namespace RuleTrace
                         Log("معماری: RuleTrace دیگر VB را چسب نمی‌زند و Compile نمی‌کند.");
                         Log("موتور Sara پوسته خالی ساخت. اگر UI سارا فرمول را کامپایل کرده، DLL را در dll10 یا Cache بگذارید.");
                     }
-                    if (string.Equals(req.Formula, "Solh", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(req.Formula, "344", StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        try
+                        int nidLoad;
+                        if (!FormulaEngine.FormulaMap.TryGetValue(req.Formula, out nidLoad))
+                            int.TryParse(req.Formula, out nidLoad);
+                        if (nidLoad > 0) LoadSourcesInto(eng, nidLoad);
+                        Ui(() =>
                         {
-                            LoadSourcesInto(eng, 344);
-                            Ui(() =>
-                            {
-                                _debug.FocusMember(ChidmanAnalyzer.DefaultChidmanMemberId);
-                                _tabs.SelectedTab = _tabDebug;
-                            });
-                        }
-                        catch (Exception ex) { Log("WARN         : " + ex.Message); }
+                            _debug.FocusMember(ChidmanAnalyzer.DefaultChidmanMemberId);
+                            _tabs.SelectedTab = _tabDebug;
+                        });
                     }
+                    catch (Exception ex) { Log("WARN         : " + ex.Message); }
                 }
 
                 if (code == 0 || code == 1)

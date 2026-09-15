@@ -12,6 +12,7 @@ namespace RuleTrace
         {
             int fail = 0;
             fail += ChidmanSolhGuard();
+            fail += RelatedClassesSolh();
             fail += BannerIsV21();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
             return fail == 0 ? 0 : 1;
@@ -24,16 +25,18 @@ namespace RuleTrace
             {
                 new MemberSource
                 {
-                    NidMember = 1,
+                    NidClass = 344,
+                    NidMember = 1296,
                     Name = "Run",
-                    Meta = "test",
-                    Code = "Public Sub Run()\r\n  If True Then Map_Function()\r\nEnd Sub\r\n",
+                    Meta = "Solh",
+                    Code = "Public Sub Run()\r\n  If True Then InsertChidman()\r\nEnd Sub\r\n",
                 },
                 new MemberSource
                 {
+                    NidClass = 342,
                     NidMember = 1288,
                     Name = "Chidman",
-                    Meta = "test",
+                    Meta = "ZabetehConvert",
                     Code =
                         "Public Sub InsertChidman()\r\n" +
                         "  If Solh Then\r\n" +
@@ -52,6 +55,9 @@ namespace RuleTrace
 
             int fail = 0;
             fail += Expect(all, "Chidman      :", "summary prefix");
+            fail += Expect(all, "342", "ZabetehConvert class");
+            fail += Expect(all, "344", "Solh class");
+            fail += Expect(all, "calls InsertChidman", "Solh calls chidman in 342");
             fail += Expect(all, "InsertChidman", "method name");
             fail += Expect(all, "If Solh Then", "Solh guard");
             fail += Expect(all, "Exit Sub", "early exit on Solh");
@@ -65,6 +71,28 @@ namespace RuleTrace
             if (all.IndexOf("vbc", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 Console.Error.WriteLine("FAIL: static analysis still mentions vbc");
+                fail++;
+            }
+            return fail;
+        }
+
+        private static int RelatedClassesSolh()
+        {
+            int[] rel = FormulaEngine.RelatedNidClasses(344);
+            int fail = 0;
+            foreach (int need in new[] { 336, 342, 344, 345, 432 })
+            {
+                bool ok = false;
+                foreach (int n in rel) if (n == need) ok = true;
+                if (!ok)
+                {
+                    Console.Error.WriteLine("FAIL: RelatedNidClasses(344) missing " + need);
+                    fail++;
+                }
+            }
+            if (FormulaEngine.ClassName(342) != "ZabetehConvert")
+            {
+                Console.Error.WriteLine("FAIL: class 342 should be ZabetehConvert, got " + FormulaEngine.ClassName(342));
                 fail++;
             }
             return fail;

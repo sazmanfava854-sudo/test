@@ -6,7 +6,13 @@
 
 این برنامه **عیب‌یابی** است. کد `dbo.Member` را از RuleEngine کنار نوع‌های DLL می‌گذارد. **چیزی در دیتابیس ذخیره نمی‌شود.**
 
-## مرحله ۲ — اجرا بدون بازنویسی VB (`v21b-chidman-summary`)
+## مرحله ۲ — اجرا بدون بازنویسی VB (`v21c-cross-class`)
+
+RuleTrace دیگر کد Memberها را به یک فایل VB نمی‌چسباند.
+
+کلاس‌های فرمول **به هم وصل‌اند**. Member چیدمان `1288` در `ZabetehConvert` (NidClass **342**) است، نه در Solh/344. با انتخاب Solh این کلاس‌ها با هم خوانده می‌شوند: Rule 336، ZabetehConvert 342، Solh 344، Tavafogh 345، Global 432.
+
+`build.cmd` — عنوان باید `v21c-cross-class` باشد.
 
 RuleTrace دیگر کد Memberها را به یک فایل VB نمی‌چسباند و `Compile(ToString1)` / vbc نمی‌کند. آن معماری خطاهای BC30269 (Out/M_Out تکراری) و BC30289 (متد داخل متد) می‌ساخت و همگرا نمی‌شد.
 

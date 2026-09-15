@@ -36,14 +36,22 @@ namespace RuleTrace
             log("=== تحلیل مسیر چیدمان (Member " + nidMember + ") ===");
 
             MemberSource focus = sources.FirstOrDefault(s => s.NidMember == nidMember);
+            log("  Classes loaded: " + string.Join(", ", sources.Select(s => FormulaEngine.ClassName(s.NidClass) + "/" + s.NidClass).Distinct()));
             if (focus == null)
             {
-                log("Member " + nidMember + " : NOT FOUND in dbo.Member for this formula");
-                log("  Available NidMember: " + string.Join(", ", sources.Select(s => s.NidMember.ToString()).Take(25)));
+                log("Member " + nidMember + " : NOT FOUND in loaded classes");
+                log("  Available: " + string.Join(", ", sources.Select(s => s.NidClass + "/" + s.NidMember).Take(40)));
+                ReportChidmanLocations(sources, log);
                 return;
             }
 
             log("Member " + nidMember + " : " + focus.Name + "  " + focus.Meta);
+            if (focus.NidClass != 0)
+            {
+                log("  NidClass=" + focus.NidClass + " " + FormulaEngine.ClassName(focus.NidClass)
+                    + (focus.NidClass == 342 ? " (تبدیل ضابطه — چیدمان اینجاست، نه در Solh/344)" : "")
+                    + (focus.NidClass == 344 ? " (Solh)" : ""));
+            }
 
             var methods = ExtractMethodNames(focus.Code);
             log("  Sub/Function in this member: " + (methods.Count == 0 ? "(none parsed)" : string.Join(", ", methods.Take(12)) + (methods.Count > 12 ? " ..." : "")));
@@ -60,10 +68,32 @@ namespace RuleTrace
             else
                 log("  chidman AddError: " + chidmanAddErrors.Count + " line(s) in Member " + nidMember);
 
+            ReportChidmanLocations(sources, log);
             ReportCallers(sources, focus, methods, log);
             ReportSolhGuards(focus, sources, log);
             ReportGuardsNearChidman(focus, log);
             ReportTrace(trace, sources, nidMember, log);
+        }
+
+        private static void ReportChidmanLocations(IList<MemberSource> sources, Action<string> log)
+        {
+            log("");
+            log("  Members with InsertChidman/Chideman/Chidman (all loaded classes):");
+            int n = 0;
+            foreach (MemberSource src in sources)
+            {
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
+                var hits = new List<string>();
+                foreach (string h in MethodHints)
+                {
+                    if (Regex.IsMatch(src.Code, @"\b" + Regex.Escape(h) + @"\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                        hits.Add(h);
+                }
+                if (hits.Count == 0) continue;
+                log("    " + FormulaEngine.ClassName(src.NidClass) + "/" + src.NidClass + " Member " + src.NidMember + " " + src.Name + " : " + string.Join(", ", hits));
+                n++;
+            }
+            if (n == 0) log("    (none in loaded classes)");
         }
 
         private static void ReportCallers(IList<MemberSource> sources, MemberSource focus, List<string> methods, Action<string> log)
@@ -74,11 +104,12 @@ namespace RuleTrace
             var callers = new List<string>();
             foreach (MemberSource src in sources)
             {
-                if (src == focus || string.IsNullOrWhiteSpace(src.Code)) continue;
+                if (src.NidClass == focus.NidClass && src.NidMember == focus.NidMember) continue;
+                if (string.IsNullOrWhiteSpace(src.Code)) continue;
                 foreach (string name in targets)
                 {
                     if (Regex.IsMatch(src.Code, @"\b" + Regex.Escape(name) + @"\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-                        callers.Add("Member " + src.NidMember + " " + src.Name + " calls " + name);
+                        callers.Add(FormulaEngine.ClassName(src.NidClass) + "/" + src.NidClass + " Member " + src.NidMember + " " + src.Name + " calls " + name);
                 }
             }
 
@@ -119,12 +150,16 @@ namespace RuleTrace
             log("");
             log("  Solh/صلح guards (may skip chidman announcement):");
             int shown = 0;
-            shown += DumpSolhGuardLines(focus, "Member " + focus.NidMember, log, 18);
-            var run = sources.FirstOrDefault(s => s != focus && (
-                (s.Name ?? "").Equals("Run", StringComparison.OrdinalIgnoreCase)
-                || Regex.IsMatch(s.Code ?? "", @"\b(?:Public\s+)?Sub\s+Run\s*\(", RegexOptions.IgnoreCase)));
-            if (run != null)
-                shown += DumpSolhGuardLines(run, "Run Member " + run.NidMember, log, 10);
+            shown += DumpSolhGuardLines(focus, FormulaEngine.ClassName(focus.NidClass) + "/" + focus.NidClass + " Member " + focus.NidMember, log, 18);
+            foreach (MemberSource run in sources)
+            {
+                if (run.NidClass == focus.NidClass && run.NidMember == focus.NidMember) continue;
+                bool isRun = (run.Name ?? "").Equals("Run", StringComparison.OrdinalIgnoreCase)
+                    || Regex.IsMatch(run.Code ?? "", @"\b(?:Public\s+)?Sub\s+Run\s*\(", RegexOptions.IgnoreCase);
+                if (!isRun) continue;
+                if (run.NidClass != 0 && run.NidClass != 344 && run.NidClass != 342 && run.NidClass != 345) continue;
+                shown += DumpSolhGuardLines(run, FormulaEngine.ClassName(run.NidClass) + "/" + run.NidClass + " Run Member " + run.NidMember, log, 8);
+            }
             if (shown == 0)
                 log("    (no If/Exit mentioning Solh/صلح/Peace/GetPeace — مسیر skip شاید با نام دیگر است)");
         }
