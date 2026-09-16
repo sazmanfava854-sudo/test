@@ -288,6 +288,20 @@ if "BuildPartialMemberFiles" in inj_chunk or "FormulaVbcCompiler" in inj_chunk:
 if "یک‌بار همان فرم را در سارا" in hover:
     failmsg("NoInstance must not tell user to open Sara")
 expect(selftest, "InjectXmlBody", "selftest inject")
+merger = read("FormulaMerger.cs")
+expect(merger, 'TrySet(fn, "EncryptXmlBody", null)', "inject clears EncryptXmlBody")
+expect(merger, "StripDuplicateClassShell", "inject strips class shell")
+wrapped = """Public Class Rule
+Public Sub Run()
+ logfilefj("IS_BlandMartabe",IS_BlandMartabe)
+End Sub
+End Class
+"""
+block = re.search(r"(?:Public\s+)?Sub\s+Run\(\).*?End Sub", wrapped, re.S | re.I)
+if not block or "logfilefj" not in block.group(0):
+    failmsg("strip keeps Run logfilefj")
+if "Public Class" in block.group(0):
+    failmsg("strip removes Class wrapper")
 
 print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
 sys.exit(0 if fail == 0 else 1)
