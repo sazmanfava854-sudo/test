@@ -137,7 +137,12 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23c-pick-scope", "label")
+expect(build, "v23f-hover-inject", "label")
+expect(csproj, "HoverDebug.cs", "csproj compiles HoverDebug")
+expect(html, "hoverTip", "hover tooltip")
+expect(html, "renderCode", "line renderer")
+expect(html, "logfilefj", "logfilefj copy")
+expect(html, "موس را روی خط", "hover instruction")
 expect(csproj, "PermitScopes.cs", "csproj compiles PermitScopes")
 expect(html, 'data-scope="zabeteh"', "checkbox zabeteh")
 expect(html, 'data-scope="solh"', "checkbox solh")
@@ -187,7 +192,7 @@ if "Sh_Peace" not in TABLES["solh"]:
 if TABLES["commission"]:
     failmsg("commission has no named table")
 
-MUST = "کاربر باید انتخاب کند کدام بخش‌ها را دیباگ کند"
+MUST = "کاربر باید انتخاب کند کدام فرم را باز می‌کند"
 if MUST not in scopes_cs:
     failmsg("MustPick copy")
 
@@ -213,6 +218,90 @@ if csv != ["tahlil", "tavafogh"]:
 
 if "selectedScopes()" not in html:
     failmsg("payload selectedScopes")
+
+hover = read("HoverDebug.cs")
+expect(hover, "logfilefj", "parser logfilefj")
+expect(hover, r'logfilefj\s*\(', "logfilefj regex")
+expect(webapp, "SkipRelatedSources", "do not load every related class")
+expect(webapp, "LoadFormSources", "load ticked form only")
+expect(engine, "SkipRelatedSources", "Run can skip related flood")
+expect(selftest, "HoverLogfilefj", "selftest hover")
+expect(selftest, "IS_BlandMartabe", "sample probe")
+if "UPDATE dbo.Member" in hover:
+    failmsg("hover must not write dbo.Member")
+
+# logfilefj parse clone
+sample = '''Public Sub Logfilefj(ByVal A as String,ByVal B as String)
+    Info8.AddError(BIZ.SA.EumErrorAction.warning,A,B)
+End Sub
+Public Sub Run()
+ logfilefj("IS_BlandMartabe",IS_BlandMartabe)
+ ' logfilefj("CI_Zabeteh",CI_Zabeteh)
+ logfilefj("ساختمان",M_BaseUsing_Bazdid.count)
+ logfilefj("دستگاه",M_BaseUsing_Bazdid.count)
+End Sub
+'''
+import re
+probes = []
+rx = re.compile(r'logfilefj\s*\(\s*"([^"]*)"', re.I)
+for i, line in enumerate(sample.splitlines(), 1):
+    t = line.strip()
+    if t.startswith("'"):
+        continue
+    if re.search(r'\bSub\s+Logfilefj\b', t, re.I):
+        continue
+    for m in rx.finditer(line):
+        probes.append(m.group(1))
+if probes != ["IS_BlandMartabe", "ساختمان", "دستگاه"]:
+    failmsg("python logfilefj parse " + str(probes))
+
+if "به‌جای بارگذاری همهٔ کلاس‌ها فقط گام ردشده" in engine:
+    failmsg("empty Instanc must not recurse DebugSteps")
+if "eng.DebugSteps(req.NidProc, scopes)" in webapp:
+    failmsg("hover اجرا must not dump tables before logfilefj")
+expect(hover, "NoInstance", "no-instance copy")
+expect(hover, "ClearCache", "do not clear cache")
+expect(hover, "XmlBody", "inject mentioned")
+expect(webapp, "FocusMember", "open member with most logfilefj")
+expect(webapp, "فرم سارا باز نکنید", "must not tell user to open Sara")
+expect(engine, "TryInjectNativeCompile", "empty Instanc injects XmlBody")
+expect(engine, "TryEngineNativeCompile", "engine native compile")
+run_idx = engine.find("public int Run(RunRequest r)")
+if run_idx < 0:
+    failmsg("Run() missing")
+run_chunk = engine[run_idx:run_idx + 9000]
+if "TryInjectNativeCompile" not in run_chunk:
+    failmsg("Run must call TryInjectNativeCompile when Instanc empty")
+if "TryCompileToString1" in run_chunk or "SanitizeInjectedToString1" in run_chunk:
+    failmsg("Run must not Compile(ToString1)")
+inj_idx = engine.find("private object TryInjectNativeCompile")
+if inj_idx < 0:
+    failmsg("TryInjectNativeCompile method missing")
+inj_end = engine.find("private object TryInjectEngineCompile", inj_idx + 10)
+inj_chunk = engine[inj_idx:inj_end if inj_end > inj_idx else inj_idx + 8000]
+if "TryEngineNativeCompile" not in inj_chunk:
+    failmsg("inject-native must call engine native compile")
+if "SanitizeInjectedToString1" in inj_chunk or "TryCompileToString1" in inj_chunk:
+    failmsg("inject-native must not use ToString1 sanitize")
+if "BuildPartialMemberFiles" in inj_chunk or "FormulaVbcCompiler" in inj_chunk:
+    failmsg("inject-native must not fall back to vbc glue")
+if "یک‌بار همان فرم را در سارا" in hover:
+    failmsg("NoInstance must not tell user to open Sara")
+expect(selftest, "InjectXmlBody", "selftest inject")
+merger = read("FormulaMerger.cs")
+expect(merger, 'TrySet(fn, "EncryptXmlBody", null)', "inject clears EncryptXmlBody")
+expect(merger, "StripDuplicateClassShell", "inject strips class shell")
+wrapped = """Public Class Rule
+Public Sub Run()
+ logfilefj("IS_BlandMartabe",IS_BlandMartabe)
+End Sub
+End Class
+"""
+block = re.search(r"(?:Public\s+)?Sub\s+Run\(\).*?End Sub", wrapped, re.S | re.I)
+if not block or "logfilefj" not in block.group(0):
+    failmsg("strip keeps Run logfilefj")
+if "Public Class" in block.group(0):
+    failmsg("strip removes Class wrapper")
 
 print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
 sys.exit(0 if fail == 0 else 1)

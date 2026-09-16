@@ -303,18 +303,96 @@ namespace RuleTrace
 
             if (req.NidProc.Length > 0)
             {
-                return Run("فرم‌های انتخاب‌شده پروانه (بدون موتور / بدون بارگذاری همهٔ کلاس‌ها)...", false, (eng, log) =>
+                var scopes = PermitScopes.Normalize(Json.StrList(body, "scopes"));
+                if (scopes.Count == 0)
+                    return Fail(PermitScopes.MustPick);
+                bool dll = FormulaEngine.IsDllFolder(_settings.DllPath);
+                string formTitle = PermitScopes.Title(scopes[0]);
+                return Run("دیباگ hover فرم " + formTitle + " — بدون UI سارا", dll, (eng, log) =>
                 {
-                    var extra = eng.DebugSteps(req.NidProc, Json.StrList(body, "scopes"));
-                    extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
-                    extra["settings"] = SettingsMap();
-                    extra["exitCode"] = extra.ContainsKey("exitCode") ? extra["exitCode"] : 1;
-                    extra["members"] = new List<object>();
-                    extra["trace"] = new List<object>();
-                    extra["params"] = new Dictionary<string, string>();
-                    extra["watch"] = req.Watch;
-                    extra["chidmanMember"] = 0;
+                    bool prevStrict = FormulaEngine.StrictSummary;
+                    FormulaEngine.StrictSummary = true;
+                    try
+                    {
+                    log.Add("Hover      : " + HoverDebug.Goal);
+                    List<MemberSource> sources = new List<MemberSource>();
+                    try { sources = eng.LoadFormSources(scopes); }
+                    catch (Exception ex) { log.Add("Hover      : Member خوانده نشد — " + ex.Message); }
+
+                    var trace = new List<TraceEvent>();
+                    var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    int live = 2;
+                    if (dll)
+                    {
+                        int nid = PermitScopes.FormulaNid(scopes[0]);
+                        req.Formula = FormulaEngine.ClassName(nid);
+                        req.SkipRelatedSources = true;
+                        log.Add("Hover      : اجرای زنده " + formTitle + " (" + req.Formula + "/" + nid + ") — معادل باز کردن فرم");
+                        try
+                        {
+                            live = eng.Run(req);
+                            if (eng.LastTrace != null) trace.AddRange(eng.LastTrace);
+                            foreach (var kv in eng.LastParams) parms[kv.Key] = kv.Value;
+                            log.Add("Hover      : BizErrors/logfilefj=" + trace.Count + " ParametersValue=" + parms.Count);
+                        }
+                        catch (Exception ex)
+                        {
+                            log.Add("Hover      : اجرا زنده نشد — " + FirstLineSafe(ex.Message) + " — hover از سورس logfilefj");
+                            live = 2;
+                        }
+                    }
+                    else
+                        log.Add("Hover      : پوشه DLL نیست — کد Member + logfilefj خوانده می‌شود؛ مقدار بعد از اجرای زنده پر می‌شود");
+
+                    int probes = 0, bound = 0;
+                    var packed = PackSources(sources, trace, parms, null, out probes, out bound);
+                    int focus = FocusMember(packed);
+                    log.Add("Hover      : probes=" + probes + " مقداردار=" + bound + " — موس را روی خط نگه‌دارید");
+
+                    string diagnosis;
+                    string next;
+                    if (probes > 0 && bound == 0 && live == 2)
+                    {
+                        diagnosis = "پروب logfilefj=" + probes + " مقداردار=0. " + HoverDebug.NoInstance;
+                        next = "XmlBody تزریق شد؛ اگر هنوز مقدار نیست CompilerErrors موتور را در لاگ ببینید — فرم سارا باز نکنید. ClearCache خاموش.";
+                        log.Add("Hover      : " + HoverDebug.NoInstance);
+                    }
+                    else if (bound > 0)
+                    {
+                        diagnosis = "موس را روی خط سبز نگه دارید — " + bound + " مقدار از logfilefj/ParametersValue";
+                        next = "خط زرد یعنی پروب هست و هنوز مقدار نیامده";
+                    }
+                    else
+                    {
+                        diagnosis = HoverDebug.Goal;
+                        next = "در کد فرم logfilefj(\"نام\", مقدار) بگذارید";
+                    }
+
+                    var extra = new Dictionary<string, object>
+                    {
+                        { "members", packed },
+                        { "trace", PackTrace(trace) },
+                        { "params", parms },
+                        { "watch", req.Watch },
+                        { "hoverGoal", HoverDebug.Goal },
+                        { "probeCount", probes },
+                        { "boundCount", bound },
+                        { "liveCode", live },
+                        { "diagnosis", diagnosis },
+                        { "nextAction", next },
+                        { "vars", new List<Dictionary<string, object>>() },
+                        { "summary", log.Where(IsCopyLine).ToList() },
+                        { "settings", SettingsMap() },
+                        { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
+                        { "focusMember", focus },
+                        { "exitCode", live == 1 ? 1 : 0 },
+                    };
                     return extra;
+                    }
+                    finally
+                    {
+                        FormulaEngine.StrictSummary = prevStrict;
+                    }
                 });
             }
 
@@ -486,10 +564,22 @@ namespace RuleTrace
 
         private static List<object> PackSources(IList<MemberSource> sources)
         {
+            int probes, bound;
+            return PackSources(sources, null, null, null, out probes, out bound);
+        }
+
+        private static List<object> PackSources(IList<MemberSource> sources, IList<TraceEvent> trace, IDictionary<string, string> parms, IList<Dictionary<string, object>> vars, out int probes, out int bound)
+        {
+            probes = 0;
+            bound = 0;
             var list = new List<object>();
             if (sources == null) return list;
             foreach (MemberSource s in sources)
             {
+                var items = HoverDebug.Parse(s.Code);
+                HoverDebug.Bind(items, trace, parms, vars);
+                probes += HoverDebug.ProbeCount(items);
+                bound += HoverDebug.BoundCount(items);
                 list.Add(new Dictionary<string, object>
                 {
                     { "nidClass", s.NidClass },
@@ -503,9 +593,51 @@ namespace RuleTrace
                     { "solhRun", s.NidClass == 344 && (s.NidMember == SolhNidDebug.SolhRunMember || s.NidMember == SolhNidDebug.SolhInitMember) },
                     { "code", Cap(s.Code) },
                     { "label", s.ToString() },
+                    { "hover", HoverDebug.PackLines(items) },
+                    { "probeCount", HoverDebug.ProbeCount(items) },
                 });
             }
             return list;
+        }
+
+        private static int FocusMember(List<object> packed)
+        {
+            int best = 0, nid = 0;
+            if (packed == null) return 0;
+            foreach (object o in packed)
+            {
+                var d = o as Dictionary<string, object>;
+                if (d == null) continue;
+                int probes = Json.Int(d, "probeCount");
+                if (probes <= best) continue;
+                best = probes;
+                nid = Json.Int(d, "nidMember");
+            }
+            return nid;
+        }
+
+        private static List<object> PackTrace(IList<TraceEvent> trace)
+        {
+            var list = new List<object>();
+            if (trace == null) return list;
+            foreach (TraceEvent t in trace)
+            {
+                list.Add(new Dictionary<string, object>
+                {
+                    { "index", t.Index },
+                    { "action", t.Action },
+                    { "key", t.Key },
+                    { "title", t.Title },
+                });
+            }
+            return list;
+        }
+
+        private static string FirstLineSafe(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            int i = s.IndexOf('\n');
+            return i < 0 ? s : s.Substring(0, i);
         }
 
         private static string Cap(string code)

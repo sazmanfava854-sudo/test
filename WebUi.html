@@ -106,6 +106,20 @@
       overflow: auto; white-space: pre; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left;
       color: #e2e8f0;
     }
+    .code-hover { height: 360px; overflow: auto; padding: 0; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left; }
+    .code-hover .ln { display: flex; gap: 10px; padding: 0 10px; white-space: pre; }
+    .code-hover .ln:hover { background: rgba(45,212,191,.14); }
+    .code-hover .ln.has-probe { background: rgba(251,191,36,.06); }
+    .code-hover .ln.has-val { background: rgba(52,211,153,.12); }
+    .code-hover .n { width: 42px; color: #64748b; text-align: right; flex: none; user-select: none; }
+    .code-hover .s { color: #e2e8f0; }
+    .hover-tip {
+      position: fixed; z-index: 40; max-width: 420px;
+      background: #042f2e; color: #ecfdf5; border: 1px solid var(--teal);
+      border-radius: 12px; padding: 10px 12px; font: 12px/1.5 Consolas, Tahoma, sans-serif;
+      box-shadow: var(--shadow); display: none; direction: ltr; text-align: left; white-space: pre-wrap;
+    }
+    .hover-tip.on { display: block; }
     .list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
     .split { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
     .list { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
@@ -220,7 +234,7 @@
         <label>پارامترها (Name=Value هر خط)</label>
         <textarea id="parameters" placeholder="NidProc=..."></textarea>
         <div class="status" style="margin-top:12px">
-          <span>اشکال پرونده مشخص است. مثل فرم سارا فقط همان بخش اجرا می‌شود. ملک می‌تواند صلح / توافق / کمیسیون نداشته باشد.</span>
+          <span>جایگزین logfilefj: فرم را تیک بزنید، اجرا کنید، موس را روی خط نگه دارید — UI سارا لازم نیست.</span>
         </div>
         <label>کدام بخش را دیباگ می‌کنید؟ (بدون پیش‌فرض — باید انتخاب کنید)</label>
         <div class="checks" id="scopeBox">
@@ -253,7 +267,7 @@
         </details>
         <div class="status">
           <span id="status">آماده — بدون CMD، فقط مرورگر</span>
-          <span>صلح / توافق / کمیسیون اجباری نیست. اول تیک بزنید کدام فرم را باز می‌کنید</span>
+          <span>logfilefj دیگر لازم نیست. بعد از اجرا موس را روی خط کد نگه دارید تا مقدار متغیر دیده شود</span>
         </div>
         <div style="margin-top:12px; overflow:auto">
           <table id="cases">
@@ -286,19 +300,19 @@
         <div id="tab-code" hidden>
           <div class="split">
             <div class="list" id="memberList"></div>
-            <pre class="code" id="memberCode">عضوی انتخاب نشده</pre>
+            <div class="code code-hover" id="memberCode">عضوی انتخاب نشده — بعد از اجرا موس را روی خط logfilefj نگه دارید</div>
           </div>
         </div>
         <div id="tab-debug" hidden>
           <div class="actions">
             <button class="ghost" id="dbgPrev">گام قبلی</button>
             <button class="gold" id="dbgNext">گام بعدی</button>
-            <span class="sub" id="dbgMeta">بعد از اجرا، رویدادهای AddError اینجا می‌آید.</span>
+            <span class="sub" id="dbgMeta">بعد از اجرا، رویدادهای logfilefj / AddError اینجا می‌آید. مقدار همان خط با hover روی کد دیده می‌شود.</span>
           </div>
           <pre class="code" id="dbgView"></pre>
         </div>
         <div id="tab-vars" hidden>
-          <div class="sub" id="varsDiag" style="margin-bottom:10px">کاربر باید انتخاب کند کدام بخش را دیباگ کند (ضابطه، صلح، چیدمان، تحلیل، توافق، کمیسیون، درآمد). مثل باز کردن فرم در سارا. کلید NidNosaziCode → Base_Info.NidBase. جداول: Zabeteh+Details، Sh_Peace، AnalysisBuilding، Sh_Agreement (Building=0)، Base_Using/Base_Front. همه ملک‌ها صلح ندارند. WorkItem 300002275 پروانه تجدید بنا. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
+          <div class="sub" id="varsDiag" style="margin-bottom:10px">جایگزین logfilefj: فرم را تیک بزنید، اجرا کنید، موس را روی خط کد نگه دارید. UI سارا لازم نیست. کاربر باید انتخاب کند کدام بخش را دیباگ کند (ضابطه، صلح، چیدمان، تحلیل، توافق، کمیسیون، درآمد). کلید NidNosaziCode → Base_Info.NidBase. جداول: Zabeteh+Details، Sh_Peace، AnalysisBuilding، Sh_Agreement (Building=0)، Base_Using/Base_Front. همه ملک‌ها صلح ندارند. WorkItem 300002275 پروانه تجدید بنا. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
           <div style="overflow:auto; margin-bottom:10px">
             <table id="varsTable">
               <thead><tr><th>متغیر / ستون</th><th>مقدار</th><th>جدول</th><th>منبع</th></tr></thead>
@@ -329,6 +343,7 @@
   </div>
   <div class="busy" id="busy"><div class="spinner"></div></div>
   <div class="toast" id="toast"></div>
+  <div class="hover-tip" id="hoverTip"></div>
 <script>
 const $ = id => document.getElementById(id);
 let members = [];
@@ -418,6 +433,74 @@ async function api(path, body) {
     setBusy(false, "آماده");
   }
 }
+function identNames(text) {
+  const skip = { Sub:1, Function:1, Dim:1, As:1, If:1, Then:1, Else:1, End:1, For:1, Next:1, logfilefj:1, Logfilefj:1, logfileFJ:1, AddError:1, Info8:1, Public:1, Private:1, ByVal:1, String:1, Integer:1, Double:1, Boolean:1, True:1, False:1, Nothing:1, New:1, And:1, Or:1, Not:1, To:1, Me:1 };
+  const out = [];
+  const re = /[A-Za-z_][A-Za-z0-9_]*/g;
+  let m;
+  while ((m = re.exec(text || ""))) {
+    if (skip[m[0]]) continue;
+    if (out.indexOf(m[0]) < 0) out.push(m[0]);
+  }
+  return out;
+}
+function lineValues(text, hoverItems) {
+  const items = (hoverItems || []).map(x => ({ name: x.name, expr: x.expr, value: x.value, source: x.source }));
+  identNames(text).forEach(n => {
+    if (items.some(x => (x.name || "").toLowerCase() === n.toLowerCase())) return;
+    const v = paramsMap[n];
+    if (v != null && String(v) !== "") items.push({ name: n, value: v, source: "ParametersValue" });
+  });
+  return items;
+}
+function hideHoverTip() {
+  $("hoverTip").classList.remove("on");
+}
+function showHoverTip(el, text, hoverItems) {
+  const items = lineValues(text, hoverItems);
+  const tip = $("hoverTip");
+  if (!items.length) {
+    tip.textContent = "متغیری روی این خط پیدا نشد — logfilefj(\"نام\", مقدار) بگذارید یا اجرا زنده کنید";
+  } else {
+    tip.textContent = items.map(it => {
+      const val = it.value ? it.value : "(هنوز اجرا نشده)";
+      return (it.name || "") + " = " + val + (it.expr && it.expr !== it.name ? "\n  expr: " + it.expr : "") + (it.source ? "\n  via " + it.source : "");
+    }).join("\n\n");
+  }
+  const r = el.getBoundingClientRect();
+  tip.classList.add("on");
+  let left = r.left + 56;
+  let top = r.bottom + 6;
+  if (left + 420 > window.innerWidth) left = Math.max(8, window.innerWidth - 430);
+  if (top + 160 > window.innerHeight) top = Math.max(8, r.top - 80);
+  tip.style.left = left + "px";
+  tip.style.top = top + "px";
+}
+function renderCode(code, hover) {
+  const box = $("memberCode");
+  box.innerHTML = "";
+  const lines = String(code || "").split(/\r?\n/);
+  const map = {};
+  (hover || []).forEach(h => { map[h.line] = h.items || []; });
+  if (!lines.length || (lines.length === 1 && !lines[0])) {
+    box.textContent = "عضوی انتخاب نشده — بعد از اجرا موس را روی خط logfilefj نگه دارید";
+    return;
+  }
+  lines.forEach((text, i) => {
+    const ln = i + 1;
+    const items = map[ln] || [];
+    const d = document.createElement("div");
+    const hasVal = items.some(x => x.value);
+    d.className = "ln" + (hasVal ? " has-val" : items.length ? " has-probe" : "");
+    d.dataset.line = String(ln);
+    const n = document.createElement("span"); n.className = "n"; n.textContent = String(ln);
+    const s = document.createElement("span"); s.className = "s"; s.textContent = text;
+    d.appendChild(n); d.appendChild(s);
+    d.onmouseenter = () => showHoverTip(d, text, items);
+    d.onmouseleave = hideHoverTip;
+    box.appendChild(d);
+  });
+}
 function showMembers(list, focusMember) {
   members = list || [];
   const box = $("memberList");
@@ -428,11 +511,11 @@ function showMembers(list, focusMember) {
   if (focus < 0) focus = members.findIndex(m => m.chidman);
   members.forEach((m, i) => {
     const d = document.createElement("div");
-    d.textContent = (m.className || m.nidClass) + " / " + m.nidMember + "  " + (m.name || "") + (m.chidman ? "  ★ چیدمان" : "") + (m.solhRun ? "  ★ صلح" : "");
+    d.textContent = (m.className || m.nidClass) + " / " + m.nidMember + "  " + (m.name || "") + (m.chidman ? "  ★ چیدمان" : "") + (m.solhRun ? "  ★ صلح" : "") + (m.probeCount ? "  " + m.probeCount + " logfilefj" : "");
     d.onclick = () => {
       box.querySelectorAll("div").forEach(x => x.classList.remove("on"));
       d.classList.add("on");
-      $("memberCode").textContent = m.code || "";
+      renderCode(m.code || "", m.hover || []);
     };
     if (m.chidman) d.style.color = "#fbbf24";
     if (m.solhRun) d.style.color = "#34d399";
@@ -565,12 +648,14 @@ $("btnHistory").onclick = async () => {
 $("btnRun").onclick = async () => {
   const p = payload();
   if (!p.nidProc) { toast("اول 300002275 را جستجو کنید"); return; }
-  if (!p.scopes.length) { toast("کدام بخش را دیباگ می‌کنید؟ تیک بزنید"); return; }
+  if (!p.scopes.length) { toast("کدام فرم را باز می‌کنید؟ تیک بزنید"); return; }
   const j = await api("/api/run", p);
   showVars(j.vars, j.diagnosis, j.nextAction);
+  showMembers(j.members, j.focusMember);
+  showTrace(j.trace, j.params, j.watch);
   showSummary(j.summary);
-  document.querySelector('[data-tab="summary"]').click();
-  toast(j.diagnosis || ("گام " + (j.step || 1) + " " + (j.status || "")));
+  document.querySelector('[data-tab="code"]').click();
+  toast(j.diagnosis || j.hoverGoal || "موس را روی خط نگه‌دارید");
 };
 $("btnChidman").onclick = async () => {
   const j = await api("/api/analyze-chidman", payload());

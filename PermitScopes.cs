@@ -18,7 +18,7 @@ namespace RuleTrace
         public const string Income = "income";
 
         public const string MustPick =
-            "کاربر باید انتخاب کند کدام بخش‌ها را دیباگ کند. مثل باز کردن فرم در سارا فقط همان کدها اجرا می‌شوند و متغیرها از لاگ RuleEngine چک می‌شوند.";
+            "کاربر باید انتخاب کند کدام فرم را باز می‌کند (مثل ضابطه در سارا). بعد موس را روی خط logfilefj نگه دارید تا مقدار متغیر دیده شود — UI سارا لازم نیست.";
 
         public static readonly string[] All =
         {
@@ -52,6 +52,19 @@ namespace RuleTrace
         public static bool BuildingZero(string id)
         {
             return id == Solh || id == Tavafogh;
+        }
+
+        /// <summary>NidClass of the Sara form — opening ضابطه runs Rule/336, not every related class.</summary>
+        public static int FormulaNid(string id)
+        {
+            if (id == Zabeteh) return 336;
+            if (id == Solh) return 344;
+            if (id == Chidman) return 342;
+            if (id == Tahlil) return 338;
+            if (id == Tavafogh) return 345;
+            if (id == Commission) return 340;
+            if (id == Income) return 337;
+            return 0;
         }
 
         public static bool Has(IList<string> selected, string id)
@@ -96,6 +109,7 @@ namespace RuleTrace
                     { "title", Title(id) },
                     { "tables", Tables(id) },
                     { "buildingZero", BuildingZero(id) },
+                    { "formulaNid", FormulaNid(id) },
                     { "optional", id != Zabeteh },
                 });
             }
