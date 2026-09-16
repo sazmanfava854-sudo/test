@@ -25,7 +25,7 @@ namespace RuleTrace
             "به‌جای logfilefj و باز کردن فرم سارا، موس را روی هر خط نگه دارید تا مقدار متغیر مثل دیباگر دیده شود.";
 
         public const string NoInstance =
-            "Instanc ساخته نشد — کش DLL این فرم خالی است یا CompilerErrors. یک‌بار همان فرم را در سارا باز کنید تا کامپایل شود، بعد اینجا اجرا کنید. ClearCache را تیک نزنید. RuleTrace VB را کامپایل نمی‌کند.";
+            "Instanc ساخته نشد — XmlBody در ClsFunction.Body تزریق شد ولی موتور Sara هنوز Instanc نساخت (EncryptXmlBody/CompilerErrors). UI سارا لازم نیست. ClearCache را تیک نزنید. RuleTrace VB را بازنویسی نمی‌کند.";
 
         private static readonly Regex RxLog = new Regex(
             @"logfilefj\s*\(\s*(?:""([^""]*)""|'([^']*)')\s*(?:,\s*(.*?))?\s*\)",

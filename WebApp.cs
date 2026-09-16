@@ -354,7 +354,7 @@ namespace RuleTrace
                     if (probes > 0 && bound == 0 && live == 2)
                     {
                         diagnosis = "پروب logfilefj=" + probes + " مقداردار=0. " + HoverDebug.NoInstance;
-                        next = "فرم " + formTitle + " را یک‌بار در سارا باز کنید تا کش DLL پر شود، بعد اینجا اجرا — ClearCache خاموش.";
+                        next = "XmlBody تزریق شد؛ اگر هنوز مقدار نیست CompilerErrors موتور را در لاگ ببینید — فرم سارا باز نکنید. ClearCache خاموش.";
                         log.Add("Hover      : " + HoverDebug.NoInstance);
                     }
                     else if (bound > 0)

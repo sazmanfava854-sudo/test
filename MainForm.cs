@@ -523,8 +523,8 @@ namespace RuleTrace
                 {
                     if (code == 2)
                     {
-                        Log("معماری: RuleTrace دیگر VB را چسب نمی‌زند و Compile نمی‌کند.");
-                        Log("موتور Sara پوسته خالی ساخت. اگر UI سارا فرمول را کامپایل کرده، DLL را در dll10 یا Cache بگذارید.");
+                        Log("معماری: XmlBody در ClsFunction.Body تزریق شد؛ کامپایل موتور Sara (بدون ToString1/vbc).");
+                        Log("Instanc هنوز خالی است — UI سارا لازم نیست. ClearCache را تیک نزنید.");
                     }
                     try
                     {

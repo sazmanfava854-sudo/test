@@ -22,6 +22,7 @@ namespace RuleTrace
             fail += ZabetehNamedTables();
             fail += PickScope();
             fail += HoverLogfilefj();
+            fail += InjectXmlBody();
             fail += RuleDocsCatalog();
             fail += PasteSummaryFilter();
             fail += WebUiEmbedded();
@@ -183,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("hover-instanc", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("hover-inject", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23e-hover-instanc, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23f-hover-inject, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -465,7 +466,10 @@ namespace RuleTrace
             fail += Expect(HoverDebug.Goal, "logfilefj", "goal mentions logfilefj");
             fail += Expect(HoverDebug.Goal, "موس", "goal mentions hover");
             fail += Expect(HoverDebug.NoInstance, "ClearCache", "empty Instanc tells user not to clear cache");
-            fail += Expect(HoverDebug.NoInstance, "سارا", "empty Instanc says open Sara once");
+            fail += Expect(HoverDebug.NoInstance, "XmlBody", "empty Instanc mentions XmlBody inject");
+            fail += Expect(HoverDebug.NoInstance, "UI سارا لازم نیست", "must not require Sara UI");
+            if (HoverDebug.NoInstance.IndexOf("باز کنید", StringComparison.Ordinal) >= 0)
+                fail += FailMsg("NoInstance must not tell user to open Sara");
             fail += HoverDebug.Idents("logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)").Contains("IS_BlandMartabe") ? 0 : FailMsg("idents on probe line");
             return fail;
         }
@@ -539,6 +543,7 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("SolhNid      : Member 1296 Run codeLen=366093") ? FailMsg("strict drops solh members") : 0;
             fail += FormulaEngine.IsSummaryLine("History      : 40 change row(s)") ? FailMsg("strict drops history count") : 0;
             fail += FormulaEngine.IsSummaryLine("Scope      : انتخاب = ضابطه، تحلیل") ? 0 : FailMsg("strict scope copies");
+            fail += FormulaEngine.IsSummaryLine("Hover      : Instanc از تزریق XmlBody + کامپایل موتور") ? 0 : FailMsg("strict copies hover inject");
             var flood = new[]
             {
                 "Arch         : class 335 CommissionFine members=15 (853 KB)",
@@ -697,7 +702,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23e-hover-instanc", "bootstrap label");
+                        fail += Expect(boot, "v23f-hover-inject", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
@@ -713,6 +718,55 @@ namespace RuleTrace
                     host.Stop();
                 }
             }
+        }
+
+        private static int InjectXmlBody()
+        {
+            var fn = new FakeFn { NidFunction = 336001, EncryptXmlBody = "enc" };
+            var cls = new FakeCls();
+            cls.M_Function.Add(fn);
+            var sources = new List<MemberSource>
+            {
+                new MemberSource
+                {
+                    NidMember = 336001,
+                    Name = "Run",
+                    Code =
+                        "Public Class Rule\r\n" +
+                        "Public Sub Run()\r\n" +
+                        " logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)\r\n" +
+                        "End Sub\r\n" +
+                        "End Class\r\n",
+                },
+            };
+            int n = FormulaMerger.InjectBodies(cls, sources, m => { });
+            int fail = 0;
+            fail += n == 1 ? 0 : FailMsg("inject 1 Body, got " + n);
+            fail += fn.Body != null && fn.Body.IndexOf("logfilefj", StringComparison.OrdinalIgnoreCase) >= 0
+                ? 0 : FailMsg("injected Body has logfilefj");
+            fail += fn.Body != null && fn.Body.IndexOf("Public Class", StringComparison.OrdinalIgnoreCase) < 0
+                ? 0 : FailMsg("class shell stripped from Body");
+            fail += fn.EncryptXmlBody == null ? 0 : FailMsg("EncryptXmlBody cleared so engine reads Body");
+            fail += fn.ReCompile ? 0 : FailMsg("ReCompile set after inject");
+            string stripped = FormulaMerger.StripDuplicateClassShell(sources[0].Code);
+            fail += Expect(stripped, "logfilefj", "strip keeps probe");
+            if (stripped.IndexOf("Class Rule", StringComparison.OrdinalIgnoreCase) >= 0)
+                fail += FailMsg("strip removes Class wrapper");
+            return fail;
+        }
+
+        private sealed class FakeFn
+        {
+            public int NidFunction;
+            public string Name;
+            public string Body;
+            public string EncryptXmlBody;
+            public bool ReCompile;
+        }
+
+        private sealed class FakeCls
+        {
+            public List<FakeFn> M_Function = new List<FakeFn>();
         }
 
         private static int FailMsg(string label)

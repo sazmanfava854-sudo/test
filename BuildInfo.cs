@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v23e-hover-instanc";
+        public const string Label = "v23f-hover-inject";
 
         public static string Banner
         {

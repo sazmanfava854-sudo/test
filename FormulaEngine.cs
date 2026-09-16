@@ -870,7 +870,7 @@ namespace RuleTrace
 
             DiagnoseEngineResult(result, cacheFolder);
             LogEngineMemberBodies(result);
-            _log("Arch         : RuleTrace VB را بازنویسی/کامپایل نمی‌کند — فقط RunRule موتور یا DLL از قبل آماده‌شده");
+            _log("Arch         : RuleTrace VB را بازنویسی نمی‌کند — RunRule، کش DLL، یا تزریق XmlBody + کامپایل موتور");
 
             object cacheHost = TryCacheRunHost(result, cacheFolder, r.Formula);
             if (cacheHost != null)
@@ -880,10 +880,20 @@ namespace RuleTrace
             }
             else if (!HasLiveInstance(result))
             {
-                _log("Hover      : " + HoverDebug.NoInstance);
-                _summaryCapture = false;
-                PrintSummary();
-                return 2;
+                _log("Hover      : Instanc خالی بعد از RunRule — تزریق XmlBody به ClsFunction.Body و کامپایل موتور (بدون ToString1، بدون vbc)");
+                object injected = TryInjectNativeCompile(result, nid, cityGuid, cacheFolder);
+                if (injected != null && HasLiveInstance(injected))
+                {
+                    result = injected;
+                    _log("Hover      : Instanc از تزریق XmlBody + کامپایل موتور — logfilefj بعد از Run پر می‌شود");
+                }
+                else
+                {
+                    _log("Hover      : " + HoverDebug.NoInstance);
+                    _summaryCapture = false;
+                    PrintSummary();
+                    return 2;
+                }
             }
 
             ReportCache(cacheFolder);
@@ -1186,8 +1196,91 @@ namespace RuleTrace
         }
 
         /// <summary>
-        /// v21: NOT called from Run(). Injecting XmlBody then Compile(ToString1) produced BC30289 forever
-        /// (methods nested inside methods). Kept only so Inspect / archaeology can still find the old path.
+        /// v23f: empty Instanc after RunRule (EncryptXmlBody decrypt fail locally). Copy dbo.Member
+        /// XmlBody into ClsFunction.Body and ask SafaClassDesingerNew to compile like Sara UI.
+        /// Does not glue XmlBody, does not sanitize glued class source, does not fall back to local vbc.
+        /// </summary>
+        private object TryInjectNativeCompile(object result, int nid, Guid cityGuid, string cacheFolder)
+        {
+            List<MemberSource> sources;
+            try { sources = GetMemberSources(nid); }
+            catch (Exception ex)
+            {
+                _log("Hover      : Member خوانده نشد — " + FirstLine(ex.Message));
+                return null;
+            }
+            if (sources == null || sources.Count == 0 || sources.All(s => string.IsNullOrWhiteSpace(s.Code) || s.Code.Length < 50))
+            {
+                _log("Hover      : XmlBody خالی است — تزریق ممکن نیست");
+                return null;
+            }
+
+            _log("Hover      : " + sources.Count + " member(s), " + (sources.Sum(s => (long)s.Code.Length) / 1024) + " KB XmlBody → ClsFunction.Body");
+
+            object cls = Get(result, "ClassDesinger") ?? Get(result, "M_ClassDesinger");
+            int n = 0;
+            if (cls != null)
+            {
+                try
+                {
+                    n = FormulaMerger.InjectBodies(cls, sources, _log);
+                    _log("Hover      : " + n + "/" + sources.Count + " ClsFunction.Body از XmlBody");
+                }
+                catch (Exception ex)
+                {
+                    _log("Hover      : ClassDesinger موجود تزریق نشد — " + FirstLine(ex.Message));
+                    n = 0;
+                }
+            }
+
+            if (n == 0)
+            {
+                try
+                {
+                    cls = FormulaMerger.CreateClassWithBodies(_safa, nid, cityGuid, true, sources, _log);
+                }
+                catch (Exception ex)
+                {
+                    _log("Hover      : CreateClassWithBodies — " + FirstLine(ex.Message));
+                    return null;
+                }
+            }
+
+            FormulaMerger.LogFunctionBodies(cls, _log, 8);
+
+            object compiled = TryEngineNativeCompile(cls, cacheFolder);
+            if (compiled != null && HasLiveInstance(compiled))
+            {
+                _log("Hover      : کامپایل موتور بعد از تزریق Instanc ساخت");
+                return compiled;
+            }
+
+            if (result != null && !(result is DirectFormulaHost))
+            {
+                foreach (MethodInfo m in result.GetType().GetMethods(AnyInstance))
+                {
+                    if (m.Name.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    ParameterInfo[] ps = m.GetParameters();
+                    if (ps.Length > 1) continue;
+                    if (ps.Length == 1 && ps[0].ParameterType == typeof(string)) continue;
+                    try
+                    {
+                        InvokeEngineMethod(result, m);
+                        _log("Hover      : ClsRunRuleResult." + m.Name + " live=" + HasLiveInstance(result));
+                        if (HasLiveInstance(result)) return result;
+                    }
+                    catch (Exception ex) { _log("Hover      : " + m.Name + " — " + FirstLine(ex.Message)); }
+                }
+            }
+
+            if (HasLiveInstance(result)) return result;
+            _log("Hover      : موتور بعد از تزریق XmlBody هم Instanc نساخت");
+            return compiled;
+        }
+
+        /// <summary>
+        /// v21 archaeology: Injecting XmlBody then Compile(ToString1) produced BC30289 forever
+        /// (methods nested inside methods). Run() uses TryInjectNativeCompile instead.
         /// </summary>
         private object TryInjectEngineCompile(object result, int nid, Guid cityGuid, string cacheFolder)
         {
@@ -1688,10 +1781,17 @@ namespace RuleTrace
                 foreach (MethodInfo m in tCls.GetMethods(AnyInstance))
                 {
                     if (!m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (m.GetParameters().Length > 2) continue;
+                    ParameterInfo[] ps = m.GetParameters();
+                    if (ps.Length > 2) continue;
+                    if (ps.Length >= 1 && ps[0].ParameterType == typeof(string)) continue;
                     try
                     {
                         object ret = InvokeEngineMethod(cls, m);
+                        if (HasLiveInstance(cls))
+                        {
+                            _log("Engine compile: " + tCls.Name + "." + m.Name + "() mutated live Instanc");
+                            return cls;
+                        }
                         if (ret == null) continue;
                         _log("Engine compile: " + tCls.Name + "." + m.Name + "() -> " + ret.GetType().Name);
                         if (HasLiveInstance(ret) || !HasCompilerErrors(Get(ret, "CompilerErrors")))
