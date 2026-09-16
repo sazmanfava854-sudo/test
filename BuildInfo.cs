@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v22l-permit-pipe";
+        public const string Label = "v22m-unannounced";
 
         public static string Banner
         {

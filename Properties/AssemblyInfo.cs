@@ -8,5 +8,5 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("RuleTrace")]
 [assembly: ComVisible(false)]
 [assembly: Guid("a1b2c3d4-e5f6-7890-abcd-ef1234567890")]
-[assembly: AssemblyVersion("1.0.22.12")]
-[assembly: AssemblyFileVersion("1.0.22.12")]
+[assembly: AssemblyVersion("1.0.22.13")]
+[assembly: AssemblyFileVersion("1.0.22.13")]

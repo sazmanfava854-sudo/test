@@ -181,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("permit-pipe", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("unannounced", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22l-permit-pipe, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22m-unannounced, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -273,6 +273,29 @@ namespace RuleTrace
             }, skipLog.Add);
             fail += Expect(skip, "بررسی نمی‌شود", "skip diagnosis");
             fail += skipLog.Any(l => l.IndexOf("صلح نیست", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("skip log");
+            var overlayLog = new List<string>();
+            var overlaySources = new List<MemberSource>
+            {
+                new MemberSource { NidClass = 338, NidMember = 1, Name = "Tahlil" },
+                new MemberSource { NidClass = 340, NidMember = 2, Name = "Commission" },
+                new MemberSource { NidClass = 335, NidMember = 3, Name = "Fine" },
+                new MemberSource { NidClass = 337, NidMember = 4, Name = "Income" },
+            };
+            string unannounced = PermitPipeline.Report(overlaySources, new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidWorkItem" }, { "value", "300002275" }, { "table", "Sh_RequestInfo" } },
+                new Dictionary<string, object> { { "name", "NidNosaziCode" }, { "value", "bce2f9e5-f6bf-4e13-882f-804048fad548" }, { "table", "Sh_RequestInfo" } },
+                new Dictionary<string, object> { { "name", "NidZabeteh" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "[dbo].[Zabeteh]" } },
+            }, overlayLog.Add);
+            fail += Expect(unannounced, "اعلام نشده", "overlay exists but unannounced");
+            fail += Expect(unannounced, "هست", "overlay present");
+            fail += Expect(unannounced, "عوض نکنید", "do not edit 1296");
+            if (unannounced.IndexOf("پیدا نشد", StringComparison.Ordinal) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: unannounced overlay must not say zabeteh missing");
+                fail++;
+            }
+            fail += overlayLog.Any(l => l.IndexOf("هست ولی اعلام نشده", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("permit peace line unannounced");
             fail += Expect(string.Join(",", PermitPipeline.PermitClasses), "338", "takhalofat class");
             fail += Expect(string.Join(",", PermitPipeline.PermitClasses), "337", "income class");
             fail += Expect(ZabetehCase.StaticPkeyColumn, "P_Key", "static P_Key column");
@@ -339,6 +362,7 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Doc         : [AspNetUsers] peek rows=1") ? FailMsg("aspnet peek skip") : 0;
             fail += FormulaEngine.IsSummaryLine("Doc         : MemberDocument TOP 1000 → 503 ردیف") ? 0 : FailMsg("memberdocument count copies");
             fail += FormulaEngine.IsSummaryLine("Permit      : مسیر پروانه = ضابطه → صلح → تحلیل") ? 0 : FailMsg("permit path copies");
+            fail += FormulaEngine.IsSummaryLine("Zabeteh     : روکش اعلام‌نشده NidZabeteh=abc") ? 0 : FailMsg("unannounced overlay copies");
             fail += FormulaEngine.IsSummaryLine("Permit      : WorkItem=5298603 بررسی نمی‌شود") ? 0 : FailMsg("ignore workitem copies");
             fail += FormulaEngine.IsSummaryLine("Detail      : جدول [AspNetUsers] cols=Id") ? FailMsg("detail prefix never copies") : 0;
             return fail;
@@ -458,7 +482,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22l-permit-pipe", "bootstrap label");
+                        fail += Expect(boot, "v22m-unannounced", "bootstrap label");
                         return fail;
                     }
                 }

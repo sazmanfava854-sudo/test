@@ -30,7 +30,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
 5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**. اگر Instanc ساخته نشود (خروج ۲)، همان اجرا ضابطه را با join `NidNosaziCode` می‌خواند و در خلاصهٔ کپی می‌گذارد (دیگر فقط BodyLen=0 نیست). NidProc باید پر باشد.
-6. **دیباگ پروانه این Nid** — CRUD=Read. همهٔ پرونده‌های پروانه همین مسیر را دارند: ضابطه (Rule 336 / ZabetehConvert 342) → صلح (Solh 344 / Tavafogh 345) → تحلیل (Takhalofat 338) → کمیسیون ماده ۱۰۰ (Commission 340 / CommissionFine 335) → درآمد (Income 337). پروندهٔ نمونه WorkItem `300002275` (پروانه تجدید بنا). WorkItem `5298603` بررسی نمی‌شود. join ضابطه: `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode`. Member 1296 را عوض نکنید.
+6. **دیباگ پروانه این Nid** — CRUD=Read. همهٔ پرونده‌های پروانه همین مسیر را دارند: ضابطه (Rule 336 / ZabetehConvert 342) → صلح (Solh 344 / Tavafogh 345) → تحلیل (Takhalofat 338) → کمیسیون ماده ۱۰۰ (Commission 340 / CommissionFine 335) → درآمد (Income 337). پروندهٔ نمونه WorkItem `300002275` (پروانه تجدید بنا). اگر ردیف `Zabeteh` با `NidNosaziCode` باشد ولی `ActiveNidZabeteh` خالی باشد، ضابطه هست و اعلام نشده؛ L270 درست می‌ایستد — Member 1296 را عوض نکنید. WorkItem `5298603` بررسی نمی‌شود.
 7. **مستند کلی** — همان کوئری SSMS بدون فیلتر Member:
    `SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM [DbRuleEngeinDocument].[dbo].[MemberDocument]`
    با یوزر `debugger`. جداول **دیگر** همان دیتابیس هم لیست و peek می‌شوند. عنوان/متن مستند برای نام جداول ضابطه (`Zabeteh`، `CI_PlanType`، …) جستجو می‌شود.
