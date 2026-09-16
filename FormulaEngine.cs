@@ -600,6 +600,7 @@ namespace RuleTrace
                 @"SELECT TOP 30 CAST(r.NidProc AS NVARCHAR(50)), CAST(r.NidWorkItem AS NVARCHAR(50)), r.WorkflowTitel, r.RequestDate, r.RequesterName
                   FROM dbo.Sh_RequestInfo r
                   WHERE CAST(r.NidWorkItem AS NVARCHAR(50)) = @t OR CAST(r.NidProc AS NVARCHAR(50)) = @t
+                     OR CAST(r.NidNosaziCode AS NVARCHAR(50)) = @t OR CAST(r.ActiveNidZabeteh AS NVARCHAR(50)) = @t
                   ORDER BY r.RequestDate DESC",
                 @"SELECT TOP 30 CAST(r.NidProc AS NVARCHAR(50)), CAST(r.NidWorkItem AS NVARCHAR(50)), r.WorkflowTitel, r.RequestDate, nc.NosaziCode
                   FROM dbo.Sh_RequestInfo r
@@ -749,6 +750,11 @@ namespace RuleTrace
         /// <returns>0 ok, 1 stop-error in BizErrors, 2 no live instance (static debug), 3 null result, 4 runtime/engine error</returns>
         public int Run(RunRequest r)
         {
+            if (r == null) throw new ArgumentNullException("r");
+            Guid parsed;
+            if (r.RequestGuid == Guid.Empty && Guid.TryParse(r.NidProc, out parsed))
+                r.RequestGuid = parsed;
+
             int nid;
             if (!FormulaMap.TryGetValue(r.Formula ?? string.Empty, out nid))
             {

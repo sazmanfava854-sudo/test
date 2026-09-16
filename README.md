@@ -30,8 +30,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
 5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**
-6. **دیباگ صلح این Nid** — کد Member 1296/1297 را از DB می‌خواند (CRUD=Read، بدون نوشتن) و ضابطهٔ همین NidProc را از جداول نام‌دار Sara می‌خواند:
-   `Zabeteh` (روکش محاسبه‌شده)، `CI_PlanType`، `CI_PlanUsingType`، `CI_Zabeteh`، `ZabeteStatic_Info` (کلید Pkey از همپوشانی لایه ۸۳۶ مثل ماده ۵)، `ZabeteStatic_Zabete` (ریز ضابطه ایستا)، `ZabeteStatic_Plan` (طرح/کاربری مجاز). توقف رایج: `ActiveNidZabeteh = Guid.Empty` در Member 1296.
+6. **دیباگ صلح این Nid** — CRUD=Read. ضابطه با join `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode` خوانده می‌شود (نه `NidProc`). پروندهٔ تست بدون خطا: WorkItem `5298603` / NidProc `89DD8996-A448-4164-B0FD-74F8B5F71B1B`. توقف پروندهٔ خراب معمولاً `ActiveNidZabeteh = Guid.Empty` در Member 1296 L270 است.
 7. **مستند کلی** — همان کوئری SSMS بدون فیلتر Member:
    `SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM [DbRuleEngeinDocument].[dbo].[MemberDocument]`
    با یوزر `debugger`. جداول **دیگر** همان دیتابیس هم لیست و peek می‌شوند. عنوان/متن مستند برای نام جداول ضابطه (`Zabeteh`، `CI_PlanType`، …) جستجو می‌شود.

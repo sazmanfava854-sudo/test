@@ -180,9 +180,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("member-docs", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("zabeteh-join", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22g-member-docs, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22h-zabeteh-join, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -245,6 +245,20 @@ namespace RuleTrace
             var vars = ZabetehCase.Read("", "", "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28", log.Add);
             fail += vars.Count == 0 ? 0 : FailMsg("no vars without Sara");
             fail += Expect(string.Join("\n", log), "اتصال Sara خالی", "empty Sara log");
+            fail += Expect(ZabetehCase.JoinSql, "NidNosaziCode", "join sql nosazi");
+            fail += Expect(ZabetehCase.JoinSql, "INNER JOIN", "join sql inner");
+            fail += Expect(ZabetehCase.JoinOn, "NidNosaziCode", "join on nosazi not nidproc");
+            if (ZabetehCase.JoinSql.IndexOf("a.NidProc", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: Zabeteh join must not be on a.NidProc");
+                fail++;
+            }
+            fail += Expect(ZabetehCase.SampleNidProc, "89DD8996", "sample nidproc");
+            fail += Expect(ZabetehCase.SampleNidWorkItem, "5298603", "sample workitem");
+            fail += Expect(ZabetehCase.SampleActiveNidZabeteh, "EEA1F974", "sample active overlay");
+            fail += string.Equals(ZabetehCase.SampleNidZabeteh, ZabetehCase.SampleActiveNidZabeteh, StringComparison.OrdinalIgnoreCase)
+                ? FailMsg("sample latest NidZabeteh differs from Active")
+                : 0;
             return fail;
         }
 
@@ -345,7 +359,8 @@ namespace RuleTrace
             fail += Expect(html, "Zabeteh", "named Zabeteh table in vars hint");
             fail += Expect(html, "CI_PlanType", "CI_PlanType hint");
             fail += Expect(html, "ZabeteStatic_Info", "static info hint");
-            fail += Expect(html, "MemberDocument", "document table hint");
+            fail += Expect(html, "NidNosaziCode", "join key in vars hint");
+            fail += Expect(html, "5298603", "CRUD sample workitem");
             fail += Expect(html, "مستند کلی", "overall docs button");
             fail += Expect(html, "/api/docs", "docs endpoint");
             fail += Expect(html, "data-tab=\"docs\"", "docs tab");
@@ -386,7 +401,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22g-member-docs", "bootstrap label");
+                        fail += Expect(boot, "v22h-zabeteh-join", "bootstrap label");
                         return fail;
                     }
                 }
