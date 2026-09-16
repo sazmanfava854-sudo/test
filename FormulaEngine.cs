@@ -158,7 +158,7 @@ namespace RuleTrace
                 || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase))
                 return false;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -947,6 +947,23 @@ namespace RuleTrace
                     MemberHistory.Report(_s.RuleEngine, RelatedNidClasses(nidRuleClass), _log);
                 }
                 catch (Exception hx) { _log("History      : " + FirstLine(hx.Message)); }
+            }
+            finally
+            {
+                _summaryCapture = false;
+            }
+        }
+
+        public Dictionary<string, object> DebugSolhNid(string nidProc)
+        {
+            Summary.Clear();
+            _summaryCapture = true;
+            try
+            {
+                _log("SolhNid      : خواندن کد صلح از dbo.Member (CRUD Read)");
+                LastMemberSources.Clear();
+                LastMemberSources.AddRange(GetRelatedMemberSources(344));
+                return SolhNidDebug.Run(_s.Sara, nidProc, LastMemberSources, _log);
             }
             finally
             {

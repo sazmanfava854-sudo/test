@@ -29,8 +29,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 2. تست اتصال دیتابیس — باید RuleEngine و Sara هر دو OK باشند
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
-5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش** (اگر تیک باشد DLL کامپایل‌شده Solh حذف می‌شود و Exit 2 می‌گیرید)
-6. **بررسی فرمول از DB** و تب تاریخچه — لاگ `NidHistory` / `MemberHistory` (ستون `Body` از نوع `image` است؛ لیست فقط اندازه می‌گیرد)
+5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**
+6. **دیباگ صلح این Nid** — کد Member 1296/1297 را از DB می‌خواند (CRUD=Read، بدون نوشتن) و ستون‌های پرونده را برای همان NidProc از Sara لیست می‌کند تا ببینید توقف از کدام بخش است (معمولاً عدم اعلام ضابطه).
+7. **بررسی فرمول از DB** و تب تاریخچه — لاگ `NidHistory` / `MemberHistory`
 
 کلاس‌ها به هم وصل‌اند. Member چیدمان `1288` در `ZabetehConvert` (342) است نه Solh/344. با انتخاب Solh این کلاس‌ها با هم خوانده می‌شوند: Rule 336، ZabetehConvert 342، Solh 344، Tavafogh 345، Global 432.
 

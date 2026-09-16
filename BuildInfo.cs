@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v22d-web-history";
+        public const string Label = "v22e-solh-nid";
 
         public static string Banner
         {
