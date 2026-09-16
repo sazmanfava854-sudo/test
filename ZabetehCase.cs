@@ -279,6 +279,15 @@ namespace RuleTrace
             else
                 log("Zabeteh     : NidNosaziCode روی درخواست خالی است — join کاربر اجرا نشد");
 
+            if (byNosazi > 0 && IsEmptyGuid(keys.ActiveNidZabeteh))
+            {
+                string nidZ = FirstFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh");
+                string plan = FirstFromTable(vars, "[dbo].[Zabeteh]", "CI_PlanType");
+                log("Zabeteh     : روکش اعلام‌نشده NidZabeteh=" + (nidZ ?? "(خالی)")
+                    + " CI_PlanType=" + (plan ?? "(خالی)")
+                    + " — ضابطه برای ملک هست ولی Active خالی است؛ L270 درست می‌ایستد (Member 1296 را عوض نکنید)");
+            }
+
             if (cols.Contains("NidZabeteh") && !IsEmptyGuid(keys.ActiveNidZabeteh))
             {
                 byActive = SelectWhere(cs, "Zabeteh", cols, types, "NidZabeteh", keys.ActiveNidZabeteh, vars, log, 3, null);

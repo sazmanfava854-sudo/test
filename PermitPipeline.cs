@@ -99,7 +99,9 @@ namespace RuleTrace
                 + " ActiveNidZabeteh=" + (emptyActive ? "(خالی)" : Trunc(active, 36))
                 + " NidNosaziCode=" + (nosazi ?? "(خالی)"));
             log("Permit      : صلح      Solh/344=" + solh + " Tavafogh/345=" + tavafogh
-                + (emptyActive ? " — L270 باید بایستد (ضابطه اعلام نشده)" : " — L270 شلیک نمی‌شود"));
+                + (emptyActive
+                    ? (hasOverlay ? " — L270: ضابطه هست ولی اعلام نشده" : " — L270: نه روکش نه Active")
+                    : " — L270 شلیک نمی‌شود"));
             log("Permit      : تحلیل    Takhalofat/338=" + tahlil
                 + (tahlil == 0 ? " — فرمول تحلیل برای این بارگذاری نیامد" : ""));
             log("Permit      : کمیسیون  Commission/340=" + commission + " CommissionFine/335=" + fine
@@ -123,19 +125,20 @@ namespace RuleTrace
                 who += " / " + Trunc(flow, 40);
 
             var missing = new List<string>();
-            if (emptyActive && !hasOverlay) missing.Add("ضابطه اعلام‌نشده");
             if (tahlil == 0) missing.Add("تحلیل/338");
             if (commission == 0 && fine == 0) missing.Add("کمیسیون ماده ۱۰۰");
             if (income == 0) missing.Add("درآمد/337");
 
             string head = who + " مسیر " + PathFa + ". ";
-            if (emptyActive)
-                head += "صلح L270 (Member 1296) به‌خاطر Active خالی می‌ایستد. join " + ZabetehCase.JoinOn + ". ";
+            if (emptyActive && hasOverlay)
+                head += "ضابطه برای ملک هست (Zabeteh با NidNosaziCode) ولی اعلام نشده (ActiveNidZabeteh خالی). صلح L270 درست می‌ایستد. Member 1296 را عوض نکنید. تحلیل/کمیسیون/درآمد بعد از این Stop نمی‌رسند. ";
+            else if (emptyActive)
+                head += "نه روکش Zabeteh نه Active — ضابطه برای این ملک پیدا نشد. صلح L270 (Member 1296) درست می‌ایستد. join " + ZabetehCase.JoinOn + ". ";
             else
                 head += "ضابطه اعلام شده؛ صلح L270 شلیک نمی‌شود. ";
             if (missing.Count > 0)
                 head += "کمبود بارگذاری: " + string.Join("، ", missing) + ".";
-            else
+            else if (!(emptyActive && hasOverlay))
                 head += "پنج مرحله فرمول بارگذاری شد.";
             return head;
         }
