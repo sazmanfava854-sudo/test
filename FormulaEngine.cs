@@ -750,6 +750,11 @@ namespace RuleTrace
         /// <returns>0 ok, 1 stop-error in BizErrors, 2 no live instance (static debug), 3 null result, 4 runtime/engine error</returns>
         public int Run(RunRequest r)
         {
+            if (r == null) throw new ArgumentNullException("r");
+            Guid parsed;
+            if (r.RequestGuid == Guid.Empty && Guid.TryParse(r.NidProc, out parsed))
+                r.RequestGuid = parsed;
+
             int nid;
             if (!FormulaMap.TryGetValue(r.Formula ?? string.Empty, out nid))
             {

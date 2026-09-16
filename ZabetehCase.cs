@@ -29,6 +29,8 @@ namespace RuleTrace
             "ZabeteStatic_Plan",
         };
 
+        private static readonly string[] SkipTypes = { "image", "varbinary", "binary", "timestamp", "rowversion" };
+
         /// <summary>
         /// Known-good CRUD sample (has overlay, no Solh L270).
         /// Join: Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode
