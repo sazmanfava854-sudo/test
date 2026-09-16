@@ -42,6 +42,9 @@ namespace RuleTrace
         public const string SampleActiveNidZabeteh = "EEA1F974-CC70-44CB-8386-21B8AAAA4B31";
 
         public const string JoinOn = "Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode";
+        public const string StaticPkeyColumn = "P_Key";
+        /// <summary>ZabeteStatic_Plan joins via Info, not CI_PlanType.</summary>
+        public static readonly string[] StaticChildPrefer = { "NidZStatic_Info", StaticPkeyColumn };
 
         public static readonly string JoinSql =
             "SELECT TOP (10) a.NidZabeteh, a.NidNosaziCode, a.CI_PlanType, a.DateZabeteh, a.TimeZabeteh, a.UserName, " +
@@ -84,7 +87,7 @@ namespace RuleTrace
             });
             log("Zabeteh     : NidNosaziCode=" + (keys.NidNosaziCode ?? "(خالی)")
                 + " ActiveNidZabeteh=" + (IsEmptyGuid(keys.ActiveNidZabeteh) ? "(خالی)" : keys.ActiveNidZabeteh)
-                + " Pkey=" + (keys.Pkey ?? "(خالی)"));
+                + " P_Key=" + (keys.Pkey ?? "(خالی)"));
 
             if (IsEmptyGuid(keys.ActiveNidZabeteh))
                 log("Zabeteh     : ActiveNidZabeteh خالی/Guid.Empty — صلح L270 باید بایستد (حتی اگر ردیف Zabeteh با NidNosaziCode باشد)");
@@ -96,10 +99,7 @@ namespace RuleTrace
             LookupById(sara, "CI_PlanUsingType", keys.PlanUsingTypeId, vars, log);
             LookupById(sara, "CI_Zabeteh", keys.CIZabetehId, vars, log);
 
-            DumpNamed(sara, "ZabeteStatic_Info", keys, vars, log, "Pkey", "PKEY", "PKey");
-            FillKeys(keys, vars);
-            DumpNamed(sara, "ZabeteStatic_Zabete", keys, vars, log, "Pkey", "Nid", "Code", "NidZabeteStatic");
-            DumpNamed(sara, "ZabeteStatic_Plan", keys, vars, log, "Pkey", "Nid", "Code", "CI_PlanType", "CI_PlanUsingType");
+            DumpStaticLayer(sara, keys, vars, log);
 
             int zabRows = CountTable(vars, "Zabeteh");
             int staticInfo = CountTable(vars, "ZabeteStatic_Info");
@@ -168,6 +168,7 @@ namespace RuleTrace
             public string PlanTypeId;
             public string PlanUsingTypeId;
             public string CIZabetehId;
+            public string NidZStaticInfo;
         }
 
         private static void FillKeys(CaseKeys k, List<Dictionary<string, object>> vars)
@@ -175,7 +176,9 @@ namespace RuleTrace
             if (IsEmptyGuid(k.ActiveNidZabeteh))
                 k.ActiveNidZabeteh = First(vars, "ActiveNidZabeteh", "NidActiveZabeteh") ?? k.ActiveNidZabeteh;
             if (string.IsNullOrEmpty(k.Pkey))
-                k.Pkey = First(vars, "Pkey", "PKEY", "PKey", "MelkPkey", "PKEY_Melk");
+                k.Pkey = First(vars, "P_Key", "Pkey", "PKEY", "PKey", "MelkPkey", "PKEY_Melk");
+            if (string.IsNullOrEmpty(k.NidZStaticInfo))
+                k.NidZStaticInfo = First(vars, "NidZStatic_Info");
             if (string.IsNullOrEmpty(k.NidNosaziCode))
                 k.NidNosaziCode = First(vars, "NidNosaziCode");
             if (string.IsNullOrEmpty(k.PlanTypeId))
@@ -185,6 +188,29 @@ namespace RuleTrace
             if (string.IsNullOrEmpty(k.CIZabetehId))
                 k.CIZabetehId = First(vars, "CI_Zabeteh", "NidCIZabeteh", "NidZabetehType");
             // Do not copy Zabeteh.NidZabeteh into ActiveNidZabeteh — L270 reads the request field only.
+        }
+
+        /// <summary>
+        /// ماده ۵ / لایه ۸۳۶: ZabeteStatic_Info keyed by P_Key, children by NidZStatic_Info.
+        /// Do not fall back to CI_PlanType — that dumps unrelated plan rows.
+        /// </summary>
+        private static void DumpStaticLayer(string sara, CaseKeys keys, List<Dictionary<string, object>> vars, Action<string> log)
+        {
+            if (string.IsNullOrEmpty(keys.Pkey))
+                log("Zabeteh     : P_Key خالی — ZabeteStatic_Info (لایه ۸۳۶ / ماده ۵) برای این درخواست کلید نقشه ندارد");
+            else
+            {
+                DumpNamed(sara, "ZabeteStatic_Info", keys, vars, log, StaticPkeyColumn, "Pkey", "PKEY", "PKey");
+                FillKeys(keys, vars);
+            }
+
+            if (string.IsNullOrEmpty(keys.NidZStaticInfo) && string.IsNullOrEmpty(keys.Pkey))
+                log("Zabeteh     : ZabeteStatic_Zabete/Plan رد شد — بدون NidZStatic_Info (بدون fallback روی CI_PlanType)");
+            else
+            {
+                DumpNamed(sara, "ZabeteStatic_Zabete", keys, vars, log, StaticChildPrefer);
+                DumpNamed(sara, "ZabeteStatic_Plan", keys, vars, log, StaticChildPrefer);
+            }
         }
 
         private static void DumpNamed(string cs, string table, CaseKeys keys, List<Dictionary<string, object>> vars, Action<string> log, params string[] preferCols)
@@ -269,8 +295,11 @@ namespace RuleTrace
             if (col.Equals("NidProc", StringComparison.OrdinalIgnoreCase)) return k.NidProc;
             if (col.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return k.ActiveNidZabeteh;
             if (col.Equals("NidZabeteh", StringComparison.OrdinalIgnoreCase)) return k.ActiveNidZabeteh;
-            if (col.IndexOf("Pkey", StringComparison.OrdinalIgnoreCase) >= 0 || col.Equals("PKEY", StringComparison.OrdinalIgnoreCase))
+            if (col.Equals("P_Key", StringComparison.OrdinalIgnoreCase)
+                || col.IndexOf("Pkey", StringComparison.OrdinalIgnoreCase) >= 0
+                || col.Equals("PKEY", StringComparison.OrdinalIgnoreCase))
                 return k.Pkey;
+            if (col.Equals("NidZStatic_Info", StringComparison.OrdinalIgnoreCase)) return k.NidZStaticInfo;
             if (col.Equals("NidNosaziCode", StringComparison.OrdinalIgnoreCase)) return k.NidNosaziCode;
             if (col.IndexOf("PlanUsing", StringComparison.OrdinalIgnoreCase) >= 0) return k.PlanUsingTypeId;
             if (col.IndexOf("PlanType", StringComparison.OrdinalIgnoreCase) >= 0) return k.PlanTypeId;
@@ -369,7 +398,9 @@ namespace RuleTrace
             if (col.IndexOf("Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return "ضابطه";
             if (col.IndexOf("PlanType", StringComparison.OrdinalIgnoreCase) >= 0) return "طرح";
             if (col.IndexOf("PlanUsing", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Karbari", StringComparison.OrdinalIgnoreCase) >= 0) return "کاربری";
-            if (col.IndexOf("Pkey", StringComparison.OrdinalIgnoreCase) >= 0) return "Pkey ملک";
+            if (col.Equals("P_Key", StringComparison.OrdinalIgnoreCase)
+                || col.IndexOf("Pkey", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "P_Key ملک / ماده ۵";
             if (col.IndexOf("NidProc", StringComparison.OrdinalIgnoreCase) >= 0) return "VB/کلید";
             return "ستون";
         }

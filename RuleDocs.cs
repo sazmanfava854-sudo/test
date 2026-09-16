@@ -226,7 +226,7 @@ ORDER BY t.TABLE_NAME", c) { CommandTimeout = 30 })
             {
                 string name = Convert.ToString(t["name"]);
                 t["cols"] = string.Join(", ", TableColumns(c, name).Keys.Take(24));
-                log("Doc         : جدول [" + name + "] cols=" + Convert.ToString(t["cols"]));
+                log("Detail      : جدول [" + name + "] cols=" + Convert.ToString(t["cols"]));
             }
             return list;
         }
@@ -299,6 +299,17 @@ ORDER BY t.TABLE_NAME", c) { CommandTimeout = 30 })
             log("Doc         : جدول‌های اشاره‌شده در مستند: " + string.Join(", ", byHint));
         }
 
+        internal static bool SkipPeek(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return true;
+            if (name.Equals(MainTable, StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.Equals("sysdiagrams", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.StartsWith("AspNet", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.StartsWith("__EF", StringComparison.OrdinalIgnoreCase)) return true;
+            if (name.Equals("Users", StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
         private static List<Dictionary<string, object>> PeekOtherTables(SqlConnection c, List<Dictionary<string, object>> tables, Action<string> log)
         {
             var rows = new List<Dictionary<string, object>>();
@@ -306,8 +317,7 @@ ORDER BY t.TABLE_NAME", c) { CommandTimeout = 30 })
             foreach (var t in tables)
             {
                 string name = Str(t, "name");
-                if (name.Equals(MainTable, StringComparison.OrdinalIgnoreCase)) continue;
-                if (name.Equals("sysdiagrams", StringComparison.OrdinalIgnoreCase)) continue;
+                if (SkipPeek(name)) continue;
                 if (peeked >= 20) break;
                 peeked++;
                 var cols = TableColumns(c, name);
@@ -346,12 +356,12 @@ ORDER BY t.TABLE_NAME", c) { CommandTimeout = 30 })
                                 });
                             }
                         }
-                        log("Doc         : [" + name + "] peek rows=" + n + (looksDoc ? " (مستندگونه)" : ""));
+                        log("Detail      : [" + name + "] peek rows=" + n + (looksDoc ? " (مستندگونه)" : ""));
                     }
                 }
                 catch (Exception ex)
                 {
-                    log("Doc         : [" + name + "] " + FirstLine(ex.Message));
+                    log("Detail      : [" + name + "] " + FirstLine(ex.Message));
                 }
             }
             return rows;

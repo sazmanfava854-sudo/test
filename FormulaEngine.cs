@@ -171,6 +171,13 @@ namespace RuleTrace
                 if (t.IndexOf("Members with Insert", StringComparison.OrdinalIgnoreCase) >= 0) return false;
                 if (t.IndexOf("شرط‌های مهم داخل", StringComparison.Ordinal) >= 0) return false;
             }
+            if (t.StartsWith("Doc", StringComparison.OrdinalIgnoreCase))
+            {
+                if (t.IndexOf("AspNet", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                if (t.IndexOf("__EF", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                if (t.IndexOf("جدول [", StringComparison.Ordinal) >= 0) return false;
+                if (t.IndexOf("peek rows", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            }
             if (t.StartsWith("History", StringComparison.OrdinalIgnoreCase)
                 && t.IndexOf("Rule/336", StringComparison.OrdinalIgnoreCase) >= 0
                 && t.IndexOf("1296", StringComparison.Ordinal) < 0
