@@ -183,11 +183,15 @@ namespace RuleTrace
                 log.Add("");
                 log.Add("══════════ " + DateTime.Now.ToString("HH:mm:ss") + " CHIDMAN Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " (DB + history) ══════════");
                 eng.AnalyzeChidmanMember(nid, ChidmanAnalyzer.DefaultChidmanMemberId);
-                var hist = PackHistory(MemberHistory.List(_settings.RuleEngine, FormulaEngine.RelatedNidClasses(nid), 0, 40, log.Add));
+                var hist = PackHistory(MemberHistory.List(_settings.RuleEngine, FormulaEngine.RelatedNidClasses(nid), 0, 40, null));
+                var summary = eng.Summary.ToList();
+                if (summary.Count == 0)
+                    summary = log.Where(IsCopyLine).ToList();
                 return new Dictionary<string, object>
                 {
                     { "members", PackSources(eng.LastMemberSources) },
                     { "history", hist },
+                    { "summary", summary },
                     { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
                 };
             });
@@ -205,11 +209,28 @@ namespace RuleTrace
                 var ids = new List<int>(FormulaEngine.RelatedNidClasses(nid));
                 MemberHistory.Report(_settings.RuleEngine, ids, log.Add);
                 var rows = MemberHistory.List(_settings.RuleEngine, ids, member, 80, log.Add);
+                var summary = log.Where(IsCopyLine).ToList();
                 return new Dictionary<string, object>
                 {
                     { "table", MemberHistory.LastTable ?? "" },
                     { "history", PackHistory(rows) },
+                    { "summary", summary },
                     { "related", ids },
+                };
+            });
+        }
+
+        public Dictionary<string, object> GetHistoryRow(Dictionary<string, object> body)
+        {
+            long id = Json.Long(body, "nidHistory");
+            if (id <= 0) return Fail("NidHistory نامعتبر است.");
+            return Run("خواندن Body تاریخچه...", false, (eng, log) =>
+            {
+                var row = MemberHistory.Get(_settings.RuleEngine, id, log.Add);
+                if (row == null) return new Dictionary<string, object> { { "ok", false }, { "message", "ردیف پیدا نشد" } };
+                return new Dictionary<string, object>
+                {
+                    { "row", PackHistory(new List<HistoryRow> { row })[0] },
                 };
             });
         }
@@ -349,6 +370,15 @@ namespace RuleTrace
                 { "lookup", _settings.LastLookup ?? string.Empty },
                 { "dllOk", FormulaEngine.IsDllFolder(_settings.DllPath) },
             };
+        }
+
+        private static bool IsCopyLine(string m)
+        {
+            if (string.IsNullOrWhiteSpace(m)) return false;
+            string t = m.TrimStart();
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+                if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         private static string FormulaOf(Dictionary<string, object> body)

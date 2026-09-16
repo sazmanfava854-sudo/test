@@ -41,6 +41,16 @@ namespace RuleTrace
             return fallback;
         }
 
+        public static long Long(Dictionary<string, object> map, string key, long fallback = 0)
+        {
+            object v;
+            if (map == null || !map.TryGetValue(key, out v) || v == null) return fallback;
+            if (v is long) return (long)v;
+            if (v is int) return (int)v;
+            long n;
+            return long.TryParse(Convert.ToString(v, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) ? n : fallback;
+        }
+
         public static int Int(Dictionary<string, object> map, string key, int fallback = 0)
         {
             object v;
