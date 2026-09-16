@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -16,6 +17,7 @@ namespace RuleTrace
             fail += RelatedClassesSolh();
             fail += BannerNoRewrite();
             fail += JsonRoundtrip();
+            fail += HistoryImageSql();
             fail += WebUiEmbedded();
             fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
@@ -183,6 +185,33 @@ namespace RuleTrace
             return 0;
         }
 
+        private static int HistoryImageSql()
+        {
+            int fail = 0;
+            string list = MemberHistory.ListBodyExpr("Body");
+            fail += Expect(list, "DATALENGTH", "list uses DATALENGTH");
+            if (list.IndexOf("NVARCHAR", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: list Body expr must not CAST to nvarchar");
+                fail++;
+            }
+            string image = MemberHistory.BodyPayloadExpr("Body", "image");
+            fail += Expect(image, "VARBINARY(MAX)", "image payload via varbinary");
+            if (image.IndexOf("NVARCHAR", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: image payload must not CAST to nvarchar");
+                fail++;
+            }
+            fail += MemberHistory.IsBinaryBody("image") ? 0 : FailMsg("image is binary body");
+            fail += Expect(MemberHistory.BodyPayloadExpr("XmlBody", "nvarchar"), "VARBINARY(MAX)", "nvarchar also via varbinary");
+            fail += Expect(MemberHistory.BodyPayloadExpr("Body", "ntext"), "NVARCHAR(MAX)", "ntext convert");
+            byte[] utf16 = Encoding.Unicode.GetBytes("<Member><Body>Sub Run()</Body></Member>");
+            fail += Expect(MemberHistory.DecodeBodyBytes(utf16), "Sub Run()", "utf16 xml decode");
+            byte[] utf8 = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("<x>ok</x>")).ToArray();
+            fail += Expect(MemberHistory.DecodeBodyBytes(utf8), "<x>ok</x>", "utf8 bom decode");
+            return fail;
+        }
+
         private static int JsonRoundtrip()
         {
             var src = new System.Collections.Generic.Dictionary<string, object>
@@ -197,6 +226,7 @@ namespace RuleTrace
             fail += Expect(json, "1288", "json number");
             fail += Json.Bool(back, "ok") ? 0 : FailMsg("json bool");
             fail += Json.Int(back, "n") == 1288 ? 0 : FailMsg("json int");
+            fail += Json.Long(new Dictionary<string, object> { { "nidHistory", 598688L } }, "nidHistory") == 598688L ? 0 : FailMsg("json long");
             fail += (Json.Str(back, "s") ?? string.Empty).IndexOf("چیدمان", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("json unicode");
             return fail;
         }
@@ -212,11 +242,19 @@ namespace RuleTrace
             }
             int fail = 0;
             fail += Expect(html, "عیب‌یاب فرمول سارا", "persian title");
+            fail += Expect(html, "id=\"btnRun\">اجرا</button>", "gold run button");
             fail += Expect(html, "/api/run", "run endpoint");
             fail += Expect(html, "/api/history", "history endpoint");
+            fail += Expect(html, "/api/history-row", "history-row endpoint");
             fail += Expect(html, "تاریخچه فرمول", "history tab");
             fail += Expect(html, "بررسی فرمول از DB", "db-first button");
+            fail += Expect(html, "showSummary(j.summary)", "chidman/history fill copy-summary");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
+            if (html.IndexOf("اجرای موتور (اختیاری)", StringComparison.Ordinal) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: optional-engine label should not replace اجرا");
+                fail++;
+            }
             return fail;
         }
 
@@ -247,7 +285,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22c-web-history", "bootstrap label");
+                        fail += Expect(boot, "v22d-web-history", "bootstrap label");
                         return fail;
                     }
                 }

@@ -221,8 +221,8 @@
         <textarea id="parameters" placeholder="NidProc=..."></textarea>
         <div class="actions">
           <button class="ghost" id="btnLookup">جستجو در Sara</button>
-          <button class="gold" id="btnHistory">بررسی فرمول از DB</button>
-          <button class="ghost" id="btnRun">اجرای موتور (اختیاری)</button>
+          <button class="gold" id="btnRun">اجرا</button>
+          <button class="ghost" id="btnHistory">بررسی فرمول از DB</button>
           <button class="ghost" id="btnChidman">تحلیل چیدمان ۱۲۸۸</button>
           <button class="ghost" id="btnCombine">ترکیب DB + DLL</button>
           <button class="ghost" id="btnMembers">تحلیل Member</button>
@@ -436,19 +436,34 @@ function showHistory(rows) {
     [h.nidHistory, (h.className || h.nidClass) + "/" + h.nidClass, h.nidMember, h.modifyer, h.modifyDate, h.modifyTime, h.modifyDesc, h.bodyChars].forEach(c => {
       const td = document.createElement("td"); td.textContent = c == null ? "" : String(c); tr.appendChild(td);
     });
-    tr.onclick = () => {
+    tr.onclick = async () => {
       tb.querySelectorAll("tr").forEach(x => x.classList.remove("sel"));
       tr.classList.add("sel");
-      $("histCode").textContent = h.code || "(Body خالی — فقط لاگ تغییر است، مثل نمونه 337/1160)";
+      if (h.code) { $("histCode").textContent = h.code; return; }
+      if (!h.bodyChars) { $("histCode").textContent = "(Body خالی — فقط لاگ تغییر است، مثل نمونه 337/1160)"; return; }
+      $("histCode").textContent = "در حال خواندن Body از DB…";
+      try {
+        const j = await api("/api/history-row", { nidHistory: h.nidHistory });
+        const row = j.row || {};
+        h.code = row.code || "";
+        $("histCode").textContent = h.code || "(Body خالی — فقط لاگ تغییر)";
+      } catch (e) {
+        $("histCode").textContent = "خواندن Body ناموفق";
+      }
     };
     if (idx === 0) tr.classList.add("sel");
     tb.appendChild(tr);
   });
-  if (rows && rows[0]) $("histCode").textContent = rows[0].code || "(Body خالی — فقط لاگ تغییر)";
+  if (rows && rows[0]) {
+    if (rows[0].code) $("histCode").textContent = rows[0].code;
+    else if (!rows[0].bodyChars) $("histCode").textContent = "(Body خالی — فقط لاگ تغییر)";
+    else $("histCode").textContent = "روی ردیف کلیک کنید تا Body خوانده شود (ستون image است)";
+  }
 }
 $("btnHistory").onclick = async () => {
   const j = await api("/api/history", payload());
   showHistory(j.history);
+  if (j.summary) showSummary(j.summary);
   document.querySelector('[data-tab="history"]').click();
   toast((j.history || []).length + " ردیف تاریخچه");
 };
@@ -465,7 +480,9 @@ $("btnChidman").onclick = async () => {
   const j = await api("/api/analyze-chidman", payload());
   showMembers(j.members);
   if (j.history) showHistory(j.history);
-  document.querySelector('[data-tab="code"]').click();
+  showSummary(j.summary);
+  document.querySelector('[data-tab="summary"]').click();
+  toast("تحلیل چیدمان — خلاصه آماده کپی");
 };
 $("btnCombine").onclick = async () => {
   const j = await api("/api/combine", payload());

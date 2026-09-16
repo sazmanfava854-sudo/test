@@ -933,10 +933,25 @@ namespace RuleTrace
 
         public void AnalyzeChidmanMember(int nidRuleClass, int nidMember)
         {
-            var sources = GetRelatedMemberSources(nidRuleClass);
-            LastMemberSources.Clear();
-            LastMemberSources.AddRange(sources);
-            ChidmanAnalyzer.Report(sources, LastTrace, nidMember, _log);
+            Summary.Clear();
+            _summaryCapture = true;
+            try
+            {
+                var sources = GetRelatedMemberSources(nidRuleClass);
+                LastMemberSources.Clear();
+                LastMemberSources.AddRange(sources);
+                ChidmanAnalyzer.Report(sources, LastTrace, nidMember, _log);
+                try
+                {
+                    _log("Arch         : منبع حقیقت فرمول = dbo.Member + تاریخچه (NidHistory). DLL به‌روز برای این عیب‌یابی لازم نیست.");
+                    MemberHistory.Report(_s.RuleEngine, RelatedNidClasses(nidRuleClass), _log);
+                }
+                catch (Exception hx) { _log("History      : " + FirstLine(hx.Message)); }
+            }
+            finally
+            {
+                _summaryCapture = false;
+            }
         }
 
         private object BuildFactory(RunRequest r)

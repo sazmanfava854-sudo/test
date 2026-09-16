@@ -84,7 +84,15 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
                 return list;
             }
 
+            Dictionary<string, string> types;
+            try { types = ColumnTypes(ruleEngineConn, table); }
+            catch { types = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
             string bodyCol = FirstCol(cols, "Body", "XmlBody", "EncryptXmlBody");
+            string bodyType = bodyCol != null && types.ContainsKey(bodyCol) ? types[bodyCol] : "";
+            if (bodyCol != null && log != null)
+                log("History      : Body column " + bodyCol + " type=" + (string.IsNullOrEmpty(bodyType) ? "?" : bodyType)
+                    + (IsBinaryBody(bodyType) ? " — list uses DATALENGTH (no CAST image→nvarchar)" : ""));
+
             var select = new List<string>();
             AddCol(select, cols, "NidHistory");
             AddCol(select, cols, "NidClass");
@@ -98,7 +106,8 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
             AddCol(select, cols, "ModifyDate");
             AddCol(select, cols, "ModifyTime");
             AddCol(select, cols, "ModifyDesc", "Description", "Desc");
-            if (bodyCol != null) select.Add("CAST(" + Quote(bodyCol) + " AS NVARCHAR(MAX)) AS BodyText");
+            // Never CAST(image AS NVARCHAR(MAX)) — SQL Server rejects it.
+            if (bodyCol != null) select.Add(ListBodyExpr(bodyCol));
 
             var where = new StringBuilder();
             where.Append(" WHERE 1=1 ");
@@ -122,7 +131,7 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
                     using (var r = cmd.ExecuteReader())
                     {
                         while (r.Read())
-                            list.Add(Read(r, table, bodyCol != null));
+                            list.Add(Read(r, table, false));
                     }
                 }
             }
@@ -132,6 +141,112 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
             }
             if (log != null) log("History      : " + list.Count + " change row(s)");
             return list;
+        }
+
+        public static HistoryRow Get(string ruleEngineConn, long nidHistory, Action<string> log)
+        {
+            if (string.IsNullOrWhiteSpace(ruleEngineConn) || nidHistory <= 0) return null;
+            string table;
+            try { table = DiscoverTable(ruleEngineConn); }
+            catch (Exception ex)
+            {
+                if (log != null) log("History      : discover failed — " + FirstLine(ex.Message));
+                return null;
+            }
+            if (table == null) return null;
+            HashSet<string> cols;
+            Dictionary<string, string> types;
+            try
+            {
+                cols = Columns(ruleEngineConn, table);
+                types = ColumnTypes(ruleEngineConn, table);
+            }
+            catch (Exception ex)
+            {
+                if (log != null) log("History      : columns — " + FirstLine(ex.Message));
+                return null;
+            }
+            if (!cols.Contains("NidHistory")) return null;
+            string bodyCol = FirstCol(cols, "Body", "XmlBody", "EncryptXmlBody");
+            string bodyType = bodyCol != null && types.ContainsKey(bodyCol) ? types[bodyCol] : "";
+            var select = new List<string>();
+            AddCol(select, cols, "NidHistory");
+            AddCol(select, cols, "NidClass");
+            AddCol(select, cols, "NidMember");
+            AddCol(select, cols, "FromDate");
+            AddCol(select, cols, "ToDate");
+            AddCol(select, cols, "EnumType");
+            AddCol(select, cols, "isActive", "IsActive");
+            AddCol(select, cols, "VersionDateTime");
+            AddCol(select, cols, "Modifyer", "Modifier", "ModifyUser", "UserName");
+            AddCol(select, cols, "ModifyDate");
+            AddCol(select, cols, "ModifyTime");
+            AddCol(select, cols, "ModifyDesc", "Description", "Desc");
+            if (bodyCol != null)
+            {
+                select.Add(ListBodyExpr(bodyCol));
+                select.Add(BodyPayloadExpr(bodyCol, bodyType));
+            }
+            string sql = "SELECT TOP 1 " + string.Join(", ", select) + " FROM " + table + " WHERE NidHistory=@id";
+            try
+            {
+                using (var c = new SqlConnection(ruleEngineConn))
+                using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 60 })
+                {
+                    cmd.Parameters.AddWithValue("@id", nidHistory);
+                    c.Open();
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        if (!r.Read()) return null;
+                        return Read(r, table, bodyCol != null);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (log != null) log("History      : get failed — " + FirstLine(ex.Message));
+                return null;
+            }
+        }
+
+        /// <summary>List query: size only. CAST(image AS NVARCHAR(MAX)) is illegal on SQL Server.</summary>
+        internal static string ListBodyExpr(string col)
+        {
+            return "DATALENGTH(" + Quote(col) + ") AS BodyBytes";
+        }
+
+        /// <summary>One-row payload. Prefer VARBINARY so image never CAST to nvarchar.</summary>
+        internal static string BodyPayloadExpr(string col, string dataType)
+        {
+            string q = Quote(col);
+            string t = (dataType ?? "").ToLowerInvariant();
+            if (t == "text" || t == "ntext")
+                return "CONVERT(NVARCHAR(MAX), " + q + ") AS BodyText";
+            return "CONVERT(VARBINARY(MAX), " + q + ") AS BodyBin";
+        }
+
+        internal static bool IsBinaryBody(string dataType)
+        {
+            string t = (dataType ?? "").ToLowerInvariant();
+            return t == "image" || t == "varbinary" || t == "binary";
+        }
+
+        internal static string DecodeBodyBytes(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return "";
+            if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+                return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+            if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+                return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+                return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+            int nuls = 0;
+            int lim = Math.Min(bytes.Length, 200);
+            for (int i = 1; i < lim; i += 2)
+                if (bytes[i] == 0) nuls++;
+            if (lim >= 4 && nuls > lim / 6)
+                return Encoding.Unicode.GetString(bytes);
+            return Encoding.UTF8.GetString(bytes);
         }
 
         public static void Report(string ruleEngineConn, IList<int> nidClasses, Action<string> log)
@@ -174,10 +289,21 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
             h.ModifyDate = Trim(Val(r, "ModifyDate"));
             h.ModifyTime = Trim(Val(r, "ModifyTime"));
             h.ModifyDesc = FirstNonEmpty(Val(r, "ModifyDesc"), Val(r, "Description"), Val(r, "Desc"));
+            long bytes = ToLong(Val(r, "BodyBytes"));
             if (hasBody)
             {
                 string raw = Val(r, "BodyText");
-                h.BodyChars = raw == null ? 0 : raw.Length;
+                if (string.IsNullOrEmpty(raw))
+                {
+                    byte[] bin = Bytes(r, "BodyBin");
+                    if (bin != null && bin.Length > 0)
+                    {
+                        raw = DecodeBodyBytes(bin);
+                        if (bytes <= 0) bytes = bin.Length;
+                    }
+                }
+                h.BodyChars = bytes > 0 ? (bytes > int.MaxValue ? int.MaxValue : (int)bytes)
+                    : (raw == null ? 0 : raw.Length);
                 if (!string.IsNullOrWhiteSpace(raw))
                 {
                     string name;
@@ -185,6 +311,10 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
                     if (string.IsNullOrEmpty(h.Code)) h.Code = raw;
                     if (h.Code.Length > 200000) h.Code = h.Code.Substring(0, 200000) + "\n/* truncated */";
                 }
+            }
+            else
+            {
+                h.BodyChars = bytes > int.MaxValue ? int.MaxValue : (int)bytes;
             }
             return h;
         }
@@ -210,6 +340,27 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
             return set;
         }
 
+        private static Dictionary<string, string> ColumnTypes(string cs, string table)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string name = table.Replace("[", "").Replace("]", "");
+            string schema = "dbo";
+            string tbl = name;
+            int dot = name.IndexOf('.');
+            if (dot > 0) { schema = name.Substring(0, dot); tbl = name.Substring(dot + 1); }
+            using (var c = new SqlConnection(cs))
+            using (var cmd = new SqlCommand(
+                "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@s AND TABLE_NAME=@t", c))
+            {
+                cmd.Parameters.AddWithValue("@s", schema);
+                cmd.Parameters.AddWithValue("@t", tbl);
+                c.Open();
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read()) map[r.GetString(0)] = r.GetString(1);
+            }
+            return map;
+        }
+
         private static void AddCol(List<string> select, HashSet<string> cols, params string[] names)
         {
             foreach (string n in names)
@@ -230,6 +381,18 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
         private static string Quote(string ident)
         {
             return "[" + ident.Replace("]", "]]") + "]";
+        }
+
+        private static byte[] Bytes(IDataRecord r, string name)
+        {
+            try
+            {
+                int i = r.GetOrdinal(name);
+                if (r.IsDBNull(i)) return null;
+                object v = r.GetValue(i);
+                return v as byte[];
+            }
+            catch { return null; }
         }
 
         private static string Val(IDataRecord r, string name)
