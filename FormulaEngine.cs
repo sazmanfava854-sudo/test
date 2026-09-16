@@ -195,6 +195,7 @@ namespace RuleTrace
             if (t.StartsWith("Zabeteh", StringComparison.OrdinalIgnoreCase))
             {
                 if (t.IndexOf("روکش اعلام‌نشده", StringComparison.Ordinal) >= 0) return true;
+                if (t.IndexOf("روکش ملک", StringComparison.Ordinal) >= 0) return true;
                 if (t.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return true;
                 if (t.IndexOf("NidWorkItem", StringComparison.OrdinalIgnoreCase) >= 0) return true;
                 if (t.IndexOf("پرونده پروانه", StringComparison.Ordinal) >= 0) return true;

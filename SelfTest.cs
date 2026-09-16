@@ -181,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("one-step", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("solh-optional", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23a-one-step, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23b-solh-optional, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -215,7 +215,6 @@ namespace RuleTrace
             {
                 new MemberSource { NidClass = 344, NidMember = 1296, Name = "Run", Code = run },
             }, logs.Add);
-            fail += Expect(Convert.ToString(empty["diagnosis"]), "1296", "diagnosis mentions 1296");
             fail += Expect(Convert.ToString(empty["diagnosis"]), "Zabeteh", "diagnosis names dbo.Zabeteh");
             fail += Expect(Convert.ToString(empty["stopBlock"]), "عدم اعلام", "stopBlock returned");
             fail += logs.Any(l => l.IndexOf("توقف زنده", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("empty Active logs fired L270");
@@ -229,7 +228,7 @@ namespace RuleTrace
         {
             int fail = 0;
             string joined = string.Join(",", ZabetehCase.SaraTables);
-            foreach (string t in new[] { "Sh_RequestInfo", "Zabeteh", "CI_PlanType", "CI_PlanUsingType", "CI_Zabeteh", "ZabeteStatic_Info", "ZabeteStatic_Zabete", "ZabeteStatic_Plan" })
+            foreach (string t in new[] { "Sh_RequestInfo", "Zabeteh", "Zabeteh_Details", "CI_PlanType", "CI_PlanUsingType", "CI_Zabeteh", "ZabeteStatic_Info", "ZabeteStatic_Zabete", "ZabeteStatic_Plan" })
                 fail += Expect(joined, t, "named table " + t);
             fail += Expect(ZabetehCase.DocumentCatalog, "DbRuleEngeinDocument", "document catalog");
             fail += ZabetehCase.IsEmptyGuid(null) ? 0 : FailMsg("null guid empty");
@@ -287,20 +286,31 @@ namespace RuleTrace
                 new Dictionary<string, object> { { "name", "NidNosaziCode" }, { "value", "bce2f9e5-f6bf-4e13-882f-804048fad548" }, { "table", "Sh_RequestInfo" } },
                 new Dictionary<string, object> { { "name", "NidZabeteh" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "[dbo].[Zabeteh]" } },
             }, overlayLog.Add);
-            fail += Expect(unannounced, "اعلام نشده", "overlay exists but unannounced");
+            fail += Expect(unannounced, "صلح ندارند", "solh not required for every property");
             fail += Expect(unannounced, "هست", "overlay present");
-            fail += Expect(unannounced, "عوض نکنید", "do not edit 1296");
             if (unannounced.IndexOf("پیدا نشد", StringComparison.Ordinal) >= 0)
             {
                 Console.Error.WriteLine("FAIL: unannounced overlay must not say zabeteh missing");
                 fail++;
             }
-            fail += overlayLog.Any(l => l.IndexOf("هست ولی اعلام نشده", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("permit peace line unannounced");
-            var stepFail = PermitSteps.ClassifyZabeteh("300002275", "", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0", "24");
-            fail += stepFail.Status == "FAIL" ? 0 : FailMsg("step1 fail unannounced");
-            fail += Expect(stepFail.Verdict, "اعلام نشده", "step1 verdict");
-            fail += Expect(stepFail.NextAction, "عوض نکنید", "step1 do not edit 1296");
-            fail += Expect(stepFail.NextAction, "گام‌های ۲–۵", "later steps blocked");
+            fail += overlayLog.Any(l => l.IndexOf("صلح ندارند", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("permit peace line optional solh");
+            var stepOverlay = PermitSteps.ClassifyZabeteh("300002275", "", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0", "24");
+            fail += stepOverlay.Status == "PASS" ? 0 : FailMsg("step1 pass when overlay exists even if Active empty");
+            fail += Expect(stepOverlay.Verdict, "ضابطه ملک هست", "step1 overlay is enough");
+            fail += Expect(stepOverlay.NextAction, "اجباری نیست", "solh not mandatory");
+            var stepSolhSkip = PermitSteps.ClassifySolh("300002275", "", false);
+            fail += stepSolhSkip.Status == "SKIP" ? 0 : FailMsg("step2 skip when no solh record");
+            fail += Expect(stepSolhSkip.Verdict, "صلح ندارد", "step2 no solh");
+            fail += PermitSteps.HasSolhRecord(new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidSolh" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "Solh" } },
+            }) ? 0 : FailMsg("nidsolh counts as solh record");
+            fail += PermitSteps.HasSolhRecord(new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidZabeteh" }, { "value", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0" }, { "table", "[dbo].[Zabeteh]" } },
+            }) ? FailMsg("zabeteh overlay is not a solh record") : 0;
+            var stepSolhFail = PermitSteps.ClassifySolh("300002275", "", true);
+            fail += stepSolhFail.Status == "FAIL" ? 0 : FailMsg("step2 fail only if solh record and Active empty");
             var stepPass = PermitSteps.ClassifyZabeteh("300002275", "EEA1F974-CC70-44CB-8386-21B8AAAA4B31", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0", "24");
             fail += stepPass.Status == "PASS" ? 0 : FailMsg("step1 pass when Active set");
             var stepSkip = PermitSteps.ClassifyZabeteh("5298603", "", "", "");
@@ -495,7 +505,7 @@ namespace RuleTrace
             fail += Expect(html, "300002275", "permit sample workitem");
             fail += Expect(html, "5298603", "ignored workitem mentioned");
             fail += Expect(html, "تجدید بنا", "reconstruction permit");
-            fail += Expect(html, "گام ۱", "step 1 copy");
+            fail += Expect(html, "صلح ندارند", "solh not required for every property");
             fail += Expect(html, "ابزارهای بیشتر", "advanced tools collapsed");
             fail += Expect(html, "مستند کلی", "overall docs button");
             fail += Expect(html, "/api/docs", "docs endpoint");
@@ -537,7 +547,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23a-one-step", "bootstrap label");
+                        fail += Expect(boot, "v23b-solh-optional", "bootstrap label");
                         return fail;
                     }
                 }

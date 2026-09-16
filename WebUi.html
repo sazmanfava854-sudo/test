@@ -220,7 +220,7 @@
         <label>پارامترها (Name=Value هر خط)</label>
         <textarea id="parameters" placeholder="NidProc=..."></textarea>
         <div class="status" style="margin-top:12px">
-          <span>گام‌ها (یکی‌یکی): ۱ ضابطه → ۲ صلح → ۳ تحلیل → ۴ کمیسیون → ۵ درآمد. اجرا فقط گام ردشده را می‌گوید.</span>
+          <span>گام‌ها: ۱ ضابطه ملک → ۲ صلح اگر باشد → ۳ تحلیل → ۴ کمیسیون → ۵ درآمد. همه ملک‌ها صلح ندارند.</span>
         </div>
         <div class="actions">
           <button class="ghost" id="btnLookup">جستجو در Sara</button>
@@ -243,7 +243,7 @@
         </details>
         <div class="status">
           <span id="status">آماده — بدون CMD، فقط مرورگر</span>
-          <span>تا گام ۱ (اعلام ضابطه) قبول نشود، صلح/تحلیل/کمیسیون/درآمد را نگاه نکنید</span>
+          <span>صلح برای همه ملک‌ها اجباری نیست. اگر صلح نداشت، گام ۳ تحلیل را ببینید</span>
         </div>
         <div style="margin-top:12px; overflow:auto">
           <table id="cases">
@@ -288,7 +288,7 @@
           <pre class="code" id="dbgView"></pre>
         </div>
         <div id="tab-vars" hidden>
-          <div class="sub" id="varsDiag" style="margin-bottom:10px">گام ۱ WorkItem 300002275 (پروانه تجدید بنا): روکش Zabeteh هست ولی ActiveNidZabeteh خالی — اعلام نشده. join روی NidNosaziCode. کار: اعلام ضابطه در گردش پروانه. گام ۲–۵ را نزنید. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
+          <div class="sub" id="varsDiag" style="margin-bottom:10px">گام ۱ WorkItem 300002275: ضابطه ملک هست (Zabeteh + Zabeteh_Details). Active خالی یعنی این درخواست صلح ندارد — همه ملک‌ها صلح ندارند. L270 فقط اگر صلح محاسبه شود می‌ایستد. کار بعدی: گام ۳ تحلیل. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
           <div style="overflow:auto; margin-bottom:10px">
             <table id="varsTable">
               <thead><tr><th>متغیر / ستون</th><th>مقدار</th><th>جدول</th><th>منبع</th></tr></thead>
