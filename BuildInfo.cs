@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v23c-pick-scope";
+        public const string Label = "v23d-hover-debug";
 
         public static string Banner
         {

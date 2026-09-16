@@ -57,6 +57,7 @@
     <Compile Include="FormulaEngine.cs" />
     <Compile Include="FormulaMerger.cs" />
     <Compile Include="FormulaVbcCompiler.cs" />
+    <Compile Include="HoverDebug.cs" />
     <Compile Include="HostForm.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -137,7 +137,12 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23c-pick-scope", "label")
+expect(build, "v23d-hover-debug", "label")
+expect(csproj, "HoverDebug.cs", "csproj compiles HoverDebug")
+expect(html, "hoverTip", "hover tooltip")
+expect(html, "renderCode", "line renderer")
+expect(html, "logfilefj", "logfilefj copy")
+expect(html, "موس را روی خط", "hover instruction")
 expect(csproj, "PermitScopes.cs", "csproj compiles PermitScopes")
 expect(html, 'data-scope="zabeteh"', "checkbox zabeteh")
 expect(html, 'data-scope="solh"', "checkbox solh")
@@ -187,7 +192,7 @@ if "Sh_Peace" not in TABLES["solh"]:
 if TABLES["commission"]:
     failmsg("commission has no named table")
 
-MUST = "کاربر باید انتخاب کند کدام بخش‌ها را دیباگ کند"
+MUST = "کاربر باید انتخاب کند کدام فرم را باز می‌کند"
 if MUST not in scopes_cs:
     failmsg("MustPick copy")
 
@@ -213,6 +218,42 @@ if csv != ["tahlil", "tavafogh"]:
 
 if "selectedScopes()" not in html:
     failmsg("payload selectedScopes")
+
+hover = read("HoverDebug.cs")
+expect(hover, "logfilefj", "parser logfilefj")
+expect(hover, r'logfilefj\s*\(', "logfilefj regex")
+expect(webapp, "SkipRelatedSources", "do not load every related class")
+expect(webapp, "LoadFormSources", "load ticked form only")
+expect(engine, "SkipRelatedSources", "Run can skip related flood")
+expect(selftest, "HoverLogfilefj", "selftest hover")
+expect(selftest, "IS_BlandMartabe", "sample probe")
+if "UPDATE dbo.Member" in hover:
+    failmsg("hover must not write dbo.Member")
+
+# logfilefj parse clone
+sample = '''Public Sub Logfilefj(ByVal A as String,ByVal B as String)
+    Info8.AddError(BIZ.SA.EumErrorAction.warning,A,B)
+End Sub
+Public Sub Run()
+ logfilefj("IS_BlandMartabe",IS_BlandMartabe)
+ ' logfilefj("CI_Zabeteh",CI_Zabeteh)
+ logfilefj("ساختمان",M_BaseUsing_Bazdid.count)
+ logfilefj("دستگاه",M_BaseUsing_Bazdid.count)
+End Sub
+'''
+import re
+probes = []
+rx = re.compile(r'logfilefj\s*\(\s*"([^"]*)"', re.I)
+for i, line in enumerate(sample.splitlines(), 1):
+    t = line.strip()
+    if t.startswith("'"):
+        continue
+    if re.search(r'\bSub\s+Logfilefj\b', t, re.I):
+        continue
+    for m in rx.finditer(line):
+        probes.append(m.group(1))
+if probes != ["IS_BlandMartabe", "ساختمان", "دستگاه"]:
+    failmsg("python logfilefj parse " + str(probes))
 
 print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
 sys.exit(0 if fail == 0 else 1)

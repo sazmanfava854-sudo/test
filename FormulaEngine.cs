@@ -21,6 +21,7 @@ namespace RuleTrace
         public bool ReCompile;
         public bool ClearCache;
         public bool ShowAllParams;
+        public bool SkipRelatedSources;
         public int District;
         public Guid RequestGuid;
         public string EncryptCode = string.Empty;
@@ -179,7 +180,7 @@ namespace RuleTrace
                 && t.IndexOf("1296", StringComparison.Ordinal) < 0
                 && t.IndexOf("1288", StringComparison.Ordinal) < 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Step", "Scope", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Step", "Scope", "Hover", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -187,6 +188,7 @@ namespace RuleTrace
         internal static bool IsStepSummary(string t)
         {
             if (string.IsNullOrWhiteSpace(t)) return false;
+            if (t.StartsWith("Hover", StringComparison.OrdinalIgnoreCase)) return true;
             if (t.StartsWith("Step", StringComparison.OrdinalIgnoreCase)) return true;
             if (t.StartsWith("Scope", StringComparison.OrdinalIgnoreCase)) return true;
             if (t.StartsWith("RuleTrace ", StringComparison.OrdinalIgnoreCase)) return true;
@@ -973,7 +975,8 @@ namespace RuleTrace
             try
             {
                 LastMemberSources.Clear();
-                LastMemberSources.AddRange(GetRelatedMemberSources(nid));
+                if (!r.SkipRelatedSources)
+                    LastMemberSources.AddRange(GetRelatedMemberSources(nid));
             }
             catch (Exception ex)
             {
@@ -1996,6 +1999,33 @@ namespace RuleTrace
         }
 
         // ───────────────────────────── Diagnostics: member sources ─────────────────────────────
+
+        /// <summary>Only the ticked Sara form classes — not RelatedNidClasses flood.</summary>
+        public List<MemberSource> LoadFormSources(IList<string> scopes)
+        {
+            var all = new List<MemberSource>();
+            var seen = new List<int>();
+            foreach (string id in PermitScopes.Normalize(scopes))
+            {
+                int n = PermitScopes.FormulaNid(id);
+                if (n <= 0) continue;
+                bool dup = false;
+                foreach (int x in seen) if (x == n) { dup = true; break; }
+                if (dup) continue;
+                seen.Add(n);
+                try
+                {
+                    var rows = GetMemberSources(n);
+                    _log("Hover      : فرم " + PermitScopes.Title(id) + " " + ClassName(n) + "/" + n + " members=" + rows.Count);
+                    all.AddRange(rows);
+                }
+                catch (Exception ex)
+                {
+                    _log("Hover      : " + ClassName(n) + "/" + n + " خوانده نشد — " + FirstLine(ex.Message));
+                }
+            }
+            return all;
+        }
 
         /// <summary>Reads dbo.Member rows of a formula and extracts the VB code text from XmlBody for the debug panel.</summary>
         public List<MemberSource> GetMemberSources(int nid)

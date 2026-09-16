@@ -21,6 +21,7 @@ namespace RuleTrace
             fail += SolhNidExtract();
             fail += ZabetehNamedTables();
             fail += PickScope();
+            fail += HoverLogfilefj();
             fail += RuleDocsCatalog();
             fail += PasteSummaryFilter();
             fail += WebUiEmbedded();
@@ -182,9 +183,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("pick-scope", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("hover-debug", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23c-pick-scope, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23d-hover-debug, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -420,6 +421,53 @@ namespace RuleTrace
             return fail;
         }
 
+        private static int HoverLogfilefj()
+        {
+            const string code =
+                "Public Sub Logfilefj(ByVal A as String,ByVal B as String)\r\n" +
+                " if ucase(Info8.User.UserGuid.ToString()) = ucase(\"ca742134-44bb-4ba6-b0c4-e5e186600a0a\") Then\r\n" +
+                "    Info8.AddError(BIZ.SA.EumErrorAction.warning,A,B)\r\n" +
+                " End if\r\n" +
+                "End Sub\r\n" +
+                "Public Sub Run()\r\n" +
+                " logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)\r\n" +
+                " ' logfilefj(\"CI_Zabeteh\",CI_Zabeteh & \"ValueZabeteh\" & ValueZabeteh)\r\n" +
+                " logfilefj(\"ساختمان\",M_BaseUsing_Bazdid.count)\r\n" +
+                " logfilefj(\"دستگاه\",M_BaseUsing_Bazdid.count)\r\n" +
+                "End Sub\r\n";
+            var probes = HoverDebug.Parse(code);
+            int fail = 0;
+            fail += HoverDebug.ProbeCount(probes) == 3 ? 0 : FailMsg("3 logfilefj probes, got " + HoverDebug.ProbeCount(probes));
+            fail += probes.Exists(p => p.Name == "IS_BlandMartabe") ? 0 : FailMsg("IS_BlandMartabe probe");
+            fail += probes.Exists(p => p.Name == "ساختمان") ? 0 : FailMsg("ساختمان probe");
+            fail += probes.Exists(p => p.Name == "دستگاه") ? 0 : FailMsg("دستگاه probe");
+            fail += probes.Exists(p => p.Name == "CI_Zabeteh") ? FailMsg("commented logfilefj must be skipped") : 0;
+            fail += probes.Exists(p => p.Source == "AddError" && p.Name == "A") ? FailMsg("helper AddError(A,B) is not a probe") : 0;
+            fail += PermitScopes.FormulaNid(PermitScopes.Zabeteh) == 336 ? 0 : FailMsg("zabeteh is Rule/336");
+            fail += PermitScopes.FormulaNid(PermitScopes.Solh) == 344 ? 0 : FailMsg("solh is Solh/344");
+            var trace = new List<TraceEvent>
+            {
+                new TraceEvent { Index = 0, Action = "warning", Key = "IS_BlandMartabe", Title = "True" },
+                new TraceEvent { Index = 1, Action = "warning", Key = "ساختمان", Title = "4" },
+            };
+            HoverDebug.Bind(probes, trace, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "M_BaseUsing_Bazdid.count", "4" },
+            }, null);
+            HoverItem bland = probes.Find(p => p.Name == "IS_BlandMartabe");
+            fail += bland != null && bland.Value == "True" ? 0 : FailMsg("bind logfilefj value from BizErrors");
+            fail += bland != null && bland.Source == "logfilefj" ? 0 : FailMsg("bind source logfilefj");
+            HoverItem bldg = probes.Find(p => p.Name == "ساختمان");
+            fail += bldg != null && bldg.Value == "4" ? 0 : FailMsg("bind ساختمان from trace");
+            fail += HoverDebug.BoundCount(probes) >= 2 ? 0 : FailMsg("at least 2 bound");
+            var packed = HoverDebug.PackLines(probes);
+            fail += packed.Count >= 2 ? 0 : FailMsg("pack lines");
+            fail += Expect(HoverDebug.Goal, "logfilefj", "goal mentions logfilefj");
+            fail += Expect(HoverDebug.Goal, "موس", "goal mentions hover");
+            fail += HoverDebug.Idents("logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)").Contains("IS_BlandMartabe") ? 0 : FailMsg("idents on probe line");
+            return fail;
+        }
+
         private static int RuleDocsCatalog()
         {
             int fail = 0;
@@ -601,7 +649,11 @@ namespace RuleTrace
             fail += Expect(html, "AnalysisBuilding", "analysis table in vars hint");
             fail += Expect(html, "Sh_Peace", "peace table in vars hint");
             fail += Expect(html, "Sh_Agreement", "agreement table in vars hint");
-            fail += Expect(html, "Building=0", "agreement building zero");
+            fail += Expect(html, "hoverTip", "hover tooltip");
+            fail += Expect(html, "renderCode", "line hover renderer");
+            fail += Expect(html, "logfilefj", "logfilefj replacement copy");
+            fail += Expect(html, "موس را روی خط", "hover instruction");
+            fail += Expect(html, "has-val", "valued line class");
             fail += Expect(html, "ابزارهای بیشتر", "advanced tools collapsed");
             fail += Expect(html, "مستند کلی", "overall docs button");
             fail += Expect(html, "/api/docs", "docs endpoint");
@@ -643,7 +695,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23c-pick-scope", "bootstrap label");
+                        fail += Expect(boot, "v23d-hover-debug", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
