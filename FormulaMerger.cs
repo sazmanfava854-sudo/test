@@ -1631,7 +1631,7 @@ namespace RuleTrace
                 int len = LenStr(GetMember(fn, "Body") ?? GetMember(fn, "M_Body"));
                 if (len == 0) empty++; else withBody++;
             }
-            log("Arch         : ClsFunction count=" + list.Count + " emptyBody=" + empty + " withBody=" + withBody);
+                log("Arch         : ClsFunction count=" + list.Count + " emptyBody=" + empty + " withBody=" + withBody);
             int i = 0;
             foreach (object fn in list)
             {
@@ -1639,7 +1639,7 @@ namespace RuleTrace
                 string name = Convert.ToString(GetMember(fn, "Name") ?? GetMember(fn, "M_Name") ?? "?");
                 int id = ReadInt(fn, "NidFunction");
                 int len = LenStr(GetMember(fn, "Body") ?? GetMember(fn, "M_Body"));
-                log("Arch         : ClsFunction " + id + " " + name + " BodyLen=" + len);
+                log("Detail      : ClsFunction " + id + " " + name + " BodyLen=" + len);
             }
         }
 
