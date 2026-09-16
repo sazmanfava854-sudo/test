@@ -181,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("static-pkey", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("guard-fired", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22j-static-pkey, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22k-guard-fired, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -210,13 +210,18 @@ namespace RuleTrace
             SolhNidDebug.CollectNames(hit.Block, names);
             fail += names.Contains("Masahat") ? 0 : FailMsg("dim Masahat");
             fail += names.Contains("ActiveNidZabeteh") ? 0 : FailMsg("ActiveNidZabeteh ident");
+            var logs = new List<string>();
             var empty = SolhNidDebug.Run("", "", "", new List<MemberSource>
             {
                 new MemberSource { NidClass = 344, NidMember = 1296, Name = "Run", Code = run },
-            }, m => { });
+            }, logs.Add);
             fail += Expect(Convert.ToString(empty["diagnosis"]), "1296", "diagnosis mentions 1296");
             fail += Expect(Convert.ToString(empty["diagnosis"]), "Zabeteh", "diagnosis names dbo.Zabeteh");
             fail += Expect(Convert.ToString(empty["stopBlock"]), "عدم اعلام", "stopBlock returned");
+            fail += logs.Any(l => l.IndexOf("توقف زنده", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("empty Active logs fired L270");
+            fail += logs.Any(l => l.IndexOf("توقف در Member", StringComparison.Ordinal) >= 0) ? FailMsg("old 'توقف در Member' wording") : 0;
+            fail += Expect(SolhNidDebug.L270Headline(true, 270, null), "توقف زنده", "empty Active headline");
+            fail += Expect(SolhNidDebug.L270Headline(false, 270, "EEA1F974-CC70-44CB-8386-21B8AAAA4B31"), "سورس است", "filled Active headline");
             return fail;
         }
 
@@ -314,6 +319,10 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Arch         : ClsFunction 1296 ? BodyLen=0") ? FailMsg("bodylen must not copy") : 0;
             fail += FormulaEngine.IsSummaryLine("Chidman      : L572 Key=طرح  Info8.AddError") ? FailMsg("adderror dump must not copy") : 0;
             fail += FormulaEngine.IsSummaryLine("Chidman      : توقف صلح اگر ضابطه/چیدمان اعلام نشده") ? 0 : FailMsg("l270 finding copies");
+            fail += FormulaEngine.IsSummaryLine("Chidman      : ZabetehConvert/342 Member 1288 Run L866: InsertChidman(tmpDto)") ? FailMsg("insertchidman catalog skip") : 0;
+            fail += FormulaEngine.IsSummaryLine("Chidman      : L864: If Just11 = True And tmpDto.CI_UsingGroup = 11") ? FailMsg("parking guard skip") : 0;
+            fail += FormulaEngine.IsSummaryLine("SolhNid      : L270 سورس است نه توقف این Nid — ActiveNidZabeteh=eea1f974") ? 0 : FailMsg("guard-not-fired copies");
+            fail += FormulaEngine.IsSummaryLine("SolhNid      : توقف زنده Member 1296 L270 — ActiveNidZabeteh خالی") ? 0 : FailMsg("fired L270 copies");
             fail += FormulaEngine.IsSummaryLine("History      : Rule/336 Member 1148 hist=856157") ? FailMsg("rule/336 history skip") : 0;
             fail += FormulaEngine.IsSummaryLine("History      : Solh/344 Member 1296 hist=856104") ? 0 : FailMsg("solh history copies");
             fail += FormulaEngine.IsSummaryLine("Doc         : جدول [AspNetUsers] cols=Id") ? FailMsg("aspnet docs skip") : 0;
@@ -396,6 +405,7 @@ namespace RuleTrace
             fail += Expect(html, "ZabeteStatic_Info", "static info hint");
             fail += Expect(html, "P_Key", "static P_Key in vars hint");
             fail += Expect(html, "NidZStatic_Info", "static plan join hint");
+            fail += Expect(html, "L270", "L270 guard hint");
             fail += Expect(html, "NidNosaziCode", "join key in vars hint");
             fail += Expect(html, "5298603", "CRUD sample workitem");
             fail += Expect(html, "مستند کلی", "overall docs button");
@@ -438,7 +448,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22j-static-pkey", "bootstrap label");
+                        fail += Expect(boot, "v22k-guard-fired", "bootstrap label");
                         return fail;
                     }
                 }

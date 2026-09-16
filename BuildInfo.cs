@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v22j-static-pkey";
+        public const string Label = "v22k-guard-fired";
 
         public static string Banner
         {

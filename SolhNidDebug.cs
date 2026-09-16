@@ -50,19 +50,7 @@ namespace RuleTrace
             var stop = ExtractStop(run != null ? run.Code : null, "عدم اعلام ضابطه");
             if (stop == null)
                 stop = ExtractStop(run != null ? run.Code : null, "صلحنامه");
-            if (stop != null)
-            {
-                log("SolhNid      : توقف در Member " + (run == null ? SolhRunMember : run.NidMember)
-                    + " L" + stop.Line + " Key=" + stop.Key);
-                log("SolhNid      : شرط:");
-                foreach (string line in stop.Block.Split('\n'))
-                    log("SolhNid      :   " + line.TrimEnd());
-            }
-            else log("SolhNid      : بلوک Stop عدم‌اعلام در 1296 پیدا نشد");
-
             var maz = ExtractStop(init != null ? init.Code : null, "عرض معبر");
-            if (maz != null)
-                log("SolhNid      : توقف عرض معبر Member 1297 L" + maz.Line + "  " + Trunc(maz.Text, 90));
 
             var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             CollectDimNames(run != null ? run.Code : null, names);
@@ -76,6 +64,7 @@ namespace RuleTrace
             var vars = ZabetehCase.Read(sara, ruleEngine, nidProc, log);
             var docs = RuleDocs.Read(ruleEngine, log);
             RuleDocs.FlattenInto(vars, docs);
+            LogSourceGuards(stop, maz, vars, log);
             string diagnosis = Diagnose(stop, maz, vars, log);
             log("SolhNid      : بخش مشکوک: " + diagnosis);
 
@@ -186,11 +175,55 @@ namespace RuleTrace
             return m.Success ? m.Groups[1].Value : "";
         }
 
-        private static string Diagnose(StopHit stop, StopHit maz, IList<Dictionary<string, object>> vars, Action<string> log)
+        internal static string L270Headline(bool emptyActive, int line, string active)
         {
-            string active = FindValFromTable(vars, "Sh_RequestInfo", "ActiveNidZabeteh")
+            if (emptyActive)
+                return "توقف زنده Member 1296 L" + line + " — ActiveNidZabeteh خالی";
+            return "L" + line + " سورس است نه توقف این Nid — ActiveNidZabeteh=" + Trunc(active ?? "", 36);
+        }
+
+        private static void LogSourceGuards(StopHit stop, StopHit maz, IList<Dictionary<string, object>> vars, Action<string> log)
+        {
+            string active = ReadActive(vars);
+            bool emptyActive = ZabetehCase.IsEmptyGuid(active);
+            if (stop != null)
+            {
+                log("SolhNid      : " + L270Headline(emptyActive, stop.Line, active));
+                if (emptyActive)
+                {
+                    log("SolhNid      : شرط:");
+                    foreach (string line in stop.Block.Split('\n'))
+                        log("SolhNid      :   " + line.TrimEnd());
+                }
+                else
+                    log("SolhNid      : بلوک L270 در سورس ماند؛ Member 1296 را عوض نکنید");
+            }
+            else log("SolhNid      : بلوک Stop عدم‌اعلام در 1296 پیدا نشد");
+
+            if (maz != null)
+            {
+                string mazVal = FindVal(vars, "MazArz") ?? FindVal(vars, "ArzMaabar");
+                double mazN;
+                bool wide = double.TryParse(mazVal, NumberStyles.Any, CultureInfo.InvariantCulture, out mazN) && mazN > 8;
+                if (wide)
+                    log("SolhNid      : توقف زنده عرض معبر Member 1297 L" + maz.Line + " MazArz=" + mazVal + " > 8");
+                else
+                    log("SolhNid      : سورس نامزد عرض معبر Member 1297 L" + maz.Line
+                        + " — MazArz=" + (string.IsNullOrEmpty(mazVal) ? "در جداول نام‌دار نیست" : mazVal)
+                        + " (بدون Instanc شلیک زنده معلوم نیست)");
+            }
+        }
+
+        internal static string ReadActive(IList<Dictionary<string, object>> vars)
+        {
+            return FindValFromTable(vars, "Sh_RequestInfo", "ActiveNidZabeteh")
                 ?? FindVal(vars, "ActiveNidZabeteh")
                 ?? FindVal(vars, "NidActiveZabeteh");
+        }
+
+        private static string Diagnose(StopHit stop, StopHit maz, IList<Dictionary<string, object>> vars, Action<string> log)
+        {
+            string active = ReadActive(vars);
             bool emptyActive = ZabetehCase.IsEmptyGuid(active);
             bool hasZabetehRow = HasTable(vars, "[dbo].[Zabeteh]") || HasTable(vars, ".[Zabeteh]");
             bool hasStatic = HasTable(vars, "ZabeteStatic_Info") || HasTable(vars, "ZabeteStatic_Zabete");
@@ -218,8 +251,11 @@ namespace RuleTrace
             if (!ZabetehCase.IsEmptyGuid(overlay) && !string.Equals(overlay, active, StringComparison.OrdinalIgnoreCase))
                 log("Zabeteh     : NidZabeteh آخرین ردیف=" + overlay + " ≠ Active");
             if (wide && maz != null)
-                return crud + ". توقف بعدی: عرض معبر Member 1297 L" + maz.Line + " MazArz=" + mazVal + " > 8";
-            return crud + ". L270 عدم‌اعلام نباید بایستد." + (overlay == null ? "" : " overlay=" + Trunc(overlay, 36));
+                return crud + ". L270 شلیک نمی‌شود. توقف بعدی: عرض معبر Member 1297 L" + maz.Line + " MazArz=" + mazVal + " > 8";
+            return crud + ". L270 شلیک نمی‌شود."
+                + (overlay == null ? "" : " overlay=" + Trunc(overlay, 36))
+                + " نامزد بعدی سورس: عرض معبر 1297" + (maz == null ? "" : " L" + maz.Line)
+                + " و طرح جنوب غرب. بدون Instanc شلیک زنده معلوم نیست.";
         }
 
         private static bool HasTable(IList<Dictionary<string, object>> vars, string hint)

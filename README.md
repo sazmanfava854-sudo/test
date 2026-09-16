@@ -30,7 +30,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
 5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**. اگر Instanc ساخته نشود (خروج ۲)، همان اجرا ضابطه را با join `NidNosaziCode` می‌خواند و در خلاصهٔ کپی می‌گذارد (دیگر فقط BodyLen=0 نیست). NidProc باید پر باشد.
-6. **دیباگ صلح این Nid** — CRUD=Read. ضابطه با join `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode` خوانده می‌شود (نه `NidProc`). لایه ۸۳۶ / ماده ۵ با ستون `P_Key` روی `ZabeteStatic_Info` و سپس `NidZStatic_Info` برای `ZabeteStatic_Zabete` / `ZabeteStatic_Plan` (بدون fallback روی `CI_PlanType`). پروندهٔ تست بدون خطا: WorkItem `5298603` / NidProc `89DD8996-A448-4164-B0FD-74F8B5F71B1B`. توقف پروندهٔ خراب معمولاً `ActiveNidZabeteh = Guid.Empty` در Member 1296 L270 است.
+6. **دیباگ صلح این Nid** — CRUD=Read. ضابطه با join `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode` خوانده می‌شود (نه `NidProc`). لایه ۸۳۶ / ماده ۵ با ستون `P_Key` روی `ZabeteStatic_Info` و سپس `NidZStatic_Info` برای `ZabeteStatic_Zabete` / `ZabeteStatic_Plan` (بدون fallback روی `CI_PlanType`). L270 فقط وقتی `ActiveNidZabeteh` خالی است شلیک می‌شود؛ پروندهٔ تست WorkItem `5298603` / NidProc `89DD8996-A448-4164-B0FD-74F8B5F71B1B` آن را شلیک نمی‌کند. Member 1296 را عوض نکنید.
 7. **مستند کلی** — همان کوئری SSMS بدون فیلتر Member:
    `SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM [DbRuleEngeinDocument].[dbo].[MemberDocument]`
    با یوزر `debugger`. جداول **دیگر** همان دیتابیس هم لیست و peek می‌شوند. عنوان/متن مستند برای نام جداول ضابطه (`Zabeteh`، `CI_PlanType`، …) جستجو می‌شود.

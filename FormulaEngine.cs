@@ -162,15 +162,7 @@ namespace RuleTrace
             if (t.IndexOf("ClsFunction ", StringComparison.OrdinalIgnoreCase) >= 0 && t.IndexOf("BodyLen", StringComparison.OrdinalIgnoreCase) >= 0)
                 return false;
             if (t.StartsWith("Chidman", StringComparison.OrdinalIgnoreCase))
-            {
-                if (t.IndexOf(" Key=", StringComparison.Ordinal) >= 0) return false;
-                if (t.IndexOf(">> L", StringComparison.Ordinal) >= 0) return false;
-                if (t.IndexOf("If/Exit", StringComparison.OrdinalIgnoreCase) >= 0) return false;
-                if (t.IndexOf("call sites", StringComparison.OrdinalIgnoreCase) >= 0) return false;
-                if (t.IndexOf("Who calls", StringComparison.OrdinalIgnoreCase) >= 0) return false;
-                if (t.IndexOf("Members with Insert", StringComparison.OrdinalIgnoreCase) >= 0) return false;
-                if (t.IndexOf("شرط‌های مهم داخل", StringComparison.Ordinal) >= 0) return false;
-            }
+                return IsChidmanSummary(t);
             if (t.StartsWith("Doc", StringComparison.OrdinalIgnoreCase))
             {
                 if (t.IndexOf("AspNet", StringComparison.OrdinalIgnoreCase) >= 0) return false;
@@ -185,6 +177,27 @@ namespace RuleTrace
                 return false;
             foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Copy-summary keeps Solh stop findings, not InsertChidman catalogs or parking guards.
+        /// </summary>
+        internal static bool IsChidmanSummary(string t)
+        {
+            if (string.IsNullOrWhiteSpace(t)) return false;
+            if (t.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (t.IndexOf(" Key=", StringComparison.Ordinal) >= 0) return false;
+            if (t.IndexOf(">> L", StringComparison.Ordinal) >= 0) return false;
+            foreach (string keep in new[]
+            {
+                "=== تحلیل", "NidClass=", "یافته", "توقف صلح", "عدم اعلام", "عرض معبر",
+                "جنوب غرب", "no live trace", "عیب‌یابی بدون", "DLL کش", "Instanc",
+                "no Member sources", "chidman AddError:",
+            })
+            {
+                if (t.IndexOf(keep, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
             return false;
         }
 
