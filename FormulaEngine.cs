@@ -179,7 +179,7 @@ namespace RuleTrace
                 && t.IndexOf("1296", StringComparison.Ordinal) < 0
                 && t.IndexOf("1288", StringComparison.Ordinal) < 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Step", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Step", "Scope", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -188,6 +188,7 @@ namespace RuleTrace
         {
             if (string.IsNullOrWhiteSpace(t)) return false;
             if (t.StartsWith("Step", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("Scope", StringComparison.OrdinalIgnoreCase)) return true;
             if (t.StartsWith("RuleTrace ", StringComparison.OrdinalIgnoreCase)) return true;
             if (t.StartsWith("NidProc", StringComparison.OrdinalIgnoreCase)) return true;
             if (t.StartsWith("Exit code", StringComparison.OrdinalIgnoreCase)) return true;
@@ -1009,10 +1010,15 @@ namespace RuleTrace
 
         public Dictionary<string, object> DebugSolhNid(string nidProc)
         {
-            return DebugSteps(nidProc);
+            return DebugSteps(nidProc, null);
         }
 
         public Dictionary<string, object> DebugSteps(string nidProc)
+        {
+            return DebugSteps(nidProc, null);
+        }
+
+        public Dictionary<string, object> DebugSteps(string nidProc, IList<string> scopes)
         {
             Summary.Clear();
             bool prev = StrictSummary;
@@ -1022,7 +1028,7 @@ namespace RuleTrace
             {
                 _log(BuildInfo.Banner);
                 _log("NidProc      : " + (string.IsNullOrWhiteSpace(nidProc) ? "(خالی)" : nidProc.Trim()));
-                return PermitSteps.RunUntilFail(_s.Sara, _s.RuleEngine, nidProc, _log);
+                return PermitSteps.RunSelected(_s.Sara, _s.RuleEngine, nidProc, scopes, _log);
             }
             finally
             {

@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v23b-solh-optional";
+        public const string Label = "v23c-pick-scope";
 
         public static string Banner
         {
