@@ -406,11 +406,7 @@ namespace RuleTrace
 
         private static bool IsCopyLine(string m)
         {
-            if (string.IsNullOrWhiteSpace(m)) return false;
-            string t = m.TrimStart();
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
-                if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
+            return FormulaEngine.IsSummaryLine(m);
         }
 
         private static string FormulaOf(Dictionary<string, object> body)

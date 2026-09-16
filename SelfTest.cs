@@ -21,6 +21,7 @@ namespace RuleTrace
             fail += SolhNidExtract();
             fail += ZabetehNamedTables();
             fail += RuleDocsCatalog();
+            fail += PasteSummaryFilter();
             fail += WebUiEmbedded();
             fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
@@ -180,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("zabeteh-join", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("run-solh", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22h-zabeteh-join, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22i-run-solh, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -286,6 +287,20 @@ namespace RuleTrace
             var vars = new List<Dictionary<string, object>>();
             RuleDocs.FlattenInto(vars, empty);
             fail += vars.Count == 0 ? 0 : FailMsg("flatten empty docs adds nothing");
+            return fail;
+        }
+
+        private static int PasteSummaryFilter()
+        {
+            int fail = 0;
+            fail += FormulaEngine.IsSummaryLine("NidProc      : 89DD8996-A448-4164-B0FD-74F8B5F71B1B") ? 0 : FailMsg("nidproc in summary");
+            fail += FormulaEngine.IsSummaryLine("Zabeteh     : join = Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode") ? 0 : FailMsg("zabeteh join in summary");
+            fail += FormulaEngine.IsSummaryLine("SolhNid      : بخش مشکوک: CRUD Read OK") ? 0 : FailMsg("solhnid in summary");
+            fail += FormulaEngine.IsSummaryLine("Arch         : ClsFunction 1296 ? BodyLen=0") ? FailMsg("bodylen must not copy") : 0;
+            fail += FormulaEngine.IsSummaryLine("Chidman      : L572 Key=طرح  Info8.AddError") ? FailMsg("adderror dump must not copy") : 0;
+            fail += FormulaEngine.IsSummaryLine("Chidman      : توقف صلح اگر ضابطه/چیدمان اعلام نشده") ? 0 : FailMsg("l270 finding copies");
+            fail += FormulaEngine.IsSummaryLine("History      : Rule/336 Member 1148 hist=856157") ? FailMsg("rule/336 history skip") : 0;
+            fail += FormulaEngine.IsSummaryLine("History      : Solh/344 Member 1296 hist=856104") ? 0 : FailMsg("solh history copies");
             return fail;
         }
 
@@ -401,7 +416,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22h-zabeteh-join", "bootstrap label");
+                        fail += Expect(boot, "v22i-run-solh", "bootstrap label");
                         return fail;
                     }
                 }

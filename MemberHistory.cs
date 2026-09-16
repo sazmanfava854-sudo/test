@@ -254,8 +254,11 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
             if (log == null) return;
             var rows = List(ruleEngineConn, nidClasses, 0, 40, log);
             if (rows.Count == 0) return;
-            log("History      : آخرین تغییرات فرمول (Modifyer / تاریخ / توضیح) — منبع DB است نه DLL:");
-            foreach (HistoryRow h in rows.Take(25))
+            log("History      : آخرین تغییرات مرتبط صلح/چیدمان (نه همه Rule/336):");
+            var solh = rows.Where(h => h.NidClass == 344 || h.NidClass == 342
+                || h.NidMember == 1296 || h.NidMember == 1297 || h.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId).Take(12).ToList();
+            if (solh.Count == 0) solh = rows.Take(8).ToList();
+            foreach (HistoryRow h in solh)
             {
                 log("History      : " + FormulaEngine.ClassName(h.NidClass) + "/" + h.NidClass
                     + " Member " + h.NidMember
@@ -265,6 +268,9 @@ ORDER BY CASE WHEN c.TABLE_NAME LIKE '%Member%' THEN 0 ELSE 1 END, c.TABLE_NAME"
                     + " " + Trunc(h.ModifyDesc, 60)
                     + (h.BodyChars > 0 ? " body=" + h.BodyChars : " body=NULL"));
             }
+            int omitted = rows.Count(h => h.NidClass == 336);
+            if (omitted > 0)
+                log("History      : " + omitted + " ردیف Rule/336 در لیست هست — برای خلاصه حذف شد");
             var chid = rows.Where(h => h.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId || h.NidClass == 342 || h.NidClass == 344).Take(8).ToList();
             if (chid.Count > 0)
             {

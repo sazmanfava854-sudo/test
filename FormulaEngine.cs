@@ -144,7 +144,7 @@ namespace RuleTrace
             };
         }
 
-        private static bool IsSummaryLine(string m)
+        internal static bool IsSummaryLine(string m)
         {
             if (string.IsNullOrWhiteSpace(m)) return false;
             string t = m.TrimStart();
@@ -155,10 +155,28 @@ namespace RuleTrace
                 || t.StartsWith("Sanitize", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Merge", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("API ", StringComparison.OrdinalIgnoreCase)
-                || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase))
+                || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase)
+                || t.StartsWith("Detail", StringComparison.OrdinalIgnoreCase))
                 return false;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            if (t.IndexOf("ClsFunction ", StringComparison.OrdinalIgnoreCase) >= 0 && t.IndexOf("BodyLen", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            if (t.StartsWith("Chidman", StringComparison.OrdinalIgnoreCase))
+            {
+                if (t.IndexOf(" Key=", StringComparison.Ordinal) >= 0) return false;
+                if (t.IndexOf(">> L", StringComparison.Ordinal) >= 0) return false;
+                if (t.IndexOf("If/Exit", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                if (t.IndexOf("call sites", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                if (t.IndexOf("Who calls", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                if (t.IndexOf("Members with Insert", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+                if (t.IndexOf("شرط‌های مهم داخل", StringComparison.Ordinal) >= 0) return false;
+            }
+            if (t.StartsWith("History", StringComparison.OrdinalIgnoreCase)
+                && t.IndexOf("Rule/336", StringComparison.OrdinalIgnoreCase) >= 0
+                && t.IndexOf("1296", StringComparison.Ordinal) < 0
+                && t.IndexOf("1288", StringComparison.Ordinal) < 0)
+                return false;
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -767,6 +785,7 @@ namespace RuleTrace
             _summaryCapture = true;
             _log(BuildInfo.Banner);
             _log("Formula      : " + r.Formula + " (NidRuleClass=" + nid + ")");
+            _log("NidProc      : " + (string.IsNullOrWhiteSpace(r.NidProc) ? "(خالی — اول پرونده را جستجو کنید)" : r.NidProc.Trim()));
             _log("CityGuid     : " + cityGuid);
             _log("ReCompile    : " + r.ReCompile);
             PrintMemberStats(nid);
@@ -829,6 +848,7 @@ namespace RuleTrace
                     else
                         _log("Arch         : Member " + focus.NidMember + " class=" + focus.NidClass + " " + ClassName(focus.NidClass)
                              + " " + focus.Name + " codeLen=" + (focus.Code == null ? 0 : focus.Code.Length));
+                    DebugSolhCase(r);
                     ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
                     try
                     {
@@ -1117,6 +1137,25 @@ namespace RuleTrace
             string s = code as string;
             if (!string.IsNullOrEmpty(s))
                 _log("Arch         : ClsRunRuleResult.Code len=" + s.Length + (s.Length < 40000 ? " (پوسته خالی — نه کد Member)" : ""));
+        }
+
+        private void DebugSolhCase(RunRequest r)
+        {
+            string nidProc = r == null ? "" : (r.NidProc ?? "").Trim();
+            if (nidProc.Length == 0)
+            {
+                _log("SolhNid      : NidProc خالی است — Zabeteh/NidNosaziCode خوانده نشد. اول پرونده را جستجو کنید.");
+                return;
+            }
+            try
+            {
+                _log("SolhNid      : اجرا → خواندن ضابطه با " + ZabetehCase.JoinOn);
+                SolhNidDebug.Run(_s.Sara, _s.RuleEngine, nidProc, LastMemberSources, _log);
+            }
+            catch (Exception ex)
+            {
+                _log("SolhNid      : " + FirstLine(ex.Message));
+            }
         }
 
         private static bool HasLiveInstance(object result)

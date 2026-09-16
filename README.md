@@ -29,7 +29,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 2. تست اتصال دیتابیس — باید RuleEngine (`DbRuleEngein`)، Sara (`Sara8M03`) و Document (`DbRuleEngeinDocument`) با یوزر `debugger` OK باشند. جداول نام‌دار ضابطه در Sara پروب می‌شوند.
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
-5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**
+5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**. اگر Instanc ساخته نشود (خروج ۲)، همان اجرا ضابطه را با join `NidNosaziCode` می‌خواند و در خلاصهٔ کپی می‌گذارد (دیگر فقط BodyLen=0 نیست). NidProc باید پر باشد.
 6. **دیباگ صلح این Nid** — CRUD=Read. ضابطه با join `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode` خوانده می‌شود (نه `NidProc`). پروندهٔ تست بدون خطا: WorkItem `5298603` / NidProc `89DD8996-A448-4164-B0FD-74F8B5F71B1B`. توقف پروندهٔ خراب معمولاً `ActiveNidZabeteh = Guid.Empty` در Member 1296 L270 است.
 7. **مستند کلی** — همان کوئری SSMS بدون فیلتر Member:
    `SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM [DbRuleEngeinDocument].[dbo].[MemberDocument]`
