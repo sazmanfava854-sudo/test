@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>دیباگر زنده قانون سارا</title>
+  <style>
+    :root { --bg:#0f1419; --card:#1a2330; --gold:#e3b341; --ok:#3dd68c; --bad:#ff6b6b; --muted:#8aa0b5; }
+    * { box-sizing: border-box; }
+    body { margin:0; font: 15px/1.6 Tahoma, Vazirmatn, sans-serif; background:var(--bg); color:#e8eef5; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 1.3rem; margin: 0 0 8px; }
+    .sub { color: var(--muted); font-size: 13px; }
+    .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:16px; margin-top:16px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border-radius: 12px; padding: 14px; }
+    label { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; }
+    textarea, input { width:100%; background:#0c1218; color:#e8eef5; border:1px solid #2a3b4d; border-radius:8px; padding:8px; font-family: Consolas, monospace; }
+    textarea { min-height: 220px; direction: ltr; text-align:left; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+    button { border:0; border-radius:8px; padding:8px 14px; cursor:pointer; font-weight:600; }
+    .gold { background: var(--gold); color:#1a1404; }
+    .ghost { background:#243244; color:#e8eef5; }
+    table { width:100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align:right; padding:6px 8px; border-bottom:1px solid #2a3b4d; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+    .paused { background:#2a4a6a; }
+    .faulted { background:#5a1f1f; }
+    .completed { background:#1f4a32; }
+    .ready { background:#3a3a1f; }
+    #fault { white-space: pre-wrap; color: var(--bad); font-family: Consolas, monospace; font-size: 13px; }
+    #stmt { direction:ltr; text-align:left; font-family: Consolas, monospace; background:#0c1218; padding:8px; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>دیباگر زنده قانون سارا</h1>
+    <p class="sub">گام‌به‌گام روی هر statement، Locals زنده، استثنا روی همان خط. VB سارا بازنویسی نمی‌شود — این موتور روی اسکریپت C# کار می‌کند.</p>
+    <div class="grid">
+      <div class="card">
+        <label>اسکریپت C#</label>
+        <textarea id="script">int a = 10;
+int b = 0;
+int c = a / b;</textarea>
+        <label>Host context (JSON)</label>
+        <textarea id="host" style="min-height:80px">{ "WorkItem": 300002275, "ActiveNidZabeteh": "" }</textarea>
+        <div class="actions">
+          <button class="gold" id="btnInit">شروع جلسه</button>
+          <button class="ghost" id="btnStep">گام بعدی (Step)</button>
+          <button class="ghost" id="btnCont">ادامه (Continue)</button>
+          <button class="ghost" id="btnReset">Reset</button>
+        </div>
+        <div>وضعیت: <span id="state" class="pill ready">Ready</span> خط <span id="line">—</span></div>
+        <div id="stmt">هنوز شروع نشده</div>
+      </div>
+      <div class="card">
+        <label>Locals / Watch</label>
+        <table>
+          <thead><tr><th>نام</th><th>نوع</th><th>مقدار</th><th>Scope</th></tr></thead>
+          <tbody id="locals"></tbody>
+        </table>
+        <label style="margin-top:12px">Fault</label>
+        <div id="fault">(بدون خطا)</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    let sessionId = null;
+    const $ = id => document.getElementById(id);
+    function pill(state) {
+      $("state").className = "pill " + (state || "ready").toLowerCase();
+      $("state").textContent = state || "Ready";
+    }
+    function render(j) {
+      sessionId = j.sessionId;
+      pill(j.executionState);
+      $("line").textContent = (j.currentLine || "") + (j.currentColumn ? (":" + j.currentColumn) : "");
+      $("stmt").textContent = j.currentStatement || "(پایان)";
+      const tb = $("locals");
+      tb.innerHTML = "";
+      (j.locals || []).forEach(v => {
+        const tr = document.createElement("tr");
+        [v.name, v.typeName, v.valueString, v.scope].forEach(c => {
+          const td = document.createElement("td"); td.textContent = c; tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
+      if (j.fault) {
+        $("fault").textContent =
+          "Line " + j.fault.lineNumber + ":" + j.fault.column + "\n" +
+          j.fault.failingStatement + "\n" +
+          j.fault.exceptionType + "\n" +
+          j.fault.errorMessage;
+      } else $("fault").textContent = "(بدون خطا)";
+    }
+    async function api(path, body) {
+      const r = await fetch(path, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body || {}) });
+      return r.json();
+    }
+    $("btnInit").onclick = async () => {
+      let host = {};
+      try { host = JSON.parse($("host").value || "{}"); } catch { alert("JSON نامعتبر"); return; }
+      render(await api("/api/debug/init", { script: $("script").value, host }));
+    };
+    $("btnStep").onclick = async () => {
+      if (!sessionId) { alert("اول جلسه را شروع کنید"); return; }
+      render(await api("/api/debug/step", { sessionId }));
+    };
+    $("btnCont").onclick = async () => {
+      if (!sessionId) { alert("اول جلسه را شروع کنید"); return; }
+      render(await api("/api/debug/continue", { sessionId }));
+    };
+    $("btnReset").onclick = async () => {
+      if (!sessionId) { alert("اول جلسه را شروع کنید"); return; }
+      render(await api("/api/debug/reset", { sessionId }));
+    };
+  </script>
+</body>
+</html>

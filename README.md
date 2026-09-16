@@ -51,4 +51,14 @@ PermitPipeline.cs      ← مسیر پنج‌مرحله‌ای پروانه
 SolhNidDebug.cs        ← مرحله صلح (ابزار بیشتر)
 ZabetehCase.cs         ← جداول ضابطه Sara
 RuleDocs.cs            ← مستند کلی MemberDocument + جداول دیگر DbRuleEngeinDocument
+Sara.RuleDebugger      ← دیباگر زنده C# (Roslyn، جدا از VB سارا): src/Sara.RuleDebugger
 ```
+
+دیباگر زنده قانون (C# / .NET 8، گام‌به‌گام + Locals + استثنای پین‌شده به خط):
+
+```powershell
+dotnet test Sara.RuleDebugger.sln
+dotnet run --project src/Sara.RuleDebugger.Host
+```
+
+مرورگر: `http://127.0.0.1:17890/` — این موتور VB سارا را بازنویسی نمی‌کند.
