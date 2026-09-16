@@ -29,7 +29,25 @@ namespace RuleTrace
             "ZabeteStatic_Plan",
         };
 
-        private static readonly string[] SkipTypes = { "image", "varbinary", "binary", "timestamp", "rowversion" };
+        /// <summary>
+        /// Known-good CRUD sample (has overlay, no Solh L270).
+        /// Join: Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode
+        /// </summary>
+        public const string SampleNidProc = "89DD8996-A448-4164-B0FD-74F8B5F71B1B";
+        public const string SampleNidWorkItem = "5298603";
+        public const string SampleNidNosaziCode = "D9D81F2E-FF54-4FB6-B874-C8CE6D5E453F";
+        public const string SampleNidZabeteh = "97BA4164-272C-42C7-82E9-00019DEB4AC2";
+        public const string SampleActiveNidZabeteh = "EEA1F974-CC70-44CB-8386-21B8AAAA4B31";
+
+        public const string JoinOn = "Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode";
+
+        public static readonly string JoinSql =
+            "SELECT TOP (10) a.NidZabeteh, a.NidNosaziCode, a.CI_PlanType, a.DateZabeteh, a.TimeZabeteh, a.UserName, " +
+            "b.NidProc, b.NidWorkItem, b.ActiveNidZabeteh, b.RequesterName " +
+            "FROM [dbo].[Zabeteh] a " +
+            "INNER JOIN [dbo].[Sh_RequestInfo] b ON a.NidNosaziCode = b.NidNosaziCode " +
+            "WHERE b.NidProc = @nidProc " +
+            "ORDER BY a.DateZabeteh DESC";
 
         public static List<Dictionary<string, object>> Read(string sara, string ruleEngine, string nidProc, Action<string> log)
         {
@@ -47,17 +65,29 @@ namespace RuleTrace
             }
 
             log("Zabeteh     : Sara tables = " + string.Join(", ", SaraTables));
+            log("Zabeteh     : join = " + JoinOn + "  (نه NidProc)");
             var keys = new CaseKeys { NidProc = nidProc.Trim() };
+            if (string.Equals(keys.NidProc, SampleNidProc, StringComparison.OrdinalIgnoreCase))
+                log("Zabeteh     : پرونده تست CRUD WorkItem=" + SampleNidWorkItem
+                    + " ActiveNidZabeteh=" + SampleActiveNidZabeteh);
 
             DumpNamed(sara, "Sh_RequestInfo", keys, vars, log, "NidProc");
             FillKeys(keys, vars);
-            log("Zabeteh     : ActiveNidZabeteh=" + (string.IsNullOrEmpty(keys.ActiveNidZabeteh) ? "(خالی)" : keys.ActiveNidZabeteh)
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "JoinOn" },
+                { "value", JoinOn },
+                { "table", "join" },
+                { "match", "کلید اتصال" },
+            });
+            log("Zabeteh     : NidNosaziCode=" + (keys.NidNosaziCode ?? "(خالی)")
+                + " ActiveNidZabeteh=" + (IsEmptyGuid(keys.ActiveNidZabeteh) ? "(خالی)" : keys.ActiveNidZabeteh)
                 + " Pkey=" + (keys.Pkey ?? "(خالی)"));
 
             if (IsEmptyGuid(keys.ActiveNidZabeteh))
-                log("Zabeteh     : ActiveNidZabeteh خالی/Guid.Empty — صلح L270 باید بایستد");
+                log("Zabeteh     : ActiveNidZabeteh خالی/Guid.Empty — صلح L270 باید بایستد (حتی اگر ردیف Zabeteh با NidNosaziCode باشد)");
 
-            DumpNamed(sara, "Zabeteh", keys, vars, log, "NidProc", "NidZabeteh", "ActiveNidZabeteh");
+            DumpZabeteh(sara, keys, vars, log);
             FillKeys(keys, vars);
 
             LookupById(sara, "CI_PlanType", keys.PlanTypeId, vars, log);
@@ -152,11 +182,7 @@ namespace RuleTrace
                 k.PlanUsingTypeId = First(vars, "CI_PlanUsingType", "NidPlanUsingType", "PlanUsingType");
             if (string.IsNullOrEmpty(k.CIZabetehId))
                 k.CIZabetehId = First(vars, "CI_Zabeteh", "NidCIZabeteh", "NidZabetehType");
-            if (IsEmptyGuid(k.ActiveNidZabeteh))
-            {
-                string z = FirstFromTable(vars, "Zabeteh", "NidZabeteh", "Nid");
-                if (!IsEmptyGuid(z)) k.ActiveNidZabeteh = z;
-            }
+            // Do not copy Zabeteh.NidZabeteh into ActiveNidZabeteh — L270 reads the request field only.
         }
 
         private static void DumpNamed(string cs, string table, CaseKeys keys, List<Dictionary<string, object>> vars, Action<string> log, params string[] preferCols)
@@ -191,8 +217,49 @@ namespace RuleTrace
                 return;
             }
 
-            int n = SelectWhere(cs, table, cols, types, whereCol, whereVal, vars, log);
+            int n = SelectWhere(cs, table, cols, types, whereCol, whereVal, vars, log, 5, null);
             log("Zabeteh     : [" + table + "] rows=" + n + " via " + whereCol);
+        }
+
+        /// <summary>
+        /// Overlay is stored per property code, not per NidProc.
+        /// User query: SELECT TOP 1 * FROM Zabeteh a JOIN Sh_RequestInfo b ON a.NidNosaziCode=b.NidNosaziCode
+        /// </summary>
+        private static void DumpZabeteh(string cs, CaseKeys keys, List<Dictionary<string, object>> vars, Action<string> log)
+        {
+            HashSet<string> cols;
+            Dictionary<string, string> types;
+            if (!TryMeta(cs, "Zabeteh", out cols, out types))
+            {
+                log("Zabeteh     : جدول Zabeteh در Sara نیست یا قابل خواندن نیست");
+                return;
+            }
+
+            string order = cols.Contains("DateZabeteh") ? "[DateZabeteh] DESC" : null;
+            int byNosazi = 0;
+            int byActive = 0;
+
+            if (cols.Contains("NidNosaziCode") && !string.IsNullOrEmpty(keys.NidNosaziCode))
+            {
+                byNosazi = SelectWhere(cs, "Zabeteh", cols, types, "NidNosaziCode", keys.NidNosaziCode, vars, log, 10, order);
+                log("Zabeteh     : [Zabeteh] rows=" + byNosazi + " via NidNosaziCode (join با درخواست)");
+            }
+            else
+                log("Zabeteh     : NidNosaziCode روی درخواست خالی است — join کاربر اجرا نشد");
+
+            if (cols.Contains("NidZabeteh") && !IsEmptyGuid(keys.ActiveNidZabeteh))
+            {
+                byActive = SelectWhere(cs, "Zabeteh", cols, types, "NidZabeteh", keys.ActiveNidZabeteh, vars, log, 3, null);
+                log("Zabeteh     : [Zabeteh] rows=" + byActive + " via NidZabeteh=ActiveNidZabeteh (روکش اعلام‌شده)");
+                string latest = FirstFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh");
+                if (!IsEmptyGuid(latest) && !string.Equals(latest, keys.ActiveNidZabeteh, StringComparison.OrdinalIgnoreCase))
+                    log("Zabeteh     : آخرین NidZabeteh=" + latest + " با ActiveNidZabeteh یکی نیست — اعلام‌شده همان Active است");
+            }
+
+            if (byNosazi == 0 && byActive == 0)
+            {
+                log("Zabeteh     : هیچ ردیف Zabeteh با NidNosaziCode/Active پیدا نشد — با NidProc جستجو نمی‌شود");
+            }
         }
 
         private static string ValueFor(CaseKeys k, string col)
@@ -230,11 +297,11 @@ namespace RuleTrace
                 log("Zabeteh     : " + table + " ستون ID ندارد");
                 return;
             }
-            int n = SelectWhere(cs, table, cols, types, pk, id, vars, log);
+            int n = SelectWhere(cs, table, cols, types, pk, id, vars, log, 5, null);
             log("Zabeteh     : [" + table + "] lookup " + pk + "=" + id + " rows=" + n);
         }
 
-        private static int SelectWhere(string cs, string table, HashSet<string> cols, Dictionary<string, string> types, string whereCol, string whereVal, List<Dictionary<string, object>> vars, Action<string> log)
+        private static int SelectWhere(string cs, string table, HashSet<string> cols, Dictionary<string, string> types, string whereCol, string whereVal, List<Dictionary<string, object>> vars, Action<string> log, int top, string orderBy)
         {
             var select = new List<string>();
             foreach (string col in cols)
@@ -246,8 +313,11 @@ namespace RuleTrace
                 if (select.Count >= 50) break;
             }
             if (select.Count == 0) return 0;
-            string sql = "SELECT TOP 5 " + string.Join(", ", select) + " FROM [dbo].[" + table.Replace("]", "") + "]"
+            if (top < 1) top = 5;
+            string sql = "SELECT TOP (" + top + ") " + string.Join(", ", select) + " FROM [dbo].[" + table.Replace("]", "") + "]"
                 + " WHERE CAST([" + whereCol.Replace("]", "") + "] AS NVARCHAR(50))=@t";
+            if (!string.IsNullOrWhiteSpace(orderBy))
+                sql += " ORDER BY " + orderBy;
             int rows = 0;
             try
             {

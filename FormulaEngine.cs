@@ -600,6 +600,7 @@ namespace RuleTrace
                 @"SELECT TOP 30 CAST(r.NidProc AS NVARCHAR(50)), CAST(r.NidWorkItem AS NVARCHAR(50)), r.WorkflowTitel, r.RequestDate, r.RequesterName
                   FROM dbo.Sh_RequestInfo r
                   WHERE CAST(r.NidWorkItem AS NVARCHAR(50)) = @t OR CAST(r.NidProc AS NVARCHAR(50)) = @t
+                     OR CAST(r.NidNosaziCode AS NVARCHAR(50)) = @t OR CAST(r.ActiveNidZabeteh AS NVARCHAR(50)) = @t
                   ORDER BY r.RequestDate DESC",
                 @"SELECT TOP 30 CAST(r.NidProc AS NVARCHAR(50)), CAST(r.NidWorkItem AS NVARCHAR(50)), r.WorkflowTitel, r.RequestDate, nc.NosaziCode
                   FROM dbo.Sh_RequestInfo r

@@ -188,10 +188,14 @@ namespace RuleTrace
 
         private static string Diagnose(StopHit stop, StopHit maz, IList<Dictionary<string, object>> vars, Action<string> log)
         {
-            string active = FindVal(vars, "ActiveNidZabeteh") ?? FindVal(vars, "NidActiveZabeteh");
+            string active = FindValFromTable(vars, "Sh_RequestInfo", "ActiveNidZabeteh")
+                ?? FindVal(vars, "ActiveNidZabeteh")
+                ?? FindVal(vars, "NidActiveZabeteh");
             bool emptyActive = ZabetehCase.IsEmptyGuid(active);
             bool hasZabetehRow = HasTable(vars, "[dbo].[Zabeteh]") || HasTable(vars, ".[Zabeteh]");
             bool hasStatic = HasTable(vars, "ZabeteStatic_Info") || HasTable(vars, "ZabeteStatic_Zabete");
+            string nosazi = FindValFromTable(vars, "Sh_RequestInfo", "NidNosaziCode") ?? FindVal(vars, "NidNosaziCode");
+            string overlay = FindValFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh");
             string mazVal = FindVal(vars, "MazArz") ?? FindVal(vars, "ArzMaabar");
             double mazN;
             bool wide = double.TryParse(mazVal, NumberStyles.Any, CultureInfo.InvariantCulture, out mazN) && mazN > 8;
@@ -200,16 +204,22 @@ namespace RuleTrace
             {
                 log("Zabeteh     : ActiveNidZabeteh خالی است — همان شرط L270");
                 if (hasZabetehRow)
-                    return "ActiveNidZabeteh روی درخواست خالی است اما ردیف Zabeteh پیدا شد — ضابطه محاسبه شده ولی روی درخواست اعلام نشده (Member 1296 L" + (stop == null ? 270 : stop.Line) + ").";
+                    return "ActiveNidZabeteh روی درخواست خالی است اما Zabeteh با NidNosaziCode پیدا شد — ضابطه برای ملک هست ولی اعلام نشده (Member 1296 L" + (stop == null ? 270 : stop.Line) + ").";
                 if (hasStatic)
                     return "ActiveNidZabeteh خالی است؛ ضابطه ایستا (ZabeteStatic_*) برای Pkey هست ولی به درخواست وصل نشده. صلح L270 درست می‌ایستد.";
-                return "ActiveNidZabeteh=Guid.Empty — این درخواست ضابطه اعلام‌شده ندارد. صلح Member 1296 L" + (stop == null ? 270 : stop.Line) + " درست می‌ایستد. جدول dbo.Zabeteh را برای این NidProc ببینید، Member 1296 را عوض نکنید.";
+                return "ActiveNidZabeteh=Guid.Empty — این درخواست ضابطه اعلام‌شده ندارد. join روی " + ZabetehCase.JoinOn + " است نه NidProc. Member 1296 L" + (stop == null ? 270 : stop.Line) + " را عوض نکنید.";
             }
+
+            string crud = "CRUD Read OK: ActiveNidZabeteh=" + Trunc(active, 36)
+                + " NidNosaziCode=" + Trunc(nosazi, 36)
+                + " join " + ZabetehCase.JoinOn;
+            if (!hasZabetehRow)
+                return crud + " — کلید اعلام پر است ولی ردیف Zabeteh خوانده نشد.";
+            if (!ZabetehCase.IsEmptyGuid(overlay) && !string.Equals(overlay, active, StringComparison.OrdinalIgnoreCase))
+                log("Zabeteh     : NidZabeteh آخرین ردیف=" + overlay + " ≠ Active");
             if (wide && maz != null)
-                return "ضابطه اعلام شده. توقف بعدی: عرض معبر Member 1297 L" + maz.Line + " MazArz=" + mazVal + " > 8";
-            if (stop != null)
-                return "ActiveNidZabeteh پر است (" + Trunc(active, 36) + "). Stop صلح L" + stop.Line + " نباید به‌خاطر عدم اعلام باشد — بخش بعدی Run را ببینید.";
-            return "کد صلح و جداول ضابطه خوانده شد.";
+                return crud + ". توقف بعدی: عرض معبر Member 1297 L" + maz.Line + " MazArz=" + mazVal + " > 8";
+            return crud + ". L270 عدم‌اعلام نباید بایستد." + (overlay == null ? "" : " overlay=" + Trunc(overlay, 36));
         }
 
         private static bool HasTable(IList<Dictionary<string, object>> vars, string hint)
@@ -222,6 +232,21 @@ namespace RuleTrace
                     return true;
             }
             return false;
+        }
+
+        private static string FindValFromTable(IList<Dictionary<string, object>> vars, string tableHint, string name)
+        {
+            if (vars == null) return null;
+            foreach (var v in vars)
+            {
+                object t, n, val;
+                if (!v.TryGetValue("table", out t) || !v.TryGetValue("name", out n) || !v.TryGetValue("value", out val)) continue;
+                if (Convert.ToString(t).IndexOf(tableHint, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!string.Equals(Convert.ToString(n), name, StringComparison.OrdinalIgnoreCase)) continue;
+                string s = Convert.ToString(val);
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+            return null;
         }
 
         private static string FindVal(IList<Dictionary<string, object>> vars, string name)
