@@ -144,10 +144,14 @@ namespace RuleTrace
             };
         }
 
+        /// <summary>When true, copy-summary is only Step / NidProc / overlay (no Arch/Doc/Chidman flood).</summary>
+        internal static bool StrictSummary;
+
         internal static bool IsSummaryLine(string m)
         {
             if (string.IsNullOrWhiteSpace(m)) return false;
             string t = m.TrimStart();
+            if (StrictSummary) return IsStepSummary(t);
             // v21: do not copy BC30269/BC30289 floods into the paste-summary.
             if (t.StartsWith("Engine err", StringComparison.OrdinalIgnoreCase)
                 || t.StartsWith("Engine compile", StringComparison.OrdinalIgnoreCase)
@@ -175,8 +179,27 @@ namespace RuleTrace
                 && t.IndexOf("1296", StringComparison.Ordinal) < 0
                 && t.IndexOf("1288", StringComparison.Ordinal) < 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Step", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        internal static bool IsStepSummary(string t)
+        {
+            if (string.IsNullOrWhiteSpace(t)) return false;
+            if (t.StartsWith("Step", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("RuleTrace ", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("NidProc", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("Exit code", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase) || t.StartsWith("FATAL", StringComparison.OrdinalIgnoreCase)) return true;
+            if (t.StartsWith("Zabeteh", StringComparison.OrdinalIgnoreCase))
+            {
+                if (t.IndexOf("روکش اعلام‌نشده", StringComparison.Ordinal) >= 0) return true;
+                if (t.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (t.IndexOf("NidWorkItem", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (t.IndexOf("پرونده پروانه", StringComparison.Ordinal) >= 0) return true;
+                if (t.IndexOf("بررسی نمی‌شود", StringComparison.Ordinal) >= 0) return true;
+            }
             return false;
         }
 
@@ -853,31 +876,12 @@ namespace RuleTrace
             }
             else if (!HasLiveInstance(result))
             {
-                _log("Arch         : موتور پوسته خالی ساخت (Instanc=Nothing) — عیب‌یابی از dbo.Member و NidHistory ادامه می‌یابد.");
-                _log("Arch         : به DLL به‌روز نیاز نیست. تغییرات فرمول را در تاریخچه Member ببینید.");
+                _log("Arch         : موتور پوسته خالی — به‌جای بارگذاری همهٔ کلاس‌ها فقط گام ردشده اجرا می‌شود");
                 try
                 {
-                    LastMemberSources.Clear();
-                    LastMemberSources.AddRange(GetRelatedMemberSources(nid));
-                    _log("Arch         : static dbo.Member rows=" + LastMemberSources.Count
-                         + " (" + (LastMemberSources.Sum(s => (long)(s.Code == null ? 0 : s.Code.Length)) / 1024) + " KB XmlBody)");
-                    MemberSource focus = LastMemberSources.FirstOrDefault(s => s.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId);
-                    if (focus == null)
-                        _log("Arch         : Member " + ChidmanAnalyzer.DefaultChidmanMemberId + " NOT FOUND — available: "
-                             + string.Join(",", LastMemberSources.Select(s => s.NidClass + "/" + s.NidMember).Take(30)));
-                    else
-                        _log("Arch         : Member " + focus.NidMember + " class=" + focus.NidClass + " " + ClassName(focus.NidClass)
-                             + " " + focus.Name + " codeLen=" + (focus.Code == null ? 0 : focus.Code.Length));
-                    DebugSolhCase(r);
-                    ChidmanAnalyzer.Report(LastMemberSources, LastTrace, ChidmanAnalyzer.DefaultChidmanMemberId, _log);
-                    try
-                    {
-                        _log("Arch         : منبع حقیقت فرمول = dbo.Member + تاریخچه (NidHistory). DLL به‌روز برای این عیب‌یابی لازم نیست.");
-                        MemberHistory.Report(_s.RuleEngine, RelatedNidClasses(nid), _log);
-                    }
-                    catch (Exception hx) { _log("History      : " + FirstLine(hx.Message)); }
+                    DebugSteps(r == null ? "" : r.NidProc);
                 }
-                catch (Exception ex) { _log("Arch         : static analysis — " + FirstLine(ex.Message)); }
+                catch (Exception ex) { _log("Step        : " + FirstLine(ex.Message)); }
                 _summaryCapture = false;
                 PrintSummary();
                 return 2;
@@ -1004,17 +1008,24 @@ namespace RuleTrace
 
         public Dictionary<string, object> DebugSolhNid(string nidProc)
         {
+            return DebugSteps(nidProc);
+        }
+
+        public Dictionary<string, object> DebugSteps(string nidProc)
+        {
             Summary.Clear();
+            bool prev = StrictSummary;
+            StrictSummary = true;
             _summaryCapture = true;
             try
             {
-                _log("SolhNid      : خواندن مسیر پروانه از dbo.Member (CRUD Read)");
-                LastMemberSources.Clear();
-                LastMemberSources.AddRange(GetRelatedMemberSources(344));
-                return SolhNidDebug.Run(_s.Sara, _s.RuleEngine, nidProc, LastMemberSources, _log);
+                _log(BuildInfo.Banner);
+                _log("NidProc      : " + (string.IsNullOrWhiteSpace(nidProc) ? "(خالی)" : nidProc.Trim()));
+                return PermitSteps.RunUntilFail(_s.Sara, _s.RuleEngine, nidProc, _log);
             }
             finally
             {
+                StrictSummary = prev;
                 _summaryCapture = false;
             }
         }
@@ -1157,25 +1168,6 @@ namespace RuleTrace
             string s = code as string;
             if (!string.IsNullOrEmpty(s))
                 _log("Arch         : ClsRunRuleResult.Code len=" + s.Length + (s.Length < 40000 ? " (پوسته خالی — نه کد Member)" : ""));
-        }
-
-        private void DebugSolhCase(RunRequest r)
-        {
-            string nidProc = r == null ? "" : (r.NidProc ?? "").Trim();
-            if (nidProc.Length == 0)
-            {
-                _log("SolhNid      : NidProc خالی است — Zabeteh/NidNosaziCode خوانده نشد. اول پرونده را جستجو کنید.");
-                return;
-            }
-            try
-            {
-                _log("Permit      : اجرا → مسیر " + PermitPipeline.PathFa + " با join " + ZabetehCase.JoinOn);
-                SolhNidDebug.Run(_s.Sara, _s.RuleEngine, nidProc, LastMemberSources, _log);
-            }
-            catch (Exception ex)
-            {
-                _log("SolhNid      : " + FirstLine(ex.Message));
-            }
         }
 
         private static bool HasLiveInstance(object result)

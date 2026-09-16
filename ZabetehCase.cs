@@ -107,6 +107,46 @@ namespace RuleTrace
             return vars;
         }
 
+        /// <summary>
+        /// Step 1 only: request + overlay. No CI lookups, ماده ۵ static, docs, or Member.
+        /// </summary>
+        public static List<Dictionary<string, object>> ReadStep1(string sara, string nidProc, Action<string> log)
+        {
+            if (log == null) log = m => { };
+            var vars = new List<Dictionary<string, object>>();
+            if (string.IsNullOrWhiteSpace(nidProc))
+            {
+                log("Zabeteh     : NidProc خالی");
+                return vars;
+            }
+            if (string.IsNullOrWhiteSpace(sara))
+            {
+                log("Zabeteh     : اتصال Sara خالی است");
+                return vars;
+            }
+
+            var keys = new CaseKeys { NidProc = nidProc.Trim() };
+            DumpNamed(sara, "Sh_RequestInfo", keys, vars, log, "NidProc");
+            FillKeys(keys, vars);
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "JoinOn" },
+                { "value", JoinOn },
+                { "table", "join" },
+                { "match", "کلید اتصال" },
+            });
+            log("Zabeteh     : NidWorkItem=" + (keys.NidWorkItem ?? "(خالی)")
+                + " NidNosaziCode=" + (keys.NidNosaziCode ?? "(خالی)")
+                + " ActiveNidZabeteh=" + (IsEmptyGuid(keys.ActiveNidZabeteh) ? "(خالی)" : keys.ActiveNidZabeteh));
+            if (PermitPipeline.IsIgnoredWorkItem(keys.NidWorkItem))
+                log("Zabeteh     : WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود");
+            if (PermitPipeline.IsPermitSample(keys.NidWorkItem))
+                log("Zabeteh     : پرونده " + PermitPipeline.SampleKind + " WorkItem=" + PermitPipeline.SampleWorkItem);
+
+            DumpZabeteh(sara, keys, vars, log);
+            return vars;
+        }
+
         /// <summary>Named-table ping for «تست اتصال» — no schema hunt.</summary>
         public static void Probe(string sara, string ruleEngine, Action<string> log)
         {

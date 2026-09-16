@@ -249,9 +249,8 @@ namespace RuleTrace
                 var extra = eng.DebugSolhNid(nidProc);
                 extra["members"] = PackSources(eng.LastMemberSources);
                 extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
-                extra["history"] = PackHistory(MemberHistory.List(_settings.RuleEngine, PermitPipeline.PermitClasses, SolhNidDebug.SolhRunMember, 40, null));
-                extra["focusMember"] = SolhNidDebug.SolhRunMember;
                 extra["settings"] = SettingsMap();
+                extra["focusMember"] = 0;
                 return extra;
             });
         }
@@ -299,6 +298,23 @@ namespace RuleTrace
             _settings.LastFormula = req.Formula;
             _settings.LastWatch = req.Watch;
             try { _settings.Save(); } catch { }
+
+            if (req.NidProc.Length > 0)
+            {
+                return Run("گام ۱ پروانه (بدون موتور / بدون بارگذاری همهٔ کلاس‌ها)...", false, (eng, log) =>
+                {
+                    var extra = eng.DebugSteps(req.NidProc);
+                    extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
+                    extra["settings"] = SettingsMap();
+                    extra["exitCode"] = extra.ContainsKey("exitCode") ? extra["exitCode"] : 1;
+                    extra["members"] = new List<object>();
+                    extra["trace"] = new List<object>();
+                    extra["params"] = new Dictionary<string, string>();
+                    extra["watch"] = req.Watch;
+                    extra["chidmanMember"] = 0;
+                    return extra;
+                });
+            }
 
             return Run("اجرای فرمول " + req.Formula + " ...", true, (eng, log) =>
             {

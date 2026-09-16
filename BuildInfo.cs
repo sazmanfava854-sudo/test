@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v22m-unannounced";
+        public const string Label = "v23a-one-step";
 
         public static string Banner
         {
