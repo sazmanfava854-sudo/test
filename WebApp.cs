@@ -48,6 +48,8 @@ namespace RuleTrace
                 { "relatedSolh", FormulaEngine.RelatedNidClasses(344) },
                 { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
                 { "dllOk", FormulaEngine.IsDllFolder(_settings.DllPath) },
+                { "scopes", PermitScopes.Catalog() },
+                { "mustPick", PermitScopes.MustPick },
                 { "settings", SettingsMap() },
             };
         }
@@ -246,7 +248,7 @@ namespace RuleTrace
 
             return Run("دیباگ پروانه برای NidProc " + nidProc + " ...", false, (eng, log) =>
             {
-                var extra = eng.DebugSolhNid(nidProc);
+                var extra = eng.DebugSteps(nidProc, Json.StrList(body, "scopes"));
                 extra["members"] = PackSources(eng.LastMemberSources);
                 extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
                 extra["settings"] = SettingsMap();
@@ -301,9 +303,9 @@ namespace RuleTrace
 
             if (req.NidProc.Length > 0)
             {
-                return Run("گام ۱ پروانه (بدون موتور / بدون بارگذاری همهٔ کلاس‌ها)...", false, (eng, log) =>
+                return Run("فرم‌های انتخاب‌شده پروانه (بدون موتور / بدون بارگذاری همهٔ کلاس‌ها)...", false, (eng, log) =>
                 {
-                    var extra = eng.DebugSteps(req.NidProc);
+                    var extra = eng.DebugSteps(req.NidProc, Json.StrList(body, "scopes"));
                     extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
                     extra["settings"] = SettingsMap();
                     extra["exitCode"] = extra.ContainsKey("exitCode") ? extra["exitCode"] : 1;

@@ -151,6 +151,98 @@ namespace RuleTrace
             return vars;
         }
 
+        /// <summary>
+        /// Dump only the forms the user ticked — same as opening that form in Sara.
+        /// Keys: NidNosaziCode → Base_Info.NidBase. Agreement/peace use Building='0'.
+        /// </summary>
+        public static List<Dictionary<string, object>> ReadSelected(string sara, string nidProc, IList<string> scopes, Action<string> log)
+        {
+            if (log == null) log = m => { };
+            var selected = PermitScopes.Normalize(scopes);
+            var vars = new List<Dictionary<string, object>>();
+            if (selected.Count == 0)
+            {
+                log("Scope      : " + PermitScopes.MustPick);
+                return vars;
+            }
+            if (string.IsNullOrWhiteSpace(nidProc))
+            {
+                log("Scope      : NidProc خالی");
+                return vars;
+            }
+            if (string.IsNullOrWhiteSpace(sara))
+            {
+                log("Scope      : اتصال Sara خالی است");
+                return vars;
+            }
+
+            var titles = new List<string>();
+            foreach (string id in selected) titles.Add(PermitScopes.Title(id));
+            log("Scope      : انتخاب = " + string.Join("، ", titles) + " — فقط همین فرم‌ها");
+
+            var keys = new CaseKeys { NidProc = nidProc.Trim() };
+            DumpNamed(sara, "Sh_RequestInfo", keys, vars, log, "NidProc");
+            FillKeys(keys, vars);
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "JoinOn" },
+                { "value", JoinOn },
+                { "table", "join" },
+                { "match", "کلید اتصال" },
+            });
+            log("Scope      : NidWorkItem=" + (keys.NidWorkItem ?? "(خالی)")
+                + " NidNosaziCode=" + (keys.NidNosaziCode ?? "(خالی)")
+                + " ActiveNidZabeteh=" + (IsEmptyGuid(keys.ActiveNidZabeteh) ? "(خالی)" : keys.ActiveNidZabeteh));
+
+            DumpLandBase(sara, keys, vars, log);
+
+            if (PermitScopes.Has(selected, PermitScopes.Zabeteh))
+            {
+                DumpZabeteh(sara, keys, vars, log);
+                FillKeys(keys, vars);
+                if (!IsEmptyGuid(keys.OverlayNidZabeteh))
+                    DumpNamed(sara, "Zabeteh_Details", keys, vars, log, "NidZabeteh");
+            }
+            if (PermitScopes.Has(selected, PermitScopes.Solh))
+            {
+                DumpJoinBase(sara, "Sh_Peace", keys, vars, log, true);
+                DumpJoinBase(sara, "Sh_PeaceLetter", keys, vars, log, true);
+                LookupFromVars(sara, "CI_PeaceType", "CI_PeaceType", vars, log);
+                DumpJoinBase(sara, "Base_Using", keys, vars, log, true);
+            }
+            if (PermitScopes.Has(selected, PermitScopes.Chidman))
+            {
+                DumpJoinBase(sara, "Base_Using", keys, vars, log, false);
+                DumpJoinBase(sara, "Base_Front", keys, vars, log, false);
+                LookupFromVars(sara, "CI_UsingType", "CI_UsingType", vars, log);
+                LookupFromVars(sara, "CI_UsingGroup", "CI_UsingGroup", vars, log);
+                LookupFromVars(sara, "CI_FrontPlace", "CI_FrontPlace", vars, log);
+                LookupFromVars(sara, "CI_FrontType", "CI_FrontType", vars, log);
+            }
+            if (PermitScopes.Has(selected, PermitScopes.Tahlil))
+            {
+                AddEnumAnalysis(vars);
+                DumpJoinBase(sara, "AnalysisBuilding", keys, vars, log, false);
+                DumpJoinBase(sara, "AnalysisBuilding_Details", keys, vars, log, false);
+                DumpJoinBase(sara, "GetAnalysisBuilding", keys, vars, log, false);
+                LookupFromVars(sara, "CI_Penalty", "CI_Penalty", vars, log);
+                AddMaxPenaltyDate(vars);
+            }
+            if (PermitScopes.Has(selected, PermitScopes.Tavafogh))
+            {
+                DumpJoinBase(sara, "Sh_Agreement", keys, vars, log, true);
+                DumpJoinBase(sara, "Sh_AgreementLetter", keys, vars, log, true);
+                LookupFromVars(sara, "CI_AgreementType", "CI_AgreementType", vars, log);
+            }
+            if (PermitScopes.Has(selected, PermitScopes.Commission))
+                log("Scope      : کمیسیون ماده ۱۰۰ — جدول نام‌دار در این نسخه نیست. ملک می‌تواند کمیسیون نداشته باشد");
+            if (PermitScopes.Has(selected, PermitScopes.Income))
+                log("Scope      : درآمد — جدول نام‌دار در این نسخه نیست");
+
+            log("Scope      : " + vars.Count + " مقدار از فرم‌های انتخاب‌شده");
+            return vars;
+        }
+
         /// <summary>Named-table ping for «تست اتصال» — no schema hunt.</summary>
         public static void Probe(string sara, string ruleEngine, Action<string> log)
         {
@@ -174,6 +266,22 @@ namespace RuleTrace
             }
 
             RuleDocs.Probe(ruleEngine, log);
+
+            log("Scope      : جداول زمین/صلح/تحلیل/توافق نام‌دار");
+            if (string.IsNullOrWhiteSpace(sara)) return;
+            var extra = new List<string>(PermitScopes.LandTables);
+            foreach (string id in PermitScopes.All)
+                foreach (string t in PermitScopes.Tables(id))
+                    if (!extra.Contains(t) && Array.IndexOf(SaraTables, t) < 0) extra.Add(t);
+            foreach (string table in extra)
+            {
+                HashSet<string> cols;
+                Dictionary<string, string> types;
+                if (TryMeta(sara, table, out cols, out types))
+                    log("Scope      : [" + table + "] OK cols=" + cols.Count);
+                else
+                    log("Scope      : [" + table + "] نیست یا قابل خواندن نیست");
+            }
         }
 
         public static bool IsEmptyGuid(string v)
@@ -214,6 +322,8 @@ namespace RuleTrace
             public string PlanUsingTypeId;
             public string CIZabetehId;
             public string NidZStaticInfo;
+            public string NidBase;
+            public string Building;
         }
 
         private static void FillKeys(CaseKeys k, List<Dictionary<string, object>> vars)
@@ -239,6 +349,10 @@ namespace RuleTrace
                 k.PlanUsingTypeId = First(vars, "CI_PlanUsingType", "NidPlanUsingType", "PlanUsingType");
             if (string.IsNullOrEmpty(k.CIZabetehId))
                 k.CIZabetehId = First(vars, "CI_Zabeteh", "NidCIZabeteh", "NidZabetehType");
+            if (string.IsNullOrEmpty(k.Building))
+                k.Building = FirstFromTable(vars, "Base_NosaziCode", "Building") ?? First(vars, "Building");
+            if (IsEmptyGuid(k.NidBase))
+                k.NidBase = FirstFromTable(vars, "Base_Info", "NidBase") ?? First(vars, "NidBase");
             // Do not copy Zabeteh.NidZabeteh into ActiveNidZabeteh — L270 reads the request field only.
         }
 
@@ -351,6 +465,326 @@ namespace RuleTrace
             }
         }
 
+        /// <summary>
+        /// Land row: Base_Info ⋈ Base_NosaziCode. Agreement/peace use Building='0'.
+        /// </summary>
+        private static void DumpLandBase(string cs, CaseKeys keys, List<Dictionary<string, object>> vars, Action<string> log)
+        {
+            HashSet<string> infoCols, nosaziCols;
+            Dictionary<string, string> infoTypes, nosaziTypes;
+            if (!TryMeta(cs, "Base_Info", out infoCols, out infoTypes))
+            {
+                log("Scope      : جدول Base_Info در Sara نیست یا قابل خواندن نیست");
+                return;
+            }
+            bool hasNosazi = TryMeta(cs, "Base_NosaziCode", out nosaziCols, out nosaziTypes);
+            if (!infoCols.Contains("NidNosaziCode") || string.IsNullOrEmpty(keys.NidNosaziCode))
+            {
+                log("Scope      : NidNosaziCode برای Base_Info خالی است");
+                return;
+            }
+
+            var select = new List<string>();
+            foreach (string col in infoCols)
+            {
+                string t;
+                infoTypes.TryGetValue(col, out t);
+                if (SkipTypes.Contains((t ?? "").ToLowerInvariant())) continue;
+                select.Add("bi.[" + col.Replace("]", "]]") + "]");
+                if (select.Count >= 40) break;
+            }
+            if (hasNosazi)
+            {
+                foreach (string col in new[] { "Building", "District", "Region", "Block", "House" })
+                {
+                    if (!nosaziCols.Contains(col)) continue;
+                    select.Add("ni.[" + col + "]");
+                }
+            }
+            if (select.Count == 0) return;
+
+            string sql = "SELECT TOP (10) " + string.Join(", ", select)
+                + " FROM [dbo].[Base_Info] bi";
+            if (hasNosazi && nosaziCols.Contains("NidNosaziCode"))
+            {
+                sql += " INNER JOIN [dbo].[Base_NosaziCode] ni ON bi.[NidNosaziCode] = ni.[NidNosaziCode]";
+                sql += " WHERE CAST(bi.[NidNosaziCode] AS NVARCHAR(50))=@t";
+                if (nosaziCols.Contains("Building"))
+                    sql += " ORDER BY CASE WHEN CAST(ni.[Building] AS NVARCHAR(20))='0' THEN 0 ELSE 1 END, ni.[Building]";
+            }
+            else
+                sql += " WHERE CAST(bi.[NidNosaziCode] AS NVARCHAR(50))=@t";
+
+            int rows = 0;
+            string firstBase = null;
+            string firstBuilding = null;
+            try
+            {
+                using (var c = new SqlConnection(cs))
+                using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 45 })
+                {
+                    cmd.Parameters.AddWithValue("@t", keys.NidNosaziCode);
+                    c.Open();
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            rows++;
+                            AddRow(r, "[dbo].[Base_Info]", vars);
+                            if (hasNosazi)
+                            {
+                                for (int i = 0; i < r.FieldCount; i++)
+                                {
+                                    if (r.IsDBNull(i)) continue;
+                                    string col = r.GetName(i);
+                                    if (col.Equals("Building", StringComparison.OrdinalIgnoreCase)
+                                        || col.Equals("District", StringComparison.OrdinalIgnoreCase)
+                                        || col.Equals("Region", StringComparison.OrdinalIgnoreCase)
+                                        || col.Equals("Block", StringComparison.OrdinalIgnoreCase)
+                                        || col.Equals("House", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        string val = Trunc(Convert.ToString(r.GetValue(i), CultureInfo.InvariantCulture), 120);
+                                        if (string.IsNullOrWhiteSpace(val)) continue;
+                                        vars.Add(new Dictionary<string, object>
+                                        {
+                                            { "name", col },
+                                            { "value", val },
+                                            { "table", "[dbo].[Base_NosaziCode]" },
+                                            { "match", Flag(col) },
+                                        });
+                                        if (firstBuilding == null && col.Equals("Building", StringComparison.OrdinalIgnoreCase))
+                                            firstBuilding = val;
+                                    }
+                                }
+                            }
+                            if (firstBase == null)
+                            {
+                                try
+                                {
+                                    int ord = r.GetOrdinal("NidBase");
+                                    if (!r.IsDBNull(ord))
+                                        firstBase = Convert.ToString(r.GetValue(ord), CultureInfo.InvariantCulture);
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log("Scope      : Base_Info join — " + FirstLine(ex.Message));
+            }
+            if (!IsEmptyGuid(firstBase)) keys.NidBase = firstBase;
+            if (!string.IsNullOrEmpty(firstBuilding)) keys.Building = firstBuilding;
+            FillKeys(keys, vars);
+            log("Scope      : [Base_Info] rows=" + rows
+                + " NidBase=" + (keys.NidBase ?? "(خالی)")
+                + " Building=" + (keys.Building ?? "(خالی)")
+                + " — توافق/صلح روی Building=0");
+        }
+
+        /// <summary>
+        /// Child table via NidBase ← Base_Info.NidNosaziCode. Building='0' for agreement/peace.
+        /// AnalysisBuilding_Details may join parent AnalysisBuilding when it has no NidBase.
+        /// </summary>
+        private static int DumpJoinBase(string cs, string table, CaseKeys keys, List<Dictionary<string, object>> vars, Action<string> log, bool buildingZero)
+        {
+            if (string.IsNullOrEmpty(keys.NidNosaziCode))
+            {
+                log("Scope      : " + table + " — NidNosaziCode خالی");
+                return 0;
+            }
+            HashSet<string> cols;
+            Dictionary<string, string> types;
+            if (!TryMeta(cs, table, out cols, out types))
+            {
+                log("Scope      : جدول " + table + " در Sara نیست یا قابل خواندن نیست");
+                return 0;
+            }
+
+            var select = new List<string>();
+            foreach (string col in cols)
+            {
+                string t;
+                types.TryGetValue(col, out t);
+                if (SkipTypes.Contains((t ?? "").ToLowerInvariant())) continue;
+                select.Add("t.[" + col.Replace("]", "]]") + "]");
+                if (select.Count >= 50) break;
+            }
+            if (select.Count == 0) return 0;
+
+            string sql;
+            string via;
+            if (cols.Contains("NidBase"))
+            {
+                sql = "SELECT TOP (20) " + string.Join(", ", select)
+                    + " FROM [dbo].[" + table.Replace("]", "") + "] t"
+                    + " INNER JOIN [dbo].[Base_Info] bi ON t.[NidBase] = bi.[NidBase]";
+                via = "NidBase←Base_Info.NidNosaziCode";
+                if (buildingZero)
+                {
+                    sql += " INNER JOIN [dbo].[Base_NosaziCode] ni ON bi.[NidNosaziCode] = ni.[NidNosaziCode] AND CAST(ni.[Building] AS NVARCHAR(20))='0'";
+                    via += " Building=0";
+                }
+                sql += " WHERE CAST(bi.[NidNosaziCode] AS NVARCHAR(50))=@t";
+            }
+            else if (cols.Contains("NidAnalysisBuilding"))
+            {
+                sql = "SELECT TOP (20) " + string.Join(", ", select)
+                    + " FROM [dbo].[" + table.Replace("]", "") + "] t"
+                    + " INNER JOIN [dbo].[AnalysisBuilding] ab ON t.[NidAnalysisBuilding] = ab.[NidAnalysisBuilding]"
+                    + " INNER JOIN [dbo].[Base_Info] bi ON ab.[NidBase] = bi.[NidBase]"
+                    + " WHERE CAST(bi.[NidNosaziCode] AS NVARCHAR(50))=@t";
+                via = "NidAnalysisBuilding←AnalysisBuilding.NidBase";
+            }
+            else if (cols.Contains("NidPeace"))
+            {
+                sql = "SELECT TOP (20) " + string.Join(", ", select)
+                    + " FROM [dbo].[" + table.Replace("]", "") + "] t"
+                    + " INNER JOIN [dbo].[Sh_Peace] sp ON t.[NidPeace] = sp.[NidPeace]"
+                    + " INNER JOIN [dbo].[Base_Info] bi ON sp.[NidBase] = bi.[NidBase]";
+                via = "NidPeace←Sh_Peace.NidBase";
+                if (buildingZero)
+                {
+                    sql += " INNER JOIN [dbo].[Base_NosaziCode] ni ON bi.[NidNosaziCode] = ni.[NidNosaziCode] AND CAST(ni.[Building] AS NVARCHAR(20))='0'";
+                    via += " Building=0";
+                }
+                sql += " WHERE CAST(bi.[NidNosaziCode] AS NVARCHAR(50))=@t";
+            }
+            else if (cols.Contains("NidAgreement"))
+            {
+                sql = "SELECT TOP (20) " + string.Join(", ", select)
+                    + " FROM [dbo].[" + table.Replace("]", "") + "] t"
+                    + " INNER JOIN [dbo].[Sh_Agreement] sa ON t.[NidAgreement] = sa.[NidAgreement]"
+                    + " INNER JOIN [dbo].[Base_Info] bi ON sa.[NidBase] = bi.[NidBase]";
+                via = "NidAgreement←Sh_Agreement.NidBase";
+                if (buildingZero)
+                {
+                    sql += " INNER JOIN [dbo].[Base_NosaziCode] ni ON bi.[NidNosaziCode] = ni.[NidNosaziCode] AND CAST(ni.[Building] AS NVARCHAR(20))='0'";
+                    via += " Building=0";
+                }
+                sql += " WHERE CAST(bi.[NidNosaziCode] AS NVARCHAR(50))=@t";
+            }
+            else if (!IsEmptyGuid(keys.NidBase) && cols.Contains("NidZabeteh"))
+            {
+                return SelectWhere(cs, table, cols, types, "NidZabeteh", keys.OverlayNidZabeteh, vars, log, 10, null);
+            }
+            else
+            {
+                log("Scope      : " + table + " — ستون NidBase/NidAnalysisBuilding برای join زمین نیست");
+                return 0;
+            }
+
+            int rows = 0;
+            try
+            {
+                using (var c = new SqlConnection(cs))
+                using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 45 })
+                {
+                    cmd.Parameters.AddWithValue("@t", keys.NidNosaziCode);
+                    c.Open();
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            rows++;
+                            AddRow(r, "[dbo].[" + table + "]", vars);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log("Scope      : " + table + " query — " + FirstLine(ex.Message));
+            }
+            log("Scope      : [" + table + "] rows=" + rows + " via " + via);
+            return rows;
+        }
+
+        private static void LookupFromVars(string cs, string table, string col, List<Dictionary<string, object>> vars, Action<string> log)
+        {
+            var ids = new List<string>();
+            foreach (var v in vars)
+            {
+                object n, val;
+                if (!v.TryGetValue("name", out n) || !v.TryGetValue("value", out val)) continue;
+                if (!string.Equals(Convert.ToString(n), col, StringComparison.OrdinalIgnoreCase)) continue;
+                string s = Convert.ToString(val, CultureInfo.InvariantCulture);
+                if (string.IsNullOrWhiteSpace(s) || IsEmptyGuid(s)) continue;
+                bool dup = false;
+                foreach (string x in ids)
+                    if (string.Equals(x, s, StringComparison.OrdinalIgnoreCase)) { dup = true; break; }
+                if (!dup) ids.Add(s);
+                if (ids.Count >= 8) break;
+            }
+            foreach (string id in ids)
+                LookupById(cs, table, id, vars, log);
+        }
+
+        private static void AddEnumAnalysis(List<Dictionary<string, object>> vars)
+        {
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "Parvaneh" }, { "value", "1" },
+                { "table", "EumAnalysisBuildingType" }, { "match", "تحلیل پروانه" },
+            });
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "Foul" }, { "value", "2" },
+                { "table", "EumAnalysisBuildingType" }, { "match", "تعیین خلاف" },
+            });
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "MovafeghatOsooli" }, { "value", "3" },
+                { "table", "EumAnalysisBuildingType" }, { "match", "تحلیل موافقت اصولی" },
+            });
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "AnaliysParvaneh_Date" }, { "value", "max(PenaltyDate)" },
+                { "table", "AnalysisBuilding" }, { "match", "تاریخ تحلیل پروانه" },
+            });
+        }
+
+        private static void AddMaxPenaltyDate(List<Dictionary<string, object>> vars)
+        {
+            string max = null;
+            foreach (var v in vars)
+            {
+                object n, val, t;
+                if (!v.TryGetValue("name", out n) || !v.TryGetValue("value", out val)) continue;
+                if (!string.Equals(Convert.ToString(n), "PenaltyDate", StringComparison.OrdinalIgnoreCase)) continue;
+                if (v.TryGetValue("table", out t))
+                {
+                    string table = Convert.ToString(t) ?? "";
+                    if (table.IndexOf("AnalysisBuilding", StringComparison.OrdinalIgnoreCase) < 0
+                        && table.IndexOf("Penalty", StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                }
+                string s = Convert.ToString(val, CultureInfo.InvariantCulture);
+                if (string.IsNullOrWhiteSpace(s)) continue;
+                if (max == null || string.Compare(s, max, StringComparison.OrdinalIgnoreCase) > 0)
+                    max = s;
+            }
+            if (max == null) return;
+            foreach (var v in vars)
+            {
+                object n, t;
+                if (!v.TryGetValue("name", out n) || !v.TryGetValue("table", out t)) continue;
+                if (!string.Equals(Convert.ToString(n), "AnaliysParvaneh_Date", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Convert.ToString(t).IndexOf("AnalysisBuilding", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                v["value"] = max;
+                return;
+            }
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", "AnaliysParvaneh_Date" },
+                { "value", max },
+                { "table", "AnalysisBuilding" },
+                { "match", "تاریخ تحلیل پروانه" },
+            });
+        }
+
         private static string ValueFor(CaseKeys k, string col)
         {
             if (col.Equals("NidProc", StringComparison.OrdinalIgnoreCase)) return k.NidProc;
@@ -363,6 +797,8 @@ namespace RuleTrace
                 return k.Pkey;
             if (col.Equals("NidZStatic_Info", StringComparison.OrdinalIgnoreCase)) return k.NidZStaticInfo;
             if (col.Equals("NidNosaziCode", StringComparison.OrdinalIgnoreCase)) return k.NidNosaziCode;
+            if (col.Equals("NidBase", StringComparison.OrdinalIgnoreCase)) return k.NidBase;
+            if (col.Equals("Building", StringComparison.OrdinalIgnoreCase)) return k.Building;
             if (col.IndexOf("PlanUsing", StringComparison.OrdinalIgnoreCase) >= 0) return k.PlanUsingTypeId;
             if (col.IndexOf("PlanType", StringComparison.OrdinalIgnoreCase) >= 0) return k.PlanTypeId;
             if (col.IndexOf("CI_Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return k.CIZabetehId;
@@ -457,6 +893,12 @@ namespace RuleTrace
         private static string Flag(string col)
         {
             if (col.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return "کلید صلح L270";
+            if (col.IndexOf("NidBase", StringComparison.OrdinalIgnoreCase) >= 0) return "NidBase ملک";
+            if (col.Equals("Building", StringComparison.OrdinalIgnoreCase)) return "کد ساختمان (توافق/صلح=0)";
+            if (col.IndexOf("Peace", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0) return "صلح";
+            if (col.IndexOf("Agreement", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Tavafogh", StringComparison.OrdinalIgnoreCase) >= 0) return "توافق";
+            if (col.IndexOf("Penalty", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("AnalysisBuilding", StringComparison.OrdinalIgnoreCase) >= 0) return "تحلیل";
+            if (col.IndexOf("Front", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("UsingArea", StringComparison.OrdinalIgnoreCase) >= 0) return "چیدمان";
             if (col.IndexOf("Takhalof", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Tahlil", StringComparison.OrdinalIgnoreCase) >= 0) return "تحلیل";
             if (col.IndexOf("Commission", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Jarime", StringComparison.OrdinalIgnoreCase) >= 0) return "کمیسیون ماده ۱۰۰";
             if (col.IndexOf("Daramad", StringComparison.OrdinalIgnoreCase) >= 0 || col.Equals("Income", StringComparison.OrdinalIgnoreCase)) return "درآمد";

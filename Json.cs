@@ -61,6 +61,27 @@ namespace RuleTrace
             return int.TryParse(Convert.ToString(v, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) ? n : fallback;
         }
 
+        public static List<string> StrList(Dictionary<string, object> map, string key)
+        {
+            var list = new List<string>();
+            object v;
+            if (map == null || !map.TryGetValue(key, out v) || v == null) return list;
+            var arr = v as List<object>;
+            if (arr != null)
+            {
+                foreach (object x in arr)
+                {
+                    string s = Convert.ToString(x, CultureInfo.InvariantCulture);
+                    if (!string.IsNullOrWhiteSpace(s)) list.Add(s.Trim());
+                }
+                return list;
+            }
+            string raw = Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
+            foreach (string part in raw.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries))
+                list.Add(part.Trim());
+            return list;
+        }
+
         private static void Write(StringBuilder sb, object value, int depth)
         {
             if (depth > 40) { sb.Append("null"); return; }

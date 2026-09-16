@@ -20,6 +20,7 @@ namespace RuleTrace
             fail += HistoryImageSql();
             fail += SolhNidExtract();
             fail += ZabetehNamedTables();
+            fail += PickScope();
             fail += RuleDocsCatalog();
             fail += PasteSummaryFilter();
             fail += WebUiEmbedded();
@@ -181,9 +182,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("solh-optional", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("pick-scope", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23b-solh-optional, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23c-pick-scope, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -303,8 +304,8 @@ namespace RuleTrace
             fail += Expect(stepSolhSkip.Verdict, "صلح ندارد", "step2 no solh");
             fail += PermitSteps.HasSolhRecord(new List<Dictionary<string, object>>
             {
-                new Dictionary<string, object> { { "name", "NidSolh" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "Solh" } },
-            }) ? 0 : FailMsg("nidsolh counts as solh record");
+                new Dictionary<string, object> { { "name", "NidPeace" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "[dbo].[Sh_Peace]" } },
+            }) ? 0 : FailMsg("Sh_Peace counts as solh record");
             fail += PermitSteps.HasSolhRecord(new List<Dictionary<string, object>>
             {
                 new Dictionary<string, object> { { "name", "NidZabeteh" }, { "value", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0" }, { "table", "[dbo].[Zabeteh]" } },
@@ -343,6 +344,79 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: ZabeteStatic_Plan must not join on CI_PlanType");
                 fail++;
             }
+            return fail;
+        }
+
+        private static int PickScope()
+        {
+            int fail = 0;
+            fail += PermitScopes.Has(PermitScopes.Normalize(new[] { "ضابطه", "صلح", "analysis" }), PermitScopes.Zabeteh) ? 0 : FailMsg("normalize zabeteh");
+            fail += PermitScopes.Has(PermitScopes.Normalize(new[] { "صلح" }), PermitScopes.Solh) ? 0 : FailMsg("normalize solh");
+            fail += PermitScopes.Has(PermitScopes.Normalize(new[] { "تحلیل" }), PermitScopes.Tahlil) ? 0 : FailMsg("normalize tahlil");
+            fail += PermitScopes.Has(PermitScopes.Normalize(new[] { "توافق" }), PermitScopes.Tavafogh) ? 0 : FailMsg("normalize tavafogh");
+            fail += PermitScopes.Has(PermitScopes.Normalize(new[] { "چیدمان" }), PermitScopes.Chidman) ? 0 : FailMsg("normalize chidman");
+            fail += PermitScopes.Normalize(new[] { "nope", "zabeteh" }).Count == 1 ? 0 : FailMsg("unknown scope dropped");
+            fail += Expect(string.Join(",", PermitScopes.Tables(PermitScopes.Tahlil)), "AnalysisBuilding", "tahlil named table");
+            fail += Expect(string.Join(",", PermitScopes.Tables(PermitScopes.Solh)), "Sh_Peace", "solh named table");
+            fail += Expect(string.Join(",", PermitScopes.Tables(PermitScopes.Tavafogh)), "Sh_Agreement", "agreement named table");
+            fail += Expect(string.Join(",", PermitScopes.Tables(PermitScopes.Chidman)), "Base_Front", "chidman front");
+            fail += PermitScopes.Tables(PermitScopes.Commission).Length == 0 ? 0 : FailMsg("commission has no named table");
+            fail += PermitScopes.BuildingZero(PermitScopes.Solh) ? 0 : FailMsg("solh building 0");
+            fail += PermitScopes.BuildingZero(PermitScopes.Tavafogh) ? 0 : FailMsg("agreement building 0");
+            fail += PermitScopes.BuildingZero(PermitScopes.Tahlil) ? FailMsg("tahlil not building 0") : 0;
+            fail += Expect(PermitScopes.MustPick, "کاربر باید انتخاب", "must pick copy");
+
+            var emptyLog = new List<string>();
+            var empty = PermitSteps.RunSelected("", "", "E3BB36F6-1D34-426B-BFA1-526A05C452BE", new string[0], emptyLog.Add);
+            fail += Convert.ToString(empty["status"]) == "FAIL" ? 0 : FailMsg("empty pick fails");
+            fail += Expect(Convert.ToString(empty["diagnosis"]), "کاربر باید انتخاب", "empty pick diagnosis");
+            fail += emptyLog.Any(l => l.IndexOf("کاربر باید انتخاب", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("empty pick log");
+            fail += emptyLog.Any(l => l.IndexOf("Member 1296", StringComparison.Ordinal) >= 0) ? FailMsg("pick run must not load 1296") : 0;
+
+            var tahlilPass = PermitSteps.ClassifyTahlil("300002275", true);
+            fail += tahlilPass.Status == "PASS" ? 0 : FailMsg("tahlil pass when AnalysisBuilding");
+            fail += Expect(tahlilPass.Verdict, "AnalysisBuilding", "tahlil names table");
+            fail += Expect(tahlilPass.Verdict, "AnaliysParvaneh_Date", "tahlil max penalty date");
+            var tahlilSkip = PermitSteps.ClassifyTahlil("300002275", false);
+            fail += tahlilSkip.Status == "SKIP" ? 0 : FailMsg("tahlil skip when missing");
+            var agrSkip = PermitSteps.ClassifyTavafogh("300002275", false);
+            fail += agrSkip.Status == "SKIP" ? 0 : FailMsg("agreement skip when missing");
+            fail += Expect(agrSkip.Verdict, "توافق ندارد", "agreement optional");
+            var agrPass = PermitSteps.ClassifyTavafogh("300002275", true);
+            fail += agrPass.Status == "PASS" ? 0 : FailMsg("agreement pass");
+            fail += Expect(agrPass.Verdict, "Building=0", "agreement building 0");
+            var comm = PermitSteps.ClassifyCommission("300002275");
+            fail += comm.Status == "SKIP" ? 0 : FailMsg("commission skip no named table");
+            fail += Expect(comm.Verdict, "کمیسیون نداشته باشد", "commission optional");
+            var income = PermitSteps.ClassifyIncome("300002275");
+            fail += income.Status == "SKIP" ? 0 : FailMsg("income skip");
+            var chid = PermitSteps.ClassifyChidman("300002275", true);
+            fail += chid.Status == "PASS" ? 0 : FailMsg("chidman pass");
+
+            fail += PermitSteps.HasNamed(new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidAnalysisBuilding" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "[dbo].[AnalysisBuilding]" } },
+            }, "AnalysisBuilding") ? 0 : FailMsg("has analysis building");
+            fail += PermitSteps.HasSolhRecord(new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidAgreement" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "[dbo].[Sh_Agreement]" } },
+            }) ? FailMsg("agreement is not solh") : 0;
+            fail += PermitSteps.HasNamed(new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidAgreement" }, { "value", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }, { "table", "[dbo].[Sh_Agreement]" } },
+            }, "Sh_Agreement") ? 0 : FailMsg("has agreement");
+
+            var pickLog = new List<string>();
+            var pack = PermitSteps.RunSelected("", "", "E3BB36F6-1D34-426B-BFA1-526A05C452BE", new[] { "zabeteh", "tahlil" }, pickLog.Add);
+            fail += Convert.ToInt32(pack["exitCode"]) == 1 ? 0 : FailMsg("empty sara zabeteh fail exit");
+            fail += Expect(Convert.ToString(pack["diagnosis"]), "پیدا نشد", "selected zabeteh no overlay");
+            fail += pickLog.Any(l => l.IndexOf("Scope", StringComparison.OrdinalIgnoreCase) >= 0) ? 0 : FailMsg("selected logs Scope");
+            fail += pickLog.Any(l => l.IndexOf("2/5 صلح", StringComparison.Ordinal) >= 0) ? FailMsg("selected must not run linear solh gate") : 0;
+            fail += pickLog.Any(l => l.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0) ? FailMsg("selected must not analyze chidman member") : 0;
+            fail += pack.ContainsKey("scopes") ? 0 : FailMsg("pack has scopes");
+
+            var readEmpty = ZabetehCase.ReadSelected("", "E3BB36F6-1D34-426B-BFA1-526A05C452BE", new[] { "tahlil" }, m => { });
+            fail += readEmpty.Count == 0 ? 0 : FailMsg("readselected empty sara");
             return fail;
         }
 
@@ -403,6 +477,7 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Permit      : WorkItem=5298603 بررسی نمی‌شود") ? 0 : FailMsg("ignore workitem copies");
             fail += FormulaEngine.IsSummaryLine("Detail      : جدول [AspNetUsers] cols=Id") ? FailMsg("detail prefix never copies") : 0;
             fail += FormulaEngine.IsSummaryLine("Step        : 1/5 ضابطه — رد") ? 0 : FailMsg("step line copies");
+            fail += FormulaEngine.IsSummaryLine("Scope      : تحلیل — قبول") ? 0 : FailMsg("scope line copies");
             bool prevStrict = FormulaEngine.StrictSummary;
             FormulaEngine.StrictSummary = true;
             fail += FormulaEngine.IsSummaryLine("Step        : 1/5 ضابطه — رد") ? 0 : FailMsg("strict step copies");
@@ -413,6 +488,7 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Zabeteh     : Sara tables = Sh_RequestInfo, Zabeteh") ? FailMsg("strict drops table catalog") : 0;
             fail += FormulaEngine.IsSummaryLine("SolhNid      : Member 1296 Run codeLen=366093") ? FailMsg("strict drops solh members") : 0;
             fail += FormulaEngine.IsSummaryLine("History      : 40 change row(s)") ? FailMsg("strict drops history count") : 0;
+            fail += FormulaEngine.IsSummaryLine("Scope      : انتخاب = ضابطه، تحلیل") ? 0 : FailMsg("strict scope copies");
             var flood = new[]
             {
                 "Arch         : class 335 CommissionFine members=15 (853 KB)",
@@ -476,6 +552,14 @@ namespace RuleTrace
             fail += Json.Int(back, "n") == 1288 ? 0 : FailMsg("json int");
             fail += Json.Long(new Dictionary<string, object> { { "nidHistory", 598688L } }, "nidHistory") == 598688L ? 0 : FailMsg("json long");
             fail += (Json.Str(back, "s") ?? string.Empty).IndexOf("چیدمان", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("json unicode");
+            var listed = Json.StrList(new Dictionary<string, object>
+            {
+                { "scopes", new List<object> { "zabeteh", "solh" } },
+            }, "scopes");
+            fail += listed.Count == 2 ? 0 : FailMsg("json strlist count");
+            fail += listed.Contains("zabeteh") ? 0 : FailMsg("json strlist zabeteh");
+            var csv = Json.StrList(new Dictionary<string, object> { { "scopes", "tahlil,tavafogh" } }, "scopes");
+            fail += csv.Count == 2 ? 0 : FailMsg("json strlist csv");
             return fail;
         }
 
@@ -506,6 +590,18 @@ namespace RuleTrace
             fail += Expect(html, "5298603", "ignored workitem mentioned");
             fail += Expect(html, "تجدید بنا", "reconstruction permit");
             fail += Expect(html, "صلح ندارند", "solh not required for every property");
+            fail += Expect(html, "data-scope=\"zabeteh\"", "scope checkbox zabeteh");
+            fail += Expect(html, "data-scope=\"solh\"", "scope checkbox solh");
+            fail += Expect(html, "data-scope=\"chidman\"", "scope checkbox chidman");
+            fail += Expect(html, "data-scope=\"tahlil\"", "scope checkbox tahlil");
+            fail += Expect(html, "data-scope=\"tavafogh\"", "scope checkbox tavafogh");
+            fail += Expect(html, "کاربر باید انتخاب", "must pick hint");
+            fail += Expect(html, "selectedScopes", "payload collects scopes");
+            fail += Expect(html, "کدام بخش را دیباگ", "toast if no scope");
+            fail += Expect(html, "AnalysisBuilding", "analysis table in vars hint");
+            fail += Expect(html, "Sh_Peace", "peace table in vars hint");
+            fail += Expect(html, "Sh_Agreement", "agreement table in vars hint");
+            fail += Expect(html, "Building=0", "agreement building zero");
             fail += Expect(html, "ابزارهای بیشتر", "advanced tools collapsed");
             fail += Expect(html, "مستند کلی", "overall docs button");
             fail += Expect(html, "/api/docs", "docs endpoint");
@@ -547,7 +643,9 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23b-solh-optional", "bootstrap label");
+                        fail += Expect(boot, "v23c-pick-scope", "bootstrap label");
+                        fail += Expect(boot, "mustPick", "bootstrap must-pick");
+                        fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
                     }
                 }

@@ -220,7 +220,17 @@
         <label>پارامترها (Name=Value هر خط)</label>
         <textarea id="parameters" placeholder="NidProc=..."></textarea>
         <div class="status" style="margin-top:12px">
-          <span>گام‌ها: ۱ ضابطه ملک → ۲ صلح اگر باشد → ۳ تحلیل → ۴ کمیسیون → ۵ درآمد. همه ملک‌ها صلح ندارند.</span>
+          <span>اشکال پرونده مشخص است. مثل فرم سارا فقط همان بخش اجرا می‌شود. ملک می‌تواند صلح / توافق / کمیسیون نداشته باشد.</span>
+        </div>
+        <label>کدام بخش را دیباگ می‌کنید؟ (بدون پیش‌فرض — باید انتخاب کنید)</label>
+        <div class="checks" id="scopeBox">
+          <label><input type="checkbox" data-scope="zabeteh" /> ضابطه</label>
+          <label><input type="checkbox" data-scope="solh" /> صلح</label>
+          <label><input type="checkbox" data-scope="chidman" /> چیدمان</label>
+          <label><input type="checkbox" data-scope="tahlil" /> تحلیل</label>
+          <label><input type="checkbox" data-scope="tavafogh" /> توافق</label>
+          <label><input type="checkbox" data-scope="commission" /> کمیسیون ماده ۱۰۰</label>
+          <label><input type="checkbox" data-scope="income" /> درآمد</label>
         </div>
         <div class="actions">
           <button class="ghost" id="btnLookup">جستجو در Sara</button>
@@ -243,7 +253,7 @@
         </details>
         <div class="status">
           <span id="status">آماده — بدون CMD، فقط مرورگر</span>
-          <span>صلح برای همه ملک‌ها اجباری نیست. اگر صلح نداشت، گام ۳ تحلیل را ببینید</span>
+          <span>صلح / توافق / کمیسیون اجباری نیست. اول تیک بزنید کدام فرم را باز می‌کنید</span>
         </div>
         <div style="margin-top:12px; overflow:auto">
           <table id="cases">
@@ -288,7 +298,7 @@
           <pre class="code" id="dbgView"></pre>
         </div>
         <div id="tab-vars" hidden>
-          <div class="sub" id="varsDiag" style="margin-bottom:10px">گام ۱ WorkItem 300002275: ضابطه ملک هست (Zabeteh + Zabeteh_Details). Active خالی یعنی این درخواست صلح ندارد — همه ملک‌ها صلح ندارند. L270 فقط اگر صلح محاسبه شود می‌ایستد. کار بعدی: گام ۳ تحلیل. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
+          <div class="sub" id="varsDiag" style="margin-bottom:10px">کاربر باید انتخاب کند کدام بخش را دیباگ کند (ضابطه، صلح، چیدمان، تحلیل، توافق، کمیسیون، درآمد). مثل باز کردن فرم در سارا. کلید NidNosaziCode → Base_Info.NidBase. جداول: Zabeteh+Details، Sh_Peace، AnalysisBuilding، Sh_Agreement (Building=0)، Base_Using/Base_Front. همه ملک‌ها صلح ندارند. WorkItem 300002275 پروانه تجدید بنا. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
           <div style="overflow:auto; margin-bottom:10px">
             <table id="varsTable">
               <thead><tr><th>متغیر / ستون</th><th>مقدار</th><th>جدول</th><th>منبع</th></tr></thead>
@@ -346,6 +356,9 @@ function appendLog(lines) {
   box.textContent += (box.textContent ? "\n" : "") + add;
   box.scrollTop = box.scrollHeight;
 }
+function selectedScopes() {
+  return Array.from(document.querySelectorAll("[data-scope]:checked")).map(x => x.getAttribute("data-scope"));
+}
 function payload() {
   return {
     dllPath: $("dllPath").value,
@@ -364,7 +377,8 @@ function payload() {
     clearCache: $("clearCache").checked,
     allParams: $("allParams").checked,
     parameters: $("parameters").value,
-    allVersions: true
+    allVersions: true,
+    scopes: selectedScopes()
   };
 }
 function fillSettings(s) {
@@ -551,6 +565,7 @@ $("btnHistory").onclick = async () => {
 $("btnRun").onclick = async () => {
   const p = payload();
   if (!p.nidProc) { toast("اول 300002275 را جستجو کنید"); return; }
+  if (!p.scopes.length) { toast("کدام بخش را دیباگ می‌کنید؟ تیک بزنید"); return; }
   const j = await api("/api/run", p);
   showVars(j.vars, j.diagnosis, j.nextAction);
   showSummary(j.summary);
@@ -567,6 +582,7 @@ $("btnChidman").onclick = async () => {
 };
 $("btnSolhNid").onclick = async () => {
   if (!$("nidProc").value.trim()) { toast("اول پرونده را جستجو کنید تا NidProc پر شود"); return; }
+  if (!selectedScopes().length) { toast("کدام بخش را دیباگ می‌کنید؟ تیک بزنید"); return; }
   const j = await api("/api/solh-nid", payload());
   showMembers(j.members, j.focusMember);
   showVars(j.vars, j.diagnosis, j.stopBlock);

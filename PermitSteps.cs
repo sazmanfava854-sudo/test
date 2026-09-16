@@ -5,7 +5,7 @@ using System.Globalization;
 namespace RuleTrace
 {
     /// <summary>
-    /// One permit step at a time. Do not dump Solh/chidman/docs/history until step 1 (اعلام ضابطه) passes.
+    /// User picks forms (ضابطه/صلح/چیدمان/تحلیل/توافق/کمیسیون/درآمد). Independent — no linear gate.
     /// Read-only. Does not write dbo.Member. Does not compile VB.
     /// </summary>
     internal static class PermitSteps
@@ -125,8 +125,165 @@ namespace RuleTrace
             return Pack(step1.Status == "PASS" && step2.Status == "SKIP" ? step2 : step1, SlimVars(vars), 0);
         }
 
+        /// <summary>Independent forms. Empty pick → FAIL. Solh is Sh_Peace; agreement is Sh_Agreement; analysis is AnalysisBuilding.</summary>
+        public static Dictionary<string, object> RunSelected(string sara, string ruleEngine, string nidProc, IList<string> scopes, Action<string> log)
+        {
+            if (log == null) log = m => { };
+            var selected = PermitScopes.Normalize(scopes);
+            nidProc = (nidProc ?? "").Trim();
+            log("Scope      : مثل باز کردن فرم سارا — فقط بخش‌های تیک‌خورده. توافق و کمیسیون می‌تواند نباشد");
+            if (selected.Count == 0)
+            {
+                log("Scope      : " + PermitScopes.MustPick);
+                log("Exit code    : 1");
+                return Pack(0, "FAIL", PermitScopes.MustPick, "تیک بزنید کدام بخش را دیباگ می‌کنید", 1);
+            }
+            if (nidProc.Length == 0)
+            {
+                log("Scope      : NidProc خالی — اول جستجو کنید");
+                return Pack(0, "FAIL", "NidProc خالی", "اول پرونده را جستجو کنید", 1);
+            }
+
+            var vars = ZabetehCase.ReadSelected(sara, nidProc, selected, log);
+            string work = PermitPipeline.FindWorkItem(vars);
+            string active = SolhNidDebug.ReadActive(vars);
+            string overlay = FirstFrom(vars, "[dbo].[Zabeteh]", "NidZabeteh") ?? FirstFrom(vars, "Zabeteh", "NidZabeteh");
+            string plan = FirstFrom(vars, "[dbo].[Zabeteh]", "CI_PlanType") ?? FirstFrom(vars, "CI_PlanType", "ID")
+                ?? FirstFrom(vars, "CI_PlanType", "Id");
+
+            var results = new List<Result>();
+            foreach (string id in selected)
+            {
+                Result r;
+                if (id == PermitScopes.Zabeteh)
+                    r = ClassifyZabeteh(work, active, overlay, plan);
+                else if (id == PermitScopes.Solh)
+                    r = ClassifySolh(work, active, HasSolhRecord(vars));
+                else if (id == PermitScopes.Chidman)
+                    r = ClassifyChidman(work, HasNamed(vars, "Base_Using") || HasNamed(vars, "Base_Front"));
+                else if (id == PermitScopes.Tahlil)
+                    r = ClassifyTahlil(work, HasNamed(vars, "AnalysisBuilding"));
+                else if (id == PermitScopes.Tavafogh)
+                    r = ClassifyTavafogh(work, HasNamed(vars, "Sh_Agreement"));
+                else if (id == PermitScopes.Commission)
+                    r = ClassifyCommission(work);
+                else if (id == PermitScopes.Income)
+                    r = ClassifyIncome(work);
+                else
+                    continue;
+                r.Name = PermitScopes.Title(id);
+                WriteScope(log, r);
+                results.Add(r);
+            }
+
+            Result worst = PickWorst(results);
+            log("Exit code    : " + (worst.Status == "FAIL" ? 1 : 0));
+            var pack = Pack(worst, ScopeVars(vars, selected), worst.Status == "FAIL" ? 1 : 0);
+            pack["scopes"] = selected;
+            pack["sections"] = PackSections(results);
+            return pack;
+        }
+
+        public static Result ClassifyChidman(string workItem, bool hasLayout)
+        {
+            var r = new Result { Number = 3, Name = PermitScopes.Title(PermitScopes.Chidman) };
+            if (PermitPipeline.IsIgnoredWorkItem(workItem))
+            {
+                r.Status = "SKIP";
+                r.Verdict = "WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود";
+                r.NextAction = "WorkItem " + PermitPipeline.SampleWorkItem + " را جستجو کنید";
+                return r;
+            }
+            if (hasLayout)
+            {
+                r.Status = "PASS";
+                r.Verdict = "چیدمان در Base_Using / Base_Front هست";
+                r.NextAction = "متغیر UsingArea و CI_UsingType / CI_FrontPlace را در لاگ چک کنید";
+                return r;
+            }
+            r.Status = "SKIP";
+            r.Verdict = "چیدمان در Base_Using/Base_Front نیست";
+            r.NextAction = "اگر این ملک چیدمان دارد، NidBase را در SSMS چک کنید";
+            return r;
+        }
+
+        public static Result ClassifyTahlil(string workItem, bool hasAnalysis)
+        {
+            var r = new Result { Number = 3, Name = PermitScopes.Title(PermitScopes.Tahlil) };
+            if (PermitPipeline.IsIgnoredWorkItem(workItem))
+            {
+                r.Status = "SKIP";
+                r.Verdict = "WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود";
+                r.NextAction = "WorkItem " + PermitPipeline.SampleWorkItem + " را جستجو کنید";
+                return r;
+            }
+            if (hasAnalysis)
+            {
+                r.Status = "PASS";
+                r.Verdict = "تحلیل در AnalysisBuilding هست (Parvaneh=1 Foul=2 MovafeghatOsooli=3). AnaliysParvaneh_Date=max(PenaltyDate)";
+                r.NextAction = "ریز را در AnalysisBuilding_Details و CI_Penalty ببینید";
+                return r;
+            }
+            r.Status = "SKIP";
+            r.Verdict = "تحلیل در AnalysisBuilding نیست";
+            r.NextAction = "NidBase را از Base_Info با NidNosaziCode در SSMS چک کنید";
+            return r;
+        }
+
+        public static Result ClassifyTavafogh(string workItem, bool hasAgreement)
+        {
+            var r = new Result { Number = 4, Name = PermitScopes.Title(PermitScopes.Tavafogh) };
+            if (PermitPipeline.IsIgnoredWorkItem(workItem))
+            {
+                r.Status = "SKIP";
+                r.Verdict = "WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود";
+                r.NextAction = "WorkItem " + PermitPipeline.SampleWorkItem + " را جستجو کنید";
+                return r;
+            }
+            if (hasAgreement)
+            {
+                r.Status = "PASS";
+                r.Verdict = "توافق در Sh_Agreement هست (Building=0)";
+                r.NextAction = "نوع را در Sh_AgreementLetter / CI_AgreementType ببینید";
+                return r;
+            }
+            r.Status = "SKIP";
+            r.Verdict = "توافق ندارد — ملک می‌تواند توافق نداشته باشد";
+            r.NextAction = "اگر توافق باید باشد، Building=0 و NidBase را چک کنید";
+            return r;
+        }
+
+        public static Result ClassifyCommission(string workItem)
+        {
+            var r = new Result { Number = 4, Name = PermitScopes.Title(PermitScopes.Commission), Status = "SKIP" };
+            if (PermitPipeline.IsIgnoredWorkItem(workItem))
+            {
+                r.Verdict = "WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود";
+                r.NextAction = "WorkItem " + PermitPipeline.SampleWorkItem + " را جستجو کنید";
+                return r;
+            }
+            r.Verdict = "کمیسیون ماده ۱۰۰ جدول نام‌دار ندارد — ملک می‌تواند کمیسیون نداشته باشد";
+            r.NextAction = "اگر رای ماده ۱۰۰ هست، جدول را نام ببرید تا به dump اضافه شود";
+            return r;
+        }
+
+        public static Result ClassifyIncome(string workItem)
+        {
+            var r = new Result { Number = 5, Name = PermitScopes.Title(PermitScopes.Income), Status = "SKIP" };
+            if (PermitPipeline.IsIgnoredWorkItem(workItem))
+            {
+                r.Verdict = "WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود";
+                r.NextAction = "WorkItem " + PermitPipeline.SampleWorkItem + " را جستجو کنید";
+                return r;
+            }
+            r.Verdict = "درآمد جدول نام‌دار ندارد";
+            r.NextAction = "اگر جدول درآمد مشخص شد، به dump اضافه می‌شود";
+            return r;
+        }
+
         internal static bool HasSolhRecord(IList<Dictionary<string, object>> vars)
         {
+            if (HasNamed(vars, "Sh_Peace")) return true;
             if (vars == null) return false;
             foreach (var v in vars)
             {
@@ -139,13 +296,28 @@ namespace RuleTrace
                 string value = Convert.ToString(val, CultureInfo.InvariantCulture) ?? "";
                 if (name.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) continue;
                 if (table.IndexOf("Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                bool nameHit = name.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0
-                    || name.IndexOf("Tavafogh", StringComparison.OrdinalIgnoreCase) >= 0
-                    || name.IndexOf("Peace", StringComparison.OrdinalIgnoreCase) >= 0
-                    || name.IndexOf("صلح", StringComparison.Ordinal) >= 0;
-                bool tableHit = table.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0
-                    || table.IndexOf("Tavafogh", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (table.IndexOf("Tavafogh", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (table.IndexOf("Sh_Agreement", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                bool nameHit = name.Equals("NidPeace", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("NidSolh", StringComparison.OrdinalIgnoreCase);
+                bool tableHit = table.IndexOf("Sh_Peace", StringComparison.OrdinalIgnoreCase) >= 0;
                 if ((nameHit || tableHit) && !string.IsNullOrWhiteSpace(value) && !ZabetehCase.IsEmptyGuid(value))
+                    return true;
+            }
+            return false;
+        }
+
+        internal static bool HasNamed(IList<Dictionary<string, object>> vars, string tableHint)
+        {
+            if (vars == null || string.IsNullOrEmpty(tableHint)) return false;
+            foreach (var v in vars)
+            {
+                object t, val;
+                if (!v.TryGetValue("table", out t) || !v.TryGetValue("value", out val)) continue;
+                string table = Convert.ToString(t) ?? "";
+                string value = Convert.ToString(val, CultureInfo.InvariantCulture) ?? "";
+                if (table.IndexOf(tableHint, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!string.IsNullOrWhiteSpace(value) && !ZabetehCase.IsEmptyGuid(value))
                     return true;
             }
             return false;
@@ -181,6 +353,101 @@ namespace RuleTrace
                 log("Step        : " + r.Verdict);
             if (!string.IsNullOrEmpty(r.NextAction))
                 log("Step        : کار بعدی: " + r.NextAction);
+        }
+
+        private static void WriteScope(Action<string> log, Result r)
+        {
+            log("Scope      : " + r.Name + " — " + FaStatus(r.Status));
+            if (!string.IsNullOrEmpty(r.Verdict))
+                log("Scope      : " + r.Verdict);
+            if (!string.IsNullOrEmpty(r.NextAction))
+                log("Scope      : کار بعدی: " + r.NextAction);
+        }
+
+        private static Result PickWorst(List<Result> results)
+        {
+            if (results == null || results.Count == 0)
+                return new Result { Number = 0, Name = "انتخاب", Status = "FAIL", Verdict = PermitScopes.MustPick, NextAction = "تیک بزنید" };
+            Result fail = null, pass = null, skip = null;
+            foreach (Result r in results)
+            {
+                if (r.Status == "FAIL" && fail == null) fail = r;
+                else if (r.Status == "PASS" && pass == null) pass = r;
+                else if (skip == null) skip = r;
+            }
+            if (fail != null)
+            {
+                var parts = new List<string>();
+                foreach (Result r in results)
+                    if (r.Status == "FAIL") parts.Add(r.Name + ": " + r.Verdict);
+                fail.Verdict = string.Join(" | ", parts);
+                return fail;
+            }
+            if (pass != null)
+            {
+                var parts = new List<string>();
+                foreach (Result r in results) parts.Add(r.Name + " " + FaStatus(r.Status));
+                pass.Verdict = string.Join("، ", parts) + ". " + (pass.Verdict ?? "");
+                return pass;
+            }
+            skip.Verdict = (skip.Verdict ?? "") + " — بخش‌های انتخاب‌شده برای این ملک لازم نیست";
+            return skip;
+        }
+
+        private static List<object> PackSections(List<Result> results)
+        {
+            var list = new List<object>();
+            if (results == null) return list;
+            foreach (Result r in results)
+            {
+                list.Add(new Dictionary<string, object>
+                {
+                    { "name", r.Name ?? "" },
+                    { "status", r.Status ?? "" },
+                    { "verdict", r.Verdict ?? "" },
+                    { "nextAction", r.NextAction ?? "" },
+                });
+            }
+            return list;
+        }
+
+        /// <summary>Keep keys plus columns from the ticked named tables so the vars tab matches the open form.</summary>
+        internal static List<Dictionary<string, object>> ScopeVars(IList<Dictionary<string, object>> vars, IList<string> scopes)
+        {
+            var keepName = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "ActiveNidZabeteh", "NidZabeteh", "NidWorkItem", "NidNosaziCode", "NidBase",
+                "Building", "CI_PlanType", "NidProc", "JoinOn", "WorkflowTitel", "Workflow",
+                "UsingArea", "PenaltyDate", "AnaliysParvaneh_Date", "Parvaneh", "Foul", "MovafeghatOsooli",
+            };
+            var keepTable = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Sh_RequestInfo", "Base_Info", "Base_NosaziCode", "EumAnalysisBuildingType", "join"
+            };
+            if (scopes != null)
+            {
+                foreach (string id in scopes)
+                    foreach (string t in PermitScopes.Tables(id))
+                        keepTable.Add(t);
+            }
+            var outVars = new List<Dictionary<string, object>>();
+            if (vars == null) return outVars;
+            foreach (var v in vars)
+            {
+                object n, t;
+                v.TryGetValue("name", out n);
+                v.TryGetValue("table", out t);
+                string name = Convert.ToString(n) ?? "";
+                string table = Convert.ToString(t) ?? "";
+                bool hit = keepName.Contains(name);
+                if (!hit)
+                {
+                    foreach (string hint in keepTable)
+                        if (table.IndexOf(hint, StringComparison.OrdinalIgnoreCase) >= 0) { hit = true; break; }
+                }
+                if (hit) outVars.Add(v);
+            }
+            return outVars;
         }
 
         private static string FaStatus(string s)

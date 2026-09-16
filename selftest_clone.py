@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+# Cloud clone of RuleTrace --self-test pick-scope checks (net472 WinExe cannot run here).
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+fail = 0
+
+
+def expect(haystack: str, needle: str, label: str) -> None:
+    global fail
+    if needle.lower() not in haystack.lower() and needle not in haystack:
+        print(f"FAIL: expected {label} ({needle})", file=sys.stderr)
+        fail += 1
+
+
+def failmsg(label: str) -> None:
+    global fail
+    print(f"FAIL: {label}", file=sys.stderr)
+    fail += 1
+
+
+def read(path: str) -> str:
+    with open(os.path.join(ROOT, path), encoding="utf-8") as f:
+        return f.read()
+
+
+ALL = ["zabeteh", "solh", "chidman", "tahlil", "tavafogh", "commission", "income"]
+TABLES = {
+    "zabeteh": ["Zabeteh", "Zabeteh_Details"],
+    "solh": ["Sh_Peace", "Sh_PeaceLetter", "CI_PeaceType", "Base_Using"],
+    "chidman": ["Base_Using", "Base_Front", "CI_UsingType", "CI_UsingGroup", "CI_FrontPlace", "CI_FrontType"],
+    "tahlil": ["AnalysisBuilding", "AnalysisBuilding_Details", "GetAnalysisBuilding", "CI_Penalty"],
+    "tavafogh": ["Sh_Agreement", "Sh_AgreementLetter", "CI_AgreementType"],
+    "commission": [],
+    "income": [],
+}
+
+
+def normalize(raw):
+    aliases = {
+        "peace": "solh",
+        "صلح": "solh",
+        "analysis": "tahlil",
+        "تحلیل": "tahlil",
+        "takhalofat": "tahlil",
+        "foul": "tahlil",
+        "agreement": "tavafogh",
+        "توافق": "tavafogh",
+        "ضابطه": "zabeteh",
+        "چیدمان": "chidman",
+        "zabetehconvert": "chidman",
+        "کمیسیون": "commission",
+        "commissionfine": "commission",
+        "درآمد": "income",
+        "daramad": "income",
+    }
+    out = []
+    for item in raw or []:
+        t = (item or "").strip().lower()
+        t = aliases.get(t, t)
+        if t in ALL and t not in out:
+            out.append(t)
+    return out
+
+
+def is_empty_guid(v: str | None) -> bool:
+    if v is None or not str(v).strip():
+        return True
+    v = str(v).strip().strip("{}")
+    if v.lower() == "guid.empty":
+        return True
+    if v.replace("-", "") == "0" * 32:
+        return True
+    return False
+
+
+def has_named(vars_, hint: str) -> bool:
+    for v in vars_ or []:
+        table = str(v.get("table") or "")
+        value = str(v.get("value") or "")
+        if hint.lower() in table.lower() and value.strip() and not is_empty_guid(value):
+            return True
+    return False
+
+
+def has_solh(vars_):
+    if has_named(vars_, "Sh_Peace"):
+        return True
+    for v in vars_ or []:
+        name = str(v.get("name") or "")
+        table = str(v.get("table") or "")
+        value = str(v.get("value") or "")
+        if "ActiveNidZabeteh" in name:
+            continue
+        if "Zabeteh" in table:
+            continue
+        if "Tavafogh" in table or "Sh_Agreement" in table:
+            continue
+        name_hit = name.lower() in ("nidpeace", "nidsolh")
+        table_hit = "Sh_Peace" in table
+        if (name_hit or table_hit) and value.strip() and not is_empty_guid(value):
+            return True
+    return False
+
+
+def json_strlist(obj, key):
+    v = obj.get(key)
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    raw = str(v)
+    out = []
+    buf = ""
+    for ch in raw + ",":
+        if ch in ",; ":
+            if buf.strip():
+                out.append(buf.strip())
+            buf = ""
+        else:
+            buf += ch
+    return out
+
+
+# --- source contracts ---
+html = read("WebUi.html")
+scopes_cs = read("PermitScopes.cs")
+steps = read("PermitSteps.cs")
+case = read("ZabetehCase.cs")
+engine = read("FormulaEngine.cs")
+webapp = read("WebApp.cs")
+build = read("BuildInfo.cs")
+selftest = read("SelfTest.cs")
+csproj = read("RuleTrace.csproj")
+
+expect(build, "v23c-pick-scope", "label")
+expect(csproj, "PermitScopes.cs", "csproj compiles PermitScopes")
+expect(html, 'data-scope="zabeteh"', "checkbox zabeteh")
+expect(html, 'data-scope="solh"', "checkbox solh")
+expect(html, 'data-scope="chidman"', "checkbox chidman")
+expect(html, 'data-scope="tahlil"', "checkbox tahlil")
+expect(html, 'data-scope="tavafogh"', "checkbox tavafogh")
+expect(html, "کاربر باید انتخاب", "must pick")
+expect(html, "selectedScopes", "payload scopes")
+expect(html, "AnalysisBuilding", "analysis table")
+expect(html, "Sh_Peace", "peace table")
+expect(html, "Sh_Agreement", "agreement table")
+expect(html, "Building=0", "building zero")
+expect(html, "id=\"btnRun\">اجرا</button>", "gold run")
+expect(scopes_cs, "کاربر باید انتخاب", "MustPick")
+expect(case, "AnalysisBuilding", "dump analysis")
+expect(case, "Sh_Peace", "dump peace")
+expect(case, "Sh_Agreement", "dump agreement")
+expect(case, "NVARCHAR(20))='0'", "sql building 0")
+expect(case, "EumAnalysisBuildingType", "enum")
+expect(case, "AnaliysParvaneh_Date", "max penalty alias")
+expect(case, "Parvaneh", "enum parvaneh")
+expect(case, "MovafeghatOsooli", "enum osooli")
+expect(case, "Base_Using", "using table")
+expect(case, "Base_Front", "front table")
+expect(case, "CI_FrontPlace", "front place")
+expect(case, "CI_FrontType", "front type")
+expect(case, "CI_Penalty", "penalty lookup")
+expect(engine, "RunSelected", "engine uses RunSelected")
+expect(webapp, "Json.StrList(body, \"scopes\")", "webapp passes scopes")
+expect(steps, "RunSelected", "steps RunSelected")
+expect(selftest, "PickScope", "selftest pick scope")
+if "UPDATE dbo.Member" in steps or "UPDATE dbo.Member" in case:
+    failmsg("pick-scope path must not write dbo.Member")
+if "Compile VB" in steps.lower() and "does not compile" not in steps.lower():
+    failmsg("must not compile VB")
+
+# --- logic clone ---
+n = normalize(["ضابطه", "صلح", "analysis"])
+if "zabeteh" not in n or "solh" not in n or "tahlil" not in n:
+    failmsg("normalize persian/finglish")
+if normalize(["nope", "zabeteh"]) != ["zabeteh"]:
+    failmsg("unknown scope dropped")
+if "AnalysisBuilding" not in TABLES["tahlil"]:
+    failmsg("tahlil named table")
+if "Sh_Peace" not in TABLES["solh"]:
+    failmsg("solh named table")
+if TABLES["commission"]:
+    failmsg("commission has no named table")
+
+MUST = "کاربر باید انتخاب کند کدام بخش‌ها را دیباگ کند"
+if MUST not in scopes_cs:
+    failmsg("MustPick copy")
+
+peace = [{"name": "NidPeace", "value": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "table": "[dbo].[Sh_Peace]"}]
+if not has_solh(peace):
+    failmsg("Sh_Peace counts as solh")
+if has_solh([{"name": "NidZabeteh", "value": "3fd00472-04da-4b5b-8ca8-701d9e82c4c0", "table": "[dbo].[Zabeteh]"}]):
+    failmsg("zabeteh overlay is not solh")
+if has_solh([{"name": "NidAgreement", "value": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "table": "[dbo].[Sh_Agreement]"}]):
+    failmsg("agreement is not solh")
+if not has_named(
+    [{"name": "NidAnalysisBuilding", "value": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "table": "[dbo].[AnalysisBuilding]"}],
+    "AnalysisBuilding",
+):
+    failmsg("has analysis building")
+
+listed = json_strlist({"scopes": ["zabeteh", "solh"]}, "scopes")
+if listed != ["zabeteh", "solh"]:
+    failmsg("json strlist count")
+csv = json_strlist({"scopes": "tahlil,tavafogh"}, "scopes")
+if csv != ["tahlil", "tavafogh"]:
+    failmsg("json strlist csv")
+
+if "selectedScopes()" not in html:
+    failmsg("payload selectedScopes")
+
+print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
+sys.exit(0 if fail == 0 else 1)
