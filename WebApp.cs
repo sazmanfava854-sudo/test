@@ -240,16 +240,16 @@ namespace RuleTrace
             string nidProc = Json.Str(body, "nidProc").Trim();
             if (nidProc.Length == 0) nidProc = (_settings.LastNidProc ?? "").Trim();
             if (nidProc.Length == 0)
-                return Fail("NidProc خالی است — اول پرونده را جستجو کنید، بعد «دیباگ صلح این Nid» را بزنید.");
+                return Fail("NidProc خالی است — اول پرونده را جستجو کنید، بعد «دیباگ پروانه این Nid» را بزنید.");
             _settings.LastNidProc = nidProc;
             try { _settings.Save(); } catch { }
 
-            return Run("دیباگ صلح برای NidProc " + nidProc + " ...", false, (eng, log) =>
+            return Run("دیباگ پروانه برای NidProc " + nidProc + " ...", false, (eng, log) =>
             {
                 var extra = eng.DebugSolhNid(nidProc);
                 extra["members"] = PackSources(eng.LastMemberSources);
                 extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
-                extra["history"] = PackHistory(MemberHistory.List(_settings.RuleEngine, new[] { 344, 342 }, SolhNidDebug.SolhRunMember, 40, null));
+                extra["history"] = PackHistory(MemberHistory.List(_settings.RuleEngine, PermitPipeline.PermitClasses, SolhNidDebug.SolhRunMember, 40, null));
                 extra["focusMember"] = SolhNidDebug.SolhRunMember;
                 extra["settings"] = SettingsMap();
                 return extra;

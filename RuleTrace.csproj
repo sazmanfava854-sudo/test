@@ -67,6 +67,7 @@
     <Compile Include="MemberHistory.cs" />
     <Compile Include="MemberAnalyzer.cs" />
     <Compile Include="MemberRepository.cs" />
+    <Compile Include="PermitPipeline.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RuleDocs.cs" />

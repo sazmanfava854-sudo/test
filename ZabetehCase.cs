@@ -32,15 +32,10 @@ namespace RuleTrace
         private static readonly string[] SkipTypes = { "image", "varbinary", "binary", "timestamp", "rowversion" };
 
         /// <summary>
-        /// Known-good CRUD sample (has overlay, no Solh L270).
+        /// Overlay is stored per property code, not per NidProc.
         /// Join: Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode
+        /// Permit sample: WorkItem 300002275 (پروانه تجدید بنا). 5298603 is skipped.
         /// </summary>
-        public const string SampleNidProc = "89DD8996-A448-4164-B0FD-74F8B5F71B1B";
-        public const string SampleNidWorkItem = "5298603";
-        public const string SampleNidNosaziCode = "D9D81F2E-FF54-4FB6-B874-C8CE6D5E453F";
-        public const string SampleNidZabeteh = "97BA4164-272C-42C7-82E9-00019DEB4AC2";
-        public const string SampleActiveNidZabeteh = "EEA1F974-CC70-44CB-8386-21B8AAAA4B31";
-
         public const string JoinOn = "Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode";
         public const string StaticPkeyColumn = "P_Key";
         /// <summary>ZabeteStatic_Plan joins via Info, not CI_PlanType.</summary>
@@ -72,9 +67,6 @@ namespace RuleTrace
             log("Zabeteh     : Sara tables = " + string.Join(", ", SaraTables));
             log("Zabeteh     : join = " + JoinOn + "  (نه NidProc)");
             var keys = new CaseKeys { NidProc = nidProc.Trim() };
-            if (string.Equals(keys.NidProc, SampleNidProc, StringComparison.OrdinalIgnoreCase))
-                log("Zabeteh     : پرونده تست CRUD WorkItem=" + SampleNidWorkItem
-                    + " ActiveNidZabeteh=" + SampleActiveNidZabeteh);
 
             DumpNamed(sara, "Sh_RequestInfo", keys, vars, log, "NidProc");
             FillKeys(keys, vars);
@@ -85,9 +77,15 @@ namespace RuleTrace
                 { "table", "join" },
                 { "match", "کلید اتصال" },
             });
-            log("Zabeteh     : NidNosaziCode=" + (keys.NidNosaziCode ?? "(خالی)")
+            log("Zabeteh     : NidWorkItem=" + (keys.NidWorkItem ?? "(خالی)")
+                + " Workflow=" + (keys.Workflow ?? "(خالی)")
+                + " NidNosaziCode=" + (keys.NidNosaziCode ?? "(خالی)")
                 + " ActiveNidZabeteh=" + (IsEmptyGuid(keys.ActiveNidZabeteh) ? "(خالی)" : keys.ActiveNidZabeteh)
                 + " P_Key=" + (keys.Pkey ?? "(خالی)"));
+            if (PermitPipeline.IsIgnoredWorkItem(keys.NidWorkItem))
+                log("Zabeteh     : WorkItem " + PermitPipeline.IgnoreWorkItem + " بررسی نمی‌شود");
+            if (PermitPipeline.IsPermitSample(keys.NidWorkItem))
+                log("Zabeteh     : پرونده " + PermitPipeline.SampleKind + " WorkItem=" + PermitPipeline.SampleWorkItem);
 
             if (IsEmptyGuid(keys.ActiveNidZabeteh))
                 log("Zabeteh     : ActiveNidZabeteh خالی/Guid.Empty — صلح L270 باید بایستد (حتی اگر ردیف Zabeteh با NidNosaziCode باشد)");
@@ -165,6 +163,8 @@ namespace RuleTrace
             public string ActiveNidZabeteh;
             public string Pkey;
             public string NidNosaziCode;
+            public string NidWorkItem;
+            public string Workflow;
             public string PlanTypeId;
             public string PlanUsingTypeId;
             public string CIZabetehId;
@@ -181,6 +181,10 @@ namespace RuleTrace
                 k.NidZStaticInfo = First(vars, "NidZStatic_Info");
             if (string.IsNullOrEmpty(k.NidNosaziCode))
                 k.NidNosaziCode = First(vars, "NidNosaziCode");
+            if (string.IsNullOrEmpty(k.NidWorkItem))
+                k.NidWorkItem = First(vars, "NidWorkItem", "WorkItem");
+            if (string.IsNullOrEmpty(k.Workflow))
+                k.Workflow = First(vars, "WorkflowTitel", "WorkflowTitle", "Workflow");
             if (string.IsNullOrEmpty(k.PlanTypeId))
                 k.PlanTypeId = First(vars, "CI_PlanType", "NidPlanType", "PlanType", "PlanTypeId");
             if (string.IsNullOrEmpty(k.PlanUsingTypeId))
@@ -395,6 +399,9 @@ namespace RuleTrace
         private static string Flag(string col)
         {
             if (col.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return "کلید صلح L270";
+            if (col.IndexOf("Takhalof", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Tahlil", StringComparison.OrdinalIgnoreCase) >= 0) return "تحلیل";
+            if (col.IndexOf("Commission", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Jarime", StringComparison.OrdinalIgnoreCase) >= 0) return "کمیسیون ماده ۱۰۰";
+            if (col.IndexOf("Daramad", StringComparison.OrdinalIgnoreCase) >= 0 || col.Equals("Income", StringComparison.OrdinalIgnoreCase)) return "درآمد";
             if (col.IndexOf("Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return "ضابطه";
             if (col.IndexOf("PlanType", StringComparison.OrdinalIgnoreCase) >= 0) return "طرح";
             if (col.IndexOf("PlanUsing", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Karbari", StringComparison.OrdinalIgnoreCase) >= 0) return "کاربری";

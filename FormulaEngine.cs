@@ -88,17 +88,17 @@ namespace RuleTrace
             { "Nosazi_Calculate", 339 },
         };
 
-        /// <summary>Solh/Tavafogh/Rule/ZabetehConvert share members (e.g. chidman 1288 is class 342, not 344).</summary>
+        /// <summary>Permit formulas share ضابطه/صلح/تحلیل/کمیسیون/درآمد (every پروانه).</summary>
         public static int[] RelatedNidClasses(int nid)
         {
             var set = new SortedSet<int>();
             if (nid > 0) set.Add(nid);
             set.Add(432);
-            int[] cluster = { 336, 342, 344, 345 };
-            bool inCluster = false;
-            foreach (int n in cluster) if (n == nid) { inCluster = true; break; }
-            if (inCluster)
-                foreach (int n in cluster) set.Add(n);
+            bool inPermit = false;
+            foreach (int n in PermitPipeline.PermitClasses)
+                if (n == nid) { inPermit = true; break; }
+            if (inPermit)
+                foreach (int n in PermitPipeline.PermitClasses) set.Add(n);
             int[] ids = new int[set.Count];
             set.CopyTo(ids);
             return ids;
@@ -175,7 +175,7 @@ namespace RuleTrace
                 && t.IndexOf("1296", StringComparison.Ordinal) < 0
                 && t.IndexOf("1288", StringComparison.Ordinal) < 0)
                 return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "NidProc", "Arch", "Chidman", "History", "SolhNid", "Permit", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -1008,7 +1008,7 @@ namespace RuleTrace
             _summaryCapture = true;
             try
             {
-                _log("SolhNid      : خواندن کد صلح از dbo.Member (CRUD Read)");
+                _log("SolhNid      : خواندن مسیر پروانه از dbo.Member (CRUD Read)");
                 LastMemberSources.Clear();
                 LastMemberSources.AddRange(GetRelatedMemberSources(344));
                 return SolhNidDebug.Run(_s.Sara, _s.RuleEngine, nidProc, LastMemberSources, _log);
@@ -1169,7 +1169,7 @@ namespace RuleTrace
             }
             try
             {
-                _log("SolhNid      : اجرا → خواندن ضابطه با " + ZabetehCase.JoinOn);
+                _log("Permit      : اجرا → مسیر " + PermitPipeline.PathFa + " با join " + ZabetehCase.JoinOn);
                 SolhNidDebug.Run(_s.Sara, _s.RuleEngine, nidProc, LastMemberSources, _log);
             }
             catch (Exception ex)
