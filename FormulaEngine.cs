@@ -158,7 +158,7 @@ namespace RuleTrace
                 || t.StartsWith("Compiling", StringComparison.OrdinalIgnoreCase))
                 return false;
             if (t.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase)) return false;
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -522,6 +522,8 @@ namespace RuleTrace
             int fail = 0;
             fail += TestOne("RuleEngine", _s.RuleEngine) ? 0 : 1;
             fail += TestOne("Sara", _s.Sara) ? 0 : 1;
+            fail += TestOne("Document", ZabetehCase.WithCatalog(_s.RuleEngine, ZabetehCase.DocumentCatalog)) ? 0 : 1;
+            ZabetehCase.Probe(_s.Sara, _s.RuleEngine, _log);
             return fail;
         }
 
@@ -963,7 +965,7 @@ namespace RuleTrace
                 _log("SolhNid      : خواندن کد صلح از dbo.Member (CRUD Read)");
                 LastMemberSources.Clear();
                 LastMemberSources.AddRange(GetRelatedMemberSources(344));
-                return SolhNidDebug.Run(_s.Sara, nidProc, LastMemberSources, _log);
+                return SolhNidDebug.Run(_s.Sara, _s.RuleEngine, nidProc, LastMemberSources, _log);
             }
             finally
             {

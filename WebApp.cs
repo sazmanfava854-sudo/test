@@ -82,7 +82,7 @@ namespace RuleTrace
             return Run("تست اتصال...", false, (eng, log) =>
             {
                 int fail = eng.TestDatabases();
-                log.Add(fail == 0 ? "OK — هر دو دیتابیس با debugger در دسترس‌اند." : "FAILED — " + fail + " اتصال ناموفق.");
+                log.Add(fail == 0 ? "OK — RuleEngine + Sara + Document با debugger در دسترس‌اند." : "FAILED — " + fail + " اتصال ناموفق.");
                 return new Dictionary<string, object> { { "fail", fail }, { "ok", fail == 0 } };
             });
         }
@@ -397,7 +397,7 @@ namespace RuleTrace
         {
             if (string.IsNullOrWhiteSpace(m)) return false;
             string t = m.TrimStart();
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Zabeteh", "Doc", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }

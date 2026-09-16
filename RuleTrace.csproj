@@ -74,6 +74,7 @@
     <Compile Include="UserSettings.cs" />
     <Compile Include="WebApp.cs" />
     <Compile Include="WebHost.cs" />
+    <Compile Include="ZabetehCase.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="WebUi.html" />

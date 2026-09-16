@@ -19,6 +19,7 @@ namespace RuleTrace
             fail += JsonRoundtrip();
             fail += HistoryImageSql();
             fail += SolhNidExtract();
+            fail += ZabetehNamedTables();
             fail += WebUiEmbedded();
             fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
@@ -178,9 +179,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("web", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("zabeteh", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22-web, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22f-zabeteh-tables, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -191,28 +192,58 @@ namespace RuleTrace
             const string run =
                 "Public Sub Run()\r\n" +
                 "  Dim Masahat As Double = 0\r\n" +
-                "  If Info8.GetZabeteh() Is Nothing Then\r\n" +
+                "  If Info8.GetRequest.Info.ActiveNidZabeteh = Guid.Empty Then\r\n" +
                 "    Info8.AddError(BIZ.SA.EumErrorAction.Stop, \"صلحنامه\", \"به دلیل عدم اعلام ضابطه امکان محاسبه صلحنامه نمی باشد\")\r\n" +
+                "    Exit Function\r\n" +
                 "  End If\r\n" +
-                "  InsertChidman(tmpDto2)\r\n" +
                 "End Sub\r\n";
             var hit = SolhNidDebug.ExtractStop(run, "عدم اعلام ضابطه");
             int fail = 0;
             if (hit == null) return FailMsg("solh stop block");
             fail += hit.Line == 4 ? 0 : FailMsg("stop line");
             fail += Expect(hit.Key, "صلحنامه", "stop key");
-            fail += Expect(hit.Block, "GetZabeteh", "if GetZabeteh");
+            fail += Expect(hit.Block, "ActiveNidZabeteh", "if ActiveNidZabeteh");
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             SolhNidDebug.CollectDimNames(run, names);
             SolhNidDebug.CollectNames(hit.Block, names);
             fail += names.Contains("Masahat") ? 0 : FailMsg("dim Masahat");
-            fail += names.Contains("GetZabeteh") ? 0 : FailMsg("GetZabeteh ident");
-            var empty = SolhNidDebug.Run("", "", new List<MemberSource>
+            fail += names.Contains("ActiveNidZabeteh") ? 0 : FailMsg("ActiveNidZabeteh ident");
+            var empty = SolhNidDebug.Run("", "", "", new List<MemberSource>
             {
                 new MemberSource { NidClass = 344, NidMember = 1296, Name = "Run", Code = run },
             }, m => { });
             fail += Expect(Convert.ToString(empty["diagnosis"]), "1296", "diagnosis mentions 1296");
+            fail += Expect(Convert.ToString(empty["diagnosis"]), "Zabeteh", "diagnosis names dbo.Zabeteh");
             fail += Expect(Convert.ToString(empty["stopBlock"]), "عدم اعلام", "stopBlock returned");
+            return fail;
+        }
+
+        private static int ZabetehNamedTables()
+        {
+            int fail = 0;
+            string joined = string.Join(",", ZabetehCase.SaraTables);
+            foreach (string t in new[] { "Sh_RequestInfo", "Zabeteh", "CI_PlanType", "CI_PlanUsingType", "CI_Zabeteh", "ZabeteStatic_Info", "ZabeteStatic_Zabete", "ZabeteStatic_Plan" })
+                fail += Expect(joined, t, "named table " + t);
+            fail += Expect(ZabetehCase.DocumentCatalog, "DbRuleEngeinDocument", "document catalog");
+            fail += ZabetehCase.IsEmptyGuid(null) ? 0 : FailMsg("null guid empty");
+            fail += ZabetehCase.IsEmptyGuid("") ? 0 : FailMsg("blank guid empty");
+            fail += ZabetehCase.IsEmptyGuid("00000000-0000-0000-0000-000000000000") ? 0 : FailMsg("zero guid empty");
+            fail += ZabetehCase.IsEmptyGuid("Guid.Empty") ? 0 : FailMsg("Guid.Empty token");
+            fail += ZabetehCase.IsEmptyGuid("FA77A442-29CD-4DDC-ADEA-A3D3A6183F28") ? FailMsg("real nid should not be empty") : 0;
+            string cs = ZabetehCase.WithCatalog(
+                "Server=tcp:172.16.10.232;Database=DbRuleEngein;User Id=debugger;Password=x",
+                ZabetehCase.DocumentCatalog);
+            fail += Expect(cs, "DbRuleEngeinDocument", "WithCatalog switches InitialCatalog");
+            if (cs.IndexOf("Database=DbRuleEngein;", StringComparison.OrdinalIgnoreCase) >= 0
+                && cs.IndexOf("DbRuleEngeinDocument", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Console.Error.WriteLine("FAIL: WithCatalog left RuleEngine catalog");
+                fail++;
+            }
+            var log = new List<string>();
+            var vars = ZabetehCase.Read("", "", "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28", log.Add);
+            fail += vars.Count == 0 ? 0 : FailMsg("no vars without Sara");
+            fail += Expect(string.Join("\n", log), "اتصال Sara خالی", "empty Sara log");
             return fail;
         }
 
@@ -283,6 +314,10 @@ namespace RuleTrace
             fail += Expect(html, "/api/solh-nid", "solh-nid endpoint");
             fail += Expect(html, "متغیرهای این Nid", "vars tab");
             fail += Expect(html, "showSummary(j.summary)", "chidman/history fill copy-summary");
+            fail += Expect(html, "Zabeteh", "named Zabeteh table in vars hint");
+            fail += Expect(html, "CI_PlanType", "CI_PlanType hint");
+            fail += Expect(html, "ZabeteStatic_Info", "static info hint");
+            fail += Expect(html, "MemberDocument", "document table hint");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
             if (html.IndexOf("اجرای موتور (اختیاری)", StringComparison.Ordinal) >= 0)
             {
@@ -319,7 +354,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22e-solh-nid", "bootstrap label");
+                        fail += Expect(boot, "v22f-zabeteh-tables", "bootstrap label");
                         return fail;
                     }
                 }
