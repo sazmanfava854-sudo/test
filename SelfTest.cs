@@ -181,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("unannounced", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("one-step", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22m-unannounced, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23a-one-step, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -296,6 +296,33 @@ namespace RuleTrace
                 fail++;
             }
             fail += overlayLog.Any(l => l.IndexOf("هست ولی اعلام نشده", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("permit peace line unannounced");
+            var stepFail = PermitSteps.ClassifyZabeteh("300002275", "", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0", "24");
+            fail += stepFail.Status == "FAIL" ? 0 : FailMsg("step1 fail unannounced");
+            fail += Expect(stepFail.Verdict, "اعلام نشده", "step1 verdict");
+            fail += Expect(stepFail.NextAction, "عوض نکنید", "step1 do not edit 1296");
+            fail += Expect(stepFail.NextAction, "گام‌های ۲–۵", "later steps blocked");
+            var stepPass = PermitSteps.ClassifyZabeteh("300002275", "EEA1F974-CC70-44CB-8386-21B8AAAA4B31", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0", "24");
+            fail += stepPass.Status == "PASS" ? 0 : FailMsg("step1 pass when Active set");
+            var stepSkip = PermitSteps.ClassifyZabeteh("5298603", "", "", "");
+            fail += stepSkip.Status == "SKIP" ? 0 : FailMsg("step1 skip 5298603");
+            var emptyStepLog = new List<string>();
+            var emptyPack = PermitSteps.RunUntilFail("", "", "E3BB36F6-1D34-426B-BFA1-526A05C452BE", emptyStepLog.Add);
+            fail += Convert.ToString(emptyPack["status"]) == "FAIL" ? 0 : FailMsg("empty sara step1 fail");
+            fail += Convert.ToInt32(emptyPack["step"]) == 1 ? 0 : FailMsg("empty sara stays on step 1");
+            fail += Expect(Convert.ToString(emptyPack["diagnosis"]), "پیدا نشد", "no overlay without Sara");
+            fail += emptyStepLog.Any(l => l.IndexOf("Member 1288", StringComparison.Ordinal) >= 0) ? FailMsg("step run must not load chidman member") : 0;
+            fail += emptyStepLog.Any(l => l.IndexOf("InsertChidman", StringComparison.OrdinalIgnoreCase) >= 0) ? FailMsg("step run must not analyze chidman") : 0;
+            fail += emptyStepLog.Any(l => l.IndexOf("MemberDocument", StringComparison.OrdinalIgnoreCase) >= 0) ? FailMsg("step run must not load docs") : 0;
+            fail += emptyStepLog.Any(l => l.IndexOf("CommissionFine", StringComparison.OrdinalIgnoreCase) >= 0) ? FailMsg("step run must not load income/commission members") : 0;
+            fail += emptyStepLog.Any(l => l.IndexOf("2/5 صلح", StringComparison.Ordinal) >= 0 && l.IndexOf("اجرا نشد", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("later steps blocked");
+            fail += emptyStepLog.Any(l => l.IndexOf("ZabeteStatic", StringComparison.OrdinalIgnoreCase) >= 0) ? FailMsg("step1 must not dump ماده ۵") : 0;
+            var slim = PermitSteps.SlimVars(new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidZabeteh" }, { "value", "3fd00472-04da-4b5b-8ca8-701d9e82c4c0" }, { "table", "[dbo].[Zabeteh]" } },
+                new Dictionary<string, object> { { "name", "DateZabeteh" }, { "value", "1404/01/01" }, { "table", "[dbo].[Zabeteh]" } },
+                new Dictionary<string, object> { { "name", "UserName" }, { "value", "x" }, { "table", "[dbo].[Zabeteh]" } },
+            });
+            fail += slim.Count == 1 ? 0 : FailMsg("slim vars drops extra overlay columns");
             fail += Expect(string.Join(",", PermitPipeline.PermitClasses), "338", "takhalofat class");
             fail += Expect(string.Join(",", PermitPipeline.PermitClasses), "337", "income class");
             fail += Expect(ZabetehCase.StaticPkeyColumn, "P_Key", "static P_Key column");
@@ -365,6 +392,34 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Zabeteh     : روکش اعلام‌نشده NidZabeteh=abc") ? 0 : FailMsg("unannounced overlay copies");
             fail += FormulaEngine.IsSummaryLine("Permit      : WorkItem=5298603 بررسی نمی‌شود") ? 0 : FailMsg("ignore workitem copies");
             fail += FormulaEngine.IsSummaryLine("Detail      : جدول [AspNetUsers] cols=Id") ? FailMsg("detail prefix never copies") : 0;
+            fail += FormulaEngine.IsSummaryLine("Step        : 1/5 ضابطه — رد") ? 0 : FailMsg("step line copies");
+            bool prevStrict = FormulaEngine.StrictSummary;
+            FormulaEngine.StrictSummary = true;
+            fail += FormulaEngine.IsSummaryLine("Step        : 1/5 ضابطه — رد") ? 0 : FailMsg("strict step copies");
+            fail += FormulaEngine.IsSummaryLine("Arch         : class 335 CommissionFine members=15") ? FailMsg("strict drops arch") : 0;
+            fail += FormulaEngine.IsSummaryLine("Doc         : MemberDocument TOP 1000 → 503 ردیف") ? FailMsg("strict drops docs") : 0;
+            fail += FormulaEngine.IsSummaryLine("Chidman      : توقف صلح اگر ضابطه/چیدمان اعلام نشده") ? FailMsg("strict drops chidman") : 0;
+            fail += FormulaEngine.IsSummaryLine("Zabeteh     : روکش اعلام‌نشده NidZabeteh=3fd00472") ? 0 : FailMsg("strict overlay copies");
+            fail += FormulaEngine.IsSummaryLine("Zabeteh     : Sara tables = Sh_RequestInfo, Zabeteh") ? FailMsg("strict drops table catalog") : 0;
+            fail += FormulaEngine.IsSummaryLine("SolhNid      : Member 1296 Run codeLen=366093") ? FailMsg("strict drops solh members") : 0;
+            fail += FormulaEngine.IsSummaryLine("History      : 40 change row(s)") ? FailMsg("strict drops history count") : 0;
+            var flood = new[]
+            {
+                "Arch         : class 335 CommissionFine members=15 (853 KB)",
+                "Doc         : MemberDocument TOP 1000 → 503 ردیف",
+                "Chidman      : chidman AddError: 21 line(s) in Member 1288",
+                "History      : 40 change row(s)",
+                "SolhNid      : Member 1296 Run codeLen=366093",
+                "Step        : 1/5 ضابطه — رد",
+                "Step        : ضابطه هست، اعلام نشده. روکش=3fd00472-04da-4b5b-8ca8-701d9e82c4c0 PlanType=24",
+                "Zabeteh     : روکش اعلام‌نشده NidZabeteh=3fd00472-04da-4b5b-8ca8-701d9e82c4c0 CI_PlanType=24",
+                "Exit code    : 1",
+            };
+            int copied = 0;
+            foreach (string line in flood)
+                if (FormulaEngine.IsSummaryLine(line)) copied++;
+            fail += copied == 4 ? 0 : FailMsg("strict flood copies only 4 step lines, got " + copied);
+            FormulaEngine.StrictSummary = prevStrict;
             return fail;
         }
 
@@ -440,8 +495,8 @@ namespace RuleTrace
             fail += Expect(html, "300002275", "permit sample workitem");
             fail += Expect(html, "5298603", "ignored workitem mentioned");
             fail += Expect(html, "تجدید بنا", "reconstruction permit");
-            fail += Expect(html, "تحلیل", "tahlil stage");
-            fail += Expect(html, "درآمد", "income stage");
+            fail += Expect(html, "گام ۱", "step 1 copy");
+            fail += Expect(html, "ابزارهای بیشتر", "advanced tools collapsed");
             fail += Expect(html, "مستند کلی", "overall docs button");
             fail += Expect(html, "/api/docs", "docs endpoint");
             fail += Expect(html, "data-tab=\"docs\"", "docs tab");
@@ -482,7 +537,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22m-unannounced", "bootstrap label");
+                        fail += Expect(boot, "v23a-one-step", "bootstrap label");
                         return fail;
                     }
                 }

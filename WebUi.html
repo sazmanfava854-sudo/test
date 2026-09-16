@@ -219,9 +219,17 @@
         </div>
         <label>پارامترها (Name=Value هر خط)</label>
         <textarea id="parameters" placeholder="NidProc=..."></textarea>
+        <div class="status" style="margin-top:12px">
+          <span>گام‌ها (یکی‌یکی): ۱ ضابطه → ۲ صلح → ۳ تحلیل → ۴ کمیسیون → ۵ درآمد. اجرا فقط گام ردشده را می‌گوید.</span>
+        </div>
         <div class="actions">
           <button class="ghost" id="btnLookup">جستجو در Sara</button>
           <button class="gold" id="btnRun">اجرا</button>
+          <button class="ghost" id="btnCopy">کپی خلاصه</button>
+        </div>
+        <details style="margin-top:12px">
+          <summary class="sub" style="cursor:pointer">ابزارهای بیشتر (چیدمان، مستند، تاریخچه، موتور)</summary>
+          <div class="actions">
           <button class="ghost" id="btnHistory">بررسی فرمول از DB</button>
           <button class="ghost" id="btnChidman">تحلیل چیدمان ۱۲۸۸</button>
           <button class="ok" id="btnSolhNid">دیباگ پروانه این Nid</button>
@@ -229,13 +237,13 @@
           <button class="ghost" id="btnCombine">ترکیب DB + DLL</button>
           <button class="ghost" id="btnMembers">تحلیل Member</button>
           <button class="ghost" id="btnInspect">بررسی موتور</button>
-          <button class="ghost" id="btnCopy">کپی خلاصه</button>
           <button class="ghost" id="btnClear">پاک کردن خروجی</button>
           <button class="danger" id="btnQuit">خروج از برنامه</button>
-        </div>
+          </div>
+        </details>
         <div class="status">
           <span id="status">آماده — بدون CMD، فقط مرورگر</span>
-          <span>پروانه: ضابطه ۳۳۶/۳۴۲ → صلح ۳۴۴/۳۴۵ → تحلیل ۳۳۸ → کمیسیون ۳۴۰/۳۳۵ → درآمد ۳۳۷</span>
+          <span>تا گام ۱ (اعلام ضابطه) قبول نشود، صلح/تحلیل/کمیسیون/درآمد را نگاه نکنید</span>
         </div>
         <div style="margin-top:12px; overflow:auto">
           <table id="cases">
@@ -280,7 +288,7 @@
           <pre class="code" id="dbgView"></pre>
         </div>
         <div id="tab-vars" hidden>
-          <div class="sub" id="varsDiag" style="margin-bottom:10px">همهٔ پرونده‌های پروانه: ضابطه → صلح → تحلیل → کمیسیون ماده ۱۰۰ → درآمد. پرونده نمونه: WorkItem 300002275 (پروانه تجدید بنا). اگر Zabeteh با NidNosaziCode باشد ولی ActiveNidZabeteh خالی باشد، ضابطه هست و اعلام نشده — L270 درست می‌ایستد (Member 1296 را عوض نکنید). WorkItem 5298603 بررسی نمی‌شود. ابتدا جستجو، بعد «دیباگ پروانه این Nid».</div>
+          <div class="sub" id="varsDiag" style="margin-bottom:10px">گام ۱ WorkItem 300002275 (پروانه تجدید بنا): روکش Zabeteh هست ولی ActiveNidZabeteh خالی — اعلام نشده. join روی NidNosaziCode. کار: اعلام ضابطه در گردش پروانه. گام ۲–۵ را نزنید. Member 1296 را عوض نکنید. WorkItem 5298603 بررسی نمی‌شود.</div>
           <div style="overflow:auto; margin-bottom:10px">
             <table id="varsTable">
               <thead><tr><th>متغیر / ستون</th><th>مقدار</th><th>جدول</th><th>منبع</th></tr></thead>
@@ -542,12 +550,12 @@ $("btnHistory").onclick = async () => {
 };
 $("btnRun").onclick = async () => {
   const p = payload();
-  if (p.clearCache) toast("توجه: پاک کردن Cache تیک دارد — DLL کامپایل‌شده Solh حذف می‌شود");
+  if (!p.nidProc) { toast("اول 300002275 را جستجو کنید"); return; }
   const j = await api("/api/run", p);
-  showMembers(j.members);
-  showTrace(j.trace, j.params, j.watch);
+  showVars(j.vars, j.diagnosis, j.nextAction);
   showSummary(j.summary);
-  toast("Exit " + (j.exitCode != null ? j.exitCode : "?"));
+  document.querySelector('[data-tab="summary"]').click();
+  toast(j.diagnosis || ("گام " + (j.step || 1) + " " + (j.status || "")));
 };
 $("btnChidman").onclick = async () => {
   const j = await api("/api/analyze-chidman", payload());
