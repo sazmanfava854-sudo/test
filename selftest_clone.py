@@ -137,7 +137,7 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23d-hover-debug", "label")
+expect(build, "v23e-hover-instanc", "label")
 expect(csproj, "HoverDebug.cs", "csproj compiles HoverDebug")
 expect(html, "hoverTip", "hover tooltip")
 expect(html, "renderCode", "line renderer")
@@ -254,6 +254,14 @@ for i, line in enumerate(sample.splitlines(), 1):
         probes.append(m.group(1))
 if probes != ["IS_BlandMartabe", "ساختمان", "دستگاه"]:
     failmsg("python logfilefj parse " + str(probes))
+
+if "به‌جای بارگذاری همهٔ کلاس‌ها فقط گام ردشده" in engine:
+    failmsg("empty Instanc must not recurse DebugSteps")
+if "eng.DebugSteps(req.NidProc, scopes)" in webapp:
+    failmsg("hover اجرا must not dump tables before logfilefj")
+expect(hover, "NoInstance", "no-instance copy")
+expect(hover, "ClearCache", "do not clear cache")
+expect(webapp, "FocusMember", "open member with most logfilefj")
 
 print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
 sys.exit(0 if fail == 0 else 1)

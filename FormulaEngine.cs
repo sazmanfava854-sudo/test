@@ -880,12 +880,7 @@ namespace RuleTrace
             }
             else if (!HasLiveInstance(result))
             {
-                _log("Arch         : موتور پوسته خالی — به‌جای بارگذاری همهٔ کلاس‌ها فقط گام ردشده اجرا می‌شود");
-                try
-                {
-                    DebugSteps(r == null ? "" : r.NidProc);
-                }
-                catch (Exception ex) { _log("Step        : " + FirstLine(ex.Message)); }
+                _log("Hover      : " + HoverDebug.NoInstance);
                 _summaryCapture = false;
                 PrintSummary();
                 return 2;

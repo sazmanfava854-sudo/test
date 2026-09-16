@@ -35,6 +35,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 6. **اجرا** — کد Member همان فرم بار می‌شود؛ `logfilefj("نام", مقدار)` به خط‌ها وصل می‌شود
 7. تب «کد Member» — موس را روی خط نگه دارید تا مقدار دیده شود (سبز = مقدار هست، زرد = probe بدون اجرا)
 
+اگر Instanc ساخته نشد (کش DLL خالی / CompilerErrors): یک‌بار همان فرم را در سارا باز کنید تا کامپایل شود، بعد اینجا اجرا کنید و **ClearCache را تیک نزنید**. RuleTrace VB را کامپایل نمی‌کند.
+
 `logfilefj` همان `Info8.AddError(Warning, A, B)` است؛ بعد از اجرای زنده، B در tooltip می‌آید. Member 1296 را عوض نکنید.
 
 این برنامه `dbo.Member` را نمی‌نویسد و VB را کامپایل/بازنویسی نمی‌کند.

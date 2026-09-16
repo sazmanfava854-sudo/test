@@ -655,7 +655,7 @@ $("btnRun").onclick = async () => {
   showTrace(j.trace, j.params, j.watch);
   showSummary(j.summary);
   document.querySelector('[data-tab="code"]').click();
-  toast(j.hoverGoal || "موس را روی خط نگه‌دارید");
+  toast(j.diagnosis || j.hoverGoal || "موس را روی خط نگه‌دارید");
 };
 $("btnChidman").onclick = async () => {
   const j = await api("/api/analyze-chidman", payload());

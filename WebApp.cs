@@ -310,9 +310,11 @@ namespace RuleTrace
                 string formTitle = PermitScopes.Title(scopes[0]);
                 return Run("دیباگ hover فرم " + formTitle + " — بدون UI سارا", dll, (eng, log) =>
                 {
+                    bool prevStrict = FormulaEngine.StrictSummary;
+                    FormulaEngine.StrictSummary = true;
+                    try
+                    {
                     log.Add("Hover      : " + HoverDebug.Goal);
-                    var extra = eng.DebugSteps(req.NidProc, scopes);
-                    var varList = extra.ContainsKey("vars") ? extra["vars"] as List<Dictionary<string, object>> : null;
                     List<MemberSource> sources = new List<MemberSource>();
                     try { sources = eng.LoadFormSources(scopes); }
                     catch (Exception ex) { log.Add("Hover      : Member خوانده نشد — " + ex.Message); }
@@ -343,23 +345,54 @@ namespace RuleTrace
                         log.Add("Hover      : پوشه DLL نیست — کد Member + logfilefj خوانده می‌شود؛ مقدار بعد از اجرای زنده پر می‌شود");
 
                     int probes = 0, bound = 0;
-                    var packed = PackSources(sources, trace, parms, varList, out probes, out bound);
+                    var packed = PackSources(sources, trace, parms, null, out probes, out bound);
+                    int focus = FocusMember(packed);
                     log.Add("Hover      : probes=" + probes + " مقداردار=" + bound + " — موس را روی خط نگه‌دارید");
 
-                    extra["members"] = packed;
-                    extra["trace"] = PackTrace(trace);
-                    extra["params"] = parms;
-                    extra["watch"] = req.Watch;
-                    extra["hoverGoal"] = HoverDebug.Goal;
-                    extra["probeCount"] = probes;
-                    extra["boundCount"] = bound;
-                    extra["liveCode"] = live;
-                    extra["summary"] = log.Where(IsCopyLine).ToList();
-                    extra["settings"] = SettingsMap();
-                    extra["chidmanMember"] = ChidmanAnalyzer.DefaultChidmanMemberId;
-                    extra["focusMember"] = 0;
-                    if (!extra.ContainsKey("exitCode")) extra["exitCode"] = live == 1 ? 1 : 0;
+                    string diagnosis;
+                    string next;
+                    if (probes > 0 && bound == 0 && live == 2)
+                    {
+                        diagnosis = "پروب logfilefj=" + probes + " مقداردار=0. " + HoverDebug.NoInstance;
+                        next = "فرم " + formTitle + " را یک‌بار در سارا باز کنید تا کش DLL پر شود، بعد اینجا اجرا — ClearCache خاموش.";
+                        log.Add("Hover      : " + HoverDebug.NoInstance);
+                    }
+                    else if (bound > 0)
+                    {
+                        diagnosis = "موس را روی خط سبز نگه دارید — " + bound + " مقدار از logfilefj/ParametersValue";
+                        next = "خط زرد یعنی پروب هست و هنوز مقدار نیامده";
+                    }
+                    else
+                    {
+                        diagnosis = HoverDebug.Goal;
+                        next = "در کد فرم logfilefj(\"نام\", مقدار) بگذارید";
+                    }
+
+                    var extra = new Dictionary<string, object>
+                    {
+                        { "members", packed },
+                        { "trace", PackTrace(trace) },
+                        { "params", parms },
+                        { "watch", req.Watch },
+                        { "hoverGoal", HoverDebug.Goal },
+                        { "probeCount", probes },
+                        { "boundCount", bound },
+                        { "liveCode", live },
+                        { "diagnosis", diagnosis },
+                        { "nextAction", next },
+                        { "vars", new List<Dictionary<string, object>>() },
+                        { "summary", log.Where(IsCopyLine).ToList() },
+                        { "settings", SettingsMap() },
+                        { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
+                        { "focusMember", focus },
+                        { "exitCode", live == 1 ? 1 : 0 },
+                    };
                     return extra;
+                    }
+                    finally
+                    {
+                        FormulaEngine.StrictSummary = prevStrict;
+                    }
                 });
             }
 
@@ -565,6 +598,22 @@ namespace RuleTrace
                 });
             }
             return list;
+        }
+
+        private static int FocusMember(List<object> packed)
+        {
+            int best = 0, nid = 0;
+            if (packed == null) return 0;
+            foreach (object o in packed)
+            {
+                var d = o as Dictionary<string, object>;
+                if (d == null) continue;
+                int probes = Json.Int(d, "probeCount");
+                if (probes <= best) continue;
+                best = probes;
+                nid = Json.Int(d, "nidMember");
+            }
+            return nid;
         }
 
         private static List<object> PackTrace(IList<TraceEvent> trace)

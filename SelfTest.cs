@@ -183,9 +183,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("hover-debug", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("hover-instanc", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23d-hover-debug, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23e-hover-instanc, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -464,6 +464,8 @@ namespace RuleTrace
             fail += packed.Count >= 2 ? 0 : FailMsg("pack lines");
             fail += Expect(HoverDebug.Goal, "logfilefj", "goal mentions logfilefj");
             fail += Expect(HoverDebug.Goal, "موس", "goal mentions hover");
+            fail += Expect(HoverDebug.NoInstance, "ClearCache", "empty Instanc tells user not to clear cache");
+            fail += Expect(HoverDebug.NoInstance, "سارا", "empty Instanc says open Sara once");
             fail += HoverDebug.Idents("logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)").Contains("IS_BlandMartabe") ? 0 : FailMsg("idents on probe line");
             return fail;
         }
@@ -695,7 +697,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23d-hover-debug", "bootstrap label");
+                        fail += Expect(boot, "v23e-hover-instanc", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
