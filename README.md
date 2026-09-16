@@ -31,8 +31,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
 5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**
 6. **دیباگ صلح این Nid** — کد Member 1296/1297 را از DB می‌خواند (CRUD=Read، بدون نوشتن) و ضابطهٔ همین NidProc را از جداول نام‌دار Sara می‌خواند:
-   `Zabeteh` (روکش محاسبه‌شده)، `CI_PlanType`، `CI_PlanUsingType`، `CI_Zabeteh`، `ZabeteStatic_Info` (کلید Pkey از همپوشانی لایه ۸۳۶ مثل ماده ۵)، `ZabeteStatic_Zabete` (ریز ضابطه ایستا)، `ZabeteStatic_Plan` (طرح/کاربری مجاز). داکیومنت کدها از `[DbRuleEngeinDocument].[dbo].[MemberDocument]` با همان یوزر `debugger` خوانده می‌شود. توقف رایج: `ActiveNidZabeteh = Guid.Empty` در Member 1296.
-7. **بررسی فرمول از DB** و تب تاریخچه — لاگ `NidHistory` / `MemberHistory`
+   `Zabeteh` (روکش محاسبه‌شده)، `CI_PlanType`، `CI_PlanUsingType`، `CI_Zabeteh`، `ZabeteStatic_Info` (کلید Pkey از همپوشانی لایه ۸۳۶ مثل ماده ۵)، `ZabeteStatic_Zabete` (ریز ضابطه ایستا)، `ZabeteStatic_Plan` (طرح/کاربری مجاز). توقف رایج: `ActiveNidZabeteh = Guid.Empty` در Member 1296.
+7. **مستند کلی** — همان کوئری SSMS بدون فیلتر Member:
+   `SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM [DbRuleEngeinDocument].[dbo].[MemberDocument]`
+   با یوزر `debugger`. جداول **دیگر** همان دیتابیس هم لیست و peek می‌شوند. عنوان/متن مستند برای نام جداول ضابطه (`Zabeteh`، `CI_PlanType`، …) جستجو می‌شود.
+8. **بررسی فرمول از DB** و تب تاریخچه — لاگ `NidHistory` / `MemberHistory`
 
 کلاس‌ها به هم وصل‌اند. Member چیدمان `1288` در `ZabetehConvert` (342) است نه Solh/344. با انتخاب Solh این کلاس‌ها با هم خوانده می‌شوند: Rule 336، ZabetehConvert 342، Solh 344، Tavafogh 345، Global 432.
 
@@ -57,5 +60,6 @@ WebHost.cs / WebApp.cs ← HttpListener روی 127.0.0.1
 FormulaEngine.cs       ← موتور Sara با reflection
 ChidmanAnalyzer.cs     ← تحلیل ایستای چیدمان ۱۲۸۸
 SolhNidDebug.cs        ← دیباگ صلح این Nid (Read-only)
-ZabetehCase.cs         ← جداول ضابطه Sara + MemberDocument
+ZabetehCase.cs         ← جداول ضابطه Sara
+RuleDocs.cs            ← مستند کلی MemberDocument + جداول دیگر DbRuleEngeinDocument
 ```

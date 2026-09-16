@@ -225,6 +225,7 @@
           <button class="ghost" id="btnHistory">بررسی فرمول از DB</button>
           <button class="ghost" id="btnChidman">تحلیل چیدمان ۱۲۸۸</button>
           <button class="ok" id="btnSolhNid">دیباگ صلح این Nid</button>
+          <button class="ghost" id="btnDocs">مستند کلی</button>
           <button class="ghost" id="btnCombine">ترکیب DB + DLL</button>
           <button class="ghost" id="btnMembers">تحلیل Member</button>
           <button class="ghost" id="btnInspect">بررسی موتور</button>
@@ -251,6 +252,7 @@
           <button data-tab="code">کد Member</button>
           <button data-tab="debug">دیباگ مرحله‌ای</button>
           <button data-tab="vars">متغیرهای این Nid</button>
+          <button data-tab="docs">مستندات</button>
           <button data-tab="summary">خلاصه خطا</button>
         </div>
         <div id="tab-log"><div class="log" id="log"></div></div>
@@ -286,6 +288,22 @@
             </table>
           </div>
           <pre class="code" id="varsStop">بلوک Stop صلح (Member 1296) اینجا می‌آید</pre>
+        </div>
+        <div id="tab-docs" hidden>
+          <div class="sub" id="docsMeta" style="margin-bottom:10px">SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM DbRuleEngeinDocument.dbo.MemberDocument — دکمه «مستند کلی» را بزنید. جداول دیگر همان دیتابیس هم لیست می‌شوند.</div>
+          <div style="overflow:auto; margin-bottom:10px">
+            <table id="docTables">
+              <thead><tr><th>جدول در DbRuleEngeinDocument</th><th>ستون‌ها</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div style="overflow:auto; margin-bottom:10px">
+            <table id="docRows">
+              <thead><tr><th>DocId</th><th>Title</th><th>NidMember</th><th>ParentDocId</th><th>UserName</th><th>LastEditOn</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <pre class="code" id="docBody">یک ردیف مستند را انتخاب کنید</pre>
         </div>
         <div id="tab-summary" hidden><pre class="code" id="summary">هنوز اجرایی نشده</pre></div>
       </section>
@@ -413,6 +431,31 @@ function showVars(rows, diagnosis, stopBlock) {
   });
   $("varsStop").textContent = stopBlock || "(بلوک Stop پیدا نشد)";
 }
+function showDocs(j) {
+  const docs = (j && j.docs) || [];
+  const tables = (j && (j.tables || j.docTables)) || [];
+  $("docsMeta").textContent = ((j && j.catalog) || "DbRuleEngeinDocument") + ".dbo.MemberDocument — "
+    + docs.length + " ردیف مستند، " + tables.length + " جدول در کاتالوگ";
+  const tbT = $("docTables").querySelector("tbody");
+  tbT.innerHTML = "";
+  tables.forEach(t => {
+    const tr = document.createElement("tr");
+    [t.name, t.cols].forEach(c => { const td = document.createElement("td"); td.textContent = c == null ? "" : String(c); tr.appendChild(td); });
+    tbT.appendChild(tr);
+  });
+  const tb = $("docRows").querySelector("tbody");
+  tb.innerHTML = "";
+  docs.forEach(d => {
+    const tr = document.createElement("tr");
+    [d.docId, d.title, d.nidMember, d.parentDocId, d.userName, d.lastEditOn].forEach(c => {
+      const td = document.createElement("td"); td.textContent = c == null ? "" : String(c); tr.appendChild(td);
+    });
+    tr.style.cursor = "pointer";
+    tr.onclick = () => { $("docBody").textContent = (d.title || "") + "\n\n" + (d.excerpt || ""); };
+    tb.appendChild(tr);
+  });
+  if (!docs.length) $("docBody").textContent = "ردیفی خوانده نشد — اتصال debugger به DbRuleEngeinDocument را تست کنید";
+}
 function showTrace(list, parms, watch) {
   trace = list || [];
   paramsMap = parms || {};
@@ -519,10 +562,18 @@ $("btnSolhNid").onclick = async () => {
   const j = await api("/api/solh-nid", payload());
   showMembers(j.members, j.focusMember);
   showVars(j.vars, j.diagnosis, j.stopBlock);
+  showDocs(j);
   if (j.history) showHistory(j.history);
   showSummary(j.summary);
   document.querySelector('[data-tab="vars"]').click();
   toast(j.diagnosis || "دیباگ صلح");
+};
+$("btnDocs").onclick = async () => {
+  const j = await api("/api/docs", payload());
+  showDocs(j);
+  if (j.summary) showSummary(j.summary);
+  document.querySelector('[data-tab="docs"]').click();
+  toast(((j.docs || []).length) + " ردیف مستند / " + ((j.tables || []).length) + " جدول");
 };
 $("btnCombine").onclick = async () => {
   const j = await api("/api/combine", payload());
@@ -548,7 +599,7 @@ document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
     b.classList.add("on");
-    ["log","history","code","debug","vars","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
+    ["log","history","code","debug","vars","docs","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
   };
 });
 

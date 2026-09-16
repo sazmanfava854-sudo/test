@@ -973,6 +973,21 @@ namespace RuleTrace
             }
         }
 
+        public Dictionary<string, object> BrowseDocs()
+        {
+            Summary.Clear();
+            _summaryCapture = true;
+            try
+            {
+                _log("Doc         : مستند کلی " + RuleDocs.Catalog + ".dbo." + RuleDocs.MainTable + " — SELECT TOP (1000) بدون فیلتر Member");
+                return RuleDocs.Read(_s.RuleEngine, _log);
+            }
+            finally
+            {
+                _summaryCapture = false;
+            }
+        }
+
         private object BuildFactory(RunRequest r)
         {
             var parameterList = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

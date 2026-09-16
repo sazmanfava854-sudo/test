@@ -69,6 +69,7 @@
     <Compile Include="MemberRepository.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RuleDocs.cs" />
     <Compile Include="SelfTest.cs" />
     <Compile Include="SolhNidDebug.cs" />
     <Compile Include="UserSettings.cs" />

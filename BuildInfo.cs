@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v22f-zabeteh-tables";
+        public const string Label = "v22g-member-docs";
 
         public static string Banner
         {

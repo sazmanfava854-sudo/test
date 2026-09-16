@@ -9,8 +9,9 @@ using System.Text;
 namespace RuleTrace
 {
     /// <summary>
-    /// Read-only Sara ضابطه tables for one NidProc, plus MemberDocument notes.
+    /// Read-only Sara ضابطه tables for one NidProc.
     /// Named tables only — no INFORMATION_SCHEMA hunt for random *Zabeteh* names.
+    /// Overall docs live in RuleDocs (DbRuleEngeinDocument.MemberDocument).
     /// </summary>
     internal static class ZabetehCase
     {
@@ -29,8 +30,6 @@ namespace RuleTrace
         };
 
         private static readonly string[] SkipTypes = { "image", "varbinary", "binary", "timestamp", "rowversion" };
-
-        private static readonly int[] DocMembers = { 1296, 1297, 1288, 1300, 1148, 1316 };
 
         public static List<Dictionary<string, object>> Read(string sara, string ruleEngine, string nidProc, Action<string> log)
         {
@@ -74,8 +73,7 @@ namespace RuleTrace
             int staticInfo = CountTable(vars, "ZabeteStatic_Info");
             log("Zabeteh     : rows Zabeteh=" + zabRows + " ZabeteStatic_Info=" + staticInfo);
 
-            ReadDocuments(ruleEngine, vars, log);
-            log("Zabeteh     : " + vars.Count + " مقدار خوانده شد");
+            log("Zabeteh     : " + vars.Count + " مقدار از جداول ضابطه");
             return vars;
         }
 
@@ -101,32 +99,7 @@ namespace RuleTrace
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(ruleEngine))
-            {
-                log("Doc         : RuleEngine خالی — MemberDocument Probe نشد");
-                return;
-            }
-            string cs = WithCatalog(ruleEngine, DocumentCatalog);
-            try
-            {
-                using (var c = new SqlConnection(cs))
-                using (var cmd = new SqlCommand(
-                    "SELECT DB_NAME(), SUSER_SNAME(), (SELECT COUNT(*) FROM [dbo].[MemberDocument])", c) { CommandTimeout = 30 })
-                {
-                    c.Open();
-                    using (var r = cmd.ExecuteReader())
-                    {
-                        r.Read();
-                        log("Doc         : [" + DocumentCatalog + "].[dbo].[MemberDocument] OK db="
-                            + Convert.ToString(r.GetValue(0)) + " login=" + Convert.ToString(r.GetValue(1))
-                            + " rows=" + Convert.ToString(r.GetValue(2)));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                log("Doc         : MemberDocument — " + FirstLine(ex.Message));
-            }
+            RuleDocs.Probe(ruleEngine, log);
         }
 
         public static bool IsEmptyGuid(string v)
@@ -327,55 +300,6 @@ namespace RuleTrace
             if (col.IndexOf("Pkey", StringComparison.OrdinalIgnoreCase) >= 0) return "Pkey ملک";
             if (col.IndexOf("NidProc", StringComparison.OrdinalIgnoreCase) >= 0) return "VB/کلید";
             return "ستون";
-        }
-
-        private static void ReadDocuments(string ruleEngine, List<Dictionary<string, object>> vars, Action<string> log)
-        {
-            if (string.IsNullOrWhiteSpace(ruleEngine))
-            {
-                log("Doc         : RuleEngine خالی — MemberDocument خوانده نشد");
-                return;
-            }
-            string cs = WithCatalog(ruleEngine, DocumentCatalog);
-            try
-            {
-                using (var c = new SqlConnection(cs))
-                using (var cmd = new SqlCommand(@"
-SELECT TOP 40 DocId, Title, NidMember, LastEditOn, Sort, ParentDocId, UserName,
-       CASE WHEN DATALENGTH(MemberDocument) IS NULL THEN 0 ELSE DATALENGTH(MemberDocument) END AS DocBytes,
-       LEFT(CONVERT(NVARCHAR(MAX), MemberDocument), 1500) AS DocText
-FROM [dbo].[MemberDocument]
-WHERE NidMember IN (" + string.Join(",", DocMembers.Select(n => n.ToString(CultureInfo.InvariantCulture))) + @")
-ORDER BY NidMember, Sort, DocId", c) { CommandTimeout = 45 })
-                {
-                    c.Open();
-                    using (var r = cmd.ExecuteReader())
-                    {
-                        int n = 0;
-                        while (r.Read())
-                        {
-                            n++;
-                            int mid = r["NidMember"] == DBNull.Value ? 0 : Convert.ToInt32(r["NidMember"]);
-                            string title = r["Title"] == DBNull.Value ? "" : Convert.ToString(r["Title"]);
-                            string text = r["DocText"] == DBNull.Value ? "" : Convert.ToString(r["DocText"]);
-                            string user = r["UserName"] == DBNull.Value ? "" : Convert.ToString(r["UserName"]);
-                            vars.Add(new Dictionary<string, object>
-                            {
-                                { "name", "MemberDocument/" + mid },
-                                { "value", Trunc((title + " — " + text).Trim(' ', '—'), 200) },
-                                { "table", "[" + DocumentCatalog + "].[dbo].[MemberDocument]" },
-                                { "match", "داکیومنت " + user },
-                            });
-                            log("Doc         : Member " + mid + "  " + Trunc(title, 80));
-                        }
-                        log("Doc         : " + n + " ردیف از " + DocumentCatalog + ".dbo.MemberDocument");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                log("Doc         : " + FirstLine(ex.Message));
-            }
         }
 
         private static bool TryMeta(string cs, string table, out HashSet<string> cols, out Dictionary<string, string> types)

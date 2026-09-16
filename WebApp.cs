@@ -256,6 +256,17 @@ namespace RuleTrace
             });
         }
 
+        public Dictionary<string, object> BrowseDocs(Dictionary<string, object> body)
+        {
+            return Run("مستند کلی MemberDocument...", false, (eng, log) =>
+            {
+                var extra = eng.BrowseDocs();
+                extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
+                extra["settings"] = SettingsMap();
+                return extra;
+            });
+        }
+
         public Dictionary<string, object> Inspect(Dictionary<string, object> body)
         {
             string formula = FormulaOf(body);

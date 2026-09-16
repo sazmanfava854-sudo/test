@@ -74,6 +74,8 @@ namespace RuleTrace
             log("SolhNid      : شناسه‌های VB در Run/meghdardehi=" + names.Count);
 
             var vars = ZabetehCase.Read(sara, ruleEngine, nidProc, log);
+            var docs = RuleDocs.Read(ruleEngine, log);
+            RuleDocs.FlattenInto(vars, docs);
             string diagnosis = Diagnose(stop, maz, vars, log);
             log("SolhNid      : بخش مشکوک: " + diagnosis);
 
@@ -87,6 +89,9 @@ namespace RuleTrace
                 { "mazArzLine", maz == null ? 0 : maz.Line },
                 { "vars", vars },
                 { "vbNames", names.Take(80).ToList() },
+                { "docs", docs.ContainsKey("docs") ? docs["docs"] : new List<Dictionary<string, object>>() },
+                { "docTables", docs.ContainsKey("tables") ? docs["tables"] : new List<Dictionary<string, object>>() },
+                { "docMatches", docs.ContainsKey("matches") ? docs["matches"] : new List<Dictionary<string, object>>() },
             };
         }
 

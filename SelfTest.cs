@@ -20,6 +20,7 @@ namespace RuleTrace
             fail += HistoryImageSql();
             fail += SolhNidExtract();
             fail += ZabetehNamedTables();
+            fail += RuleDocsCatalog();
             fail += WebUiEmbedded();
             fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
@@ -179,9 +180,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("zabeteh", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("member-docs", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22f-zabeteh-tables, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22g-member-docs, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -244,6 +245,33 @@ namespace RuleTrace
             var vars = ZabetehCase.Read("", "", "FA77A442-29CD-4DDC-ADEA-A3D3A6183F28", log.Add);
             fail += vars.Count == 0 ? 0 : FailMsg("no vars without Sara");
             fail += Expect(string.Join("\n", log), "اتصال Sara خالی", "empty Sara log");
+            return fail;
+        }
+
+        private static int RuleDocsCatalog()
+        {
+            int fail = 0;
+            string sql = RuleDocs.CatalogSql(null);
+            fail += Expect(sql, "TOP (1000)", "overall TOP 1000");
+            foreach (string col in RuleDocs.UserColumns)
+                fail += Expect(sql, "[" + col + "]", "catalog column " + col);
+            if (sql.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: overall MemberDocument query must not filter NidMember");
+                fail++;
+            }
+            fail += Expect(RuleDocs.Catalog, "DbRuleEngeinDocument", "docs catalog");
+            fail += Expect(RuleDocs.MainTable, "MemberDocument", "main docs table");
+            fail += Expect(RuleDocs.DefaultBodyExpr(), "MemberDocument", "body convert");
+            fail += Expect(RuleDocs.BodyExpr("MemberDocument", "image"), "VARBINARY(MAX)", "image body via varbinary");
+            fail += Expect(string.Join(",", RuleDocs.TableHints), "Zabeteh", "hint Zabeteh");
+            fail += Expect(string.Join(",", RuleDocs.TableHints), "CI_PlanType", "hint CI_PlanType");
+            var empty = RuleDocs.Read("", m => { });
+            fail += empty.ContainsKey("docs") ? 0 : FailMsg("empty pack has docs");
+            fail += empty.ContainsKey("tables") ? 0 : FailMsg("empty pack has tables");
+            var vars = new List<Dictionary<string, object>>();
+            RuleDocs.FlattenInto(vars, empty);
+            fail += vars.Count == 0 ? 0 : FailMsg("flatten empty docs adds nothing");
             return fail;
         }
 
@@ -318,6 +346,10 @@ namespace RuleTrace
             fail += Expect(html, "CI_PlanType", "CI_PlanType hint");
             fail += Expect(html, "ZabeteStatic_Info", "static info hint");
             fail += Expect(html, "MemberDocument", "document table hint");
+            fail += Expect(html, "مستند کلی", "overall docs button");
+            fail += Expect(html, "/api/docs", "docs endpoint");
+            fail += Expect(html, "data-tab=\"docs\"", "docs tab");
+            fail += Expect(html, "ParentDocId", "ParentDocId column");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
             if (html.IndexOf("اجرای موتور (اختیاری)", StringComparison.Ordinal) >= 0)
             {
@@ -354,7 +386,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22f-zabeteh-tables", "bootstrap label");
+                        fail += Expect(boot, "v22g-member-docs", "bootstrap label");
                         return fail;
                     }
                 }
