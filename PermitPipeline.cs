@@ -16,7 +16,7 @@ namespace RuleTrace
         public const string SampleKind = "پروانه تجدید بنا";
         public const string IgnoreWorkItem = "5298603";
 
-        public const string PathFa = "ضابطه → صلح → تحلیل → کمیسیون ماده ۱۰۰ → درآمد";
+        public const string PathFa = "ضابطه → صلح (اگر باشد) → تحلیل → کمیسیون ماده ۱۰۰ → درآمد";
 
         public static readonly string[] StageNames = { "ضابطه", "صلح", "تحلیل", "کمیسیون ماده ۱۰۰", "درآمد" };
 
@@ -100,7 +100,7 @@ namespace RuleTrace
                 + " NidNosaziCode=" + (nosazi ?? "(خالی)"));
             log("Permit      : صلح      Solh/344=" + solh + " Tavafogh/345=" + tavafogh
                 + (emptyActive
-                    ? (hasOverlay ? " — L270: ضابطه هست ولی اعلام نشده" : " — L270: نه روکش نه Active")
+                    ? " — همه ملک‌ها صلح ندارند؛ L270 فقط اگر صلح محاسبه شود"
                     : " — L270 شلیک نمی‌شود"));
             log("Permit      : تحلیل    Takhalofat/338=" + tahlil
                 + (tahlil == 0 ? " — فرمول تحلیل برای این بارگذاری نیامد" : ""));
@@ -131,15 +131,17 @@ namespace RuleTrace
 
             string head = who + " مسیر " + PathFa + ". ";
             if (emptyActive && hasOverlay)
-                head += "ضابطه برای ملک هست (Zabeteh با NidNosaziCode) ولی اعلام نشده (ActiveNidZabeteh خالی). صلح L270 درست می‌ایستد. Member 1296 را عوض نکنید. تحلیل/کمیسیون/درآمد بعد از این Stop نمی‌رسند. ";
+                head += "ضابطه برای ملک هست (Zabeteh با NidNosaziCode). اعلام Active فقط وقتی لازم است که این ملک صلح داشته باشد — همه ملک‌ها صلح ندارند. ";
             else if (emptyActive)
-                head += "نه روکش Zabeteh نه Active — ضابطه برای این ملک پیدا نشد. صلح L270 (Member 1296) درست می‌ایستد. join " + ZabetehCase.JoinOn + ". ";
+                head += "روکش Zabeteh برای این ملک پیدا نشد. join " + ZabetehCase.JoinOn + ". ";
             else
-                head += "ضابطه اعلام شده؛ صلح L270 شلیک نمی‌شود. ";
+                head += "ضابطه اعلام شده. ";
             if (missing.Count > 0)
                 head += "کمبود بارگذاری: " + string.Join("، ", missing) + ".";
             else if (!(emptyActive && hasOverlay))
-                head += "پنج مرحله فرمول بارگذاری شد.";
+                head += "مراحل فرمول بارگذاری شد.";
+            else
+                head += "صلح اجباری نیست؛ تحلیل/کمیسیون/درآمد را جدا ببینید.";
             return head;
         }
 

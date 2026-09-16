@@ -250,7 +250,7 @@ namespace RuleTrace
             {
                 log("Zabeteh     : ActiveNidZabeteh خالی است — همان شرط L270");
                 if (hasZabetehRow)
-                    return "ActiveNidZabeteh روی درخواست خالی است اما Zabeteh با NidNosaziCode پیدا شد — ضابطه برای ملک هست ولی اعلام نشده (Member 1296 L" + (stop == null ? 270 : stop.Line) + ").";
+                    return "ضابطه ملک هست (Zabeteh با NidNosaziCode). Active خالی یعنی صلح روی این درخواست اعمال نشده — همه ملک‌ها صلح ندارند (Member 1296 L" + (stop == null ? 270 : stop.Line) + ").";
                 if (hasStatic)
                     return "ActiveNidZabeteh خالی است؛ ضابطه ایستا (ZabeteStatic_*) برای P_Key هست ولی به درخواست وصل نشده. صلح L270 درست می‌ایستد.";
                 return "ActiveNidZabeteh=Guid.Empty — این درخواست ضابطه اعلام‌شده ندارد. join روی " + ZabetehCase.JoinOn + " است نه NidProc. Member 1296 L" + (stop == null ? 270 : stop.Line) + " را عوض نکنید.";

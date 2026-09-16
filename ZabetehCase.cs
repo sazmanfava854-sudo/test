@@ -21,6 +21,7 @@ namespace RuleTrace
         {
             "Sh_RequestInfo",
             "Zabeteh",
+            "Zabeteh_Details",
             "CI_PlanType",
             "CI_PlanUsingType",
             "CI_Zabeteh",
@@ -88,7 +89,7 @@ namespace RuleTrace
                 log("Zabeteh     : پرونده " + PermitPipeline.SampleKind + " WorkItem=" + PermitPipeline.SampleWorkItem);
 
             if (IsEmptyGuid(keys.ActiveNidZabeteh))
-                log("Zabeteh     : ActiveNidZabeteh خالی/Guid.Empty — صلح L270 باید بایستد (حتی اگر ردیف Zabeteh با NidNosaziCode باشد)");
+                log("Zabeteh     : ActiveNidZabeteh خالی — اعلام فقط وقتی لازم است که این ملک صلح داشته باشد");
 
             DumpZabeteh(sara, keys, vars, log);
             FillKeys(keys, vars);
@@ -144,6 +145,9 @@ namespace RuleTrace
                 log("Zabeteh     : پرونده " + PermitPipeline.SampleKind + " WorkItem=" + PermitPipeline.SampleWorkItem);
 
             DumpZabeteh(sara, keys, vars, log);
+            FillKeys(keys, vars);
+            if (!IsEmptyGuid(keys.OverlayNidZabeteh))
+                DumpNamed(sara, "Zabeteh_Details", keys, vars, log, "NidZabeteh");
             return vars;
         }
 
@@ -205,6 +209,7 @@ namespace RuleTrace
             public string NidNosaziCode;
             public string NidWorkItem;
             public string Workflow;
+            public string OverlayNidZabeteh;
             public string PlanTypeId;
             public string PlanUsingTypeId;
             public string CIZabetehId;
@@ -225,6 +230,9 @@ namespace RuleTrace
                 k.NidWorkItem = First(vars, "NidWorkItem", "WorkItem");
             if (string.IsNullOrEmpty(k.Workflow))
                 k.Workflow = First(vars, "WorkflowTitel", "WorkflowTitle", "Workflow");
+            if (IsEmptyGuid(k.OverlayNidZabeteh))
+                k.OverlayNidZabeteh = FirstFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh")
+                    ?? FirstFromTable(vars, "Zabeteh", "NidZabeteh");
             if (string.IsNullOrEmpty(k.PlanTypeId))
                 k.PlanTypeId = First(vars, "CI_PlanType", "NidPlanType", "PlanType", "PlanTypeId");
             if (string.IsNullOrEmpty(k.PlanUsingTypeId))
@@ -323,9 +331,9 @@ namespace RuleTrace
             {
                 string nidZ = FirstFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh");
                 string plan = FirstFromTable(vars, "[dbo].[Zabeteh]", "CI_PlanType");
-                log("Zabeteh     : روکش اعلام‌نشده NidZabeteh=" + (nidZ ?? "(خالی)")
+                log("Zabeteh     : روکش ملک NidZabeteh=" + (nidZ ?? "(خالی)")
                     + " CI_PlanType=" + (plan ?? "(خالی)")
-                    + " — ضابطه برای ملک هست ولی Active خالی است؛ L270 درست می‌ایستد (Member 1296 را عوض نکنید)");
+                    + " — ضابطه هست؛ Active خالی یعنی صلح روی این درخواست اعمال نشده (همه ملک‌ها صلح ندارند)");
             }
 
             if (cols.Contains("NidZabeteh") && !IsEmptyGuid(keys.ActiveNidZabeteh))
@@ -347,7 +355,8 @@ namespace RuleTrace
         {
             if (col.Equals("NidProc", StringComparison.OrdinalIgnoreCase)) return k.NidProc;
             if (col.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return k.ActiveNidZabeteh;
-            if (col.Equals("NidZabeteh", StringComparison.OrdinalIgnoreCase)) return k.ActiveNidZabeteh;
+            if (col.Equals("NidZabeteh", StringComparison.OrdinalIgnoreCase))
+                return !IsEmptyGuid(k.OverlayNidZabeteh) ? k.OverlayNidZabeteh : k.ActiveNidZabeteh;
             if (col.Equals("P_Key", StringComparison.OrdinalIgnoreCase)
                 || col.IndexOf("Pkey", StringComparison.OrdinalIgnoreCase) >= 0
                 || col.Equals("PKEY", StringComparison.OrdinalIgnoreCase))

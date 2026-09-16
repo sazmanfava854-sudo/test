@@ -21,7 +21,7 @@ namespace RuleTrace
             public string NextAction;
         }
 
-        /// <summary>Step 1 only needs overlay vs Active. Later steps stay blocked until this passes.</summary>
+        /// <summary>Step 1 is overlay on the property. ActiveNidZabeteh is only a Solh gate — not every property has Solh.</summary>
         public static Result ClassifyZabeteh(string workItem, string active, string overlayId, string planType)
         {
             var r = new Result { Number = 1, Name = Names[0] };
@@ -32,27 +32,50 @@ namespace RuleTrace
                 r.NextAction = "WorkItem " + PermitPipeline.SampleWorkItem + " را جستجو کنید (پروانه تجدید بنا)";
                 return r;
             }
-            bool emptyActive = ZabetehCase.IsEmptyGuid(active);
             bool hasOverlay = !ZabetehCase.IsEmptyGuid(overlayId);
-            if (emptyActive && hasOverlay)
+            if (hasOverlay)
             {
-                r.Status = "FAIL";
-                r.Verdict = "ضابطه هست، اعلام نشده. روکش=" + overlayId
-                    + (string.IsNullOrEmpty(planType) ? "" : " PlanType=" + planType);
-                r.NextAction = "در گردش پروانه همین روکش را اعلام کنید تا ActiveNidZabeteh=" + overlayId
-                    + " شود. Member 1296 را عوض نکنید. گام‌های ۲–۵ را اجرا نکنید.";
+                r.Status = "PASS";
+                r.Verdict = "ضابطه ملک هست. روکش=" + overlayId
+                    + (string.IsNullOrEmpty(planType) ? "" : " PlanType=" + planType)
+                    + (ZabetehCase.IsEmptyGuid(active) ? " — Active خالی است ولی اعلام فقط برای صلح لازم است" : " Active=" + Trunc(active, 36));
+                r.NextAction = "صلح برای همه ملک‌ها اجباری نیست. گام ۲ را جدا ببینید.";
                 return r;
             }
-            if (emptyActive)
+            r.Status = "FAIL";
+            r.Verdict = "روکش Zabeteh برای این ملک پیدا نشد";
+            r.NextAction = "join " + ZabetehCase.JoinOn + " را در SSMS چک کنید.";
+            return r;
+        }
+
+        /// <summary>Solh is optional. Empty Active means this file is not calculating Solh — not a missing overlay.</summary>
+        public static Result ClassifySolh(string workItem, string active, bool hasSolhRecord)
+        {
+            var r = new Result { Number = 2, Name = Names[1] };
+            if (PermitPipeline.IsIgnoredWorkItem(workItem))
             {
-                r.Status = "FAIL";
-                r.Verdict = "نه روکش Zabeteh نه Active — ضابطه برای این ملک پیدا نشد";
-                r.NextAction = "join " + ZabetehCase.JoinOn + " را در SSMS چک کنید. Member 1296 را عوض نکنید.";
+                r.Status = "SKIP";
+                r.Verdict = "WorkItem " + PermitPipeline.IgnoreWorkItem + " صلح نیست";
+                r.NextAction = "گام ۳ تحلیل را جدا ببینید";
                 return r;
             }
-            r.Status = "PASS";
-            r.Verdict = "ضابطه اعلام شده Active=" + Trunc(active, 36);
-            r.NextAction = "گام ۲ صلح را جدا بزنید";
+            if (hasSolhRecord && ZabetehCase.IsEmptyGuid(active))
+            {
+                r.Status = "FAIL";
+                r.Verdict = "این پرونده صلح دارد ولی ActiveNidZabeteh خالی است — L270 می‌ایستد";
+                r.NextAction = "اگر صلح باید محاسبه شود، روکش را اعلام کنید. Member 1296 را عوض نکنید.";
+                return r;
+            }
+            if (hasSolhRecord)
+            {
+                r.Status = "PASS";
+                r.Verdict = "صلح اعمال می‌شود Active=" + Trunc(active, 36);
+                r.NextAction = "گام ۳ تحلیل را جدا ببینید";
+                return r;
+            }
+            r.Status = "SKIP";
+            r.Verdict = "صلح ندارد — همه ملک‌ها صلح ندارند. L270 این پرونده را متوقف نمی‌کند";
+            r.NextAction = "گام ۳ تحلیل را جدا ببینید. Member 1296 را عوض نکنید.";
             return r;
         }
 
@@ -76,22 +99,56 @@ namespace RuleTrace
 
             Result step1 = ClassifyZabeteh(work, active, overlay, plan);
             Write(log, step1);
-            int code = step1.Status == "PASS" ? 0 : (step1.Status == "SKIP" ? 0 : 1);
-            if (step1.Status != "PASS")
+            if (step1.Status == "FAIL")
             {
                 for (int n = 2; n <= 5; n++)
                     log("Step        : " + n + "/5 " + Names[n - 1] + " — اجرا نشد (گام ۱ قبول نشد)");
-                log("Exit code    : " + code);
-                return Pack(step1, SlimVars(vars), code);
+                log("Exit code    : 1");
+                return Pack(step1, SlimVars(vars), 1);
             }
 
-            log("Step        : 2/5 صلح — PASS (Active پر است؛ L270 شلیک نمی‌شود)");
-            log("Step        : 3/5 تحلیل — موقوف تا Instanc زنده در سارا");
-            log("Step        : 4/5 کمیسیون ماده ۱۰۰ — موقوف تا Instanc زنده در سارا");
-            log("Step        : 5/5 درآمد — موقوف تا Instanc زنده در سارا");
-            log("Step        : کار بعدی: گام ۳–۵ را در خود سارا بعد از اعلام ضابطه اجرا کنید");
+            Result step2 = ClassifySolh(work, active, HasSolhRecord(vars));
+            Write(log, step2);
+            if (step2.Status == "FAIL")
+            {
+                for (int n = 3; n <= 5; n++)
+                    log("Step        : " + n + "/5 " + Names[n - 1] + " — اجرا نشد (گام ۲ صلح رد شد)");
+                log("Exit code    : 1");
+                return Pack(step2, SlimVars(vars), 1);
+            }
+
+            log("Step        : 3/5 تحلیل — بعدی (Instanc زنده در سارا)");
+            log("Step        : 4/5 کمیسیون ماده ۱۰۰ — بعد از تحلیل");
+            log("Step        : 5/5 درآمد — بعد از کمیسیون");
+            log("Step        : کار بعدی: گام ۳ تحلیل را در سارا ببینید. صلح اجباری نیست.");
             log("Exit code    : 0");
-            return Pack(step1, SlimVars(vars), 0);
+            return Pack(step1.Status == "PASS" && step2.Status == "SKIP" ? step2 : step1, SlimVars(vars), 0);
+        }
+
+        internal static bool HasSolhRecord(IList<Dictionary<string, object>> vars)
+        {
+            if (vars == null) return false;
+            foreach (var v in vars)
+            {
+                object n, t, val;
+                v.TryGetValue("name", out n);
+                v.TryGetValue("table", out t);
+                v.TryGetValue("value", out val);
+                string name = Convert.ToString(n) ?? "";
+                string table = Convert.ToString(t) ?? "";
+                string value = Convert.ToString(val, CultureInfo.InvariantCulture) ?? "";
+                if (name.IndexOf("ActiveNidZabeteh", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                if (table.IndexOf("Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                bool nameHit = name.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Tavafogh", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Peace", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("صلح", StringComparison.Ordinal) >= 0;
+                bool tableHit = table.IndexOf("Solh", StringComparison.OrdinalIgnoreCase) >= 0
+                    || table.IndexOf("Tavafogh", StringComparison.OrdinalIgnoreCase) >= 0;
+                if ((nameHit || tableHit) && !string.IsNullOrWhiteSpace(value) && !ZabetehCase.IsEmptyGuid(value))
+                    return true;
+            }
+            return false;
         }
 
         private static Dictionary<string, object> Pack(Result step1, List<Dictionary<string, object>> vars, int code)
@@ -129,7 +186,7 @@ namespace RuleTrace
         private static string FaStatus(string s)
         {
             if (s == "PASS") return "قبول";
-            if (s == "SKIP") return "رد شد از بررسی";
+            if (s == "SKIP") return "لازم نیست";
             return "رد";
         }
 
