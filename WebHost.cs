@@ -130,6 +130,7 @@ namespace RuleTrace
                     case "/api/analyze-chidman": result = _app.AnalyzeChidman(body); break;
                     case "/api/history": result = _app.FormulaHistory(body); break;
                     case "/api/history-row": result = _app.GetHistoryRow(body); break;
+                    case "/api/solh-nid": result = _app.DebugSolhNid(body); break;
                     case "/api/inspect": result = _app.Inspect(body); break;
                     case "/api/run": result = _app.RunFormula(body); break;
                     case "/api/shutdown":

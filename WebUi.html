@@ -224,6 +224,7 @@
           <button class="gold" id="btnRun">اجرا</button>
           <button class="ghost" id="btnHistory">بررسی فرمول از DB</button>
           <button class="ghost" id="btnChidman">تحلیل چیدمان ۱۲۸۸</button>
+          <button class="ok" id="btnSolhNid">دیباگ صلح این Nid</button>
           <button class="ghost" id="btnCombine">ترکیب DB + DLL</button>
           <button class="ghost" id="btnMembers">تحلیل Member</button>
           <button class="ghost" id="btnInspect">بررسی موتور</button>
@@ -249,6 +250,7 @@
           <button data-tab="history">تاریخچه فرمول</button>
           <button data-tab="code">کد Member</button>
           <button data-tab="debug">دیباگ مرحله‌ای</button>
+          <button data-tab="vars">متغیرهای این Nid</button>
           <button data-tab="summary">خلاصه خطا</button>
         </div>
         <div id="tab-log"><div class="log" id="log"></div></div>
@@ -274,6 +276,16 @@
             <span class="sub" id="dbgMeta">بعد از اجرا، رویدادهای AddError اینجا می‌آید.</span>
           </div>
           <pre class="code" id="dbgView"></pre>
+        </div>
+        <div id="tab-vars" hidden>
+          <div class="sub" id="varsDiag" style="margin-bottom:10px">ابتدا پرونده را جستجو کنید، NidProc پر شود، بعد «دیباگ صلح این Nid».</div>
+          <div style="overflow:auto; margin-bottom:10px">
+            <table id="varsTable">
+              <thead><tr><th>متغیر / ستون</th><th>مقدار</th><th>جدول</th><th>منبع</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <pre class="code" id="varsStop">بلوک Stop صلح (Member 1296) اینجا می‌آید</pre>
         </div>
         <div id="tab-summary" hidden><pre class="code" id="summary">هنوز اجرایی نشده</pre></div>
       </section>
@@ -366,22 +378,40 @@ async function api(path, body) {
     setBusy(false, "آماده");
   }
 }
-function showMembers(list) {
+function showMembers(list, focusMember) {
   members = list || [];
   const box = $("memberList");
   box.innerHTML = "";
+  let focus = -1;
+  if (focusMember) focus = members.findIndex(m => m.nidMember === focusMember);
+  if (focus < 0) focus = members.findIndex(m => m.solhRun);
+  if (focus < 0) focus = members.findIndex(m => m.chidman);
   members.forEach((m, i) => {
     const d = document.createElement("div");
-    d.textContent = (m.className || m.nidClass) + " / " + m.nidMember + "  " + (m.name || "") + (m.chidman ? "  ★ چیدمان" : "");
+    d.textContent = (m.className || m.nidClass) + " / " + m.nidMember + "  " + (m.name || "") + (m.chidman ? "  ★ چیدمان" : "") + (m.solhRun ? "  ★ صلح" : "");
     d.onclick = () => {
       box.querySelectorAll("div").forEach(x => x.classList.remove("on"));
       d.classList.add("on");
       $("memberCode").textContent = m.code || "";
     };
     if (m.chidman) d.style.color = "#fbbf24";
+    if (m.solhRun) d.style.color = "#34d399";
     box.appendChild(d);
-    if (m.chidman || i === 0) d.click();
+    if (i === focus || (focus < 0 && (m.chidman || i === 0))) d.click();
   });
+}
+function showVars(rows, diagnosis, stopBlock) {
+  $("varsDiag").textContent = diagnosis || "";
+  const tb = $("varsTable").querySelector("tbody");
+  tb.innerHTML = "";
+  (rows || []).forEach(v => {
+    const tr = document.createElement("tr");
+    [v.name, v.value, v.table, v.match].forEach(c => {
+      const td = document.createElement("td"); td.textContent = c == null ? "" : String(c); tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  $("varsStop").textContent = stopBlock || "(بلوک Stop پیدا نشد)";
 }
 function showTrace(list, parms, watch) {
   trace = list || [];
@@ -484,6 +514,16 @@ $("btnChidman").onclick = async () => {
   document.querySelector('[data-tab="summary"]').click();
   toast("تحلیل چیدمان — خلاصه آماده کپی");
 };
+$("btnSolhNid").onclick = async () => {
+  if (!$("nidProc").value.trim()) { toast("اول پرونده را جستجو کنید تا NidProc پر شود"); return; }
+  const j = await api("/api/solh-nid", payload());
+  showMembers(j.members, j.focusMember);
+  showVars(j.vars, j.diagnosis, j.stopBlock);
+  if (j.history) showHistory(j.history);
+  showSummary(j.summary);
+  document.querySelector('[data-tab="vars"]').click();
+  toast(j.diagnosis || "دیباگ صلح");
+};
 $("btnCombine").onclick = async () => {
   const j = await api("/api/combine", payload());
   showMembers(j.members);
@@ -508,7 +548,7 @@ document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
     b.classList.add("on");
-    ["log","history","code","debug","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
+    ["log","history","code","debug","vars","summary"].forEach(id => $( "tab-" + id ).hidden = b.dataset.tab !== id);
   };
 });
 

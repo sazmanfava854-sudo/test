@@ -18,6 +18,7 @@ namespace RuleTrace
             fail += BannerNoRewrite();
             fail += JsonRoundtrip();
             fail += HistoryImageSql();
+            fail += SolhNidExtract();
             fail += WebUiEmbedded();
             fail += WebHostRoundtrip();
             Console.WriteLine(fail == 0 ? "SELFTEST OK" : "SELFTEST FAIL " + fail);
@@ -185,6 +186,36 @@ namespace RuleTrace
             return 0;
         }
 
+        private static int SolhNidExtract()
+        {
+            const string run =
+                "Public Sub Run()\r\n" +
+                "  Dim Masahat As Double = 0\r\n" +
+                "  If Info8.GetZabeteh() Is Nothing Then\r\n" +
+                "    Info8.AddError(BIZ.SA.EumErrorAction.Stop, \"صلحنامه\", \"به دلیل عدم اعلام ضابطه امکان محاسبه صلحنامه نمی باشد\")\r\n" +
+                "  End If\r\n" +
+                "  InsertChidman(tmpDto2)\r\n" +
+                "End Sub\r\n";
+            var hit = SolhNidDebug.ExtractStop(run, "عدم اعلام ضابطه");
+            int fail = 0;
+            if (hit == null) return FailMsg("solh stop block");
+            fail += hit.Line == 4 ? 0 : FailMsg("stop line");
+            fail += Expect(hit.Key, "صلحنامه", "stop key");
+            fail += Expect(hit.Block, "GetZabeteh", "if GetZabeteh");
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            SolhNidDebug.CollectDimNames(run, names);
+            SolhNidDebug.CollectNames(hit.Block, names);
+            fail += names.Contains("Masahat") ? 0 : FailMsg("dim Masahat");
+            fail += names.Contains("GetZabeteh") ? 0 : FailMsg("GetZabeteh ident");
+            var empty = SolhNidDebug.Run("", "", new List<MemberSource>
+            {
+                new MemberSource { NidClass = 344, NidMember = 1296, Name = "Run", Code = run },
+            }, m => { });
+            fail += Expect(Convert.ToString(empty["diagnosis"]), "1296", "diagnosis mentions 1296");
+            fail += Expect(Convert.ToString(empty["stopBlock"]), "عدم اعلام", "stopBlock returned");
+            return fail;
+        }
+
         private static int HistoryImageSql()
         {
             int fail = 0;
@@ -248,6 +279,9 @@ namespace RuleTrace
             fail += Expect(html, "/api/history-row", "history-row endpoint");
             fail += Expect(html, "تاریخچه فرمول", "history tab");
             fail += Expect(html, "بررسی فرمول از DB", "db-first button");
+            fail += Expect(html, "دیباگ صلح این Nid", "solh nid button");
+            fail += Expect(html, "/api/solh-nid", "solh-nid endpoint");
+            fail += Expect(html, "متغیرهای این Nid", "vars tab");
             fail += Expect(html, "showSummary(j.summary)", "chidman/history fill copy-summary");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
             if (html.IndexOf("اجرای موتور (اختیاری)", StringComparison.Ordinal) >= 0)
@@ -285,7 +319,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22d-web-history", "bootstrap label");
+                        fail += Expect(boot, "v22e-solh-nid", "bootstrap label");
                         return fail;
                     }
                 }

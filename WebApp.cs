@@ -235,6 +235,27 @@ namespace RuleTrace
             });
         }
 
+        public Dictionary<string, object> DebugSolhNid(Dictionary<string, object> body)
+        {
+            string nidProc = Json.Str(body, "nidProc").Trim();
+            if (nidProc.Length == 0) nidProc = (_settings.LastNidProc ?? "").Trim();
+            if (nidProc.Length == 0)
+                return Fail("NidProc خالی است — اول پرونده را جستجو کنید، بعد «دیباگ صلح این Nid» را بزنید.");
+            _settings.LastNidProc = nidProc;
+            try { _settings.Save(); } catch { }
+
+            return Run("دیباگ صلح برای NidProc " + nidProc + " ...", false, (eng, log) =>
+            {
+                var extra = eng.DebugSolhNid(nidProc);
+                extra["members"] = PackSources(eng.LastMemberSources);
+                extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
+                extra["history"] = PackHistory(MemberHistory.List(_settings.RuleEngine, new[] { 344, 342 }, SolhNidDebug.SolhRunMember, 40, null));
+                extra["focusMember"] = SolhNidDebug.SolhRunMember;
+                extra["settings"] = SettingsMap();
+                return extra;
+            });
+        }
+
         public Dictionary<string, object> Inspect(Dictionary<string, object> body)
         {
             string formula = FormulaOf(body);
@@ -376,7 +397,7 @@ namespace RuleTrace
         {
             if (string.IsNullOrWhiteSpace(m)) return false;
             string t = m.TrimStart();
-            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
+            foreach (string p in new[] { "RuleTrace ", "Formula ", "Arch", "Chidman", "History", "SolhNid", "Vars", "Phase ", "Diagnose", "Result ", "Cache", "Member rows", "Engine flag", "SetMyInfo", "RunRule", "Run FAILED", "ERROR", "FATAL", "WARN", "Exit code" })
                 if (t.StartsWith(p, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -454,6 +475,7 @@ namespace RuleTrace
                     { "version", s.Version },
                     { "active", s.IsActive },
                     { "chidman", s.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId },
+                    { "solhRun", s.NidClass == 344 && (s.NidMember == SolhNidDebug.SolhRunMember || s.NidMember == SolhNidDebug.SolhInitMember) },
                     { "code", Cap(s.Code) },
                     { "label", s.ToString() },
                 });
