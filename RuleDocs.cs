@@ -29,6 +29,7 @@ namespace RuleTrace
             "ZabeteStatic_Zabete", "ZabeteStatic_Info", "ZabeteStatic_Plan",
             "Sh_RequestInfo", "ActiveNidZabeteh", "NidProc",
             "Solh", "صلح", "ضابطه", "ماده 5", "ماده ۵", "کمیسیون", "چیدمان",
+            "تحلیل", "تخلف", "درآمد", "ماده 100", "ماده صد", "پروانه", "تجدید",
         };
 
         private static readonly string[] SkipTypes = { "image", "varbinary", "binary", "timestamp", "rowversion" };

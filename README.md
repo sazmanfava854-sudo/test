@@ -30,7 +30,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 3. NidWorkItem یا کد نوسازی → جستجو → NidProc پر می‌شود
 4. فرمول `Solh`، Watch `Calc_Chandganeh`
 5. دکمه طلایی **اجرا** — ReCompile خاموش، **پاک کردن Cache خاموش**. اگر Instanc ساخته نشود (خروج ۲)، همان اجرا ضابطه را با join `NidNosaziCode` می‌خواند و در خلاصهٔ کپی می‌گذارد (دیگر فقط BodyLen=0 نیست). NidProc باید پر باشد.
-6. **دیباگ صلح این Nid** — CRUD=Read. ضابطه با join `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode` خوانده می‌شود (نه `NidProc`). لایه ۸۳۶ / ماده ۵ با ستون `P_Key` روی `ZabeteStatic_Info` و سپس `NidZStatic_Info` برای `ZabeteStatic_Zabete` / `ZabeteStatic_Plan` (بدون fallback روی `CI_PlanType`). L270 فقط وقتی `ActiveNidZabeteh` خالی است شلیک می‌شود؛ پروندهٔ تست WorkItem `5298603` / NidProc `89DD8996-A448-4164-B0FD-74F8B5F71B1B` آن را شلیک نمی‌کند. Member 1296 را عوض نکنید.
+6. **دیباگ پروانه این Nid** — CRUD=Read. همهٔ پرونده‌های پروانه همین مسیر را دارند: ضابطه (Rule 336 / ZabetehConvert 342) → صلح (Solh 344 / Tavafogh 345) → تحلیل (Takhalofat 338) → کمیسیون ماده ۱۰۰ (Commission 340 / CommissionFine 335) → درآمد (Income 337). پروندهٔ نمونه WorkItem `300002275` (پروانه تجدید بنا). WorkItem `5298603` بررسی نمی‌شود. join ضابطه: `Zabeteh.NidNosaziCode = Sh_RequestInfo.NidNosaziCode`. Member 1296 را عوض نکنید.
 7. **مستند کلی** — همان کوئری SSMS بدون فیلتر Member:
    `SELECT TOP (1000) DocId, Title, NidMember, MemberDocument, LastEditOn, Sort, ParentDocId, UserName FROM [DbRuleEngeinDocument].[dbo].[MemberDocument]`
    با یوزر `debugger`. جداول **دیگر** همان دیتابیس هم لیست و peek می‌شوند. عنوان/متن مستند برای نام جداول ضابطه (`Zabeteh`، `CI_PlanType`، …) جستجو می‌شود.
@@ -58,7 +58,8 @@ WebUi.html             ← ظاهر فارسی RTL
 WebHost.cs / WebApp.cs ← HttpListener روی 127.0.0.1
 FormulaEngine.cs       ← موتور Sara با reflection
 ChidmanAnalyzer.cs     ← تحلیل ایستای چیدمان ۱۲۸۸
-SolhNidDebug.cs        ← دیباگ صلح این Nid (Read-only)
+PermitPipeline.cs      ← مسیر پنج‌مرحله‌ای پروانه
+SolhNidDebug.cs        ← مرحله صلح داخل همان مسیر (Read-only)
 ZabetehCase.cs         ← جداول ضابطه Sara
 RuleDocs.cs            ← مستند کلی MemberDocument + جداول دیگر DbRuleEngeinDocument
 ```

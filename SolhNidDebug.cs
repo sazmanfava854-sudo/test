@@ -64,10 +64,23 @@ namespace RuleTrace
             var vars = ZabetehCase.Read(sara, ruleEngine, nidProc, log);
             var docs = RuleDocs.Read(ruleEngine, log);
             RuleDocs.FlattenInto(vars, docs);
-            LogSourceGuards(stop, maz, vars, log);
-            string diagnosis = Diagnose(stop, maz, vars, log);
-            log("SolhNid      : بخش مشکوک: " + diagnosis);
 
+            if (PermitPipeline.IsIgnoredWorkItem(PermitPipeline.FindWorkItem(vars)))
+            {
+                string skip = PermitPipeline.Report(sources, vars, log);
+                log("SolhNid      : بخش مشکوک: " + skip);
+                return Pack(nidProc, skip, stop, maz, vars, names, docs);
+            }
+
+            LogSourceGuards(stop, maz, vars, log);
+            string permit = PermitPipeline.Report(sources, vars, log);
+            Diagnose(stop, maz, vars, log);
+            log("SolhNid      : بخش مشکوک: " + permit);
+            return Pack(nidProc, permit, stop, maz, vars, names, docs);
+        }
+
+        private static Dictionary<string, object> Pack(string nidProc, string diagnosis, StopHit stop, StopHit maz, List<Dictionary<string, object>> vars, SortedSet<string> names, Dictionary<string, object> docs)
+        {
             return new Dictionary<string, object>
             {
                 { "nidProc", nidProc },

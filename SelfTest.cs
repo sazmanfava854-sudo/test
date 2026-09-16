@@ -156,7 +156,7 @@ namespace RuleTrace
         {
             int[] rel = FormulaEngine.RelatedNidClasses(344);
             int fail = 0;
-            foreach (int need in new[] { 336, 342, 344, 345, 432 })
+            foreach (int need in new[] { 336, 342, 344, 345, 338, 340, 335, 337, 432 })
             {
                 bool ok = false;
                 foreach (int n in rel) if (n == need) ok = true;
@@ -181,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("guard-fired", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("permit-pipe", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22k-guard-fired, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22l-permit-pipe, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -259,12 +259,22 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: Zabeteh join must not be on a.NidProc");
                 fail++;
             }
-            fail += Expect(ZabetehCase.SampleNidProc, "89DD8996", "sample nidproc");
-            fail += Expect(ZabetehCase.SampleNidWorkItem, "5298603", "sample workitem");
-            fail += Expect(ZabetehCase.SampleActiveNidZabeteh, "EEA1F974", "sample active overlay");
-            fail += string.Equals(ZabetehCase.SampleNidZabeteh, ZabetehCase.SampleActiveNidZabeteh, StringComparison.OrdinalIgnoreCase)
-                ? FailMsg("sample latest NidZabeteh differs from Active")
-                : 0;
+            fail += Expect(PermitPipeline.SampleWorkItem, "300002275", "permit sample workitem");
+            fail += Expect(PermitPipeline.IgnoreWorkItem, "5298603", "ignored non-permit workitem");
+            fail += Expect(PermitPipeline.PathFa, "ضابطه", "permit path starts with zabeteh");
+            fail += Expect(PermitPipeline.PathFa, "درآمد", "permit path ends with income");
+            fail += PermitPipeline.IsIgnoredWorkItem("5298603") ? 0 : FailMsg("ignore 5298603");
+            fail += PermitPipeline.IsPermitSample("300002275") ? 0 : FailMsg("sample 300002275");
+            fail += PermitPipeline.IsIgnoredWorkItem("300002275") ? FailMsg("permit sample not ignored") : 0;
+            var skipLog = new List<string>();
+            string skip = PermitPipeline.Report(new List<MemberSource>(), new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "NidWorkItem" }, { "value", "5298603" }, { "table", "Sh_RequestInfo" } },
+            }, skipLog.Add);
+            fail += Expect(skip, "بررسی نمی‌شود", "skip diagnosis");
+            fail += skipLog.Any(l => l.IndexOf("صلح نیست", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("skip log");
+            fail += Expect(string.Join(",", PermitPipeline.PermitClasses), "338", "takhalofat class");
+            fail += Expect(string.Join(",", PermitPipeline.PermitClasses), "337", "income class");
             fail += Expect(ZabetehCase.StaticPkeyColumn, "P_Key", "static P_Key column");
             fail += Expect(string.Join(",", ZabetehCase.StaticChildPrefer), "NidZStatic_Info", "static child via Info");
             fail += Expect(string.Join(",", ZabetehCase.StaticChildPrefer), "P_Key", "static child also P_Key");
@@ -328,7 +338,8 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Doc         : جدول [AspNetUsers] cols=Id") ? FailMsg("aspnet docs skip") : 0;
             fail += FormulaEngine.IsSummaryLine("Doc         : [AspNetUsers] peek rows=1") ? FailMsg("aspnet peek skip") : 0;
             fail += FormulaEngine.IsSummaryLine("Doc         : MemberDocument TOP 1000 → 503 ردیف") ? 0 : FailMsg("memberdocument count copies");
-            fail += FormulaEngine.IsSummaryLine("Zabeteh     : P_Key خالی — ZabeteStatic_Info") ? 0 : FailMsg("empty P_Key copies");
+            fail += FormulaEngine.IsSummaryLine("Permit      : مسیر پروانه = ضابطه → صلح → تحلیل") ? 0 : FailMsg("permit path copies");
+            fail += FormulaEngine.IsSummaryLine("Permit      : WorkItem=5298603 بررسی نمی‌شود") ? 0 : FailMsg("ignore workitem copies");
             fail += FormulaEngine.IsSummaryLine("Detail      : جدول [AspNetUsers] cols=Id") ? FailMsg("detail prefix never copies") : 0;
             return fail;
         }
@@ -396,18 +407,17 @@ namespace RuleTrace
             fail += Expect(html, "/api/history-row", "history-row endpoint");
             fail += Expect(html, "تاریخچه فرمول", "history tab");
             fail += Expect(html, "بررسی فرمول از DB", "db-first button");
-            fail += Expect(html, "دیباگ صلح این Nid", "solh nid button");
+            fail += Expect(html, "دیباگ پروانه این Nid", "permit nid button");
             fail += Expect(html, "/api/solh-nid", "solh-nid endpoint");
             fail += Expect(html, "متغیرهای این Nid", "vars tab");
             fail += Expect(html, "showSummary(j.summary)", "chidman/history fill copy-summary");
             fail += Expect(html, "Zabeteh", "named Zabeteh table in vars hint");
-            fail += Expect(html, "CI_PlanType", "CI_PlanType hint");
-            fail += Expect(html, "ZabeteStatic_Info", "static info hint");
-            fail += Expect(html, "P_Key", "static P_Key in vars hint");
-            fail += Expect(html, "NidZStatic_Info", "static plan join hint");
-            fail += Expect(html, "L270", "L270 guard hint");
             fail += Expect(html, "NidNosaziCode", "join key in vars hint");
-            fail += Expect(html, "5298603", "CRUD sample workitem");
+            fail += Expect(html, "300002275", "permit sample workitem");
+            fail += Expect(html, "5298603", "ignored workitem mentioned");
+            fail += Expect(html, "تجدید بنا", "reconstruction permit");
+            fail += Expect(html, "تحلیل", "tahlil stage");
+            fail += Expect(html, "درآمد", "income stage");
             fail += Expect(html, "مستند کلی", "overall docs button");
             fail += Expect(html, "/api/docs", "docs endpoint");
             fail += Expect(html, "data-tab=\"docs\"", "docs tab");
@@ -448,7 +458,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22k-guard-fired", "bootstrap label");
+                        fail += Expect(boot, "v22l-permit-pipe", "bootstrap label");
                         return fail;
                     }
                 }
