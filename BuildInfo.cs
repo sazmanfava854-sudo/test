@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v22i-run-solh";
+        public const string Label = "v22j-static-pkey";
 
         public static string Banner
         {

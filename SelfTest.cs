@@ -181,9 +181,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("run-solh", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("static-pkey", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22i-run-solh, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v22j-static-pkey, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -260,6 +260,14 @@ namespace RuleTrace
             fail += string.Equals(ZabetehCase.SampleNidZabeteh, ZabetehCase.SampleActiveNidZabeteh, StringComparison.OrdinalIgnoreCase)
                 ? FailMsg("sample latest NidZabeteh differs from Active")
                 : 0;
+            fail += Expect(ZabetehCase.StaticPkeyColumn, "P_Key", "static P_Key column");
+            fail += Expect(string.Join(",", ZabetehCase.StaticChildPrefer), "NidZStatic_Info", "static child via Info");
+            fail += Expect(string.Join(",", ZabetehCase.StaticChildPrefer), "P_Key", "static child also P_Key");
+            if (string.Join(",", ZabetehCase.StaticChildPrefer).IndexOf("CI_PlanType", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: ZabeteStatic_Plan must not join on CI_PlanType");
+                fail++;
+            }
             return fail;
         }
 
@@ -281,6 +289,13 @@ namespace RuleTrace
             fail += Expect(RuleDocs.BodyExpr("MemberDocument", "image"), "VARBINARY(MAX)", "image body via varbinary");
             fail += Expect(string.Join(",", RuleDocs.TableHints), "Zabeteh", "hint Zabeteh");
             fail += Expect(string.Join(",", RuleDocs.TableHints), "CI_PlanType", "hint CI_PlanType");
+            fail += RuleDocs.SkipPeek("AspNetUsers") ? 0 : FailMsg("skip AspNetUsers peek");
+            fail += RuleDocs.SkipPeek("__EFMigrationsHistory") ? 0 : FailMsg("skip EF peek");
+            fail += RuleDocs.SkipPeek("Users") ? 0 : FailMsg("skip Users peek");
+            fail += RuleDocs.SkipPeek("sysdiagrams") ? 0 : FailMsg("skip sysdiagrams peek");
+            fail += RuleDocs.SkipPeek("MemberDocument") ? 0 : FailMsg("skip main catalog peek");
+            fail += RuleDocs.SkipPeek("MemberDocumentLog") ? FailMsg("should peek MemberDocumentLog") : 0;
+            fail += RuleDocs.SkipPeek("MemberVbCodeDocument") ? FailMsg("should peek MemberVbCodeDocument") : 0;
             var empty = RuleDocs.Read("", m => { });
             fail += empty.ContainsKey("docs") ? 0 : FailMsg("empty pack has docs");
             fail += empty.ContainsKey("tables") ? 0 : FailMsg("empty pack has tables");
@@ -301,6 +316,11 @@ namespace RuleTrace
             fail += FormulaEngine.IsSummaryLine("Chidman      : توقف صلح اگر ضابطه/چیدمان اعلام نشده") ? 0 : FailMsg("l270 finding copies");
             fail += FormulaEngine.IsSummaryLine("History      : Rule/336 Member 1148 hist=856157") ? FailMsg("rule/336 history skip") : 0;
             fail += FormulaEngine.IsSummaryLine("History      : Solh/344 Member 1296 hist=856104") ? 0 : FailMsg("solh history copies");
+            fail += FormulaEngine.IsSummaryLine("Doc         : جدول [AspNetUsers] cols=Id") ? FailMsg("aspnet docs skip") : 0;
+            fail += FormulaEngine.IsSummaryLine("Doc         : [AspNetUsers] peek rows=1") ? FailMsg("aspnet peek skip") : 0;
+            fail += FormulaEngine.IsSummaryLine("Doc         : MemberDocument TOP 1000 → 503 ردیف") ? 0 : FailMsg("memberdocument count copies");
+            fail += FormulaEngine.IsSummaryLine("Zabeteh     : P_Key خالی — ZabeteStatic_Info") ? 0 : FailMsg("empty P_Key copies");
+            fail += FormulaEngine.IsSummaryLine("Detail      : جدول [AspNetUsers] cols=Id") ? FailMsg("detail prefix never copies") : 0;
             return fail;
         }
 
@@ -374,6 +394,8 @@ namespace RuleTrace
             fail += Expect(html, "Zabeteh", "named Zabeteh table in vars hint");
             fail += Expect(html, "CI_PlanType", "CI_PlanType hint");
             fail += Expect(html, "ZabeteStatic_Info", "static info hint");
+            fail += Expect(html, "P_Key", "static P_Key in vars hint");
+            fail += Expect(html, "NidZStatic_Info", "static plan join hint");
             fail += Expect(html, "NidNosaziCode", "join key in vars hint");
             fail += Expect(html, "5298603", "CRUD sample workitem");
             fail += Expect(html, "مستند کلی", "overall docs button");
@@ -416,7 +438,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v22i-run-solh", "bootstrap label");
+                        fail += Expect(boot, "v22j-static-pkey", "bootstrap label");
                         return fail;
                     }
                 }
