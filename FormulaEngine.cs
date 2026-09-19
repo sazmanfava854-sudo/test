@@ -1036,7 +1036,22 @@ namespace RuleTrace
             {
                 _log(BuildInfo.Banner);
                 _log("NidProc      : " + (string.IsNullOrWhiteSpace(nidProc) ? "(خالی)" : nidProc.Trim()));
-                return PermitSteps.RunSelected(_s.Sara, _s.RuleEngine, nidProc, scopes, _log);
+                var pack = PermitSteps.RunSelected(_s.Sara, _s.RuleEngine, nidProc, scopes, _log);
+                LastMemberSources.Clear();
+                try
+                {
+                    var sources = LoadFormSources(scopes);
+                    LastMemberSources.AddRange(sources);
+                    if (sources.Count == 0)
+                        _log("Hover      : کد Member خالی — dbo.Member برای فرم تیک‌خورده خوانده نشد");
+                    else
+                        _log("Hover      : کد Member=" + sources.Count + " — تب کد");
+                }
+                catch (Exception ex)
+                {
+                    _log("Hover      : Member خوانده نشد — " + FirstLine(ex.Message));
+                }
+                return pack;
             }
             finally
             {

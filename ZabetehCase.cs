@@ -201,7 +201,7 @@ namespace RuleTrace
                 DumpZabeteh(sara, keys, vars, log);
                 FillKeys(keys, vars);
                 if (!IsEmptyGuid(keys.OverlayNidZabeteh))
-                    DumpNamed(sara, "Zabeteh_Details", keys, vars, log, "NidZabeteh");
+                    log("Zabeteh     : Zabeteh_Details رد شد — CAST روی جدول بزرگ timeout می‌دهد. روکش کافی است؛ کد Member از dbo.Member بار می‌شود");
             }
             if (PermitScopes.Has(selected, PermitScopes.Solh))
             {
@@ -843,17 +843,25 @@ namespace RuleTrace
             }
             if (select.Count == 0) return 0;
             if (top < 1) top = 5;
+            Guid guidVal;
+            bool guidEq = IsGuidCol(whereCol) && Guid.TryParse(whereVal, out guidVal);
+            string pred = guidEq
+                ? "[" + whereCol.Replace("]", "") + "]=@t"
+                : "CAST([" + whereCol.Replace("]", "") + "] AS NVARCHAR(50))=@t";
             string sql = "SELECT TOP (" + top + ") " + string.Join(", ", select) + " FROM [dbo].[" + table.Replace("]", "") + "]"
-                + " WHERE CAST([" + whereCol.Replace("]", "") + "] AS NVARCHAR(50))=@t";
+                + " WHERE " + pred;
             if (!string.IsNullOrWhiteSpace(orderBy))
                 sql += " ORDER BY " + orderBy;
             int rows = 0;
             try
             {
                 using (var c = new SqlConnection(cs))
-                using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 45 })
+                using (var cmd = new SqlCommand(sql, c) { CommandTimeout = 12 })
                 {
-                    cmd.Parameters.AddWithValue("@t", whereVal ?? "");
+                    if (guidEq)
+                        cmd.Parameters.Add("@t", SqlDbType.UniqueIdentifier).Value = guidVal;
+                    else
+                        cmd.Parameters.AddWithValue("@t", whereVal ?? "");
                     c.Open();
                     using (var r = cmd.ExecuteReader())
                     {

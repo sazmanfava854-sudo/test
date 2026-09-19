@@ -502,6 +502,10 @@ function showMembers(list, focusMember) {
   members = list || [];
   const box = $("memberList");
   box.innerHTML = "";
+  if (!members.length) {
+    $("memberCode").textContent = "کد Member خالی است — dbo.Member فرم تیک‌خورده خوانده نشد. ضابطه را تیک بزنید و دوباره دیباگ/اجرا کنید.";
+    return;
+  }
   let focus = -1;
   if (focusMember) focus = members.findIndex(m => m.nidMember === focusMember);
   if (focus < 0) focus = members.findIndex(m => m.solhRun);
@@ -667,12 +671,12 @@ $("btnSolhNid").onclick = async () => {
   if (!selectedScopes().length) { toast("کدام بخش را دیباگ می‌کنید؟ تیک بزنید"); return; }
   const j = await api("/api/solh-nid", payload());
   showMembers(j.members, j.focusMember);
-  showVars(j.vars, j.diagnosis, j.stopBlock);
+  showVars(j.vars, j.diagnosis, j.nextAction || j.stopBlock);
   showDocs(j);
   if (j.history) showHistory(j.history);
   showSummary(j.summary);
-  document.querySelector('[data-tab="vars"]').click();
-  toast(j.diagnosis || "دیباگ پروانه");
+  document.querySelector('[data-tab="code"]').click();
+  toast(j.diagnosis || "کد Member");
 };
 $("btnDocs").onclick = async () => {
   const j = await api("/api/docs", payload());
