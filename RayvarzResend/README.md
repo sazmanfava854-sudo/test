@@ -1,17 +1,19 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه تحویل: ۲۳** — همه باگ‌های ۱–۲۰ + بحرانی v21 + غیربحرانی v22 + جزئی v23.
+**نسخه تحویل: ۲۴** — واسط `Accounting_Doc` پس از ارسال (تهاتر / درآمد / نوسازی / صنفی) + پایه bank-inquiry 166a.
 
 | دریافت | آدرس |
 |--------|------|
-| Zip نسخه ۲۳ | `RayvarzResend-23.zip` (ریشه مخزن) |
+| Zip نسخه ۲۴ | `RayvarzResend-24.zip` (ریشه مخزن) |
+| Tag | `rayvarzresend-tahator-accounting-v24` |
+| v24 جزئیات | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
 | v23 جزئیات | [`DELIVERY-v23.md`](DELIVERY-v23.md) |
 | v22 غیربحرانی | [`DELIVERY-v22.md`](DELIVERY-v22.md) |
 | v21 بحرانی | [`DELIVERY-v21.md`](DELIVERY-v21.md) |
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: هدر فرم یا `GET /api/config` → `releaseVersion: 23`
+پس از `dotnet run`: هدر فرم یا `GET /api/config` → `releaseVersion: 24`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 
