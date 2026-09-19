@@ -45,7 +45,7 @@ public sealed class TahatorResendService
 
     public bool IsDryRun =>
         _config.GetValue<bool?>("Tahator:DryRun")
-        ?? _config.GetValue("Rayvarz:DryRun", true);
+        ?? _config.GetValue<bool>("Rayvarz:DryRun");
 
     public async Task<TahatorCheckResult> CheckAsync(string ficheNo, CancellationToken ct = default)
     {

@@ -25,9 +25,13 @@ public sealed class AccountingDocWriter
             ?? throw new InvalidOperationException("ConnectionStrings:Sara not set");
     }
 
+    /// <summary>
+    /// پیش‌فرض false (مثل FicheSendService) — اگر کلید Rayvarz:DryRun روی سرور publish نباشد،
+    /// نباید واسط در حالت DryRun بماند در حالی که SOAP واقعی ارسال می‌شود.
+    /// </summary>
     public bool IsDryRun =>
         _config.GetValue<bool?>("AccountingDoc:DryRun")
-        ?? _config.GetValue("Rayvarz:DryRun", true);
+        ?? _config.GetValue<bool>("Rayvarz:DryRun");
 
     public async Task<AccountingDocWriteResult> TryWriteAfterSendAsync(
         FicheHeaderDto fiche,

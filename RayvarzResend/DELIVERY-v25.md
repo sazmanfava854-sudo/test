@@ -24,6 +24,9 @@ https://github.com/sazmanfava854-sudo/test/releases/download/rayvarzresend-noskh
 `appsettings.json` سرور را overwrite نکنید.  
 `Rayvarz:DryRun=false` ، `AccountingDoc:DryRun=false` (در صورت نیاز).
 
+**مهم (publish روی سرور):** `appsettings.json` کنار `RayvarzResend.Web.exe` باید بخش‌های `AccountingDoc` و `Tahator` داشته باشد (یا حداقل `Rayvarz:DryRun:false`).  
+پس از deploy، `GET /api/config` → `accountingDoc.dryRun` باید **false** باشد؛ اگر true است واسط INSERT نمی‌شود.
+
 `GET /api/config` → `releaseVersion: 25` ، `releaseLabel: نسخه آخر`
 
 ## خلاصه تغییرات نسبت به v24

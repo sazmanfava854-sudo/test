@@ -408,9 +408,17 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true },
     tahator = new
     {
-        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
         pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
         pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
+    },
+    accountingDoc = new
+    {
+        dryRun = config.GetValue<bool?>("AccountingDoc:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
+        pollTimeoutSeconds = config.GetValue("AccountingDoc:PollTimeoutSeconds",
+            config.GetValue("Tahator:PollTimeoutSeconds", 60)),
+        pollIntervalMs = config.GetValue("AccountingDoc:PollIntervalMs",
+            config.GetValue("Tahator:PollIntervalMs", 2000)),
     },
     installment = new
     {

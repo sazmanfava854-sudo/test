@@ -61,6 +61,8 @@ public class DeliveryReleaseTests
         Assert.Contains("epay_EstelamOnLineBank", json);
         Assert.DoesNotContain("\"DryRun\": true", json);
         Assert.Contains("\"DryRun\": false", json);
+        Assert.Contains("\"AccountingDoc\"", json);
+        Assert.Contains("\"Tahator\"", json);
     }
 
     [Fact]
