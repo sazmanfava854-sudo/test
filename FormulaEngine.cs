@@ -1262,8 +1262,18 @@ namespace RuleTrace
             }
 
             FormulaMerger.LogFunctionBodies(cls, _log, 8);
+            RefreshDesignerSource(cls);
+            string raw = ReadDesignerSource(cls);
+            _log("Hover      : منبع کلاس بعد از تزریق len=" + (raw == null ? 0 : raw.Length));
 
-            object compiled = TryEngineNativeCompile(cls, cacheFolder);
+            object compiled = TryCompileRawSource(result, cls, raw, cacheFolder);
+            if (compiled != null && HasLiveInstance(compiled))
+            {
+                _log("Hover      : Compile(منبع بعد از تزریق) Instanc ساخت");
+                return compiled;
+            }
+
+            compiled = TryEngineNativeCompile(cls, cacheFolder);
             if (compiled != null && HasLiveInstance(compiled))
             {
                 _log("Hover      : کامپایل موتور بعد از تزریق Instanc ساخت");
@@ -1274,7 +1284,7 @@ namespace RuleTrace
             {
                 foreach (MethodInfo m in result.GetType().GetMethods(AnyInstance))
                 {
-                    if (m.Name.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (!IsRealCompileMethod(m)) continue;
                     ParameterInfo[] ps = m.GetParameters();
                     if (ps.Length > 1) continue;
                     if (ps.Length == 1 && ps[0].ParameterType == typeof(string)) continue;
@@ -1288,9 +1298,158 @@ namespace RuleTrace
                 }
             }
 
+            HoverLogCompilerErrors(result ?? compiled, 3);
             if (HasLiveInstance(result)) return result;
             _log("Hover      : موتور بعد از تزریق XmlBody هم Instanc نساخت");
             return compiled;
+        }
+
+        private static bool IsRealCompileMethod(MethodInfo m)
+        {
+            if (m == null || m.IsSpecialName) return false;
+            string n = m.Name ?? "";
+            if (n.StartsWith("get_", StringComparison.OrdinalIgnoreCase) || n.StartsWith("set_", StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (n.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return n.Equals("Compile", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("ReCompile", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("RunCompile", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("CompileClass", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("CreateDll", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("DoCompile", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("SaveCompile", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void RefreshDesignerSource(object cls)
+        {
+            if (cls == null) return;
+            TrySet(cls, "_ReCompile", true);
+            TrySet(cls, "ReCompile", true);
+            foreach (string name in new[] { "Rebuild", "Refresh", "UpdateCode", "BuildToString", "GenerateCode", "MakeClass" })
+            {
+                MethodInfo m = cls.GetType().GetMethod(name, AnyInstance);
+                if (m == null || m.GetParameters().Length != 0) continue;
+                try { m.Invoke(cls, null); }
+                catch { }
+            }
+        }
+
+        private string ReadDesignerSource(object cls)
+        {
+            if (cls == null) return null;
+            string best = null;
+            foreach (string name in new[] { "ToString1", "Code", "M_Code" })
+            {
+                string s = Get(cls, name) as string;
+                if (!string.IsNullOrEmpty(s) && (best == null || s.Length > best.Length)) best = s;
+            }
+            try
+            {
+                MethodInfo m = cls.GetType().GetMethod("GetStrOutClass", AnyInstance);
+                if (m != null && m.GetParameters().Length == 0)
+                {
+                    string s = m.Invoke(cls, null) as string;
+                    if (!string.IsNullOrEmpty(s) && (best == null || s.Length > best.Length)) best = s;
+                }
+            }
+            catch { }
+            return best;
+        }
+
+        /// <summary>Compile engine ToString1/Code after Body inject. Raw source only — no sanitize (that caused BC30289).</summary>
+        private object TryCompileRawSource(object result, object cls, string source, string cacheFolder)
+        {
+            if (result == null || result is DirectFormulaHost) return null;
+            if (string.IsNullOrEmpty(source) || source.Length < 20000)
+            {
+                _log("Hover      : منبع کلاس برای Compile(string) کوتاه است");
+                return null;
+            }
+
+            MethodInfo compile = null;
+            foreach (MethodInfo m in result.GetType().GetMethods(AnyInstance))
+            {
+                if (!m.Name.Equals("Compile", StringComparison.OrdinalIgnoreCase) || m.IsSpecialName) continue;
+                ParameterInfo[] ps = m.GetParameters();
+                if (ps.Length == 2 && ps[0].ParameterType == typeof(string))
+                {
+                    compile = m;
+                    break;
+                }
+            }
+            if (compile == null)
+            {
+                _log("Hover      : Compile(String, List) روی ClsRunRuleResult نیست");
+                return null;
+            }
+
+            object imports = Get(cls, "ImportsDll");
+            object listArg = CoerceImportList(compile.GetParameters()[1].ParameterType, imports);
+            if (listArg == null)
+            {
+                _log("Hover      : ImportsDll برای Compile ساخته نشد");
+                return null;
+            }
+
+            object ret = null;
+            try
+            {
+                ret = compile.Invoke(result, new object[] { source, listArg });
+                _log("Hover      : Compile(منبع تزریق‌شده) len=" + source.Length + " -> " + (ret == null ? "null" : ret.GetType().Name));
+            }
+            catch (TargetInvocationException tie)
+            {
+                Exception inner = tie.InnerException ?? tie;
+                _log("Hover      : Compile(منبع) FAIL " + inner.GetType().Name + ": " + FirstLine(inner.Message));
+                return null;
+            }
+
+            if (ret != null && Get(result, "Instanc") == null && Get(result, "M_Instanc") == null)
+            {
+                TrySet(result, "Instanc", ret);
+                TrySet(result, "M_Instanc", ret);
+            }
+            if (ret is Assembly)
+                TrySet(result, "M_Assm", ret);
+
+            HoverLogCompilerErrors(result, 3);
+            if (HasLiveInstance(result)) return result;
+
+            Assembly asm = ret as Assembly ?? Get(result, "M_Assm") as Assembly;
+            if (asm != null)
+            {
+                string hint = Convert.ToString(Get(cls, "Name") ?? Get(cls, "ClassName") ?? "");
+                Type formulaType = FindFormulaType(asm, hint) ?? FindFormulaType(asm, null);
+                if (formulaType != null)
+                {
+                    _log("Hover      : wrapping " + formulaType.FullName);
+                    return new DirectFormulaHost { ClassDesigner = cls, Assembly = asm, FormulaType = formulaType };
+                }
+            }
+            return null;
+        }
+
+        private void HoverLogCompilerErrors(object result, int max)
+        {
+            if (result == null) return;
+            object errors = Get(result, "CompilerErrors");
+            if (errors == null) return;
+            object count = Get(errors, "Count") ?? Get(errors, "Length");
+            _log("Hover      : CompilerErrors=" + (count ?? "?") + " HasErrors=" + HasCompilerErrors(errors));
+            int shown = 0;
+            int n = 0;
+            Try(() => n = Convert.ToInt32(count ?? 0));
+            PropertyInfo item = errors.GetType().GetProperty("Item", new[] { typeof(int) });
+            for (int i = 0; i < n && shown < max; i++)
+            {
+                object e = null;
+                try { if (item != null) e = item.GetValue(errors, new object[] { i }); } catch { }
+                if (e == null) continue;
+                string num = Convert.ToString(Get(e, "ErrorNumber") ?? "");
+                string text = Convert.ToString(Get(e, "ErrorText") ?? e);
+                _log("Hover      : " + (string.IsNullOrEmpty(num) ? "" : num + " ") + FirstLine(text));
+                shown++;
+            }
         }
 
         /// <summary>
@@ -1451,7 +1610,8 @@ namespace RuleTrace
             Assembly asm = ret as Assembly ?? Get(result, "M_Assm") as Assembly;
             if (asm != null)
             {
-                Type formulaType = FindFormulaType(asm, "Solh") ?? FindFormulaType(asm, null);
+                string hint = Convert.ToString(Get(cls, "Name") ?? Get(cls, "ClassName") ?? "Solh");
+                Type formulaType = FindFormulaType(asm, hint) ?? FindFormulaType(asm, null);
                 if (formulaType != null)
                 {
                     _log("Engine compile: wrapping " + formulaType.FullName + " from compiled assembly");
@@ -1846,7 +2006,8 @@ namespace RuleTrace
             {
                 foreach (MethodInfo m in tCommon.GetMethods(AnyStatic))
                 {
-                    if (m.Name.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (!IsRealCompileMethod(m) && !m.Name.Equals("Compile", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (m.IsSpecialName) continue;
                     if (m.GetParameters().Length > 3) continue;
                     try
                     {
