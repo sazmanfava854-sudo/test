@@ -150,9 +150,15 @@ public static class AccountingDocRowBuilder
             _ => ObjOnPriceIncome
         };
 
-    /// <summary>Member 1388: درآمد PhasType=7؛ نوسازی/صنفی DocRow=1.</summary>
-    private static int ResolveDocRow(FicheHeaderDto fiche) =>
-        fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi ? 1 : PhasTypeRayvarz;
+    /// <summary>Member 1388: PhasType=7؛ DocRow=1 برای تهاتر/نوسازی/صنفی؛ درآمد عادی DocRow=7.</summary>
+    private static int ResolveDocRow(FicheHeaderDto fiche)
+    {
+        if (fiche.Category is FicheCategory.DutyNosazi or FicheCategory.DutySenfi)
+            return 1;
+        if (TahatorRowBuilder.IsTahatorFiche(fiche) || fiche.DocTyp is 14 or 15 or 17 or 18)
+            return 1;
+        return PhasTypeRayvarz;
+    }
 
     private static int ResolvePaymentDateCompact(FicheHeaderDto fiche)
     {

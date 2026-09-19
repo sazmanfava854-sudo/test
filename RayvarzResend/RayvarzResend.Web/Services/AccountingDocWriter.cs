@@ -32,6 +32,7 @@ public sealed class AccountingDocWriter
     public async Task<AccountingDocWriteResult> TryWriteAfterSendAsync(
         FicheHeaderDto fiche,
         string? pursuitDocNo,
+        IReadOnlyList<int>? rayvarzYearCandidates = null,
         CancellationToken ct = default)
     {
         var ficheNo = fiche.FicheNo.Trim();
@@ -44,10 +45,16 @@ public sealed class AccountingDocWriter
         if (fiche.Payable <= 0)
             return AccountingDocWriteResult.Skipped("مبلغ قابل پرداخت صفر است");
 
+        var pollTimeout = Math.Max(5, _config.GetValue("AccountingDoc:PollTimeoutSeconds",
+            _config.GetValue("Tahator:PollTimeoutSeconds", 60)));
+        var pollInterval = Math.Max(500, _config.GetValue("AccountingDoc:PollIntervalMs",
+            _config.GetValue("Tahator:PollIntervalMs", 2000)));
+
         RayvarzDocMeta? rayMeta = null;
         try
         {
-            rayMeta = await _repo.GetRayvarzDocMetaAsync(ficheNo, ct);
+            rayMeta = await _repo.WaitForRayvarzDocMetaAsync(
+                fiche, rayvarzYearCandidates, pollTimeout, pollInterval, ct);
         }
         catch (SqlException ex)
         {
@@ -56,7 +63,8 @@ public sealed class AccountingDocWriter
         }
 
         if (rayMeta == null)
-            return AccountingDocWriteResult.Failed("فیش در incmdocsys یافت نشد — واسط ثبت نشد");
+            return AccountingDocWriteResult.Failed(
+                $"فیش در incmdocsys یافت نشد (پس از {pollTimeout}s) — واسط ثبت نشد");
 
         var (header, details) = AccountingDocRowBuilder.Build(fiche, rayMeta, pursuitDocNo);
         if (details.Count == 0)

@@ -165,7 +165,7 @@ public static class AccountingDocTestFixtures
         Build(
             ficheNo, FicheCategory.Income, payable, docTyp, branch, doc,
             AccountingDocRowBuilder.ObjOnPriceIncome, "Incm",
-            AccountingDocRowBuilder.PhasTypeRayvarz, 3,
+            1, 3,
             ficheNo, ficheNo, bnkAcntNo, "", "14050520", rows);
 
     private static FicheFixture TahatorIncome(
@@ -175,7 +175,7 @@ public static class AccountingDocTestFixtures
         Build(
             ficheNo, FicheCategory.Income, payable, docTyp, branch, doc,
             AccountingDocRowBuilder.ObjOnPriceIncome, "Incm",
-            AccountingDocRowBuilder.PhasTypeRayvarz, 3,
+            1, 3,
             ficheNo, ficheNo, bnkAcntNo, "", "14050520", rows);
 
     private static FicheFixture Nosazi(

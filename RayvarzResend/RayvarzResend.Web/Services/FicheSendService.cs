@@ -80,6 +80,21 @@ public class FicheSendService
                     $"تأیید incmdocsys ممکن نشد (SQL رایورز): {ex.Message}");
             }
 
+            var years = new List<int>();
+            if (incmdocsysYear > 0)
+                years.Add(incmdocsysYear);
+            years.Add(DateHelper.ExtractShamsiYear(req.DocDate));
+            years.Add(DateHelper.ExtractShamsiYear(req.ActDate));
+            years.Add(DateHelper.CurrentShamsiYear());
+            var yearList = years.Where(y => y > 0).Distinct().ToList();
+
+            var accounting = await _accountingDoc.TryWriteAfterSendAsync(
+                fiche, result.PursuitDocNo, yearList, ct);
+            result.AccountingDocWritten = accounting.Written;
+            result.AccountingDocMessage = accounting.Message;
+            if (!accounting.Written && !accounting.WasSkipped)
+                result.Warning = CombineWarnings(result.Warning, $"واسط Sara: {accounting.Message}");
+
             if (!result.VerifiedInRayvarz)
             {
                 try
@@ -93,14 +108,6 @@ public class FicheSendService
 
                 result.Warning = CombineWarnings(result.Warning,
                     SendResultVerification.BuildUnverifiedWarning(result.Success, result.VerifiedInRayvarz, dryRun));
-            }
-            else
-            {
-                var accounting = await _accountingDoc.TryWriteAfterSendAsync(fiche, result.PursuitDocNo, ct);
-                result.AccountingDocWritten = accounting.Written;
-                result.AccountingDocMessage = accounting.Message;
-                if (!accounting.Written && !accounting.WasSkipped)
-                    result.Warning = CombineWarnings(result.Warning, $"واسط Sara: {accounting.Message}");
             }
         }
 

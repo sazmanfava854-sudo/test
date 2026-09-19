@@ -287,6 +287,25 @@ public sealed class TahatorResendService
                         : $"4) SOAP {no} FAIL — {soapResult.Message}");
 
                 var inHeaderAfter = await ExistsInAccountingDocHeaderAsync(no, ct);
+                var yearCandidates = RayvarzYearResolver.CollectCandidates(
+                    docDate, actDate, dueDate,
+                    fiche.RayvarzDocDate, fiche.RayvarzActDate, fiche.RayvarzDueDate).ToList();
+
+                AccountingDocWriteResult? accounting = null;
+                var accountingMessage = (string?)null;
+                if (!dryRun && soapResult.Success && !inHeaderAfter)
+                {
+                    accounting = await _accountingDoc.TryWriteAfterSendAsync(
+                        fiche, soapResult.PursuitDocNo, yearCandidates, ct);
+                    inHeaderAfter = accounting.Written || await ExistsInAccountingDocHeaderAsync(no, ct);
+                    accountingMessage = accounting.Message;
+                    steps.Add(accounting.Written
+                        ? $"5) واسط Sara {no}: {accounting.Message}"
+                        : accounting.WasSkipped
+                            ? $"5) واسط Sara {no}: {accounting.Message}"
+                            : $"5) ⚠ واسط Sara {no}: {accounting.Message}");
+                }
+
                 var verifiedRay = false;
                 if (!dryRun && soapResult.Success)
                 {
@@ -308,19 +327,6 @@ public sealed class TahatorResendService
                     }
                 }
 
-                var accountingMessage = (string?)null;
-                if (!dryRun && soapResult.Success && verifiedRay && !inHeaderAfter)
-                {
-                    var accounting = await _accountingDoc.TryWriteAfterSendAsync(fiche, soapResult.PursuitDocNo, ct);
-                    inHeaderAfter = accounting.Written || await ExistsInAccountingDocHeaderAsync(no, ct);
-                    accountingMessage = accounting.Message;
-                    steps.Add(accounting.Written
-                        ? $"5) واسط Sara {no}: {accounting.Message}"
-                        : accounting.WasSkipped
-                            ? $"5) واسط Sara {no}: {accounting.Message}"
-                            : $"5) ⚠ واسط Sara {no}: {accounting.Message}");
-                }
-
                 string? notSent = null;
                 if (!dryRun && !inHeaderAfter && !verifiedRay)
                 {
@@ -329,9 +335,10 @@ public sealed class TahatorResendService
                         steps.Add($"6) DocNotSent {no}: {notSent}");
                 }
 
+                var accountingFailed = accounting is { IsFailure: true };
                 var oneOk = dryRun
                     ? soapResult.Success
-                    : soapResult.Success && (inHeaderAfter || verifiedRay);
+                    : soapResult.Success && !accountingFailed && (inHeaderAfter || verifiedRay);
 
                 ficheResults.Add(new TahatorFicheSendDetail
                 {

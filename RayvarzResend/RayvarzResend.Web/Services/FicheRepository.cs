@@ -592,19 +592,106 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     }
 
     /// <summary>متادیتای سند رایورز برای AccountingNo — از ray.incmdocsys پس از ارسال موفق.</summary>
-    public async Task<RayvarzDocMeta?> GetRayvarzDocMetaAsync(string ficheNo, CancellationToken ct = default)
+    public async Task<RayvarzDocMeta?> GetRayvarzDocMetaAsync(string ficheNo, CancellationToken ct = default) =>
+        await QueryRayvarzDocMetaAsync(ficheNo.Trim(), shamsiYear: null, docTypFilter: null, ct);
+
+    /// <summary>پس از SOAP: صبر تا incmdocsys (با فیلتر DocTyp تهاتر در صورت نیاز) برای ثبت واسط.</summary>
+    public async Task<RayvarzDocMeta?> WaitForRayvarzDocMetaAsync(
+        FicheHeaderDto fiche,
+        IReadOnlyList<int>? yearCandidates,
+        int timeoutSeconds,
+        int pollIntervalMs,
+        CancellationToken ct = default)
     {
-        const string sql = """
-            SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
-            FROM ray.incmdocsys
-            WHERE RowDocNo = @f OR Ref = @f
-            ORDER BY ActDate DESC
-            """;
+        var ficheNo = TahatorRowBuilder.NormalizeFicheNo(fiche.FicheNo);
+        var isTahator = TahatorRowBuilder.IsTahatorFiche(fiche);
+        var isAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
+        int[]? docTypes = isTahator
+            ? isAmount ? new[] { 14, 15 } : new[] { 17, 18 }
+            : null;
+
+        var years = (yearCandidates ?? Array.Empty<int>()).Where(y => y > 0).Distinct().ToList();
+        var deadline = DateTime.UtcNow.AddSeconds(Math.Max(1, timeoutSeconds));
+        var delay = Math.Max(200, pollIntervalMs);
+
+        while (true)
+        {
+            if (docTypes != null)
+            {
+                foreach (var yr in years)
+                {
+                    var meta = await QueryRayvarzDocMetaAsync(ficheNo, yr, docTypes, ct);
+                    if (meta != null) return meta;
+                }
+
+                var anyYear = await QueryRayvarzDocMetaAsync(ficheNo, shamsiYear: null, docTypes, ct);
+                if (anyYear != null) return anyYear;
+            }
+            else
+            {
+                foreach (var yr in years)
+                {
+                    var meta = await QueryRayvarzDocMetaAsync(ficheNo, yr, docTypFilter: null, ct);
+                    if (meta != null) return meta;
+                }
+
+                var fallback = await GetRayvarzDocMetaAsync(ficheNo, ct);
+                if (fallback != null) return fallback;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+                return null;
+
+            await Task.Delay(delay, ct);
+        }
+    }
+
+    private async Task<RayvarzDocMeta?> QueryRayvarzDocMetaAsync(
+        string ficheNo,
+        int? shamsiYear,
+        int[]? docTypFilter,
+        CancellationToken ct)
+    {
+        var sql = docTypFilter is { Length: > 0 }
+            ? shamsiYear is > 0
+                ? """
+                  SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
+                  FROM ray.incmdocsys
+                  WHERE yr = @yr AND RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  ORDER BY ActDate DESC
+                  """
+                : """
+                  SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
+                  FROM ray.incmdocsys
+                  WHERE RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  ORDER BY ActDate DESC
+                  """
+            : shamsiYear is > 0
+                ? """
+                  SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
+                  FROM ray.incmdocsys
+                  WHERE yr = @yr AND (RowDocNo = @f OR Ref = @f)
+                  ORDER BY ActDate DESC
+                  """
+                : """
+                  SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
+                  FROM ray.incmdocsys
+                  WHERE RowDocNo = @f OR Ref = @f
+                  ORDER BY ActDate DESC
+                  """;
 
         await using var conn = new SqlConnection(_rayCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@f", ficheNo.Trim());
+        cmd.Parameters.AddWithValue("@f", ficheNo);
+        if (shamsiYear is > 0)
+            cmd.Parameters.AddWithValue("@yr", shamsiYear.Value);
+        if (docTypFilter is { Length: > 0 })
+        {
+            cmd.Parameters.AddWithValue("@d0", docTypFilter[0]);
+            cmd.Parameters.AddWithValue("@d1", docTypFilter[1]);
+        }
+
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
             return null;

@@ -42,6 +42,8 @@ cd RayvarzResend\publish\win-x64
 
 پیکربندی: `Rayvarz:DryRun=false` و در صورت نیاز `AccountingDoc:DryRun=false`.
 
+واسط پس از SOAP با **poll** روی `incmdocsys` (فیلتر DocTyp ۱۴–۱۸ برای تهاتر، تا `AccountingDoc:PollTimeoutSeconds` پیش‌فرض ۶۰ثانیه) ثبت می‌شود — برای **هر** `FicheNo` ارسال‌شده جداگانه.
+
 ## تست
 
 ```bash
