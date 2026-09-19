@@ -389,6 +389,8 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     releaseVersion = ReleaseInfo.Number,
     releaseLabel = ReleaseInfo.Label,
     releaseDisplayName = ReleaseInfo.DisplayName,
+    contentRoot = app.Environment.ContentRootPath,
+    appSettingsFile = Path.Combine(app.Environment.ContentRootPath, "appsettings.json"),
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrl"]),
     serviceUrlMsb = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrlMsb"] ?? ""),

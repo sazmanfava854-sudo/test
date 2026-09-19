@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Zip تحویل: یک appsettings در deploy/win-x64 + سورس بدون bin/obj/publish
+# یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_ZIP="${1:-$ROOT/../RayvarzResend-25.zip}"
@@ -8,42 +8,55 @@ trap 'rm -rf "$STAGE"' EXIT
 
 export PATH="${HOME}/.dotnet:${PATH}"
 
-echo "Publishing win-x64..."
+echo "Publishing self-contained win-x64..."
 dotnet publish "$ROOT/RayvarzResend.Web/RayvarzResend.Web.csproj" \
-  -c Release -r win-x64 --self-contained false \
-  -o "$STAGE/deploy/win-x64" /nologo
+  -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=false \
+  -o "$STAGE/RayvarzResend" /nologo
 
-# حذف فایل‌های appsettings اضافی کنار exe (فقط appsettings.json بماند)
-find "$STAGE/deploy/win-x64" -maxdepth 1 -type f -name 'appsettings.*.json' -delete 2>/dev/null || true
+# فقط یک appsettings.json کنار exe
+find "$STAGE/RayvarzResend" -maxdepth 1 -type f -name 'appsettings.*.json' -delete 2>/dev/null || true
 
-echo "Staging source (no bin/obj/publish)..."
-mkdir -p "$STAGE/source"
-tar -C "$ROOT" -cf - \
-  --exclude='./bin' --exclude='./obj' --exclude='./publish' \
-  --exclude='**/bin' --exclude='**/obj' --exclude='**/publish' \
-  . | tar -xf - -C "$STAGE/source"
+cp "$ROOT/RayvarzResend.Web/appsettings.json" "$STAGE/RayvarzResend/appsettings.json"
 
-# سورس: فقط یک appsettings در RayvarzResend.Web
-find "$STAGE/source" -name 'appsettings.*.json' ! -name 'appsettings.json' -delete 2>/dev/null || true
-rm -f "$STAGE/source/RayvarzResend.Web/appsettings.Development.json.example" 2>/dev/null || true
-
-cat > "$STAGE/DEPLOY-README.txt" << 'EOF'
-RayvarzResend — نسخه آخر
-
-=== سرور ویندوز (فقط این پوشه) ===
-  deploy/win-x64/
-    RayvarzResend.Web.exe
-    appsettings.json   ← تنها فایل تنظیمات (ConnectionStrings و DryRun را اینجا ویرایش کنید)
-
-appsettings.Production.json استفاده نمی‌شود — اگر روی سرور دارید، حذف کنید.
-
-=== توسعه ===
-  source/RayvarzResend.Web/appsettings.json
-
-تأیید: GET /api/config → accountingDoc.dryRun = false
+cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
+@echo off
+cd /d "%~dp0"
+echo RayvarzResend v25 — نسخه آخر
+echo Settings: %cd%\appsettings.json
+echo.
+RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
+cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
+RayvarzResend v25 — نسخه آخر (تهاتر + Accounting_Doc)
+
+نصب روی سرور ویندوز
+--------------------
+1) Zip را باز کنید. فقط یک پوشه دارید: RayvarzResend
+2) ConnectionStrings را در همین فایل ویرایش کنید:
+     RayvarzResend\appsettings.json
+   فقط همین یک فایل تنظیمات وجود دارد.
+   appsettings.Production.json را اگر از قبل دارید حذف کنید.
+3) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
+4) مرورگر: http://localhost:5088
+5) GET /api/config
+     releaseVersion = 25
+     accountingDoc.dryRun = false
+     dryRun = false
+
+Accounting_DocHeader / Accounting_DocDetails بعد از ارسال موفق به رایورز
+در همین نسخه ثبت می‌شود (اگر DryRun=false باشد).
+
+سورس روی GitHub است — داخل Zip نیست:
+https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-accounting-doc-ffcb
+EOF
+
+# Zip با root = RayvarzResend (یک پوشه)
 rm -f "$OUT_ZIP"
-(cd "$STAGE" && zip -r -q "$OUT_ZIP" DEPLOY-README.txt deploy source)
-echo "Created $OUT_ZIP"
+(cd "$STAGE" && zip -r -q "$OUT_ZIP" RayvarzResend)
+echo "Created $OUT_ZIP ($(du -h "$OUT_ZIP" | cut -f1))"
+echo "--- appsettings (must be exactly one) ---"
 unzip -l "$OUT_ZIP" | rg 'appsettings' || true
+echo "--- exe ---"
+unzip -l "$OUT_ZIP" | rg 'RayvarzResend.Web.exe|start.bat|README.txt' || true

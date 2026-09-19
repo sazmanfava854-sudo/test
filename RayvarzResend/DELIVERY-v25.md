@@ -19,20 +19,19 @@ https://github.com/sazmanfava854-sudo/test/releases/download/rayvarzresend-noskh
 
 ### اجرا روی سرور ویندوز
 
-**فقط یک پوشه و یک فایل تنظیمات:**
+Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
-| مسیر در Zip | کاربرد |
-|-------------|--------|
-| `deploy/win-x64/RayvarzResend.Web.exe` | اجرای سرور (.NET 8 Runtime) |
-| `deploy/win-x64/appsettings.json` | **تنها** فایل تنظیمات — ConnectionStrings و `DryRun` |
+| فایل | کاربرد |
+|------|--------|
+| `RayvarzResend\start.bat` | اجرا (پورت 5088) |
+| `RayvarzResend\RayvarzResend.Web.exe` | exe خودکفا (نیازی به نصب .NET SDK نیست) |
+| `RayvarzResend\appsettings.json` | **تنها** فایل تنظیمات |
 
-`appsettings.Production.json` در برنامه **خوانده نمی‌شود** — اگر روی سرور دارید، حذف کنید تا سردرگمی نشود.
+`appsettings.Production.json` خوانده نمی‌شود — اگر از قبل کنار exe هست حذف کنید.
 
-سورس (اختیاری): `source/RayvarzResend.Web/appsettings.json` — همان الگو برای `dotnet run`.
+`Rayvarz:DryRun=false` و `AccountingDoc:DryRun=false` داخل همان `appsettings.json`.
 
-`Rayvarz:DryRun=false` ، `AccountingDoc:DryRun=false` در **appsettings.json**.
-
-پس از deploy: `GET /api/config` → `accountingDoc.dryRun` = **false**.
+پس از اجرا: `GET /api/config` → `releaseVersion: 25` ، `accountingDoc.dryRun: false`.
 
 ساخت Zip: `bash RayvarzResend/scripts/build-release-zip.sh`
 
