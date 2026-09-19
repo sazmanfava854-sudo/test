@@ -137,7 +137,7 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23k-hover-dbvals", "label")
+expect(build, "v23l-inner-body", "label")
 expect(engine, "IsRealCompileMethod", "do not invoke get_CompilerErrors")
 expect(engine, "TryCompileRawSource", "compile injected class source")
 expect(webapp, "TryLiveHover", "permit debug runs live hover")
@@ -328,6 +328,9 @@ expect(selftest, "InjectXmlBody", "selftest inject")
 merger = read("FormulaMerger.cs")
 expect(merger, 'TrySet(fn, "EncryptXmlBody", null)', "inject clears EncryptXmlBody")
 expect(merger, "StripDuplicateClassShell", "inject strips class shell")
+expect(merger, "BodyForInject", "inject inner Body")
+expect(merger, "PeelMethodWrapper", "peel Sub/Function wrapper")
+expect(engine, "بدون Sub/Function", "inject log inner body")
 wrapped = """Public Class Rule
 Public Sub Run()
  logfilefj("IS_BlandMartabe",IS_BlandMartabe)
@@ -339,6 +342,33 @@ if not block or "logfilefj" not in block.group(0):
     failmsg("strip keeps Run logfilefj")
 if "Public Class" in block.group(0):
     failmsg("strip removes Class wrapper")
+inner_src = """Public Function ZaminForched()
+ Select Case x
+  Case 1
+ End Select
+ If y Then
+ End If
+ Info8.AddError(BIZ.SA.EumErrorAction.Stop,"واحد برای زمین",Rajaeie())
+End Function
+"""
+if "Public Function" in inner_src and "Select Case" in inner_src:
+    peeled_lines = []
+    started = False
+    for line in inner_src.splitlines():
+        if re.match(r"\s*(?:Public\s+|Private\s+)*(?:Sub|Function)\s+\w+", line, re.I):
+            started = True
+            continue
+        if started and re.match(r"\s*End\s+(?:Sub|Function)\b", line, re.I):
+            break
+        if started:
+            peeled_lines.append(line)
+    peeled = "\n".join(peeled_lines)
+    if "Select Case" not in peeled or "End Select" not in peeled:
+        failmsg("peel keeps Select Case")
+    if "Public Function" in peeled or "End Function" in peeled:
+        failmsg("peel removes Function wrapper")
+    if "AddError" not in peeled:
+        failmsg("peel keeps AddError")
 
 print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
 sys.exit(0 if fail == 0 else 1)

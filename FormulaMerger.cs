@@ -94,7 +94,8 @@ namespace RuleTrace
                 MemberSource src;
                 if (!map.TryGetValue(id, out src) || string.IsNullOrWhiteSpace(src.Code)) continue;
 
-                string code = StripDuplicateClassShell(src.Code);
+                string fnName = Convert.ToString(GetMember(fn, "Name") ?? GetMember(fn, "M_Name") ?? src.Name ?? "");
+                string code = BodyForInject(src.Code, fnName);
                 if (TrySet(fn, "Body", code) | TrySet(fn, "M_Body", code) | TrySet(fn, "Source", code) | TrySet(fn, "Text", code))
                     injected++;
                 TrySet(fn, "EncryptXmlBody", null);
@@ -829,6 +830,75 @@ namespace RuleTrace
             object v = GetMember(o, name);
             if (v is string) return (string)v;
             return InvokeString(o, name);
+        }
+
+        /// <summary>
+        /// ClsFunction.Body is the INNER statements. Sara ToString1 wraps Sub/Function once.
+        /// Injecting the full method caused BC30088/BC30087 (End Select/End If) and logfilefj never ran.
+        /// </summary>
+        public static string BodyForInject(string code, string functionName)
+        {
+            string stripped = StripDuplicateClassShell(code);
+            string inner = PeelMethodWrapper(stripped, functionName);
+            return string.IsNullOrWhiteSpace(inner) ? stripped : inner;
+        }
+
+        public static string PeelMethodWrapper(string code, string functionName)
+        {
+            if (string.IsNullOrWhiteSpace(code)) return string.Empty;
+            string norm = NormalizeNewlines(code);
+            var methods = ExtractMethodBlocks(norm);
+            if (methods.Count == 0)
+                return LooksLikeMethodDecl(norm) ? PeelOneMethod(norm) : code.Trim();
+
+            string pick = methods[0];
+            if (!string.IsNullOrWhiteSpace(functionName))
+            {
+                foreach (string block in methods)
+                {
+                    if (string.Equals(MethodKey(block), functionName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        pick = block;
+                        break;
+                    }
+                }
+            }
+            return PeelOneMethod(pick);
+        }
+
+        private static string PeelOneMethod(string block)
+        {
+            if (string.IsNullOrWhiteSpace(block)) return string.Empty;
+            string[] lines = NormalizeNewlines(block).Split('\n');
+            int start = -1, end = -1;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (start < 0 && LooksLikeMethodDecl(lines[i]))
+                {
+                    start = i;
+                    continue;
+                }
+                if (start >= 0 && IsMethodEndLine(lines[i]))
+                {
+                    end = i;
+                    break;
+                }
+            }
+            if (start < 0 || end <= start)
+                return block.Trim();
+            var inner = new List<string>();
+            for (int i = start + 1; i < end; i++)
+                inner.Add(lines[i]);
+            return string.Join("\r\n", inner).Trim();
+        }
+
+        private static bool LooksLikeMethodDecl(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return false;
+            return Regex.IsMatch(
+                line,
+                @"^\s*(?:<[^>]+>\s*)*(?:(?:Public|Private|Protected|Friend|Partial|Shared|Overrides|Overloads|MustOverride|NotOverridable|Shadows)\s+)*(?:Sub|Function)\s+\w+",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
         /// <summary>Keep only Sub/Function blocks; drop duplicate class shells (M_Out/Out/Namespace/Class) from member XML bodies.</summary>
@@ -1639,7 +1709,10 @@ namespace RuleTrace
                 string name = Convert.ToString(GetMember(fn, "Name") ?? GetMember(fn, "M_Name") ?? "?");
                 int id = ReadInt(fn, "NidFunction");
                 int len = LenStr(GetMember(fn, "Body") ?? GetMember(fn, "M_Body"));
-                log("Detail      : ClsFunction " + id + " " + name + " BodyLen=" + len);
+                string body = Convert.ToString(GetMember(fn, "Body") ?? GetMember(fn, "M_Body") ?? "");
+                string head = FirstLine(body);
+                log("Detail      : ClsFunction " + id + " " + name + " BodyLen=" + len
+                    + (LooksLikeMethodDecl(head) ? " WRAPPER" : " inner"));
             }
         }
 

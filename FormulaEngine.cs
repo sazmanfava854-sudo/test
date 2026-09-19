@@ -1239,7 +1239,7 @@ namespace RuleTrace
                 try
                 {
                     n = FormulaMerger.InjectBodies(cls, sources, _log);
-                    _log("Hover      : " + n + "/" + sources.Count + " ClsFunction.Body از XmlBody");
+                    _log("Hover      : " + n + "/" + sources.Count + " ClsFunction.Body داخلی از XmlBody (بدون Sub/Function تا ToString1 دوباره Wrap نکند)");
                 }
                 catch (Exception ex)
                 {
