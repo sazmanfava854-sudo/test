@@ -137,7 +137,10 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23f-hover-inject", "label")
+expect(build, "v23g-white-page", "label")
+expect(html, "background: #ffffff", "white page")
+if "#07111f" in html:
+    failmsg("dark navy page color leftover")
 expect(csproj, "HoverDebug.cs", "csproj compiles HoverDebug")
 expect(html, "hoverTip", "hover tooltip")
 expect(html, "renderCode", "line renderer")

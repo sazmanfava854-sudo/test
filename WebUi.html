@@ -6,29 +6,26 @@
   <title>RuleTrace</title>
   <style>
     :root {
-      --bg: #07111f;
-      --bg2: #0c1a2e;
-      --card: rgba(17, 32, 54, .86);
-      --line: rgba(94, 234, 212, .18);
-      --text: #e8f4ff;
-      --muted: #8aa0b8;
-      --teal: #2dd4bf;
-      --teal2: #14b8a6;
-      --gold: #fbbf24;
-      --danger: #fb7185;
-      --ok: #34d399;
-      --shadow: 0 22px 50px rgba(0,0,0,.35);
+      --bg: #ffffff;
+      --bg2: #ffffff;
+      --card: #ffffff;
+      --line: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --teal: #0d9488;
+      --teal2: #0f766e;
+      --gold: #d97706;
+      --danger: #e11d48;
+      --ok: #059669;
+      --shadow: 0 8px 24px rgba(15, 23, 42, .06);
       --radius: 18px;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
+    html, body { margin: 0; min-height: 100%; background: #ffffff; }
     body {
       font-family: Tahoma, "Segoe UI", sans-serif;
       color: var(--text);
-      background:
-        radial-gradient(1200px 500px at 10% -10%, rgba(45,212,191,.18), transparent 55%),
-        radial-gradient(900px 420px at 100% 0%, rgba(251,191,36,.12), transparent 50%),
-        linear-gradient(180deg, var(--bg), var(--bg2) 40%, #081018);
+      background: #ffffff;
     }
     .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 18px 48px; }
     header.app {
@@ -58,8 +55,8 @@
     .card h2 { margin: 0 0 14px; font-size: 15px; color: var(--teal); font-weight: 700; }
     label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
     input, select, textarea {
-      width: 100%; background: #071422; color: var(--text);
-      border: 1px solid rgba(148,163,184,.25); border-radius: 12px;
+      width: 100%; background: #ffffff; color: var(--text);
+      border: 1px solid #cbd5e1; border-radius: 12px;
       padding: 10px 12px; font: 13px/1.5 Tahoma, Consolas, monospace;
       outline: none;
     }
@@ -78,7 +75,7 @@
     }
     button:hover { filter: brightness(1.08); transform: translateY(-1px); }
     button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-    button.ghost { background: #1e334d; color: var(--text); }
+    button.ghost { background: #f1f5f9; color: var(--text); }
     button.gold { background: var(--gold); }
     button.danger { background: #be123c; color: white; }
     button.ok { background: var(--ok); }
@@ -91,31 +88,31 @@
     .pill.bad { background: var(--danger); }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { text-align: right; padding: 8px; border-bottom: 1px solid rgba(148,163,184,.12); }
-    tr.sel { background: rgba(45,212,191,.12); }
-    tr:hover { background: rgba(255,255,255,.04); cursor: pointer; }
+    tr.sel { background: rgba(13,148,136,.10); }
+    tr:hover { background: #f8fafc; cursor: pointer; }
     .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-    .tabs button { background: #132338; color: var(--muted); }
-    .tabs button.on { background: var(--teal); color: #042f2e; }
+    .tabs button { background: #f1f5f9; color: var(--muted); }
+    .tabs button.on { background: var(--teal); color: #ffffff; }
     .log {
-      background: #050b14; color: #d1fae5; border-radius: 14px; padding: 14px;
+      background: #ffffff; color: #0f172a; border: 1px solid var(--line); border-radius: 14px; padding: 14px;
       height: 300px; overflow: auto; white-space: pre-wrap;
       font: 12.5px/1.55 Consolas, "Courier New", monospace; direction: ltr; text-align: left;
     }
     .code {
-      background: #071018; border-radius: 14px; padding: 12px; height: 360px;
+      background: #ffffff; border: 1px solid var(--line); border-radius: 14px; padding: 12px; height: 360px;
       overflow: auto; white-space: pre; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left;
-      color: #e2e8f0;
+      color: #0f172a;
     }
-    .code-hover { height: 360px; overflow: auto; padding: 0; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left; }
+    .code-hover { height: 360px; overflow: auto; padding: 0; font: 12px/1.5 Consolas, monospace; direction: ltr; text-align: left; background: #ffffff; border: 1px solid var(--line); border-radius: 14px; color: #0f172a; }
     .code-hover .ln { display: flex; gap: 10px; padding: 0 10px; white-space: pre; }
     .code-hover .ln:hover { background: rgba(45,212,191,.14); }
     .code-hover .ln.has-probe { background: rgba(251,191,36,.06); }
     .code-hover .ln.has-val { background: rgba(52,211,153,.12); }
     .code-hover .n { width: 42px; color: #64748b; text-align: right; flex: none; user-select: none; }
-    .code-hover .s { color: #e2e8f0; }
+    .code-hover .s { color: #0f172a; }
     .hover-tip {
       position: fixed; z-index: 40; max-width: 420px;
-      background: #042f2e; color: #ecfdf5; border: 1px solid var(--teal);
+      background: #ffffff; color: #0f172a; border: 1px solid var(--teal);
       border-radius: 12px; padding: 10px 12px; font: 12px/1.5 Consolas, Tahoma, sans-serif;
       box-shadow: var(--shadow); display: none; direction: ltr; text-align: left; white-space: pre-wrap;
     }
@@ -128,7 +125,7 @@
     }
     .list div:hover, .list div.on { background: rgba(45,212,191,.12); }
     .busy {
-      position: fixed; inset: 0; background: rgba(2,6,23,.45); display: none; place-items: center; z-index: 20;
+      position: fixed; inset: 0; background: rgba(255,255,255,.65); display: none; place-items: center; z-index: 20;
     }
     .busy.on { display: grid; }
     .spinner {
@@ -137,7 +134,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .toast {
-      position: fixed; bottom: 18px; left: 18px; background: #134e4a; color: white;
+      position: fixed; bottom: 18px; left: 18px; background: #0f766e; color: white;
       padding: 10px 14px; border-radius: 12px; display: none; z-index: 30; max-width: 420px;
     }
     .toast.on { display: block; }
@@ -517,8 +514,8 @@ function showMembers(list, focusMember) {
       d.classList.add("on");
       renderCode(m.code || "", m.hover || []);
     };
-    if (m.chidman) d.style.color = "#fbbf24";
-    if (m.solhRun) d.style.color = "#34d399";
+    if (m.chidman) d.style.color = "#b45309";
+    if (m.solhRun) d.style.color = "#047857";
     box.appendChild(d);
     if (i === focus || (focus < 0 && (m.chidman || i === 0))) d.click();
   });

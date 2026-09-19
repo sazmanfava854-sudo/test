@@ -184,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("hover-inject", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("white-page", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23f-hover-inject, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23g-white-page, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -667,6 +667,12 @@ namespace RuleTrace
             fail += Expect(html, "data-tab=\"docs\"", "docs tab");
             fail += Expect(html, "ParentDocId", "ParentDocId column");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
+            fail += Expect(html, "background: #ffffff", "white page");
+            if (html.IndexOf("#07111f", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: dark navy page color leftover");
+                fail++;
+            }
             if (html.IndexOf("اجرای موتور (اختیاری)", StringComparison.Ordinal) >= 0)
             {
                 Console.Error.WriteLine("FAIL: optional-engine label should not replace اجرا");
@@ -702,7 +708,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23f-hover-inject", "bootstrap label");
+                        fail += Expect(boot, "v23g-white-page", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
