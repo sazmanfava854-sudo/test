@@ -137,13 +137,20 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23j-compile-body", "label")
+expect(build, "v23k-hover-dbvals", "label")
 expect(engine, "IsRealCompileMethod", "do not invoke get_CompilerErrors")
 expect(engine, "TryCompileRawSource", "compile injected class source")
 expect(webapp, "TryLiveHover", "permit debug runs live hover")
-expect(html, "مقدار در اجرای زنده نیامد", "hover empty after live")
+expect(webapp, "SeedDbParams", "seed formula params from Sara")
+expect(webapp, "BindIdents", "bind every line ident")
+if "مقدار در اجرای زنده نیامد" in html:
+    failmsg("hover must not say live-run-missed")
 if "(هنوز اجرا نشده)" in html:
     failmsg("hover must not say not-yet-run")
+expect(html, "tarakom=", "inline tarakom=value")
+expect(html, 'className = "vals"', "code line values")
+expect(html, "مقدار معتبری برای متغیرهای این خط", "missing-value hover")
+expect(html, "showTrace(j.trace, j.params", "permit debug fills paramsMap")
 expect(html, "background: #ffffff", "white page")
 expect(html, "کد Member خالی است", "empty member pane")
 expect(engine, "LoadFormSources(scopes)", "permit debug loads Member")
@@ -237,6 +244,11 @@ if "selectedScopes()" not in html:
 hover = read("HoverDebug.cs")
 expect(hover, "logfilefj", "parser logfilefj")
 expect(hover, r'logfilefj\s*\(', "logfilefj regex")
+expect(hover, "Flatten", "flatten Sara vars")
+expect(hover, "BindIdents", "bind line idents")
+expect(hover, "Tarakom", "tarakom alias")
+expect(case, "lookup CI_PlanUsingType/CI_PlanType", "zabeteh density lookup")
+expect(selftest, "tarakom=120", "selftest tarakom bind")
 expect(webapp, "SkipRelatedSources", "do not load every related class")
 expect(webapp, "LoadFormSources", "load ticked form only")
 expect(engine, "SkipRelatedSources", "Run can skip related flood")
@@ -269,6 +281,12 @@ for i, line in enumerate(sample.splitlines(), 1):
         probes.append(m.group(1))
 if probes != ["IS_BlandMartabe", "ساختمان", "دستگاه"]:
     failmsg("python logfilefj parse " + str(probes))
+
+db = {"Tarakom": "120"}
+for alias in ("Tarakom", "tarakom", "Density", "تراکم"):
+    db.setdefault(alias, db["Tarakom"])
+if db.get("tarakom") != "120" or db.get("تراکم") != "120":
+    failmsg("alias tarakom=120")
 
 if "به‌جای بارگذاری همهٔ کلاس‌ها فقط گام ردشده" in engine:
     failmsg("empty Instanc must not recurse DebugSteps")

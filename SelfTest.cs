@@ -184,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("compile-body", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("hover-dbvals", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23j-compile-body, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23k-hover-dbvals, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -471,6 +471,27 @@ namespace RuleTrace
             if (HoverDebug.NoInstance.IndexOf("باز کنید", StringComparison.Ordinal) >= 0)
                 fail += FailMsg("NoInstance must not tell user to open Sara");
             fail += HoverDebug.Idents("logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)").Contains("IS_BlandMartabe") ? 0 : FailMsg("idents on probe line");
+
+            const string asansor =
+                "  tarakom = tarakom\r\n" +
+                "  Info8.AddError(BIZ.SA.EumErrorAction.warning,\"ضابطه آسانسور\",Fnansansor_Outvalue)\r\n";
+            var sara = new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "Tarakom" }, { "value", "120" }, { "table", "[dbo].[CI_PlanUsingType]" } },
+                new Dictionary<string, object> { { "name", "Fnansansor_Outvalue" }, { "value", "1" }, { "table", "[dbo].[Zabeteh]" } },
+            };
+            var db = HoverDebug.Flatten(null, sara);
+            fail += HoverDebug.Lookup(db, "tarakom") == "120" ? 0 : FailMsg("alias tarakom=120 from Tarakom");
+            fail += HoverDebug.Lookup(db, "تراکم") == "120" ? 0 : FailMsg("alias تراکم=120");
+            var lineItems = HoverDebug.Parse(asansor);
+            HoverDebug.Bind(lineItems, null, null, sara);
+            HoverDebug.BindIdents(asansor, lineItems, db);
+            HoverItem elev = lineItems.Find(p => (p.Expr ?? "").IndexOf("Fnansansor_Outvalue", StringComparison.OrdinalIgnoreCase) >= 0
+                || (p.Name ?? "").IndexOf("ضابطه آسانسور", StringComparison.Ordinal) >= 0);
+            fail += elev != null && elev.Value == "1" ? 0 : FailMsg("AddError expr from Sara");
+            HoverItem dens = lineItems.Find(p => string.Equals(p.Name, "tarakom", StringComparison.OrdinalIgnoreCase));
+            fail += dens != null && dens.Value == "120" ? 0 : FailMsg("BindIdents tarakom=120 on code line");
+            fail += HoverDebug.BoundCount(lineItems) >= 2 ? 0 : FailMsg("asansor line bound from DB");
             return fail;
         }
 
@@ -669,6 +690,13 @@ namespace RuleTrace
             fail += Expect(html, "dir=\"rtl\"", "rtl");
             fail += Expect(html, "background: #ffffff", "white page");
             fail += Expect(html, "کد Member خالی است", "empty member pane copy");
+            fail += Expect(html, "tarakom=", "inline tarakom=value in code");
+            fail += Expect(html, "className = \"vals\"", "inline value annotation");
+            if (html.IndexOf("مقدار در اجرای زنده نیامد", StringComparison.Ordinal) >= 0)
+            {
+                Console.Error.WriteLine("FAIL: empty-live hover text must be removed");
+                fail++;
+            }
             if (html.IndexOf("#07111f", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 Console.Error.WriteLine("FAIL: dark navy page color leftover");
@@ -709,7 +737,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23j-compile-body", "bootstrap label");
+                        fail += Expect(boot, "v23k-hover-dbvals", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;

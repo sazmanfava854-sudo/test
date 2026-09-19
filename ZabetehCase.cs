@@ -200,6 +200,11 @@ namespace RuleTrace
             {
                 DumpZabeteh(sara, keys, vars, log);
                 FillKeys(keys, vars);
+                log("Zabeteh     : lookup CI_PlanUsingType/CI_PlanType برای مقدار تراکم و کاربری");
+                LookupById(sara, "CI_PlanType", keys.PlanTypeId, vars, log);
+                LookupById(sara, "CI_PlanUsingType", keys.PlanUsingTypeId, vars, log);
+                LookupById(sara, "CI_Zabeteh", keys.CIZabetehId, vars, log);
+                DumpStaticLayer(sara, keys, vars, log);
                 if (!IsEmptyGuid(keys.OverlayNidZabeteh))
                     log("Zabeteh     : Zabeteh_Details رد شد — CAST روی جدول بزرگ timeout می‌دهد. روکش کافی است؛ کد Member از dbo.Member بار می‌شود");
             }
@@ -912,6 +917,10 @@ namespace RuleTrace
             if (col.IndexOf("Commission", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Jarime", StringComparison.OrdinalIgnoreCase) >= 0) return "کمیسیون ماده ۱۰۰";
             if (col.IndexOf("Daramad", StringComparison.OrdinalIgnoreCase) >= 0 || col.Equals("Income", StringComparison.OrdinalIgnoreCase)) return "درآمد";
             if (col.IndexOf("Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return "ضابطه";
+            if (col.Equals("Tarakom", StringComparison.OrdinalIgnoreCase)
+                || col.Equals("Density", StringComparison.OrdinalIgnoreCase)
+                || col.IndexOf("تراکم", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "تراکم ضابطه";
             if (col.IndexOf("PlanType", StringComparison.OrdinalIgnoreCase) >= 0) return "طرح";
             if (col.IndexOf("PlanUsing", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Karbari", StringComparison.OrdinalIgnoreCase) >= 0) return "کاربری";
             if (col.Equals("P_Key", StringComparison.OrdinalIgnoreCase)

@@ -110,6 +110,7 @@
     .code-hover .ln.has-val { background: rgba(52,211,153,.12); }
     .code-hover .n { width: 42px; color: #64748b; text-align: right; flex: none; user-select: none; }
     .code-hover .s { color: #0f172a; }
+    .code-hover .vals { color: #0d9488; flex: none; font-size: 12px; }
     .hover-tip {
       position: fixed; z-index: 40; max-width: 420px;
       background: #ffffff; color: #0f172a; border: 1px solid var(--teal);
@@ -264,7 +265,7 @@
         </details>
         <div class="status">
           <span id="status">آماده — بدون CMD، فقط مرورگر</span>
-          <span>logfilefj دیگر لازم نیست. بعد از اجرا موس را روی خط کد نگه دارید تا مقدار متغیر دیده شود</span>
+          <span>logfilefj دیگر لازم نیست. بعد از اجرا مقدار روی خط می‌آید مثل tarakom=120</span>
         </div>
         <div style="margin-top:12px; overflow:auto">
           <table id="cases">
@@ -444,11 +445,11 @@ function identNames(text) {
 function lineValues(text, hoverItems) {
   const items = (hoverItems || []).map(x => ({ name: x.name, expr: x.expr, value: x.value, source: x.source }));
   identNames(text).forEach(n => {
-    if (items.some(x => (x.name || "").toLowerCase() === n.toLowerCase())) return;
+    if (items.some(x => (x.name || "").toLowerCase() === n.toLowerCase() || (x.expr || "").toLowerCase() === n.toLowerCase())) return;
     const v = paramsMap[n];
-    if (v != null && String(v) !== "") items.push({ name: n, value: v, source: "ParametersValue" });
+    if (v != null && String(v) !== "") items.push({ name: n, value: v, source: "Sara" });
   });
-  return items;
+  return items.filter(it => it.value);
 }
 function hideHoverTip() {
   $("hoverTip").classList.remove("on");
@@ -457,11 +458,10 @@ function showHoverTip(el, text, hoverItems) {
   const items = lineValues(text, hoverItems);
   const tip = $("hoverTip");
   if (!items.length) {
-    tip.textContent = "متغیری روی این خط پیدا نشد — logfilefj(\"نام\", مقدار) بگذارید یا اجرا زنده کنید";
+    tip.textContent = "مقدار معتبری برای متغیرهای این خط در ضابطه این Nid پیدا نشد";
   } else {
     tip.textContent = items.map(it => {
-      const val = it.value ? it.value : "(مقدار در اجرای زنده نیامد)";
-      return (it.name || "") + " = " + val + (it.expr && it.expr !== it.name ? "\n  expr: " + it.expr : "") + (it.source ? "\n  via " + it.source : "");
+      return (it.name || "") + " = " + it.value + (it.expr && it.expr !== it.name ? "\n  expr: " + it.expr : "") + (it.source ? "\n  via " + it.source : "");
     }).join("\n\n");
   }
   const r = el.getBoundingClientRect();
@@ -493,6 +493,13 @@ function renderCode(code, hover) {
     const n = document.createElement("span"); n.className = "n"; n.textContent = String(ln);
     const s = document.createElement("span"); s.className = "s"; s.textContent = text;
     d.appendChild(n); d.appendChild(s);
+    const bound = items.filter(x => x.value);
+    if (bound.length) {
+      const a = document.createElement("span");
+      a.className = "vals";
+      a.textContent = "  " + bound.map(x => (x.name || "") + "=" + x.value).join("  ");
+      d.appendChild(a);
+    }
     d.onmouseenter = () => showHoverTip(d, text, items);
     d.onmouseleave = hideHoverTip;
     box.appendChild(d);
@@ -672,6 +679,7 @@ $("btnSolhNid").onclick = async () => {
   const j = await api("/api/solh-nid", payload());
   showMembers(j.members, j.focusMember);
   showVars(j.vars, j.diagnosis, j.nextAction || j.stopBlock);
+  showTrace(j.trace, j.params, j.watch);
   showDocs(j);
   if (j.history) showHistory(j.history);
   showSummary(j.summary);
