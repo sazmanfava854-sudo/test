@@ -2056,7 +2056,7 @@ function updateSendButton(f) {
     if (previewBtn) previewBtn.disabled = true;
     btn.title = config?.tahator?.dryRun ?? config?.dryRun
       ? 'تهاتر — DryRun فعال'
-      : 'ارسال جفت تهاتر (۱۵۷+۱۵۸) به رایورز';
+      : 'ارسال فیش تهاتر (فقط شماره وارد شده) به رایورز';
     return;
   }
   if (!f.canSend) {
@@ -2908,7 +2908,7 @@ function formatTahatorSend(d) {
     `  ${r.incomeAccountGroup} ${r.ficheNo}: Success=${r.success} Skipped=${r.skipped}${r.skipReason ? ' (' + r.skipReason + ')' : ''} DocTyp=${r.docTyp} Branch=${r.branch}/${r.fund}${r.soapMessage ? ' — ' + r.soapMessage : ''}`
   );
   return [
-    '=== نتیجه ارسال جفت تهاتر ===',
+    '=== نتیجه ارسال تهاتر ===',
     `FicheNo ورودی: ${d.ficheNo}`,
     d.pair ? `جفت: ۱۵۷=${d.pair.amountFicheNo} → ۱۵۸=${d.pair.incomeFicheNo}` : '',
     `Success: ${d.success}`,
