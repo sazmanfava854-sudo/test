@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v23j-compile-body";
+        public const string Label = "v23k-hover-dbvals";
 
         public static string Banner
         {

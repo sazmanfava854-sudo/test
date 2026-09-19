@@ -268,9 +268,16 @@ namespace RuleTrace
                 };
                 ParseParams(Json.Str(body, "parameters"), req);
 
+                var dbMap = HoverDebug.Flatten(null, caseVars);
+                int seeded = SeedDbParams(req, sources, dbMap, log);
+                log.Add("Hover      : مقدار Sara=" + dbMap.Count + " seed=" + seeded
+                    + " tarakom=" + (HoverDebug.Lookup(dbMap, "tarakom") ?? "(خالی)"));
+
                 var trace = new List<TraceEvent>();
                 var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                HoverDebug.MergeInto(parms, dbMap);
                 int live = TryLiveHover(eng, log, req, scopes, trace, parms);
+                HoverDebug.MergeInto(parms, dbMap);
 
                 int probes, bound;
                 var packed = PackSources(sources, trace, parms, caseVars, out probes, out bound);
@@ -363,12 +370,23 @@ namespace RuleTrace
                     try { sources = eng.LoadFormSources(scopes); }
                     catch (Exception ex) { log.Add("Hover      : Member خوانده نشد — " + ex.Message); }
 
+                    List<Dictionary<string, object>> caseVars = new List<Dictionary<string, object>>();
+                    try { caseVars = ZabetehCase.ReadSelected(_settings.Sara, req.NidProc, scopes, log.Add); }
+                    catch (Exception ex) { log.Add("Hover      : Sara vars — " + FirstLineSafe(ex.Message)); }
+
+                    var dbMap = HoverDebug.Flatten(null, caseVars);
+                    int seeded = SeedDbParams(req, sources, dbMap, log);
+                    log.Add("Hover      : مقدار Sara=" + dbMap.Count + " seed=" + seeded
+                        + " tarakom=" + (HoverDebug.Lookup(dbMap, "tarakom") ?? "(خالی)"));
+
                     var trace = new List<TraceEvent>();
                     var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    HoverDebug.MergeInto(parms, dbMap);
                     int live = TryLiveHover(eng, log, req, scopes, trace, parms);
+                    HoverDebug.MergeInto(parms, dbMap);
 
                     int probes = 0, bound = 0;
-                    var packed = PackSources(sources, trace, parms, null, out probes, out bound);
+                    var packed = PackSources(sources, trace, parms, caseVars, out probes, out bound);
                     int focus = FocusMember(packed);
                     log.Add("Hover      : probes=" + probes + " مقداردار=" + bound + " — موس را روی خط نگه‌دارید");
 
@@ -389,7 +407,7 @@ namespace RuleTrace
                         { "liveCode", live },
                         { "diagnosis", diagnosis },
                         { "nextAction", next },
-                        { "vars", new List<Dictionary<string, object>>() },
+                        { "vars", caseVars },
                         { "summary", log.Where(IsCopyLine).ToList() },
                         { "settings", SettingsMap() },
                         { "chidmanMember", ChidmanAnalyzer.DefaultChidmanMemberId },
@@ -555,12 +573,38 @@ namespace RuleTrace
             if (members == 0)
                 return "کد Member خوانده نشد — اتصال RuleEngine و تیک فرم را چک کنید";
             if (bound > 0)
-                return "موس را روی خط سبز نگه دارید — " + bound + " مقدار از اجرای زنده";
-            if (probes > 0 && live == 2)
-                return "پروب logfilefj=" + probes + " مقداردار=0. " + HoverDebug.NoInstance;
+                return "موس را روی خط سبز نگه دارید — " + bound + " مقدار (دیتابیس/اجرا) مثل tarakom=120";
             if (probes > 0)
-                return "اجرا شد ولی " + probes + " پروب هنوز مقدار نگرفت";
-            return members + " Member از فرم تیک‌خورده — در کد logfilefj(\"نام\", مقدار) بگذارید";
+                return "پروب=" + probes + " — مقدار معتبر در جداول ضابطه این Nid پیدا نشد";
+            return members + " Member از فرم تیک‌خورده — متغیرهای خط از Sara پر می‌شوند";
+        }
+
+        private static int SeedDbParams(RunRequest req, IList<MemberSource> sources, IDictionary<string, string> db, List<string> log)
+        {
+            if (req == null || db == null || db.Count == 0) return 0;
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string n in new[] { "tarakom", "Tarakom", "تراکم", "Masahat", "Ertefa" })
+                names.Add(n);
+            if (sources != null)
+            {
+                foreach (MemberSource s in sources)
+                {
+                    if (s == null || string.IsNullOrEmpty(s.Code)) continue;
+                    foreach (string id in HoverDebug.Idents(s.Code))
+                        names.Add(id);
+                }
+            }
+            int n = 0;
+            foreach (string name in names)
+            {
+                string v = HoverDebug.Lookup(db, name);
+                if (v == null) continue;
+                string cur;
+                if (req.Parameters.TryGetValue(name, out cur) && !string.IsNullOrWhiteSpace(cur)) continue;
+                req.Parameters[name] = v;
+                n++;
+            }
+            return n;
         }
 
         private static bool IsCopyLine(string m)
@@ -640,7 +684,9 @@ namespace RuleTrace
             foreach (MemberSource s in sources)
             {
                 var items = HoverDebug.Parse(s.Code);
-                HoverDebug.Bind(items, trace, parms, vars);
+                var map = HoverDebug.Flatten(parms, vars);
+                HoverDebug.Bind(items, trace, map, vars);
+                HoverDebug.BindIdents(s.Code, items, map);
                 probes += HoverDebug.ProbeCount(items);
                 bound += HoverDebug.BoundCount(items);
                 list.Add(new Dictionary<string, object>

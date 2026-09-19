@@ -104,9 +104,75 @@ namespace RuleTrace
             return list;
         }
 
+        /// <summary>Sara/CI_PlanUsingType names that must appear as tarakom=120 on the formula line.</summary>
+        private static readonly string[][] Aliases =
+        {
+            new[] { "Tarakom", "tarakom", "Density", "تراکم", "TarakomMojaz", "AllowedDensity" },
+            new[] { "Masahat", "masahat", "Area", "مساحت" },
+            new[] { "Ertefa", "ertefa", "Height", "ارتفاع" },
+            new[] { "SathEshghal", "Occupancy", "سطح‌اشغال" },
+            new[] { "Karbari", "PlanUsingType", "CI_PlanUsingType", "UsingType" },
+            new[] { "PlanType", "CI_PlanType" },
+        };
+
+        public static Dictionary<string, string> Flatten(IDictionary<string, string> parms, IList<Dictionary<string, object>> vars)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (vars != null)
+            {
+                foreach (var v in vars)
+                {
+                    object n, val;
+                    if (!v.TryGetValue("name", out n) || !v.TryGetValue("value", out val)) continue;
+                    string name = Convert.ToString(n);
+                    string s = Convert.ToString(val, CultureInfo.InvariantCulture);
+                    if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(s)) continue;
+                    map[name.Trim()] = s.Trim();
+                }
+            }
+            ApplyAliases(map);
+            if (parms != null)
+            {
+                foreach (var kv in parms)
+                {
+                    if (string.IsNullOrWhiteSpace(kv.Key) || string.IsNullOrWhiteSpace(kv.Value)) continue;
+                    map[kv.Key.Trim()] = kv.Value.Trim();
+                }
+            }
+            ApplyAliases(map);
+            return map;
+        }
+
+        public static string Lookup(IDictionary<string, string> map, string name)
+        {
+            if (map == null || string.IsNullOrWhiteSpace(name)) return null;
+            string raw = name.Trim();
+            string v;
+            if (map.TryGetValue(raw, out v) && !string.IsNullOrWhiteSpace(v)) return v;
+            foreach (Match m in RxIdent.Matches(raw))
+            {
+                if (Skip.Contains(m.Value)) continue;
+                if (map.TryGetValue(m.Value, out v) && !string.IsNullOrWhiteSpace(v)) return v;
+            }
+            return null;
+        }
+
+        public static void MergeInto(IDictionary<string, string> dest, IDictionary<string, string> src)
+        {
+            if (dest == null || src == null) return;
+            foreach (var kv in src)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Key) || string.IsNullOrWhiteSpace(kv.Value)) continue;
+                string cur;
+                if (dest.TryGetValue(kv.Key, out cur) && !string.IsNullOrWhiteSpace(cur)) continue;
+                dest[kv.Key] = kv.Value;
+            }
+        }
+
         public static void Bind(IList<HoverItem> items, IList<TraceEvent> trace, IDictionary<string, string> parms, IList<Dictionary<string, object>> vars)
         {
             if (items == null) return;
+            var map = Flatten(parms, vars);
             foreach (HoverItem it in items)
             {
                 string fromLog = FromTrace(trace, it.Name);
@@ -116,20 +182,58 @@ namespace RuleTrace
                     it.Source = "logfilefj";
                     continue;
                 }
-                string v = FromMap(parms, it.Name);
-                string src = "ParametersValue";
+                string v = Lookup(map, it.Name);
+                string src = FromMap(parms, it.Name) != null || FromMap(parms, it.Expr) != null ? "ParametersValue" : "Sara";
                 if (v == null && !string.IsNullOrEmpty(it.Expr))
-                    v = FromMap(parms, it.Expr);
-                if (v == null)
-                {
-                    v = FromVars(vars, it.Name);
-                    src = "Sara";
-                }
-                if (v == null && !string.IsNullOrEmpty(it.Expr))
-                    v = FromVars(vars, IdentTail(it.Expr));
+                    v = Lookup(map, it.Expr);
                 if (v == null) continue;
                 it.Value = v;
                 it.Source = src;
+            }
+        }
+
+        /// <summary>Every identifier on a formula line gets a DB/live value when one exists (tarakom=120).</summary>
+        public static void BindIdents(string code, IList<HoverItem> items, IDictionary<string, string> map)
+        {
+            if (string.IsNullOrEmpty(code) || items == null || map == null || map.Count == 0) return;
+            string[] lines = code.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string raw = lines[i] ?? "";
+                if (raw.Trim().StartsWith("'")) continue;
+                foreach (string ident in Idents(raw))
+                {
+                    bool have = false;
+                    foreach (HoverItem it in items)
+                    {
+                        if (it.Line != i + 1) continue;
+                        if (!string.Equals(it.Name, ident, StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(it.Expr, ident, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (string.IsNullOrEmpty(it.Value))
+                        {
+                            string fill = Lookup(map, ident);
+                            if (fill != null)
+                            {
+                                it.Value = fill;
+                                if (string.IsNullOrEmpty(it.Source) || it.Source == "AddError" || it.Source == "logfilefj")
+                                    it.Source = "Sara";
+                            }
+                        }
+                        have = true;
+                    }
+                    if (have) continue;
+                    string v = Lookup(map, ident);
+                    if (v == null) continue;
+                    items.Add(new HoverItem
+                    {
+                        Line = i + 1,
+                        Name = ident,
+                        Expr = ident,
+                        Value = v,
+                        Source = "Sara",
+                    });
+                }
             }
         }
 
@@ -208,6 +312,31 @@ namespace RuleTrace
                     last = e.Title;
             }
             return string.IsNullOrWhiteSpace(last) ? null : last;
+        }
+
+        private static void ApplyAliases(IDictionary<string, string> map)
+        {
+            if (map == null) return;
+            foreach (string[] group in Aliases)
+            {
+                string found = null;
+                foreach (string name in group)
+                {
+                    string v;
+                    if (map.TryGetValue(name, out v) && !string.IsNullOrWhiteSpace(v))
+                    {
+                        found = v;
+                        break;
+                    }
+                }
+                if (found == null) continue;
+                foreach (string name in group)
+                {
+                    string cur;
+                    if (map.TryGetValue(name, out cur) && !string.IsNullOrWhiteSpace(cur)) continue;
+                    map[name] = found;
+                }
+            }
         }
 
         private static string FromMap(IDictionary<string, string> map, string name)
