@@ -246,32 +246,57 @@ namespace RuleTrace
             _settings.LastNidProc = nidProc;
             try { _settings.Save(); } catch { }
 
-            return Run("دیباگ پروانه برای NidProc " + nidProc + " ...", false, (eng, log) =>
+            bool dll = FormulaEngine.IsDllFolder(_settings.DllPath);
+            return Run("دیباگ پروانه برای NidProc " + nidProc + " ...", dll, (eng, log) =>
             {
-                var scopes = Json.StrList(body, "scopes");
+                var scopes = PermitScopes.Normalize(Json.StrList(body, "scopes"));
                 var extra = eng.DebugSteps(nidProc, scopes);
-                var sources = eng.LastMemberSources ?? new List<MemberSource>();
+                var sources = new List<MemberSource>(eng.LastMemberSources ?? new List<MemberSource>());
+                var permitSummary = eng.Summary.ToList();
+                var caseVars = extra.ContainsKey("vars") ? extra["vars"] as List<Dictionary<string, object>> : null;
+
+                var req = new RunRequest
+                {
+                    NidProc = nidProc,
+                    Watch = Json.Str(body, "watch", "Calc_Chandganeh").Trim(),
+                    EntryPoint = Json.Str(body, "entry").Trim(),
+                    ReCompile = Json.Bool(body, "recompile"),
+                    ClearCache = Json.Bool(body, "clearCache"),
+                    ShowAllParams = Json.Bool(body, "allParams"),
+                    District = Json.Int(body, "district"),
+                    SkipRelatedSources = true,
+                };
+                ParseParams(Json.Str(body, "parameters"), req);
+
+                var trace = new List<TraceEvent>();
+                var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                int live = TryLiveHover(eng, log, req, scopes, trace, parms);
+
                 int probes, bound;
-                var packed = PackSources(sources, null, null, null, out probes, out bound);
+                var packed = PackSources(sources, trace, parms, caseVars, out probes, out bound);
                 extra["members"] = packed;
+                extra["trace"] = PackTrace(trace);
+                extra["params"] = parms;
                 extra["focusMember"] = FocusMember(packed);
                 extra["probeCount"] = probes;
                 extra["boundCount"] = bound;
+                extra["liveCode"] = live;
                 extra["hoverGoal"] = HoverDebug.Goal;
                 if (sources.Count == 0)
                     log.Add("Hover      : کد Member خالی — dbo.Member برای فرم تیک‌خورده خوانده نشد");
                 else
-                    log.Add("Hover      : کد Member=" + sources.Count + " probes=" + probes + " — تب کد");
-                extra["diagnosis"] = sources.Count == 0
-                    ? "کد Member خوانده نشد — اتصال RuleEngine و تیک فرم را چک کنید"
-                    : sources.Count + " Member از فرم تیک‌خورده — موس را روی خط نگه دارید";
-                extra["nextAction"] = HoverDebug.Goal;
-                var summary = eng.Summary.ToList();
+                    log.Add("Hover      : کد Member=" + sources.Count + " probes=" + probes + " مقداردار=" + bound + " — تب کد");
+                extra["diagnosis"] = HoverDiagnosis(sources.Count, probes, bound, live);
+                extra["nextAction"] = bound > 0 ? "موس را روی خط سبز نگه دارید" : HoverDebug.Goal;
+                var summary = permitSummary;
+                foreach (string line in eng.Summary)
+                    if (!summary.Contains(line)) summary.Add(line);
                 foreach (string line in log)
                     if (IsCopyLine(line) && !summary.Contains(line))
                         summary.Add(line);
                 extra["summary"] = summary;
                 extra["settings"] = SettingsMap();
+                extra["exitCode"] = live == 1 ? 1 : 0;
                 return extra;
             });
         }
@@ -340,52 +365,17 @@ namespace RuleTrace
 
                     var trace = new List<TraceEvent>();
                     var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    int live = 2;
-                    if (dll)
-                    {
-                        int nid = PermitScopes.FormulaNid(scopes[0]);
-                        req.Formula = FormulaEngine.ClassName(nid);
-                        req.SkipRelatedSources = true;
-                        log.Add("Hover      : اجرای زنده " + formTitle + " (" + req.Formula + "/" + nid + ") — معادل باز کردن فرم");
-                        try
-                        {
-                            live = eng.Run(req);
-                            if (eng.LastTrace != null) trace.AddRange(eng.LastTrace);
-                            foreach (var kv in eng.LastParams) parms[kv.Key] = kv.Value;
-                            log.Add("Hover      : BizErrors/logfilefj=" + trace.Count + " ParametersValue=" + parms.Count);
-                        }
-                        catch (Exception ex)
-                        {
-                            log.Add("Hover      : اجرا زنده نشد — " + FirstLineSafe(ex.Message) + " — hover از سورس logfilefj");
-                            live = 2;
-                        }
-                    }
-                    else
-                        log.Add("Hover      : پوشه DLL نیست — کد Member + logfilefj خوانده می‌شود؛ مقدار بعد از اجرای زنده پر می‌شود");
+                    int live = TryLiveHover(eng, log, req, scopes, trace, parms);
 
                     int probes = 0, bound = 0;
                     var packed = PackSources(sources, trace, parms, null, out probes, out bound);
                     int focus = FocusMember(packed);
                     log.Add("Hover      : probes=" + probes + " مقداردار=" + bound + " — موس را روی خط نگه‌دارید");
 
-                    string diagnosis;
-                    string next;
+                    string diagnosis = HoverDiagnosis(sources.Count, probes, bound, live);
+                    string next = bound > 0 ? "موس را روی خط سبز نگه دارید" : HoverDebug.Goal;
                     if (probes > 0 && bound == 0 && live == 2)
-                    {
-                        diagnosis = "پروب logfilefj=" + probes + " مقداردار=0. " + HoverDebug.NoInstance;
-                        next = "XmlBody تزریق شد؛ اگر هنوز مقدار نیست CompilerErrors موتور را در لاگ ببینید — فرم سارا باز نکنید. ClearCache خاموش.";
                         log.Add("Hover      : " + HoverDebug.NoInstance);
-                    }
-                    else if (bound > 0)
-                    {
-                        diagnosis = "موس را روی خط سبز نگه دارید — " + bound + " مقدار از logfilefj/ParametersValue";
-                        next = "خط زرد یعنی پروب هست و هنوز مقدار نیامده";
-                    }
-                    else
-                    {
-                        diagnosis = HoverDebug.Goal;
-                        next = "در کد فرم logfilefj(\"نام\", مقدار) بگذارید";
-                    }
 
                     var extra = new Dictionary<string, object>
                     {
@@ -517,6 +507,60 @@ namespace RuleTrace
                 { "lookup", _settings.LastLookup ?? string.Empty },
                 { "dllOk", FormulaEngine.IsDllFolder(_settings.DllPath) },
             };
+        }
+
+        /// <summary>Run the ticked form so logfilefj AddError fills hover values. Does not rewrite VB.</summary>
+        private int TryLiveHover(FormulaEngine eng, List<string> log, RunRequest req, IList<string> scopes, List<TraceEvent> trace, Dictionary<string, string> parms)
+        {
+            int live = 2;
+            if (eng == null || req == null) return live;
+            if (scopes == null || scopes.Count == 0)
+            {
+                log.Add("Hover      : فرمی تیک نخورده — اجرا زنده نشد");
+                return live;
+            }
+            if (!FormulaEngine.IsDllFolder(_settings.DllPath))
+            {
+                log.Add("Hover      : پوشه DLL نیست — مقدار hover بعد از اجرای زنده پر می‌شود");
+                return live;
+            }
+            int nid = PermitScopes.FormulaNid(scopes[0]);
+            if (nid <= 0)
+            {
+                log.Add("Hover      : NidClass فرم تیک‌خورده پیدا نشد");
+                return live;
+            }
+            req.Formula = FormulaEngine.ClassName(nid);
+            req.SkipRelatedSources = true;
+            string formTitle = PermitScopes.Title(scopes[0]);
+            log.Add("Hover      : اجرای زنده " + formTitle + " (" + req.Formula + "/" + nid + ") — معادل باز کردن فرم");
+            try
+            {
+                live = eng.Run(req);
+                if (eng.LastTrace != null && trace != null) trace.AddRange(eng.LastTrace);
+                if (parms != null)
+                    foreach (var kv in eng.LastParams) parms[kv.Key] = kv.Value;
+                log.Add("Hover      : BizErrors/logfilefj=" + (trace == null ? 0 : trace.Count) + " ParametersValue=" + (parms == null ? 0 : parms.Count));
+            }
+            catch (Exception ex)
+            {
+                log.Add("Hover      : اجرا زنده نشد — " + FirstLineSafe(ex.Message) + " — hover از سورس logfilefj");
+                live = 2;
+            }
+            return live;
+        }
+
+        private static string HoverDiagnosis(int members, int probes, int bound, int live)
+        {
+            if (members == 0)
+                return "کد Member خوانده نشد — اتصال RuleEngine و تیک فرم را چک کنید";
+            if (bound > 0)
+                return "موس را روی خط سبز نگه دارید — " + bound + " مقدار از اجرای زنده";
+            if (probes > 0 && live == 2)
+                return "پروب logfilefj=" + probes + " مقداردار=0. " + HoverDebug.NoInstance;
+            if (probes > 0)
+                return "اجرا شد ولی " + probes + " پروب هنوز مقدار نگرفت";
+            return members + " Member از فرم تیک‌خورده — در کد logfilefj(\"نام\", مقدار) بگذارید";
         }
 
         private static bool IsCopyLine(string m)
