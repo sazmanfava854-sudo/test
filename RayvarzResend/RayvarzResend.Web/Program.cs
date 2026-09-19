@@ -10,6 +10,9 @@ using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+AppSettingsConfiguration.UseSingleAppSettingsJsonOnly(builder.Configuration);
+if (builder.Configuration is IConfigurationRoot configRoot)
+    configRoot.Reload();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {

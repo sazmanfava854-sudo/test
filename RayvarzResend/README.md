@@ -5,7 +5,7 @@
 | دریافت | آدرس |
 |--------|------|
 | **لیبل نسخه آخر** | Tag `rayvarzresend-noskhe-akhar` |
-| Zip publish | `RayvarzResend-25.zip` |
+| Zip publish | `RayvarzResend-25.zip` — سرور: `deploy/win-x64/` + **یک** `appsettings.json` |
 | شاخه | `cursor/tahator-accounting-doc-ffcb` |
 | جزئیات | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
 | v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
