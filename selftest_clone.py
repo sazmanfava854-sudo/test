@@ -144,6 +144,7 @@ expect(engine, "LoadFormSources(scopes)", "permit debug loads Member")
 expect(webapp, "LastMemberSources", "pack loaded members")
 expect(case, "Zabeteh_Details رد شد", "skip details timeout")
 expect(case, "SqlDbType.UniqueIdentifier", "guid equality no CAST")
+expect(case, "Guid guidVal = Guid.Empty", "guidVal assigned for CS0165")
 if "#07111f" in html:
     failmsg("dark navy page color leftover")
 expect(csproj, "HoverDebug.cs", "csproj compiles HoverDebug")

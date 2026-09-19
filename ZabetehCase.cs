@@ -843,8 +843,9 @@ namespace RuleTrace
             }
             if (select.Count == 0) return 0;
             if (top < 1) top = 5;
-            Guid guidVal;
-            bool guidEq = IsGuidCol(whereCol) && Guid.TryParse(whereVal, out guidVal);
+            Guid guidVal = Guid.Empty;
+            bool parsedGuid = Guid.TryParse(whereVal, out guidVal);
+            bool guidEq = IsGuidCol(whereCol) && parsedGuid;
             string pred = guidEq
                 ? "[" + whereCol.Replace("]", "") + "]=@t"
                 : "CAST([" + whereCol.Replace("]", "") + "] AS NVARCHAR(50))=@t";
