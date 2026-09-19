@@ -1,9 +1,10 @@
 namespace RayvarzResend.Web;
 
-/// <summary>شماره تحویل — v24: واسط Accounting_Doc پس از ارسال (تهاتر/درآمد/نوسازی/صنفی) + پایه bank-inquiry 166a.</summary>
+/// <summary>نسخه آخر — v25: واسط Accounting + تهاتر تک‌فیش + جفت Payable + poll incmdocsys.</summary>
 public static class ReleaseInfo
 {
-    public const int Number = 24;
-    public const string Label = "24";
-    public const string Tag = "rayvarzresend-tahator-accounting-v24";
+    public const int Number = 25;
+    public const string Label = "25";
+    public const string Tag = "rayvarzresend-noskhe-akhar";
+    public const string DisplayName = "نسخه آخر";
 }

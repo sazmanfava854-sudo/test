@@ -1,19 +1,21 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه تحویل: ۲۴** — واسط `Accounting_Doc` پس از ارسال (تهاتر / درآمد / نوسازی / صنفی) + پایه bank-inquiry 166a.
+**نسخه آخر (تحویل: ۲۵)** — واسط Accounting، تهاتر تک‌فیش، جفت Payable، poll incmdocsys.
 
 | دریافت | آدرس |
 |--------|------|
-| Zip نسخه ۲۴ | `RayvarzResend-24.zip` (ریشه مخزن) |
-| Tag | `rayvarzresend-tahator-accounting-v24` |
-| v24 جزئیات | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
+| **لیبل نسخه آخر** | Tag `rayvarzresend-noskhe-akhar` |
+| Zip publish | `RayvarzResend-25.zip` |
+| شاخه | `cursor/tahator-accounting-doc-ffcb` |
+| جزئیات | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
+| v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
 | v23 جزئیات | [`DELIVERY-v23.md`](DELIVERY-v23.md) |
 | v22 غیربحرانی | [`DELIVERY-v22.md`](DELIVERY-v22.md) |
 | v21 بحرانی | [`DELIVERY-v21.md`](DELIVERY-v21.md) |
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: هدر فرم یا `GET /api/config` → `releaseVersion: 24`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 25` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

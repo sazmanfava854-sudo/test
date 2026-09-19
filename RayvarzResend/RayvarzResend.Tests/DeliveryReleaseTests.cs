@@ -6,10 +6,11 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v24_final_delivery()
+    public void ReleaseInfo_is_v25_noskhe_akhar()
     {
-        Assert.Equal(24, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-accounting-v24", ReleaseInfo.Tag);
+        Assert.Equal(25, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-noskhe-akhar", ReleaseInfo.Tag);
+        Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
     [Fact]
@@ -22,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v24_doc_lists_accounting_doc()
+    public void DELIVERY_v25_doc_lists_noskhe_akhar()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v24.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v25.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("نسخه ۲۴", doc);
-        Assert.Contains("Accounting_DocHeader", doc);
-        Assert.Contains("410 تست", doc);
+        Assert.Contains("نسخه آخر", doc);
+        Assert.Contains("Accounting_Doc", doc);
+        Assert.Contains("411", doc);
     }
 
     [Fact]
