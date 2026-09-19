@@ -6,10 +6,11 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v23_final_delivery()
+    public void ReleaseInfo_is_v25_noskhe_akhar()
     {
-        Assert.Equal(23, ReleaseInfo.Number);
-        Assert.Equal("rayvarz-resend-v23", ReleaseInfo.Tag);
+        Assert.Equal(25, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-noskhe-akhar", ReleaseInfo.Tag);
+        Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
     [Fact]
@@ -22,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v23_doc_lists_minor_fix()
+    public void DELIVERY_v25_doc_lists_noskhe_akhar()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v23.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v25.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("نسخه ۲۳", doc);
-        Assert.Contains("NeedsSend", doc);
-        Assert.Contains("179 تست", doc);
+        Assert.Contains("نسخه آخر", doc);
+        Assert.Contains("Accounting_Doc", doc);
+        Assert.Contains("411", doc);
     }
 
     [Fact]
@@ -60,6 +61,8 @@ public class DeliveryReleaseTests
         Assert.Contains("epay_EstelamOnLineBank", json);
         Assert.DoesNotContain("\"DryRun\": true", json);
         Assert.Contains("\"DryRun\": false", json);
+        Assert.Contains("\"AccountingDoc\"", json);
+        Assert.Contains("\"Tahator\"", json);
     }
 
     [Fact]

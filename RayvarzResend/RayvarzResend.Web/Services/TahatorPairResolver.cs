@@ -57,22 +57,26 @@ public static class TahatorPairResolver
     {
         var partners = active.Where(c => c.IncomeAccountGroup == partnerGroup).ToList();
         if (partners.Count == 0) return null;
+        if (partners.Count == 1) return partners[0].FicheNo;
+
+        // چند فیش ۱۵۷/۱۵۸ روی یک NidIncome: اول مبلغ یکسان، بعد NidExportation (نه برعکس).
+        var pool = partners;
+        if (anchor.Payable > 0)
+        {
+            var payableMatches = partners.Where(c => c.Payable == anchor.Payable).ToList();
+            if (payableMatches.Count > 0)
+                pool = payableMatches;
+        }
 
         if (anchor.NidExportation != Guid.Empty)
         {
-            var byExport = partners
+            var byExport = pool
                 .Where(c => c.NidExportation == anchor.NidExportation)
                 .OrderByDescending(c => c.FicheNo, StringComparer.Ordinal)
                 .FirstOrDefault();
             if (byExport != null) return byExport.FicheNo;
         }
 
-        var byPayable = partners
-            .Where(c => c.Payable == anchor.Payable)
-            .OrderByDescending(c => c.FicheNo, StringComparer.Ordinal)
-            .FirstOrDefault();
-        if (byPayable != null) return byPayable.FicheNo;
-
-        return partners.OrderByDescending(c => c.FicheNo, StringComparer.Ordinal).First().FicheNo;
+        return pool.OrderByDescending(c => c.FicheNo, StringComparer.Ordinal).First().FicheNo;
     }
 }

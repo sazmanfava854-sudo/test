@@ -1,9 +1,10 @@
 namespace RayvarzResend.Web;
 
-/// <summary>شماره تحویل — v23: باگ جزئی ۱۳ (outage Rayvarz) روی v22.</summary>
+/// <summary>نسخه آخر — v25: واسط Accounting + تهاتر تک‌فیش + جفت Payable + poll incmdocsys.</summary>
 public static class ReleaseInfo
 {
-    public const int Number = 23;
-    public const string Label = "23";
-    public const string Tag = "rayvarz-resend-v23";
+    public const int Number = 25;
+    public const string Label = "25";
+    public const string Tag = "rayvarzresend-noskhe-akhar";
+    public const string DisplayName = "نسخه آخر";
 }

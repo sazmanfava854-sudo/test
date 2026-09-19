@@ -9,6 +9,7 @@ namespace RayvarzResend.Web.Services;
 /// + ساخت/ارسال SOAP:
 ///   گروه ۱۵۷ / Tahator1 → مرکز Branch=102، DocTyp ۱۴/۱۵؛
 ///   گروه ۱۵۸ / Tahator → منطقه Branch=۲۰۱–۲۱۲، DocTyp ۱۷/۱۸.
+/// ارسال: فقط فیشی که کاربر وارد کرده (بدون ارسال خودکار جفت).
 /// تغییر وضعیت Income_Fiche پس از ارسال در Sara (تایید فیش دستی) انجام می‌شود — نه در این سرویس.
 /// </summary>
 public sealed class TahatorResendService
@@ -19,19 +20,22 @@ public sealed class TahatorResendService
     private readonly FicheRepository _fiches;
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
+    private readonly AccountingDocWriter _accountingDoc;
 
     public TahatorResendService(
         IConfiguration config,
         ILogger<TahatorResendService> logger,
         FicheRepository fiches,
         RayvarzPayloadBuilder payload,
-        RayvarzClient client)
+        RayvarzClient client,
+        AccountingDocWriter accountingDoc)
     {
         _config = config;
         _logger = logger;
         _fiches = fiches;
         _payload = payload;
         _client = client;
+        _accountingDoc = accountingDoc;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara تنظیم نشده");
     }
@@ -41,7 +45,7 @@ public sealed class TahatorResendService
 
     public bool IsDryRun =>
         _config.GetValue<bool?>("Tahator:DryRun")
-        ?? _config.GetValue("Rayvarz:DryRun", true);
+        ?? _config.GetValue<bool>("Rayvarz:DryRun");
 
     public async Task<TahatorCheckResult> CheckAsync(string ficheNo, CancellationToken ct = default)
     {
@@ -125,8 +129,8 @@ public sealed class TahatorResendService
                 ? $"یکی از دو فیش جفت در رایورز است ({rayvarzCount}/۲) — فقط فیش دیگر ارسال می‌شود."
                 : anyNeedsSend
                     ? headerOnlyCount > 0
-                        ? $"آماده ارسال مجدد: {headerOnlyCount} فیش در واسط است ولی در رایورز نیست — ۱۵۷={pair.AmountFicheNo} سپس ۱۵۸={pair.IncomeFicheNo}."
-                        : $"آماده ارسال جفت تهاتر: ۱۵۷={pair.AmountFicheNo} سپس ۱۵۸={pair.IncomeFicheNo}."
+                        ? $"آماده ارسال مجدد (فقط فیش درخواستی): جفت مرجع ۱۵۷={pair.AmountFicheNo} ↔ ۱۵۸={pair.IncomeFicheNo}."
+                        : $"آماده ارسال تهاتر (فقط فیش درخواستی) — جفت مرجع: ۱۵۷={pair.AmountFicheNo} ↔ ۱۵۸={pair.IncomeFicheNo}."
                     : "وضعیت جفت تهاتر نامشخص.";
         var warning = rayvarzCheckWarnings.Count > 0
             ? string.Join(" | ", rayvarzCheckWarnings)
@@ -167,12 +171,17 @@ public sealed class TahatorResendService
         }
 
         steps.Add(
-            $"0b) NidIncome={pair.NidIncome} | ۱۵۷={pair.AmountFicheNo} (Tahator1/مرکز) → ۱۵۸={pair.IncomeFicheNo} (Tahator/منطقه)");
+            $"0b) NidIncome={pair.NidIncome} | جفت مرجع: ۱۵۷={pair.AmountFicheNo} ↔ ۱۵۸={pair.IncomeFicheNo}");
 
-        PrepareTahatorFiche(pair.AmountFiche);
-        PrepareTahatorFiche(pair.IncomeFiche);
+        var targetFiche = ResolveRequestedTahatorFiche(pair, ficheNo);
+        if (targetFiche == null)
+            return Fail(ficheNo, dryRun, steps, $"فیش {ficheNo} در جفت تهاتر resolve‌شده نیست.");
 
-        var ordered = new[] { pair.AmountFiche, pair.IncomeFiche };
+        steps.Add($"0c) ارسال فقط فیش درخواستی: {ficheNo} (گروه {targetFiche.IncomeAccountGroup})");
+
+        PrepareTahatorFiche(targetFiche);
+
+        var ordered = new[] { targetFiche };
         var ficheResults = new List<TahatorFicheSendDetail>();
         var toSend = new List<(FicheHeaderDto Fiche, IncomeFicheTahatorSnapshot State)>();
 
@@ -278,6 +287,25 @@ public sealed class TahatorResendService
                         : $"4) SOAP {no} FAIL — {soapResult.Message}");
 
                 var inHeaderAfter = await ExistsInAccountingDocHeaderAsync(no, ct);
+                var yearCandidates = RayvarzYearResolver.CollectCandidates(
+                    docDate, actDate, dueDate,
+                    fiche.RayvarzDocDate, fiche.RayvarzActDate, fiche.RayvarzDueDate).ToList();
+
+                AccountingDocWriteResult? accounting = null;
+                var accountingMessage = (string?)null;
+                if (!dryRun && soapResult.Success && !inHeaderAfter)
+                {
+                    accounting = await _accountingDoc.TryWriteAfterSendAsync(
+                        fiche, soapResult.PursuitDocNo, yearCandidates, ct);
+                    inHeaderAfter = accounting.Written || await ExistsInAccountingDocHeaderAsync(no, ct);
+                    accountingMessage = accounting.Message;
+                    steps.Add(accounting.Written
+                        ? $"5) واسط Sara {no}: {accounting.Message}"
+                        : accounting.WasSkipped
+                            ? $"5) واسط Sara {no}: {accounting.Message}"
+                            : $"5) ⚠ واسط Sara {no}: {accounting.Message}");
+                }
+
                 var verifiedRay = false;
                 if (!dryRun && soapResult.Success)
                 {
@@ -304,12 +332,13 @@ public sealed class TahatorResendService
                 {
                     notSent = await TryGetDocNotSentAsync(no, ct);
                     if (!string.IsNullOrWhiteSpace(notSent))
-                        steps.Add($"5) DocNotSent {no}: {notSent}");
+                        steps.Add($"6) DocNotSent {no}: {notSent}");
                 }
 
+                var accountingFailed = accounting is { IsFailure: true };
                 var oneOk = dryRun
                     ? soapResult.Success
-                    : soapResult.Success && (inHeaderAfter || verifiedRay);
+                    : soapResult.Success && !accountingFailed && (inHeaderAfter || verifiedRay);
 
                 ficheResults.Add(new TahatorFicheSendDetail
                 {
@@ -325,7 +354,8 @@ public sealed class TahatorResendService
                     SoapMessage = soapResult.Message,
                     PursuitDocNo = soapResult.PursuitDocNo,
                     PreviewXml = built.Xml,
-                    DocNotSentError = notSent
+                    DocNotSentError = notSent,
+                    AccountingDocMessage = accountingMessage
                 });
 
                 if (!dryRun && !oneOk)
@@ -358,7 +388,7 @@ public sealed class TahatorResendService
             }
 
             var primaryDetail = ficheResults.FirstOrDefault(r =>
-                                    string.Equals(r.FicheNo, pair.AmountFicheNo, StringComparison.Ordinal))
+                                    string.Equals(r.FicheNo, ficheNo, StringComparison.Ordinal))
                                 ?? ficheResults.FirstOrDefault();
             var success = ficheResults.Count > 0 && ficheResults.All(r => r.Skipped || r.Success);
 
@@ -382,10 +412,10 @@ public sealed class TahatorResendService
                 DocNotSentError = ficheResults.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.DocNotSentError))?.DocNotSentError,
                 Steps = steps,
                 Message = dryRun
-                    ? "DryRun جفت تهاتر: SOAP ساخته شد؛ Sara تغییر نکرد."
+                    ? $"DryRun تهاتر — فقط {ficheNo}: SOAP ساخته شد؛ Sara تغییر نکرد."
                     : success
-                        ? $"جفت تهاتر ارسال شد: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}. تایید وضعیت در Sara (تایید فیش دستی)."
-                        : "ارسال جفت تهاتر ناموفق — جزئیات در ficheResults."
+                        ? $"فیش تهاتر {ficheNo} ارسال شد. (جفت مرجع: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}) — تایید وضعیت در Sara دستی."
+                        : $"ارسال تهاتر {ficheNo} ناموفق — جزئیات در ficheResults."
             };
         }
         catch (Exception ex)
@@ -503,6 +533,15 @@ WHERE FicheNo = @f";
         var isAmount = TahatorRowBuilder.IsTahatorAmountFiche(fiche);
         return await _fiches.ExistsTahatorDocumentInRayvarzRobustAsync(
             fiche.FicheNo.Trim(), isAmount, years, ct);
+    }
+
+    private static FicheHeaderDto? ResolveRequestedTahatorFiche(TahatorPairInfo pair, string ficheNo)
+    {
+        if (string.Equals(ficheNo, pair.AmountFicheNo, StringComparison.Ordinal))
+            return pair.AmountFiche;
+        if (string.Equals(ficheNo, pair.IncomeFicheNo, StringComparison.Ordinal))
+            return pair.IncomeFiche;
+        return null;
     }
 
     private static TahatorSendResult Fail(string ficheNo, bool dryRun, List<string> steps, string message) =>
