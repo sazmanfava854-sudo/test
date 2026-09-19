@@ -184,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("white-page", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("member-code", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23g-white-page, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23h-member-code, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -668,6 +668,7 @@ namespace RuleTrace
             fail += Expect(html, "ParentDocId", "ParentDocId column");
             fail += Expect(html, "dir=\"rtl\"", "rtl");
             fail += Expect(html, "background: #ffffff", "white page");
+            fail += Expect(html, "کد Member خالی است", "empty member pane copy");
             if (html.IndexOf("#07111f", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 Console.Error.WriteLine("FAIL: dark navy page color leftover");
@@ -708,7 +709,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23g-white-page", "bootstrap label");
+                        fail += Expect(boot, "v23h-member-code", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;

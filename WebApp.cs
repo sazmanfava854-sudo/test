@@ -248,11 +248,30 @@ namespace RuleTrace
 
             return Run("دیباگ پروانه برای NidProc " + nidProc + " ...", false, (eng, log) =>
             {
-                var extra = eng.DebugSteps(nidProc, Json.StrList(body, "scopes"));
-                extra["members"] = PackSources(eng.LastMemberSources);
-                extra["summary"] = eng.Summary.Count > 0 ? eng.Summary.ToList() : log.Where(IsCopyLine).ToList();
+                var scopes = Json.StrList(body, "scopes");
+                var extra = eng.DebugSteps(nidProc, scopes);
+                var sources = eng.LastMemberSources ?? new List<MemberSource>();
+                int probes, bound;
+                var packed = PackSources(sources, null, null, null, out probes, out bound);
+                extra["members"] = packed;
+                extra["focusMember"] = FocusMember(packed);
+                extra["probeCount"] = probes;
+                extra["boundCount"] = bound;
+                extra["hoverGoal"] = HoverDebug.Goal;
+                if (sources.Count == 0)
+                    log.Add("Hover      : کد Member خالی — dbo.Member برای فرم تیک‌خورده خوانده نشد");
+                else
+                    log.Add("Hover      : کد Member=" + sources.Count + " probes=" + probes + " — تب کد");
+                extra["diagnosis"] = sources.Count == 0
+                    ? "کد Member خوانده نشد — اتصال RuleEngine و تیک فرم را چک کنید"
+                    : sources.Count + " Member از فرم تیک‌خورده — موس را روی خط نگه دارید";
+                extra["nextAction"] = HoverDebug.Goal;
+                var summary = eng.Summary.ToList();
+                foreach (string line in log)
+                    if (IsCopyLine(line) && !summary.Contains(line))
+                        summary.Add(line);
+                extra["summary"] = summary;
                 extra["settings"] = SettingsMap();
-                extra["focusMember"] = 0;
                 return extra;
             });
         }
