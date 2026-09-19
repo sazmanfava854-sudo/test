@@ -137,7 +137,9 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23i-hover-live", "label")
+expect(build, "v23j-compile-body", "label")
+expect(engine, "IsRealCompileMethod", "do not invoke get_CompilerErrors")
+expect(engine, "TryCompileRawSource", "compile injected class source")
 expect(webapp, "TryLiveHover", "permit debug runs live hover")
 expect(html, "مقدار در اجرای زنده نیامد", "hover empty after live")
 if "(هنوز اجرا نشده)" in html:
@@ -298,6 +300,10 @@ if "SanitizeInjectedToString1" in inj_chunk or "TryCompileToString1" in inj_chun
     failmsg("inject-native must not use ToString1 sanitize")
 if "BuildPartialMemberFiles" in inj_chunk or "FormulaVbcCompiler" in inj_chunk:
     failmsg("inject-native must not fall back to vbc glue")
+if 'IndexOf("Compile"' in inj_chunk or "IndexOf(\"Compile\"" in inj_chunk:
+    failmsg("inject-native must not substring-match Compile (hits get_CompilerErrors)")
+if "TryCompileRawSource" not in inj_chunk:
+    failmsg("inject-native must compile raw source after Body inject")
 if "یک‌بار همان فرم را در سارا" in hover:
     failmsg("NoInstance must not tell user to open Sara")
 expect(selftest, "InjectXmlBody", "selftest inject")
