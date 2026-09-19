@@ -24,7 +24,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | فایل | کاربرد |
 |------|--------|
 | `RayvarzResend\start.bat` | اجرا (پورت 5088) |
-| `RayvarzResend\RayvarzResend.Web.exe` | exe خودکفا (نیازی به نصب .NET SDK نیست) |
+| `RayvarzResend\RayvarzResend.Web.exe` | exe (نیاز به .NET 8 Runtime روی سرور) |
 | `RayvarzResend\appsettings.json` | **تنها** فایل تنظیمات |
 
 `appsettings.Production.json` خوانده نمی‌شود — اگر از قبل کنار exe هست حذف کنید.

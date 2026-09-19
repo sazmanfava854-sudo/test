@@ -8,10 +8,9 @@ trap 'rm -rf "$STAGE"' EXIT
 
 export PATH="${HOME}/.dotnet:${PATH}"
 
-echo "Publishing self-contained win-x64..."
+echo "Publishing win-x64 (framework-dependent — .NET 8 روی سرور)..."
 dotnet publish "$ROOT/RayvarzResend.Web/RayvarzResend.Web.csproj" \
-  -c Release -r win-x64 --self-contained true \
-  -p:PublishSingleFile=false \
+  -c Release -r win-x64 --self-contained false \
   -o "$STAGE/RayvarzResend" /nologo
 
 # فقط یک appsettings.json کنار exe
@@ -38,9 +37,10 @@ RayvarzResend v25 — نسخه آخر (تهاتر + Accounting_Doc)
      RayvarzResend\appsettings.json
    فقط همین یک فایل تنظیمات وجود دارد.
    appsettings.Production.json را اگر از قبل دارید حذف کنید.
-3) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
-4) مرورگر: http://localhost:5088
-5) GET /api/config
+3) .NET 8 Runtime/Hosting روی سرور کافی است (SDK لازم نیست).
+4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
+5) مرورگر: http://localhost:5088
+6) GET /api/config
      releaseVersion = 25
      accountingDoc.dryRun = false
      dryRun = false
