@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v23f-hover-inject";
+        public const string Label = "v23g-white-page";
 
         public static string Banner
         {
