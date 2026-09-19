@@ -184,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("hover-dbvals", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("inner-body", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23k-hover-dbvals, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23l-inner-body, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -737,7 +737,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23k-hover-dbvals", "bootstrap label");
+                        fail += Expect(boot, "v23l-inner-body", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
@@ -781,12 +781,36 @@ namespace RuleTrace
                 ? 0 : FailMsg("injected Body has logfilefj");
             fail += fn.Body != null && fn.Body.IndexOf("Public Class", StringComparison.OrdinalIgnoreCase) < 0
                 ? 0 : FailMsg("class shell stripped from Body");
+            fail += fn.Body != null && fn.Body.IndexOf("Public Sub", StringComparison.OrdinalIgnoreCase) < 0
+                ? 0 : FailMsg("injected Body must be inner statements, not Sub wrapper");
+            fail += fn.Body != null && fn.Body.IndexOf("End Sub", StringComparison.OrdinalIgnoreCase) < 0
+                ? 0 : FailMsg("injected Body must not keep End Sub");
             fail += fn.EncryptXmlBody == null ? 0 : FailMsg("EncryptXmlBody cleared so engine reads Body");
             fail += fn.ReCompile ? 0 : FailMsg("ReCompile set after inject");
             string stripped = FormulaMerger.StripDuplicateClassShell(sources[0].Code);
             fail += Expect(stripped, "logfilefj", "strip keeps probe");
             if (stripped.IndexOf("Class Rule", StringComparison.OrdinalIgnoreCase) >= 0)
                 fail += FailMsg("strip removes Class wrapper");
+            const string zamin =
+                "Public Class Rule\r\n" +
+                "Public Function ZaminForched()\r\n" +
+                " Select Case x\r\n" +
+                "  Case 1\r\n" +
+                " End Select\r\n" +
+                " If y Then\r\n" +
+                " End If\r\n" +
+                " Info8.AddError(BIZ.SA.EumErrorAction.Stop,\"واحد برای زمین\",Rajaeie())\r\n" +
+                "End Function\r\n" +
+                "End Class\r\n";
+            string inner = FormulaMerger.BodyForInject(zamin, "ZaminForched");
+            fail += Expect(inner, "Select Case", "inner keeps Select Case");
+            fail += Expect(inner, "End Select", "inner keeps End Select");
+            fail += Expect(inner, "End If", "inner keeps End If");
+            fail += Expect(inner, "AddError", "inner keeps AddError");
+            if (inner.IndexOf("Public Function", StringComparison.OrdinalIgnoreCase) >= 0)
+                fail += FailMsg("BodyForInject peels Function wrapper");
+            if (inner.IndexOf("End Function", StringComparison.OrdinalIgnoreCase) >= 0)
+                fail += FailMsg("BodyForInject peels End Function");
             return fail;
         }
 
