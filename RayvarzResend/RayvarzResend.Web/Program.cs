@@ -70,6 +70,7 @@ builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
 builder.Services.AddSingleton<ShimasAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<AccountingDocWriter>();
 builder.Services.AddSingleton<FicheSendService>();
 builder.Services.AddSingleton<UnsentFicheService>();
 builder.Services.AddSingleton<TahatorResendService>();

@@ -26,8 +26,8 @@
 4. **ذخیره پایدار** snapshot هر فишی که ارسال می‌شود  
 5. `UPDATE` وضعیت **۲** روی Sara (فقط فیش‌های در صف ارسال)  
 6. ساخت SOAP و `POST SaveDocument` — **دو بار** در صورت نیاز  
-7. `UPDATE` بازگردانی وضعیت **۳**  
-8. اگر در واسط / رایورز نبود → علت از `Accounting_DocNotSent`
+7. تأیید `incmdocsys`؛ سپس درج واسط Sara در `Accounting_DocHeader` و `Accounting_DocDetails` (`AccountingDocWriter`) اگر ردیف Header وجود نداشت  
+8. اگر SOAP یا رایورز ناموفق بود / در واسط و رایورز نبود → علت از `Accounting_DocNotSent` (خواندن `Comment`)
 
 اگر فرایند وسط کار قطع شود، snapshot با Status=`Pending` می‌ماند:
 
