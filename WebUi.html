@@ -460,7 +460,7 @@ function showHoverTip(el, text, hoverItems) {
     tip.textContent = "متغیری روی این خط پیدا نشد — logfilefj(\"نام\", مقدار) بگذارید یا اجرا زنده کنید";
   } else {
     tip.textContent = items.map(it => {
-      const val = it.value ? it.value : "(هنوز اجرا نشده)";
+      const val = it.value ? it.value : "(مقدار در اجرای زنده نیامد)";
       return (it.name || "") + " = " + val + (it.expr && it.expr !== it.name ? "\n  expr: " + it.expr : "") + (it.source ? "\n  via " + it.source : "");
     }).join("\n\n");
   }
