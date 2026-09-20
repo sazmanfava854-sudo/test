@@ -113,14 +113,14 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۹+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۰+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۹+ | |
-| `MissFoul` | `frmsh_*` | ۹+ | |
-| `Payankar` | `frmsh_*` | ۹+ | |
-| `InquiryResponse` | `frmsh_*` | ۹+ | |
-| `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | تحلیل تخلف | سه FormName یک تابع |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۱۰+ | |
+| `MissFoul` | `frmsh_*` | ۱۰+ | |
+| `Payankar` | `frmsh_*` | ۱۰+ | |
+| `InquiryResponse` | `frmsh_*` | ۱۰+ | |
+| `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
 | `ManagerConfirm` | `ManagerConfirm()` | `TaeedM*` | |
 | `Peace_List` | `FrmPeace()` | صلح | |
 | `Agreement_List` | `FrmAgreement()` | توافق | |
@@ -208,7 +208,7 @@ tmpTaeed = 1   فقط اگر
 - `Taeed3darsad(...) = 0` → Stop تأیید خطای محاسباتی ۳٪
 - `Taeed3darsadcode13(...) = 0` → Stop تأیید ۳٪ کد ۱۳
 
-پس برای منبع ۱۰ و ۱۳، `0` یعنی «تأیید لازم برقرار است / مانع». قبل از کپی الگو، همان `If` موجود را عیناً بخوانید.
+پس برای منبع ۱۰ و ۱۳، `0` یعنی «تأیید لازم برقرار است / مانع». تحلیل ساختمان همین الگوی `= 0 → Stop` را برای گواهی و لایحه و موافقت نوع ۳ هم دارد (`E09-ANL-004`). قبل از کپی الگو، همان `If` موجود را عیناً بخوانید.
 
 ---
 
@@ -222,13 +222,13 @@ tmpTaeed = 1   فقط اگر
 | `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید |
 | `TaeedMGavahi1` | 3 **یا** 4 | گواهی یا سابقه | درخواست: پیوست تأییدشده |
 | `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد) |
-| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت |
+| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت؛ تحلیل نوع ۳ (`E09-ANL-004`) |
 | `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید |
 | `TaeedMShenasnameFani` | 8 | شناسنامه فنی | شناسنامه |
-| `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان |
+| `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
 | `TaeedMComm20` | 12 | کمیسیون ۲۰ | کمیسیون |
-| `Taeed3darsadcode13` | 13 | ۳٪ کد ۱۳ | بازدید آپارتمان |
-| `TaeedMTaghsid` | 16 | تقسیط | تقسیط |
+| `Taeed3darsadcode13` | 13 | ۳٪ کد ۱۳ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
+| `TaeedMTaghsid` | 16 | تقسیط | تقسیط؛ `HasTaeedTaghsit_Mng` بخش ۹ |
 | `TaeedBime` | 20 | بیمه | گردش‌کار بیمه |
 | `TaeedMKaifiat` | 31 | کیفیت | — |
 | `TaeedMMokateb` | جدول `Sh_MokatebatConfirm` | مکاتبه؛ پارامتر `inputed_CI` پیش‌فرض **96** | مکاتبات |
@@ -403,7 +403,7 @@ tmpTaeed = 1   فقط اگر
 | 7 | هیئت فنی 66 ممنوع |
 | 2 | در بروکف: اگر `<> 2` و ملک روی نقشه نیست → Stop |
 
-**قانون برای AI:** چون آخرین تطبیق برنده است، ترتیب پر شدن لیست گروه کاربر رفتار نقش را عوض می‌کند. مرتب‌سازی گروه را «اصلاح بی‌ضرر» ندانید.
+**قانون برای AI:** چون آخرین تطبیق برنده است، ترتیب پر شدن لیست گروه کاربر رفتار نقش را عوض می‌کند. مرتب‌سازی گروه را «اصلاح بی‌ضرر» ندانید. جدول کامل GUID و نقش 400 در بخش ۹ (`E09-ANL-010`) است.
 
 ---
 
@@ -428,7 +428,7 @@ tmpTaeed = 1   فقط اگر
 |------|--------|
 | شدت | دیباگ |
 | شرط | محدود به GUID کاربر مشخص |
-| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`) |
+| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`). در تحلیل `Msgbox("", 123456)` هر ردیف (`E09-ANL-019`) و ورود `ReadComVote` |
 | الگوی تغییر | قبل از انتشار پاک یا بی‌اثر نگه دارید مگر SAMPA؛ منطق کسب‌وکار داخل `msgbox` نگذارید. پاک کردن Msgbox دستگاه رفتار UI شهر را عوض می‌کند |
 
 ---
