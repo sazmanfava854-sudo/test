@@ -1,0 +1,92 @@
+---
+description: "اعتبارسنجی فرمول — بخش ۱: تابع Run()، مسیریابی FormName، توابع TaeedM* و کمکی‌های مشترک"
+alwaysApply: false
+---
+
+# بخش ۱ — `Run()` و زیرساخت مشترک اعتبارسنجی
+
+## نقش `Run()`
+
+- Attribute: `[DisplayName("اجراي فرمول")]`
+- ورودی اصلی: **`Parameter.FormName`**
+- ابتدا: `Agreement_ListUGP` → `Edite_Fani`؛ `HarimAmniyati=False`؛ `UpdateFormulaLog(FirstOfFormul)`؛ `TmpArchiveGroup=0`
+- پایان موفق: `UpdateFormulaLog(EndOfFormul)`
+- `Catch`: `AddError(Stop, "Runtime1", ...)` + `FormulaCatch`
+
+## متغیرهای سطح ماژول (اشتراکی با زیرروال‌ها)
+
+| متغیر | نقش |
+|--------|------|
+| `tmpStr` | `NidProc` رشته‌ای برای `ParameterList` و `TaeedM*` |
+| `Sara10` | از `GetRequest.Info.IsSara10Request` در زیرروال‌ها set می‌شود |
+| `HarimAmniyati`, `TmpArchiveGroup`, `GroupDaramad`, `Modir_Daramad`, … | فلگ نقش/بایگانی/درآمد |
+| `GuidWorkFlow`, `M_ShahrsaziArchiveGroup`, `Rtype`, `Rgroup` | گردش کار و بایگانی |
+
+**هشدار:** در `Run` متغیر محلی `Dim UserIdGroup` سایه‌اندازی روی متغیر ماژول دارد.
+
+## مسیریاب `FormName` → زیرروال
+
+| FormName | Call | یادداشت |
+|----------|------|---------|
+| `EditRequest` | `EditRequest()` | `tmpStr` از Request |
+| `MovafeghatOsooli` | `MovafeghatOsooli()` | |
+| `MokatebatConfirm` | `MokatebatConfirm()` | |
+| `AssignRevisit` / `RevisitAgent` / `OfficesInquiry` | همنام | |
+| `AllDiscount`, `EditAllDiscount` | `AllDisCount()` | |
+| `Fine` / `DutyExemption` / `Zabeteh` | `FrmFine` / `FrmDutyExemption` / `FrmZabeteh` | |
+| `MapControl` | `FrmMapControl()` | |
+| `Parvandeh_Apartment` | `FrmApartment()` + inline | یک کد پستی؛ `CI_BuildingStep <> 1` |
+| `Parvandeh_HouseSharing` … `Parvandeh_Job` | `Frm*` پرونده | |
+| `Revisit_*` | `FrmRevisit*` / `frmRevisit*` | بازدید |
+| **`Barokaf`** | **`FrmSh_Barokaf()`** | مستند بخش ۲ |
+| `Request` / `Parvaneh` / `MissFoul` / `Payankar` / `InquiryResponse` | `frmsh_*` | |
+| `AnalysisBuilding_1/2/3` | `FrmAnalysisBuilding()` | |
+| `ManagerConfirm` | `ManagerConfirm()` | |
+| `Peace_List` / `Agreement_List` | `FrmPeace` / `FrmAgreement` | |
+| `Commission` | `Commission()` | |
+| `Income`, `IncomeFromMenu` | `FnIncome()` | |
+| `ShenasnameFani` | `FnShenasnameFani()` | |
+| `RequestUGP` / `MovafeghatOsooliUGP` | `RequestUGP` / `Edite_Fani` | |
+
+**Bug احتمالی:** `Parvandeh_House` دو بار در زنجیره `ElseIf` — فقط اولین شاخه (`FrmHouse`) اجرا می‌شود؛ چک دوم کد پستی dead code است.
+
+## الگوی `TaeedM*` (تأیید مدیر `Sh_ManagerConfirm`)
+
+فیلتر روی `CI_ResourceManagerConfirm` + `EumManagerConfirmLicence` (1=تأیید، 2=لغو).
+
+مقایسه آخرین تأیید با آخرین لغو بر اساس `ConfirmationDate` و در تساوی `ConfirmationTime`.
+
+| تابع | CI_Resource |
+|------|-------------|
+| `TaeedMLayehe` | 1 |
+| `TaeedMSabeghe` | 4 |
+| `TaeedMMovafeghat`, `TaeedMovafeghatOsooli` | 5 |
+| `TaeedMSolh` | 6 (+ `Peace_AgreementTaeedDate/Time`) |
+| `TaeedMShenasnameFani` | 8 |
+| `Taeed3darsad` | 10 |
+| `TaeedMComm20` | 12 |
+| `Taeed3darsadcode13` | 13 |
+| `TaeedMTaghsid` | 16 |
+| `TaeedBime` | 20 |
+| `TaeedMGavahi` | 3 |
+| `TaeedMGavahi1` | 3 یا 4 |
+| `TaeedMKaifiat` | 31 |
+| `TaeedMMokateb` | `Sh_MokatebatConfirm`, پارامتر `inputed_CI` (پیش‌فرض 96) |
+
+**تغییر SAMPA:** کپی همان الگو + تغییر CI و متن خطا.
+
+## سایر توابع مشترک (خلاصه)
+
+- **`taeeddate`:** تاریخ شمسی با طول ثابت.
+- **`CheckChar`:** ممنوع `/` و `\`.
+- **`CheckGroupPathOccupation`:** GUID گروه درآمد → 1 یا 2.
+- **`Fiche`:** کنترل فیش درآمد؛ معافیت workflow با `GetIdWorkflow` (56, 82, 69, 106, 110, …).
+- **`MapPriceNew`:** استخراج/تطبیق اضلاع از GIS؛ بازگشت `-1200` در خطاهای منطقی.
+- **`GetIdWorkflow`:** GUID `NidWorkflowDeff` → کد عددی داخلی.
+- **`UseBazdidT` / `Fpose` / `User137`:** گروه کاربری عامل بازدید / پوز / بایگانی.
+- **`MassDistanceMain`:** انباری پشت‌بام — `MassDistance_Main/Sub`.
+- **`msg` / `plogAHM`:** دیباگ محدود به GUID کاربر.
+
+## دیباگ
+
+`msgbox` در کد بروکف خالی است؛ `Msgbox("a", n)` در مسیر بروکف برای trace مرحله‌ای استفاده شده (در production معمولاً بی‌اثر).

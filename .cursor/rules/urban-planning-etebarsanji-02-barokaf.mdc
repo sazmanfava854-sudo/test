@@ -1,0 +1,217 @@
+---
+description: "اعتبارسنجی فرمول — بخش ۲: بروکف (frmsh_barokaf / FrmSh_Barokaf / FormName Barokaf)"
+alwaysApply: false
+---
+
+# بخش ۲ — اعتبارسنجی بروکف (`frmsh_barokaf`)
+
+## اتصال به `Run()`
+
+- `Parameter.FormName = "Barokaf"` → `FrmSh_Barokaf()` (معمولاً همان منطق `frmsh_barokaf`).
+- `tmpStr` از `Info8.GetBarokaf.NidLib.RRequest.NidProc` پر می‌شود.
+- متغیر ماژول **`Darmasir`**: مجموع «در مسیر» (مسیر + فضای سبز ناحیه 80 + …).
+
+## داده‌های کلیدی
+
+| منبع | کاربرد |
+|------|--------|
+| `Info8.GetBarokaf` | فرم بروکف جاری (`GetBase_Edge`, `GetSh_BaroKaf`, `Base_HouseInfo_Config`) |
+| `Info8.GetRevisit_House` | بازدید ملک (مساحت، ناحیه، `NidBase`) |
+| `Info8.GetRequest.Info` | `IsSara10Request`, `NidWorkflowDeff`, `NidProc`, `NidNosaziCode`, `NidWorkItem`, `Cellphone` |
+| `ClsObjectFactory` (`TmpbInfo8` / `TmpInfo8`) | بارگذاری **نسخه بازدید** اضلاع/مساحت برای مقایسه با بروکف |
+| `ParameterList` | `NidProc`, `NidRevisit`, `Revisit_House_NidBase` |
+
+---
+
+## ترتیب اجرا (برای تغییر امن)
+
+### ۱) SP 496536 — اصلاح نقشه در Sara10
+
+شرط: `IsSara10Request` و `NidWorkflowDeff` = `6E8E4E56-A0E7-458B-9842-E25DDC55D9BC` (اصلاح نقشه).
+
+- ساخت `Sh_Revisit` با عامل = کاربر جاری، تاریخ/ساعت شمسی.
+- `Info8.GetFunctions.AddRevisitAgentForRequest(RevisiAgentT, Info8.User)`.
+- خطا → `Stop` با عنوان `اعتبارسنجی- اصلاح نقشه`.
+
+### ۲) بایگانی DWG (درخواست خاص)
+
+- `NidWorkItem = "10103017"` → `GetArchiveDWG()` (ArchiveCore `sara7` / `sarc10` — بررسی فایل با `GetFiles(BizCode)`).
+
+### ۳) بلوک‌های غیرفعال (`And 1=2`)
+
+کد بایگانی Sara10 + سرویس املاک (`ClsAmlakMashHad.sendRequestToServiceP4`) — **اجرایی نیست**؛ برای مرجع تاریخی نگه داشته شده.
+
+### ۴) مقداردهی اولیه
+
+- `Sara10 = IsSara10Request`
+- `NidWDefff = GetSara8Workflow(UCase(NidWorkflowDeff))` (sp 219143)
+- `dis`, `Reg` از `GetNosaziNickName` (قطعات کد نوسازی)
+
+### ۵) چک‌لیست Sara10 — قفل ویرایش
+
+- `CheckEditSara10("7666b59f-54a4-465e-879f-2c6672f01332", NidProc)` = True  
+  → `Stop`: تأیید چک‌لیست «کنترل نحوه اعمال چیدمان مجاز».
+
+### ۶) محدودیت جغرافیایی دفتر نقشه‌برداری (فقط `Sara10=False`)
+
+گروه‌ها با `LstUserGroupId`:
+
+| کاربر در گروه | ناحیه `dis=3` | مناطق ممنوع/مجاز |
+|---------------|---------------|------------------|
+| `LstUser15` | Reg ∈ {1,2,3,5,6,7,8,27,25,20,21,26} | **Stop** — ویرایش برای دفتر شما نیست |
+| `LstUserNot15` | Reg ∈ {4,9,10,30,31,32,28,29,33,34,35} | **Stop** + `Exit Function` |
+
+GUIDهای `LstUser15` / `LstUserNot15` در ابتدای تابع تعریف شده‌اند.
+
+### ۷) منطق `F_changeb` (SP 364258 / 2988644)
+
+هدف: اگر **فیش تأیید** یا **تأیید مدیر** مانع ویرایش است، فقط تغییر **عمق اول/سوم** (`Depth1`, `Depth3`) نسبت به بازدید مجاز باشد.
+
+- فقط وقتی `TypeObjectt` (نوع نوسازی) **≠ 4 و ≠ 6**.
+- مقایسه `TmpbInfo8.GetRevisit_House` با `Info8.GetBarokaf`:
+  - مساحت‌ها: `CurrentArea`, `DocArea`, `RemainArea`, `MamarArea`, `GlasshouseArea`
+  - اضلاع مرتب‌شده بر `CI_SideCode`: `CI_PathType`, `EdgeBarCurrent`, `EdgeLenCurrent`, `PathWidth`, `AfterEdit*`
+- `F_sayerb=True` اگر هر فیلد غیر عمق تغییر کند یا تعداد اضلاع متفاوت باشد.
+- `F_Omghb=True` اگر `Depth1` یا `Depth3` تغییر کند.
+- قواعد نهایی:
+  - `F_Omghb And Not F_sayerb` → `F_changeb=True` (فقط عمق تغییر کرده)
+  - `F_sayerb` → `F_changeb=False`
+
+**تغییر در عمق:** قبل از commit حتماً سناریوی «فیش تأیید + فقط Depth» را تست کنید.
+
+### ۸) نقشه — `Map(0)` / `Map(1)`
+
+- اگر `Map(0)` false و `Sara10=False` و `Map(1)` و `Set_UserGroupId <> 2` → **Stop**: «ملک روی نقشه نمی باشد».
+
+### ۹) اعتبارسنجی اضلاع `Dt2 = GetBarokaf.GetBase_Edge`
+
+1. **`CheckChar`** روی فیلدهای متنی اضلاع (بر، طول، باقیمانده، …).
+2. **SAMPA / sp:** `EdgeLenCurrent` اجباری و ≠ 0.
+3. **`CI_PathType=11`:** `EntranceWith` اجباری (دوربرگردان — sp 227306).
+4. **`CI_PathType=4 or 5`:** `EntranceWith` اجباری (میدان — sp 293579).
+5. **sp 499747** (عمق اول اجباری): در کد **کامنت** شده.
+
+### ۱۰) زنجیره تأیید مدیر → `tmpTaeed`
+
+```
+tmpTaeed=1 فقط اگر TaeedMGavahi=1 و TaeedMLayehe=1 و TaeedMSolh=1
+```
+
+(مقدار `1` در این توابع = «مانع ویرایش نیست» طبق الگوی بخش ۱.)
+
+### ۱۱) فیش تأیید — `FicheTaeed(NidProc)`
+
+- اگر `FicheTaeed=0` (فیش تأیید شده دارد):
+  - `F_changeb=False` → **Stop**: مجاز به تغییر نیست.
+  - `F_changeb=True` → **Warning** همان پیام (اجازه با هشدار).
+
+`FicheTaeed` در فرمول **موافقت اصولی** تعریف شده — هنگام تغییر منطق فیش هر دو را بررسی کنید.
+
+### ۱۲) قفل تأیید مدیر
+
+- `tmpTaeed=0` → **Stop**: «تایید مدیر شده است مجاز به تغییر نمی باشید».
+
+### ۱۳) محاسبه `AreaAfterEdit` (هسته مالی/ضابطه)
+
+**مسیر دستگاه** (`GetNidLib` → `RDastgah` not null) یا **ملک** (`else`):
+
+1. `CurrentArea`, `DocArea` از `GetBase_HouseInfo_Revisit` (مقادیر &lt; 0.5 → 0).
+2. **`TajavozBemabar`** از `Sh_BaroKaf.ToGangwayArea` — از `CurrentArea` کم می‌شود (RE 10028405).
+3. هر دو مساحت صفر → **Stop** «مساحت ملک صحیح نمی باشد».
+4. `Masahat = Min(CurrentArea, DocArea)` (با سقف 100000000 برای صفر).
+5. **`Darmasir`**:
+   - `Sh_BaroKaf.PathValue`
+   - ناحیه **80**: `+ GreenArea`
+   - `ToadjusentArea` (حریم) در sp 356574 **کامنت** شده
+   - تجهیزات نوع **139** (sp 317213) جمع مسیر — **کامنت** شده
+6. `AreaAfterEdit = Max(0, Round(Masahat - Darmasir, 2))` روی `Base_HouseInfo_Config`.
+
+### ۱۴) ملک در مسیر — sp 435306 / 439527
+
+اگر `Darmasir > 0` و `Masahat - Darmasir > 0`:
+
+- `TAfterEditWidth=True` (به‌جای چک `AfterEditWidth` روی اضلاع).
+- باید حداقل یک ضلع `AfterEditSideLen > 0` و یک `AfterEditBarLen > 0`.
+- در غیر این صورت **Stop** `اعتبارسنجی##`: «ملک در مسیر دارد… اضلاع و بر پس از رعایت بر اصلاحی».
+
+### ۱۵) Sara10 + مسیر
+
+- `Darmasir > 0` و `Sara10` → `SaveCheck("98535fe3-d2cc-48d4-94b7-17927e71e932", 2, 0)`.
+
+### ۱۶) ردیابی ویرایش — `Base_OtherEquipment`
+
+| CI_OtherEquipmentType | نقش |
+|----------------------|------|
+| **250** | ثبت/به‌روز تاریخ شمسی + `getTime()` در `comments` وقتی `AreaAfterEdit` یا اضلاع (`F_Edge`) نسبت به بازدید عوض شود و `F_changeb=False` |
+| **350** | همان الگو برای ردیف واحد؛ اگر بیش از یک ردیف 350 → **Stop** «سایر امکانات دیتا نامعتبر» |
+
+**RE 4601401:** اگر `PathValue` بروکف ≠ بازدید → `F_changeb=False`.
+
+### ۱۷) هزینه نقشه‌برداری + SMS (غیر Sara10، غیر ناحیه 80)
+
+شرط ورود: `EumNosaziCodeObjType < 4`, `District <> 80`, `UserSms=1`.
+
+- `UserSms=0` اگر در لاگ گردش کار، کاربر مرحله «کانورت» / «بررسی اطلاعات» / «ثبت درخواست» در گروه‌های تبلت/مشخص (GUIDها در کد) باشد.
+- **`CI_OtherEquipmentType = 352`:** مبلغ بر اساس `AreaAfterEditBarokaf` (پلکان تا 100، 100–300، …، بالای 1000 با ضریب).
+- متن SMS به `Cellphone` با اطلاعات دفتر نقشه‌برداری بر اساس **`District`** (1–12) — `SendSMS` در کد **کامنت** (`problemsms`).
+
+### ۱۸) Sara10 — نحوه اقدام املاک (sp 410298)
+
+- `Base_FrontAge` با `CI_Frontage = 15` → `AreaAfterEdit = 0` روی config.
+
+### ۱۹) پایان
+
+- `CopyBaroKaf()` — کپی `Base_*` از بازدید به پرونده (`CopyBase` با لیست فیلدها).
+- `Catch` → `Stop` «فرمول بروکف» + `ex.Message`.
+
+---
+
+## توابع کمکی هم‌فایل
+
+### `CheckEditSara10(NidCheckList, Nidproc)`
+
+- `WF_GetCheckListByNidProc`
+- اگر آیتم با `NidCheckList` مطابق و `CI_CheckListValue = 1` → **True** (قفل ویرایش).
+
+### `Checkforbazdid(NidCheckList, Nidproc)`
+
+- برای چک‌لیست بازدید: `OwnerConfirm` یا `CI_CheckListValue=2` با `OwnerConfirm=0`.
+
+### `CopyBaroKaf()`
+
+- والد ملک `EumNosaziCodeObjType=2` → `CopyBase` از `NidRevisit` به پرونده برای:  
+  `Base_OtherEquipment, Base_Edge, Base_AddressInfo, Base_CommonEstate, Base_HouseInfo, Sh_BaroKaf, Base_RegisterPlack, Base_Owner`.
+
+### `GetArchiveDWG()`
+
+- `CI_ArchiveGroup=1`, حداقل `BizCode`, لاگین ArchiveCore.
+
+### `ControlTask(NIdNod, Optional Control)`
+
+- `WF_GetTaskByNidProc` — شمارش باز/بسته برای node.
+
+### `ReverseString`
+
+- برای قالب SMS (معکوس کردن segmentهای جدا شده با `-`).
+
+---
+
+## وابستگی‌های خارج از این تابع
+
+| نام | محل تعریف احتمالی |
+|-----|-------------------|
+| `Map`, `Set_UserGroupId`, `LstUserGroupId` | همان کلاس فرمول |
+| `FicheTaeed` | فرمول `MovafeghatOsooli` |
+| `GetSara8Workflow`, `SaveCheck`, `getTime` | کمکی مشترک |
+| `TaeedMGavahi`, `TaeedMLayehe`, `TaeedMSolh`, `CheckChar` | بخش ۱ |
+| `MapPriceNew` | در بروکف فراخوانی **کامنت** (93986) |
+
+---
+
+## نکات نگهداری
+
+1. تغییر پلکان مبلغ **352** یا متن SMS → فقط بلوک `District` و `OtherEquipmentValueBarokaf`.
+2. تغییر قوانین «در مسیر» → `Darmasir` + بلوک sp 435306 + چک `RemainBarLen`/`RemainSideLen`.
+3. GUID گروه‌های دفتر نقشه‌برداری → بلوک‌های `dis=3` و SMS `UserSms`.
+4. خطوط `Msgbox` / `msgbox` دیباگ — قبل از release بررسی شوند.
+5. رمز/URL بایگانی در `GetArchiveDWG` — حساس؛ تغییر فقط با درخواست امنیتی.

@@ -1,0 +1,27 @@
+---
+description: "فهرست مستندات اعتبارسنجی فرمول‌های VB سامانه شهرسازی (SAMPA) — برای توسعه‌دهنده فرمول"
+alwaysApply: false
+---
+
+# اعتبارسنجی فرمول (Etebarsanji)
+
+این مجموعه ruleها **منطق اعتبارسنجی** پیاده‌سازی‌شده در فرمول‌های VB (کلاس فرمول + `Info8`) را مستند می‌کند. هنگام تغییر فرمول، ابتدا بخش مربوط به `Parameter.FormName` را در فهرست زیر پیدا کنید.
+
+## فهرست بخش‌ها
+
+| بخش | فایل rule | تابع / موضوع |
+|-----|-----------|----------------|
+| ۱ | `urban-planning-etebarsanji-01-formula-run.mdc` | `Run()` — مسیریابی فرم، متغیرهای ماژول، `TaeedM*`، `Fiche`, `MapPriceNew`, کمکی‌ها |
+| ۲ | `urban-planning-etebarsanji-02-barokaf.mdc` | `frmsh_barokaf()` — اعتبارسنجی **بروکف** (`FormName = Barokaf` → `FrmSh_Barokaf`) |
+| ۳+ | (در انتظار ارسال) | سایر فرم‌ها |
+
+## قراردادهای مشترک
+
+- **خطا:** `Info8.AddError(EumErrorAction.Stop \| Warning, عنوان, پیام)` — `Stop` معمولاً ذخیره را متوقف می‌کند.
+- **لاگ فرمول:** `ClsCommon.UpdateFormulaLog(NidFormulaLog, FirstOfFormul \| EndOfFormul \| FormulaCatch)`.
+- **تأیید مدیر:** توابع `TaeedM*` مقدار `0` = وضعیت تأیید «فعال/برنده»، `1` = بدون تأیید یا لغو برنده — **همیشه محل فراخوانی را ببینید** (معنی در UI ممکن است معکوس بیان شود).
+- **نام‌گذاری:** Finglish + English (`Darmasir`, `Masahat`, `TaeedMSolh`).
+
+## وابستگی بین بخش‌ها
+
+بروکف (بخش ۲) مستقیماً از `TaeedMGavahi`, `TaeedMLayehe`, `TaeedMSolh`, `CheckChar` و الگوی `FicheTaeed` (تعریف در فرمول موافقت اصولی) استفاده می‌کند — جزئیات در بخش ۱.
