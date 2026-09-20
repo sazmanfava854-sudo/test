@@ -35,6 +35,8 @@ FILES = [
 ]
 
 SECRET = re.compile(r"zxc@|172\.16\.8|aGVkYWlhdC|d158aeeb|Password=|User ID=esup", re.I)
+CATALOG_ID = re.compile(r"\(?`?E\d{2}-[A-Z]+(?:-\d{3,}|\-\*)`?\)?")
+SECTION_PREFIX = re.compile(r"^بخش\s+[۰-۹0-9]+\s*[—\-]\s*")
 FIELD_ORDER = [
     "SAMPA / SP", "تابع", "شدت", "شرط", "شرط زنده", "اقدام", "استثنا",
     "معنی", "خالی", "موجود", "تله", "مرده", "اثر زیرسیستم", "الگوی تغییر",
@@ -42,11 +44,13 @@ FIELD_ORDER = [
 
 
 def clean(s: str) -> str:
+    s = CATALOG_ID.sub("", s)
     s = s.replace("`", "")
     s = s.replace("**", "")
     s = s.replace("\\_", "_")
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
     s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"\s+[—\-]\s*$", "", s)
     return s
 
 
@@ -98,6 +102,8 @@ def parse_file(path: Path):
         raise SystemExit(f"secret in {path}")
     mtitle = re.search(r"^# (.+)$", text, re.M)
     title = clean(mtitle.group(1)) if mtitle else path.stem
+    title = SECTION_PREFIX.sub("", title)
+    title = clean(title)
     parts = re.split(r"\n## قانون ", text)
     intro_raw = parts[0]
     # intro after 'این بخش به زبان ساده'
@@ -207,7 +213,9 @@ def setup_doc():
 
 
 def law_block(doc, law):
-    add_heading_custom(doc, f"{law['id']} — {law['title']}", 3)
+    heading = law["title"] or law["simple"][:70]
+    heading = CATALOG_ID.sub("", heading).strip(" —-")
+    add_heading_custom(doc, heading, 3)
     if law["simple"]:
         add_p(doc, law["simple"], size=11.5, space_after=6)
     rows = []
@@ -245,35 +253,34 @@ def build():
     add_table(doc, ["شرح", "مقدار"], [
         ["منبع حقیقت", "کد VB فرمول اعتبارسنجی (Info8) — نه حدس و نه آیین‌نامه جدا"],
         ["ساختار هر فصل", "۱) این سری کد چیست  ۲) اعتبارسنجی‌هایی که داخلش اجرا می‌شود"],
-        ["تعداد بخش", "۱۹ سری کد مستند"],
-        ["تعداد قانون استخراج‌شده", str(total)],
-        ["شناسه قانون", "E{شماره بخش}-{گروه}-{سه رقم} مثل E02-BARO-011"],
+        ["ترتیب فصل‌ها", "هر فصل یک تابع/فرم است؛ مثلاً فصل موافقت اصولی فقط همان توابع را شرح می‌دهد"],
+        ["تعداد اعتبارسنجی استخراج‌شده", str(total)],
         ["سامانه زنده", "در تهیه این مستند عوض نشده است"],
     ])
 
     add_heading_custom(doc, "الف) توضیح کوتاه دربارهٔ سری کدها", 1)
     add_p(doc, "اعتبارسنجی شهرسازی یک کلاس فرمول VB است. کارشناس روی فرم ذخیره می‌زند؛ موتور فرمول تابع Run را اجرا می‌کند. Run از روی رشته FormName یکی از توابع فرم را صدا می‌زند. توابع مشترک — تأیید مدیر TaeedM، تبدیل GUID گردش‌کار به عدد GetIdWorkflow، و فیش Fiche / FicheTaeed — در همان کلاس تعریف شده‌اند و فرم‌ها آن‌ها را صدا می‌زنند.")
     add_p(doc, "این مجموعه «محاسبه کامل ضابطه شهر» نیست. کارش کنترل ذخیره است: داده کامل باشد، این کاربر و این ناحیه و این نوع درخواست مجاز باشند، بعد از فیش یا تأیید مدیر ویرایش بی‌حساب باز نشود، و گاهی عدد (مساحت بعد از مسیر، زیربنا) یا تسک/پیامک ساخته شود.")
-    add_table(doc, ["سری کد", "تابع / FormName", "کار در یک جمله"], [
-        ["۱ مسیریاب", "Run + TaeedM* + GetIdWorkflow + Fiche", "ورود همه ذخیره‌ها و ابزار مشترک"],
-        ["۲ بروکف", "frmsh_barokaf / Barokaf", "قفل بر و کف + نوشتن AreaAfterEdit"],
-        ["۳ بازدید آپارتمان", "FrmRevisitApartment / Revisit_Apartment", "وضع موجود واحد آپارتمان"],
-        ["۴ پرونده آپارتمان", "FrmApartment / Parvandeh_Apartment", "مالک، کد ملی، جمع زیربنا"],
-        ["۵ درخواست سرا۸", "FrmSh_Request / Request", "ثبت گردش‌کار داخلی + نقشه + تکرار"],
-        ["۶ بازدید ملک", "FrmRevisitHouse / Revisit_House", "وضع موجود زمین/خانه"],
-        ["۷ بازدید ساختمان", "FrmRevisitBuilding / Revisit_Building", "وضع موجود بنا + زیربنا"],
-        ["۸ بازدید دستگاه", "frmRevisitHouseSharing / Revisit_HouseSharing", "مشاع / دستگاه"],
-        ["۹ تحلیل", "FrmAnalysisBuilding / AnalysisBuilding_1..3", "ردیف تخلف"],
-        ["۱۰ تأیید مدیر", "ManagerConfirm", "زدن تأیید روی منبع CI"],
-        ["۱۱ صلحنامه", "FrmPeace / Peace_List", "ذخیره ردیف صلح"],
-        ["۱۲ توافق", "FrmAgreement / Agreement_List", "ذخیره ردیف توافق"],
-        ["۱۳ تخفیف", "AllDisCount / AllDiscount", "ثبت تخفیف درآمد"],
-        ["۱۴ جریمه لایحه", "FrmFine / Fine", "ردیف کمیسیون ماده ۱۰۰"],
-        ["۱۵ ضابطه", "FrmZabeteh / Zabeteh", "قفل ذخیره کاربری طرح"],
-        ["۱۶ مأمور بازدید", "AssignRevisit", "اعلام مأمور روی درخواست"],
-        ["۱۷ درآمد", "FnIncome / Income + IncomeFromMenu", "ردیف بدهکار/بستانکار و فیش"],
-        ["۱۸ موافقت اصولی", "MovafeghatOsooli + تعریف FicheTaeed", "نامه موافقت + فیش مشترک"],
-        ["۱۹ شهروندسپاری", "RequestUGP + NewRequestOrder", "ثبت از درگاه بیرونی"],
+    add_table(doc, ["تابع / فرم", "نام در کد", "کار در یک جمله"], [
+        ["مسیریاب و مشترکات", "Run + TaeedM* + GetIdWorkflow + Fiche", "ورود همه ذخیره‌ها و ابزار مشترک"],
+        ["بروکف", "frmsh_barokaf / Barokaf", "قفل بر و کف + نوشتن AreaAfterEdit"],
+        ["بازدید آپارتمان", "FrmRevisitApartment / Revisit_Apartment", "وضع موجود واحد آپارتمان"],
+        ["پرونده آپارتمان", "FrmApartment / Parvandeh_Apartment", "مالک، کد ملی، جمع زیربنا"],
+        ["درخواست سرا۸", "FrmSh_Request / Request", "ثبت گردش‌کار داخلی + نقشه + تکرار"],
+        ["بازدید ملک", "FrmRevisitHouse / Revisit_House", "وضع موجود زمین/خانه"],
+        ["بازدید ساختمان", "FrmRevisitBuilding / Revisit_Building", "وضع موجود بنا + زیربنا"],
+        ["بازدید دستگاه", "frmRevisitHouseSharing / Revisit_HouseSharing", "مشاع / دستگاه"],
+        ["تحلیل تخلف", "FrmAnalysisBuilding / AnalysisBuilding_1..3", "ردیف تخلف"],
+        ["تأیید مدیر", "ManagerConfirm", "زدن تأیید روی منبع CI"],
+        ["صلحنامه", "FrmPeace / Peace_List", "ذخیره ردیف صلح"],
+        ["توافق", "FrmAgreement / Agreement_List", "ذخیره ردیف توافق"],
+        ["تخفیف", "AllDisCount / AllDiscount", "ثبت تخفیف درآمد"],
+        ["جریمه لایحه", "FrmFine / Fine", "ردیف کمیسیون ماده ۱۰۰"],
+        ["ضابطه", "FrmZabeteh / Zabeteh", "قفل ذخیره کاربری طرح"],
+        ["مأمور بازدید", "AssignRevisit", "اعلام مأمور روی درخواست"],
+        ["درآمد", "FnIncome / Income + IncomeFromMenu", "ردیف بدهکار/بستانکار و فیش"],
+        ["موافقت اصولی", "MovafeghatOsooli + FicheTaeed", "نامه موافقت + تعریف فیش مشترک"],
+        ["شهروندسپاری", "RequestUGP + NewRequestOrder", "ثبت از درگاه بیرونی"],
     ])
     add_p(doc, "معنی شدت در جداول بعدی: Stop = AddError توقف ذخیره. Warning = پیام و معمولاً ادامه. Exit Function = بقیه قوانین همان فرم اجرا نمی‌شوند. مرده = کامنت یا If 1=2. محاسباتی = فیلد می‌نویسد. اثر جانبی = SMS/تسک/SP.")
     add_callout(doc, "قانون طلایی تأیید مدیر",
@@ -283,12 +290,10 @@ def build():
                 fill=TEAL_BG)
 
     add_heading_custom(doc, "ب) اعتبارسنجی‌های هر سری کد", 1)
-    add_p(doc, "از اینجا به بعد هر فصل دو قسمت دارد: توضیح کوتاه همان سری کد، سپس تمام قوانین اعتبارسنجی استخراج‌شده از همان توابع به ترتیب اجرای سورس.")
+    add_p(doc, "از اینجا به بعد هر فصل فقط همان تابع را شرح می‌دهد: اول خود کد چیست، بعد اعتبارسنجی‌هایی که داخل همان تابع به ترتیب سورس اجرا می‌شوند. شماره‌گذاری جدا برای قوانین نیست.")
 
     for sec in parsed:
-        add_heading_custom(doc, f"بخش {sec['num']} — {sec['title']}", 1)
-        add_p(doc, f"فایل قانون‌نامه فنی: {sec['file']}  |  تعداد قانون: {len(sec['laws'])}",
-              size=10.5, color=GRAY, align="right", space_after=8)
+        add_heading_custom(doc, sec["title"], 1)
         add_heading_custom(doc, "توضیح کوتاه این سری کد", 2)
         for para in sec["paras"]:
             add_p(doc, para, size=11.5)
@@ -308,8 +313,8 @@ def build():
             law_block(doc, law)
 
     add_heading_custom(doc, "جمع", 1)
-    add_table(doc, ["بخش", "تعداد قانون"],
-              [[s["num"] + " — " + s["title"][:60], str(len(s["laws"]))] for s in parsed]
+    add_table(doc, ["تابع / فرم", "تعداد اعتبارسنجی"],
+              [[s["title"][:70], str(len(s["laws"]))] for s in parsed]
               + [["جمع", str(total)]])
     add_p(doc, "اگر شرط جدول با متن پیام روی صفحه فرق داشت، ملاک شرط کد است. قوانین مرده را بدون سمپا روشن نکنید. فرم‌های بازدید مغازه، پروانه/پایانکار اختصاصی، پاسخ استعلام و ویرایش درخواست هنوز در این شمارش نیستند.",
           size=11, color=GRAY, space_before=8)
