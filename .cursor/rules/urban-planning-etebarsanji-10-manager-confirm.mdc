@@ -15,6 +15,7 @@ alwaysApply: false
 |-----|----------|
 | بخش ۱ `TaeedM*` | فرم‌های دیگر می‌پرسند «آیا قبلاً این منبع تأیید شده؟» |
 | این بخش `ManagerConfirm` | خود زدن تأیید همین لحظه را قفل یا اجازه می‌دهد و گاهی SMS / آتش‌نشانی / کپی موافقت / گزارش بایگانی هم می‌فرستد |
+| بخش ۱۴ `FrmFine` | ذخیره ردیف جریمه لایحه؛ منبع ۱ را inline در `Check_com` می‌خواند (`E14-FINE`) |
 
 `DisplayName("تایید مدیر")` → `Public Function ManagerConfirm() As clsOut`.  
 `Parameter.FormName = "ManagerConfirm"` از `Run` (`E01-RUN-003`).
@@ -627,3 +628,7 @@ GUID `4c052600-bab2-48f8-a1c7-5df81741281c` در مسیر **زنده** جدا ب
 4. Side Effect Safety: SMS / 137 / `InsertReportA` / کپی موافقت / آتش / Elzam را نام ببرید اگر شاخه‌تان بعد از آن‌هاست یا آن‌ها را صدا می‌زند.
 
 **این تغییر فقط همان منبع و همان GUID را باید عوض کند.** `Msgbox`، `1=2`، و `Return True` اول `TaghsidTaeed28` را بدون SAMPA جدا «درست» نکنید.
+
+# ایمنی
+
+فقط `FormName = ManagerConfirm`. ذخیره ردیف جریمه لایحه (`FrmFine`) بخش ۱۴ است نه این فایل.
