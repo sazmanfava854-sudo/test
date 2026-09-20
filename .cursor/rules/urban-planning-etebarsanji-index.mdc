@@ -1,32 +1,241 @@
 ---
-description: "فهرست مستندات اعتبارسنجی فرمول‌های VB سامانه شهرسازی (SAMPA) — برای توسعه‌دهنده فرمول"
+description: "فهرست و قرارداد مستندات اعتبارسنجی فرمول‌های VB سامانه شهرسازی (Etebarsanji) — قانون‌نامه برای هوش مصنوعی و برنامه‌نویس بعدی"
 alwaysApply: false
 ---
 
-# اعتبارسنجی فرمول (Etebarsanji)
+# اعتبارسنجی فرمول (Etebarsanji) — قانون‌نامه
 
-این مجموعه ruleها **منطق اعتبارسنجی** پیاده‌سازی‌شده در فرمول‌های VB (کلاس فرمول + `Info8`) را مستند می‌کند. هنگام تغییر فرمول، ابتدا بخش مربوط به `Parameter.FormName` را در فهرست زیر پیدا کنید.
+این مجموعه **منطق اعتبارسنجی پیاده‌سازی‌شده در فرمول VB** (کلاس فرمول + `Info8`) را به‌صورت **قانون شماره‌دار** مستند می‌کند.
+
+مخاطب: **هوش مصنوعی (Cursor)** و **برنامه‌نویس فرمول شهرسازی**.  
+منبع حقیقت: **کد واقعی**، نه قصد نانوشته. اگر شرط با نام تابع یا متن UI فرق دارد، **شرط کد** ملاک است.
+
+کاربر بخش‌های فرمول را به‌ترتیب می‌فرستد. هر بخش یک فایل `.mdc` است. بخش‌های ۶+ پس از ارسال کد اضافه می‌شوند.
+
+---
+
+## چگونه این قانون‌نامه را بخوانید
+
+### هوش مصنوعی (قبل از هر تغییر فرمول)
+
+1. `Parameter.FormName` را در جدول بخش‌ها پیدا کنید.
+2. فایل همان بخش را باز کنید و **همه قوانین همان تابع** را بخوانید — نه فقط عنوان نزدیک.
+3. قانون را با شناسه (`E01-…` تا `E05-…`) در پاسخ نام ببرید.
+4. الگوی موجود را کپی کنید؛ معماری تازه نسازید.
+5. Finglish و English را با هم جستجو کنید (`takhfif` / `discount` / `jarime` / `fine`).
+6. بلوک `If 1=2`، کامنت SAMPA، و `msgbox` را **فعال نکنید** مگر درخواست صریح.
+7. اگر هم «فیکس» و هم «تغییر رفتار همه گردش‌کارها» خواسته شد، فقط شاخه شرطی همان SAMPA را عوض کنید.
+
+### برنامه‌نویس بعدی
+
+1. شناسه قانون را در فایل بخش جستجو کنید (`E05-REQ-003`).
+2. جدول قانون: SAMPA/SP، شرط، اقدام، استثنا، زیرسیستم.
+3. قبل از commit: سناریوی استثنا + سناریوی Stop را دستی تست کنید.
+4. GUID گردش‌کار را همزمان در `GetIdWorkflow` و `GetSara8Workflow` و وایت‌لیست گروه چک کنید — سه جدول جدا هستند.
+
+---
+
+## قرارداد شناسه قانون
+
+قالب: `E{بخش}-{گروه}-{شماره سه رقمی}`
+
+| پیشوند | معنی |
+|--------|------|
+| `E01-RUN` | مسیریاب `Run()` |
+| `E01-TAEED` | تأیید مدیر `TaeedM*` |
+| `E01-HELP` | کمکی مشترک (`Fiche`, `GetIdWorkflow`, `MapPriceNew`, …) |
+| `E02-BARO` | بروکف |
+| `E03-REV` | بازدید آپارتمان |
+| `E04-APT` | پرونده آپارتمان + کد ملی |
+| `E05-REQ` | ثبت درخواست |
+| `E05-MAP` | GIS درخواست |
+| `E05-WF` | `GetSara8Workflow` / معادل‌سازی گردش‌کار |
+
+هر قانون در فایل بخش با این بلوک مشخص است:
+
+```
+### قانون E0X-GRP-NNN — عنوان
+| فیلد | مقدار |
+| SAMPA / SP | شماره درخواست یا توضیح نبودن |
+| شدت | Stop / Warning / اثر جانبی / محاسباتی |
+| شرط | دقیقاً آنچه کد چک می‌کند |
+| اقدام | AddError / Exit / نوشتن فیلد / CreatTask |
+| استثنا | چه کسانی/گردش‌کارهایی رد می‌شوند |
+| اثر زیرسیستم | ضابطه / تخلف / کمیسیون / درآمد / رایورز / تقسیط / دسترسی / GIS |
+| الگوی تغییر | چه چیزی را کپی کنید |
+```
+
+---
 
 ## فهرست بخش‌ها
 
-| بخش | فایل rule | تابع / موضوع |
-|-----|-----------|----------------|
-| ۱ | `urban-planning-etebarsanji-01-formula-run.mdc` | `Run()` — مسیریابی فرم، متغیرهای ماژول، `TaeedM*`، `Fiche`, `MapPriceNew`, کمکی‌ها |
-| ۲ | `urban-planning-etebarsanji-02-barokaf.mdc` | `frmsh_barokaf()` — اعتبارسنجی **بروکف** (`FormName = Barokaf` → `FrmSh_Barokaf`) |
-| ۳ | `urban-planning-etebarsanji-03-revisit-apartment.mdc` | `FrmRevisitApartment()` — **بازدید آپارتمان** (`FormName = Revisit_Apartment`) |
-| ۴ | `urban-planning-etebarsanji-04-parvandeh-apartment.mdc` | `FrmApartment()` — **پرونده آپارتمان** + `CheckMeli` / `CheckMeli2` |
-| ۵ | `urban-planning-etebarsanji-05-request.mdc` | `FrmSh_Request()` — **ثبت درخواست** + `GetSara8Workflow` / نقشه / گروه |
-| ۶+ | (در انتظار ارسال) | سایر فرم‌ها |
+| بخش | فایل | تابع | FormName |
+|-----|------|------|----------|
+| ۱ | `urban-planning-etebarsanji-01-formula-run.mdc` | `Run` + `TaeedM*` + کمکی | همه فرم‌ها (مسیریاب) |
+| ۲ | `urban-planning-etebarsanji-02-barokaf.mdc` | `frmsh_barokaf` / `FrmSh_Barokaf` | `Barokaf` |
+| ۳ | `urban-planning-etebarsanji-03-revisit-apartment.mdc` | `FrmRevisitApartment` | `Revisit_Apartment` |
+| ۴ | `urban-planning-etebarsanji-04-parvandeh-apartment.mdc` | `FrmApartment` + `CheckMeli` / `CheckMeli2` | `Parvandeh_Apartment` |
+| ۵ | `urban-planning-etebarsanji-05-request.mdc` | `FrmSh_Request` + نقشه + `GetSara8Workflow` | `Request` |
+| ۶+ | (در انتظار ارسال کد) | سایر `Frm*` / `frmsh_*` | — |
 
-## قراردادهای مشترک
+---
 
-- **خطا:** `Info8.AddError(EumErrorAction.Stop \| Warning, عنوان, پیام)` — `Stop` معمولاً ذخیره را متوقف می‌کند.
-- **لاگ فرمول:** `ClsCommon.UpdateFormulaLog(NidFormulaLog, FirstOfFormul \| EndOfFormul \| FormulaCatch)`.
-- **تأیید مدیر:** توابع `TaeedM*` مقدار `0` = وضعیت تأیید «فعال/برنده»، `1` = بدون تأیید یا لغو برنده — **همیشه محل فراخوانی را ببینید** (معنی در UI ممکن است معکوس بیان شود).
-- **نام‌گذاری:** Finglish + English (`Darmasir`, `Masahat`, `TaeedMSolh`).
+## کاتالوگ قوانین مهم (جهت پرش سریع)
+
+قوانین زیر بیشترین اثر روی ثبت/ویرایش و زیرسیستم‌های مالی دارند. متن کامل در فایل بخش است.
+
+| شناسه | عنوان کوتاه | شدت | فایل |
+|--------|-------------|------|------|
+| `E01-RUN-001` | مسیریابی `FormName` → زیرروال | زیرساخت | ۰۱ |
+| `E01-RUN-002` | سایه‌اندازی `UserIdGroup` محلی | باگ نگهداری | ۰۱ |
+| `E01-RUN-003` | `Parvandeh_House` دوبار در `ElseIf` | dead code | ۰۱ |
+| `E01-TAEED-001` | معنی بازگشت `0` در برابر `1` | بحرانی | ۰۱ |
+| `E01-HELP-001` | `GetIdWorkflow` GUID→عدد | زیرساخت | ۰۱ |
+| `E01-HELP-002` | `Fiche` و معافیت گردش‌کار | درآمد | ۰۱ |
+| `E02-BARO-007` | `F_changeb` فقط عمق در برابر فیش/تأیید | بروکف+درآمد | ۰۲ |
+| `E02-BARO-013` | `AreaAfterEdit` و `Darmasir` | ضابطه+درآمد | ۰۲ |
+| `E03-REV-003` | تطابق مأمور بازدید `ChekUser` | دسترسی | ۰۳ |
+| `E03-REV-004` | قفل تبلت تا برگشت شهرسازی | دسترسی | ۰۳ |
+| `E03-REV-005` | زنجیره تأیید + سابقه + ۳٪ | دسترسی | ۰۳ |
+| `E03-REV-011` | آتش‌نشانی گردش‌کار 109 و 94 | آتش‌نشانی | ۰۳ |
+| `E04-APT-001` | کد 216 روی داده جاری همیشه Stop | باگ در برابر بازدید | ۰۴ |
+| `E04-APT-005` | `TmpMax` بعد از فیلتر practically 0/1 | باگ ضابطه | ۰۴ |
+| `E04-APT-007` | نوشتن `TotalArea` | ضابطه+درآمد | ۰۴ |
+| `E05-REQ-001` | قفل کامل ثبت چند گردش‌کار | ثبت | ۰۵ |
+| `E05-WF-001` | `GetSara8Workflow` مقدار برگشتی دور ریخته می‌شود | زیرساخت | ۰۵ |
+| `E05-REQ-013` | اعمال قانون + GettyMap لایه 13628 | کمیسیون+GIS | ۰۵ |
+| `E05-REQ-015` | `jobAV` و سابقه فیش محل فعالیت | درآمد | ۰۵ |
+| `E05-REQ-020` | هیئت فنی برعکس وایت‌لیست | دسترسی | ۰۵ |
+| `E05-REQ-030` | درخواست تکراری / هم‌گروه بایگانی | ثبت | ۰۵ |
+
+### فهرست کامل شناسه‌ها (همه قوانین نوشته‌شده)
+
+| فایل | شناسه‌ها |
+|------|----------|
+| ۰۱ | `E01-RUN-001`…`005`، `E01-TAEED-001`…`002`، `E01-HELP-001`…`011` |
+| ۰۲ | `E02-BARO-001`…`019` |
+| ۰۳ | `E03-REV-001`…`011` |
+| ۰۴ | `E04-APT-001`…`008`، `E04-MELI-001`…`002` |
+| ۰۵ گردش‌کار/ناحیه | `E05-WF-001`، `E05-REQ-000`…`022` |
+| ۰۵ نقشه | `E05-MAP-001`…`004` |
+| ۰۵ بلوک اصلی | `E05-REQ-028`…`036`، `E05-REQ-040` |
+
+جستجو: در فایل بخش عبارت `## قانون E0` را بزنید. هر قانون جدول SAMPA / شرط / اقدام / استثنا / زیرسیستم / الگوی تغییر دارد.
+
+---
+
+## قراردادهای مشترک (همه بخش‌ها)
+
+### خطا و لاگ
+
+- **Stop:** `Info8.AddError(EumErrorAction.Stop, عنوان, پیام)` — ذخیره معمولاً متوقف می‌شود.
+- **Warning:** همان API با `Warning` — ذخیره ادامه دارد؛ پیام به کاربر نشان داده می‌شود.
+- **لاگ فرمول:** `ClsCommon.UpdateFormulaLog(NidFormulaLog, FirstOfFormul | EndOfFormul | FormulaCatch)`.
+- ابتدای `Run`: `FirstOfFormul`. پایان موفق: `EndOfFormul`. `Catch` مسیر `Run`: عنوان `"Runtime1"` + `FormulaCatch`.
+
+### تأیید مدیر (`TaeedM*`)
+
+منبع: `CI_ResourceManagerConfirm` + `EumManagerConfirmLicence` (`1` = تأیید، `2` = لغو).  
+آخرین تأیید با آخرین لغو با `ConfirmationDate` و در تساوی `ConfirmationTime` مقایسه می‌شود.
+
+**قانون طلایی:** مقدار برگشتی `0` یعنی «تأیید فعال/برنده»، `1` یعنی «بدون تأیید برنده یا لغو برنده». **همیشه محل فراخوانی را بخوانید.** در بروکف و بازدید، `tmpTaeed=1` وقتی است که توابع `=1` برگردانند (یعنی مانع ویرایش نیست). در ۳٪ برعکس عمل می‌شود: `Taeed3darsad=0` → Stop.
+
+جزئیات جدول CI: بخش ۱، گروه `E01-TAEED`.
+
+### گردش‌کار — دو تابع جدا
+
+| تابع | ورودی | خروجی واقعی | اشتباه رایج |
+|------|--------|-------------|-------------|
+| `GetIdWorkflow` | GUID `NidWorkflowDeff` | عدد داخلی (`Integer`) | فرض اینکه همان گروه بایگانی است |
+| `GetSara8Workflow` | GUID `NidWorkflowDeff` | **گروه بایگانی** + side-effect روی `GuidWorkFlow`, `M_ShahrsaziArchiveGroup`, `TmpArchiveGroup` | استفاده از Return به‌جای `GuidWorkFlow` |
+
+در `FrmSh_Request` بعد از فراخوانی: `Rtype = GuidWorkFlow` (نوع درخواست)، `Rgroup = M_ShahrsaziArchiveGroup`. Return دور ریخته می‌شود.
+
+### ناحیه و ثامن
+
+- قطعه اول کد نوسازی = `District` / `dis`.
+- **ناحیه 80 = ثامن.**
+- قطعه صنف در برخی قوانین: `Split("-")(6)`.
+- `Sara10` از `GetRequest.Info.IsSara10Request` در زیرروال set می‌شود (نه لزوماً در ابتدای `Run`).
+
+### نام‌گذاری جستجو (Finglish / English / مخلوط)
+
+| مفهوم | کلیدواژه‌ها |
+|--------|-------------|
+| اعتبارسنجی | `etebarsanji`, `AddError`, `Stop`, `Warning` |
+| تأیید مدیر | `TaeedM`, `taeed`, `ManagerConfirm`, `Sh_ManagerConfirm` |
+| بروکف | `Barokaf`, `BaroKaf`, `Darmasir`, `F_changeb`, `F_Omghb` |
+| بازدید | `bazdid`, `Revisit`, `ChekUser`, `tablet`, `UseBazdidT` |
+| درخواست | `darkhast`, `Request`, `FrmSh_Request`, `NidWorkflowDeff` |
+| درآمد / فیش | `daramad`, `Fiche`, `FicheTaeed`, `Income` |
+| تخفیف | `takhfif`, `AllDiscount` |
+| جریمه | `jarime`, `Fine` |
+| صلح | `solh`, `Peace`, `TaeedMSolh` |
+| مفاصا | `mafasa`, `5AEC0F88`, `F16712D1` |
+| کد ملی | `CheckMeli`, `CheckMeli2`, `NationalCode`, `meli` |
+| نقشه | `Map`, `MapAmlak`, `GettyMap`, `MapHarimJame3` |
+| گروه کاربر | `LstUserGroupId`, `Set_UserGroupId`, `UserGroups` |
+
+---
 
 ## وابستگی بین بخش‌ها
 
-- بروکف (بخش ۲) از `TaeedMGavahi`, `TaeedMLayehe`, `TaeedMSolh`, `CheckChar` و `FicheTaeed` استفاده می‌کند.
-- بازدید آپارتمان (بخش ۳) از `ControlTask`/`Checkforbazdid` (بخش ۲)، `UseBazdidT`/`GetIdWorkflow`/`TaeedM*` (بخش ۱) و زنجیره تأیید شامل **سابقه** + ۳٪ استفاده می‌کند.
-- پرونده آپارتمان (بخش ۴) پس از `FrmApartment` در `Run` مرحله ساختمانی را دوباره چک می‌کند. کد ملی حقیقی از `CheckMeli2` است؛ بازدید آپارتمان `CheckMeli` را کامنت کرده است.
+```
+Run (E01)
+ ├─ TaeedM* / GetIdWorkflow / Fiche / MapPriceNew / CheckChar
+ ├─ Barokaf (E02) ── استفاده از TaeedMGavahi+Layehe+Solh، FicheTaeed، Map، GetSara8Workflow
+ ├─ RevisitApartment (E03) ── ControlTask/Checkforbazdid از E02؛ TaeedM + Sabeghe + 3٪ از E01
+ ├─ FrmApartment (E04) ── سپس چک BuildingStep دوباره در Run
+ └─ FrmSh_Request (E05) ── GetIdWorkflow + GetSara8Workflow + Map* + CheckMeli + User137
+```
+
+- بروکف **سابقه** و ۳٪ را چک نمی‌کند؛ بازدید آپارتمان چک می‌کند.
+- پرونده آپارتمان قفل تبلت/تأیید مدیر/Sara10 ندارد.
+- کد ملی: پرونده → `CheckMeli2`؛ درخواست → `CheckMeli`؛ بازدید → `CheckMeli` کامنت است.
+- قانون 216 در بازدید با نسخه ذخیره‌شده مقایسه می‌شود؛ در پرونده روی داده جاری است (رفتار متفاوت — باگ محتمل).
+
+---
+
+## ماتریس اثر روی زیرسیستم‌ها
+
+| زیرسیستم | کدام قوانین بیشتر اثر دارند |
+|----------|------------------------------|
+| ضابطه | `E02-BARO-013` (`AreaAfterEdit`)، `E04-APT-007` (`TotalArea`)، پیش‌آمدگی حیاط |
+| تخلف / تحلیل | تغییر مساحت/کاربری بازدید و پرونده؛ کد 138/216 |
+| کمیسیون ماده ۱۰۰ | اعمال قانون (`24B35887`)، لیست سیاه کمیسیون ۲۰، گروه `4a58bd9f` |
+| درآمد / فیش | `Fiche`, `FicheTaeed`, `jobAV`, کد 352 نقشه‌برداری، وصول درآمد |
+| رایورز | تغییر مبلغ/فیش تأیید؛ SMS و حساب ناحیه |
+| تقسیط | `TaeedMTaghsid` (منبع 16) — در مسیرهای تأیید |
+| دسترسی | `ChekUser`, تبلت, `Set_UserGroupId`, وایت‌لیست پلیس/کارگزار/درآمد |
+| GIS | `Map`, `MapAmlak`, `MapHarimJame3`, `GettyMap`, `MapMosharekati` |
+| آتش‌نشانی | `E03-REV-011` گردش‌کار 109 و 94 |
+
+**تغییر یک GUID گردش‌کار یا یک لایه نقشه می‌تواند ثبت کل شهر را قفل یا باز کند.** شرط را به همان SAMPA محدود کنید.
+
+---
+
+## ایمنی هنگام پیاده‌سازی SAMPA جدید
+
+1. جستجو: GUID گردش‌کار + عدد `GetIdWorkflow` + نام Finglish + شماره SP در کامنت.
+2. اگر الگوی مشابه هست: همان `If` + همان `AddError`؛ فقط شرط را گسترش دهید.
+3. همزمان سه جا: `GetIdWorkflow`، `GetSara8Workflow` (و در صورت شهروندسپاری `GetSara8WorkflowShahrvand`)، وایت‌لیست گروه در `FrmSh_Request`.
+4. ناحیه 80 را با بقیه شهر یکی نکنید مگر متن SAMPA صریح باشد.
+5. `Sara10` / ایساپ / شهروندسپاری سه کانال جدا هستند.
+6. منطق مرده (`If 1=2`) را بدون SAMPA زنده نکنید.
+7. کلید 137 و رمز ArchiveCore را در SAMPA اعتبارسنجی عوض نکنید.
+
+---
+
+## متغیرهای ماژول که بین فرم‌ها مشترک‌اند
+
+| متغیر | نقش | خطر |
+|--------|------|------|
+| `tmpStr` | `NidProc` رشته‌ای برای `TaeedM*` و `ParameterList` | اگر فرم آن را set نکند، تأیید مدیر روی proc اشتباه می‌رود |
+| `Sara10` | فلگ سرا ۱۰ | در `Run` set نمی‌شود؛ زیرروال مسئول است |
+| `TmpArchiveGroup` | موضوع 137 / نوع بایگانی | `GetSara8Workflow` آن را **بازنویسی** می‌کند |
+| `GuidWorkFlow` | کد نوع درخواست پس از معادل‌سازی | با Return تابع یکی نیست |
+| `Darmasir` | مجموع در مسیر بروکف | سطح ماژول؛ بین فراخوانی‌ها باقی می‌ماند |
+| `jobAV` | محل فعالیت / شغل | وایت‌لیست گروه را دور می‌زند |
+| `HarimAmniyati` | در شروع `Run` = False | |
+
+در `Run` یک `Dim UserIdGroup` محلی روی متغیر ماژول سایه می‌اندازد (`E01-RUN-002`).

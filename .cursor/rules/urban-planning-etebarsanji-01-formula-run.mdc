@@ -1,92 +1,410 @@
 ---
-description: "اعتبارسنجی فرمول — بخش ۱: تابع Run()، مسیریابی FormName، توابع TaeedM* و کمکی‌های مشترک"
+description: "اعتبارسنجی فرمول — بخش ۱ قانون‌نامه: Run()، مسیریابی FormName، TaeedM*، GetIdWorkflow، Fiche، MapPriceNew و کمکی‌های مشترک"
 alwaysApply: false
 ---
 
 # بخش ۱ — `Run()` و زیرساخت مشترک اعتبارسنجی
 
-## نقش `Run()`
+مخاطب: هوش مصنوعی و برنامه‌نویس فرمول. هر تغییر در تأیید مدیر، فیش، گردش‌کار یا مسیریاب فرم **اول این فایل** را بخوانید.
 
-- Attribute: `[DisplayName("اجراي فرمول")]`
-- ورودی اصلی: **`Parameter.FormName`**
-- ابتدا: `Agreement_ListUGP` → `Edite_Fani`؛ `HarimAmniyati=False`؛ `UpdateFormulaLog(FirstOfFormul)`؛ `TmpArchiveGroup=0`
-- پایان موفق: `UpdateFormulaLog(EndOfFormul)`
-- `Catch`: `AddError(Stop, "Runtime1", ...)` + `FormulaCatch`
+کد VB این کلاس در مخزن نیست؛ این قانون‌نامه از متن واقعی توابع استخراج شده است. جدول کامل `Case` داخل `GetIdWorkflow` را هنگام دسترسی به سورس با همین شناسه‌ها به‌روز کنید.
 
-## متغیرهای سطح ماژول (اشتراکی با زیرروال‌ها)
+---
 
-| متغیر | نقش |
-|--------|------|
-| `tmpStr` | `NidProc` رشته‌ای برای `ParameterList` و `TaeedM*` |
-| `Sara10` | از `GetRequest.Info.IsSara10Request` در زیرروال‌ها set می‌شود |
-| `HarimAmniyati`, `TmpArchiveGroup`, `GroupDaramad`, `Modir_Daramad`, … | فلگ نقش/بایگانی/درآمد |
-| `GuidWorkFlow`, `M_ShahrsaziArchiveGroup`, `Rtype`, `Rgroup` | گردش کار و بایگانی |
+## قانون E01-RUN-001 — نقش و چارچوب `Run()`
 
-**هشدار:** در `Run` متغیر محلی `Dim UserIdGroup` سایه‌اندازی روی متغیر ماژول دارد.
+| فیلد | مقدار |
+|------|--------|
+| SAMPA / SP | زیرساخت — بدون شماره |
+| تابع | `Run` — Attribute `[DisplayName("اجراي فرمول")]` |
+| شدت | زیرساخت |
+| شرط | اجرای فرمول برای هر ذخیره فرم |
+| اقدام | مسیریابی با `Parameter.FormName` به یک زیرروال |
+| استثنا | ندارد؛ همه فرم‌ها از اینجا رد می‌شوند |
+| اثر زیرسیستم | همه — نقطه ورود واحد اعتبارسنجی |
+| الگوی تغییر | فرم جدید = یک `ElseIf` + یک `Frm*`؛ قانون را در فایل بخش جدید بنویسید |
 
-## مسیریاب `FormName` → زیرروال
+**ترتیب ثابت ابتدای تابع (قبل از مسیریاب):**
 
-| FormName | Call | یادداشت |
-|----------|------|---------|
-| `EditRequest` | `EditRequest()` | `tmpStr` از Request |
-| `MovafeghatOsooli` | `MovafeghatOsooli()` | |
-| `MokatebatConfirm` | `MokatebatConfirm()` | |
-| `AssignRevisit` / `RevisitAgent` / `OfficesInquiry` | همنام | |
-| `AllDiscount`, `EditAllDiscount` | `AllDisCount()` | |
-| `Fine` / `DutyExemption` / `Zabeteh` | `FrmFine` / `FrmDutyExemption` / `FrmZabeteh` | |
-| `MapControl` | `FrmMapControl()` | |
-| `Parvandeh_Apartment` | `FrmApartment()` + inline | یک کد پستی؛ `CI_BuildingStep <> 1` |
-| `Parvandeh_HouseSharing` … `Parvandeh_Job` | `Frm*` پرونده | |
-| `Revisit_*` | `FrmRevisit*` / `frmRevisit*` | بازدید |
-| **`Barokaf`** | **`FrmSh_Barokaf()`** | مستند بخش ۲ |
-| `Request` / `Parvaneh` / `MissFoul` / `Payankar` / `InquiryResponse` | `frmsh_*` | |
-| `AnalysisBuilding_1/2/3` | `FrmAnalysisBuilding()` | |
-| `ManagerConfirm` | `ManagerConfirm()` | |
-| `Peace_List` / `Agreement_List` | `FrmPeace` / `FrmAgreement` | |
-| `Commission` | `Commission()` | |
-| `Income`, `IncomeFromMenu` | `FnIncome()` | |
-| `ShenasnameFani` | `FnShenasnameFani()` | |
-| `RequestUGP` / `MovafeghatOsooliUGP` | `RequestUGP` / `Edite_Fani` | |
+1. اگر `FormName = "Agreement_ListUGP"` → همان ابتدا `Edite_Fani()` (این شاخه قبل از بقیه است).
+2. `HarimAmniyati = False`
+3. `ClsCommon.UpdateFormulaLog(..., FirstOfFormul)`
+4. `TmpArchiveGroup = 0`
 
-**Bug احتمالی:** `Parvandeh_House` دو بار در زنجیره `ElseIf` — فقط اولین شاخه (`FrmHouse`) اجرا می‌شود؛ چک دوم کد پستی dead code است.
+**پایان موفق:** `UpdateFormulaLog(..., EndOfFormul)`  
+**Catch کل `Run`:** `AddError(Stop, "Runtime1", ...)` + `FormulaCatch`
 
-## الگوی `TaeedM*` (تأیید مدیر `Sh_ManagerConfirm`)
+ورودی اصلی مسیریاب: **`Parameter.FormName`** (رشته دقیق، case حساس در عمل VB معمولاً با orthography موجود در جدول زیر).
 
-فیلتر روی `CI_ResourceManagerConfirm` + `EumManagerConfirmLicence` (1=تأیید، 2=لغو).
+---
 
-مقایسه آخرین تأیید با آخرین لغو بر اساس `ConfirmationDate` و در تساوی `ConfirmationTime`.
+## قانون E01-RUN-002 — متغیرهای سطح ماژول و سایه‌اندازی
 
-| تابع | CI_Resource |
-|------|-------------|
-| `TaeedMLayehe` | 1 |
-| `TaeedMSabeghe` | 4 |
-| `TaeedMMovafeghat`, `TaeedMovafeghatOsooli` | 5 |
-| `TaeedMSolh` | 6 (+ `Peace_AgreementTaeedDate/Time`) |
-| `TaeedMShenasnameFani` | 8 |
-| `Taeed3darsad` | 10 |
-| `TaeedMComm20` | 12 |
-| `Taeed3darsadcode13` | 13 |
-| `TaeedMTaghsid` | 16 |
-| `TaeedBime` | 20 |
-| `TaeedMGavahi` | 3 |
-| `TaeedMGavahi1` | 3 یا 4 |
-| `TaeedMKaifiat` | 31 |
-| `TaeedMMokateb` | `Sh_MokatebatConfirm`, پارامتر `inputed_CI` (پیش‌فرض 96) |
+| فیلد | مقدار |
+|------|--------|
+| شدت | باگ نگهداری |
+| شرط | وجود `Dim UserIdGroup` محلی داخل `Run` |
+| اقدام | متغیر محلی، متغیر ماژول هم‌نام را در محدوده `Run` مخفی می‌کند |
+| اثر زیرسیستم | دسترسی / گروه کاربر اگر جایی از ماژول بعد از `Run` خوانده شود |
+| الگوی تغییر | متغیر محلی را نام دیگر بگذارید (`userIdGroupLocal`)؛ رفتار کسب‌وکار را عوض نکنید مگر SAMPA |
 
-**تغییر SAMPA:** کپی همان الگو + تغییر CI و متن خطا.
+| متغیر ماژول | نقش | چه کسی می‌نویسد |
+|-------------|-----|------------------|
+| `tmpStr` | `NidProc` برای `ParameterList` و همه `TaeedM*` | هر زیرروال در شروع |
+| `Sara10` | `GetRequest.Info.IsSara10Request` | زیرروال‌ها — **نه** ابتدای `Run` |
+| `HarimAmniyati` | فلگ حریم امنیتی | `Run` آن را False می‌کند |
+| `TmpArchiveGroup` | موضوع 137 / نوع بایگانی | `Run` صفر؛ `GetSara8Workflow` بازنویسی |
+| `GroupDaramad`, `Modir_Daramad` | نقش درآمد | گروه‌های کاربر |
+| `GuidWorkFlow` | کد نوع درخواست معادل‌سازی‌شده | `GetSara8Workflow` |
+| `M_ShahrsaziArchiveGroup` | گروه بایگانی شهرسازی | `GetSara8Workflow` |
+| `Rtype`, `Rgroup` | نوع درخواست / گروه بایگانی در درخواست | `FrmSh_Request` از دو فیلد بالا |
+| `Darmasir` | مجموع در مسیر | `frmsh_barokaf` |
+| `jobAV` | محل فعالیت | `FrmSh_Request` |
+| `AssingTo`, `AssingToUserName` | تخصیص تسک | `User()` + `CreatTask` |
 
-## سایر توابع مشترک (خلاصه)
+**قانون برای AI:** قبل از خواندن `TaeedMGavahi(tmpStr)` مطمئن شوید همان فرم `tmpStr` را از `NidProc` درست پر کرده است. خالی بودن یعنی تأیید روی شناسه اشتباه یا خالی.
 
-- **`taeeddate`:** تاریخ شمسی با طول ثابت.
-- **`CheckChar`:** ممنوع `/` و `\`.
-- **`CheckGroupPathOccupation`:** GUID گروه درآمد → 1 یا 2.
-- **`Fiche`:** کنترل فیش درآمد؛ معافیت workflow با `GetIdWorkflow` (56, 82, 69, 106, 110, …).
-- **`MapPriceNew`:** استخراج/تطبیق اضلاع از GIS؛ بازگشت `-1200` در خطاهای منطقی.
-- **`GetIdWorkflow`:** GUID `NidWorkflowDeff` → کد عددی داخلی.
-- **`UseBazdidT` / `Fpose` / `User137`:** گروه کاربری عامل بازدید / پوز / بایگانی.
-- **`MassDistanceMain`:** انباری پشت‌بام — `MassDistance_Main/Sub`.
-- **`msg` / `plogAHM`:** دیباگ محدود به GUID کاربر.
+---
 
-## دیباگ
+## قانون E01-RUN-003 — مسیریاب `FormName` → زیرروال
 
-`msgbox` در کد بروکف خالی است؛ `Msgbox("a", n)` در مسیر بروکف برای trace مرحله‌ای استفاده شده (در production معمولاً بی‌اثر).
+| فیلد | مقدار |
+|------|--------|
+| شدت | زیرساخت |
+| شرط | `Parameter.FormName` برابر یکی از رشته‌های زیر |
+| اقدام | فراخوانی همان زیرروال؛ بعضی فرم‌ها بعد از فراخوانی چک inline دارند |
+| الگوی تغییر | رشته `FormName` را عوض نکنید؛ UI همان را می‌فرستد |
+
+| FormName | Call | قانون وابسته | یادداشت حیاتی |
+|----------|------|----------------|----------------|
+| `EditRequest` | `EditRequest()` | — | `tmpStr` از Request |
+| `MovafeghatOsooli` | `MovafeghatOsooli()` | `FicheTaeed` اینجا تعریف می‌شود | بروکف به همین فیش وابسته است |
+| `MokatebatConfirm` | `MokatebatConfirm()` | `TaeedMMokateb` | |
+| `AssignRevisit` | `AssignRevisit()` | — | |
+| `RevisitAgent` | `RevisitAgent()` | — | |
+| `OfficesInquiry` | `OfficesInquiry()` | — | |
+| `AllDiscount` / `EditAllDiscount` | `AllDisCount()` | درآمد / تخفیف | هر دو FormName یک تابع |
+| `Fine` | `FrmFine()` | جریمه کمیسیون | |
+| `DutyExemption` | `FrmDutyExemption()` | معافیت عوارض | |
+| `Zabeteh` | `FrmZabeteh()` | ضابطه | |
+| `MapControl` | `FrmMapControl()` | GIS | |
+| `Parvandeh_Apartment` | `FrmApartment()` + inline | بخش ۴ | بعد از تابع: یک کد پستی؛ هر `CI_BuildingStep <> 1` → Stop |
+| `Parvandeh_HouseSharing` … `Parvandeh_Job` | `Frm*` پرونده | — | هر نوع پرونده تابع جدا |
+| `Parvandeh_House` | `FrmHouse()` | `E01-RUN-004` | **دو بار** در زنجیره `ElseIf` |
+| `Revisit_Apartment` | `FrmRevisitApartment()` | بخش ۳ | |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۶+ | خانه، ساختمان، مغازه، … |
+| `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
+| `Request` | `FrmSh_Request()` | بخش ۵ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۶+ | |
+| `MissFoul` | `frmsh_*` | ۶+ | |
+| `Payankar` | `frmsh_*` | ۶+ | |
+| `InquiryResponse` | `frmsh_*` | ۶+ | |
+| `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | تحلیل تخلف | سه FormName یک تابع |
+| `ManagerConfirm` | `ManagerConfirm()` | `TaeedM*` | |
+| `Peace_List` | `FrmPeace()` | صلح | |
+| `Agreement_List` | `FrmAgreement()` | توافق | |
+| `Commission` | `Commission()` | کمیسیون ماده ۱۰۰ | |
+| `Income` / `IncomeFromMenu` | `FnIncome()` | درآمد | |
+| `ShenasnameFani` | `FnShenasnameFani()` | شناسنامه فنی | |
+| `RequestUGP` | `RequestUGP()` | UGP | |
+| `MovafeghatOsooliUGP` | `Edite_Fani()` | UGP | |
+| `Agreement_ListUGP` | `Edite_Fani()` در **ابتدا** | UGP | قبل از مسیریاب اصلی |
+
+**قانون برای AI:** اگر کاربر «اعتبارسنجی درخواست» گفت، فقط `Request` نیست — `EditRequest` و `RequestUGP` توابع جدا دارند. بدون کد آن توابع حدس نزنید.
+
+---
+
+## قانون E01-RUN-004 — `Parvandeh_House` تکراری (dead code)
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | باگ / کد مرده |
+| شرط | دو شاخه `ElseIf FormName = "Parvandeh_House"` |
+| اقدام | فقط **اولین** شاخه (`FrmHouse`) اجرا می‌شود |
+| استثنا | شاخه دوم (چک کد پستی) هرگز نمی‌رسد |
+| اثر زیرسیستم | پرونده ملک — چک کد پستی این شاخه بی‌اثر است |
+| الگوی تغییر | شاخه دوم را بدون SAMPA حذف/ادغام نکنید مگر تأیید محصول؛ اگر SAMPA چک کد پستی می‌خواهد آن را داخل `FrmHouse` یا بعد از اولین شاخه بگذارید |
+
+---
+
+## قانون E01-RUN-005 — چک inline بعد از `FrmApartment`
+
+| فیلد | مقدار |
+|------|--------|
+| SAMPA / SP | هم‌مسیر بخش ۴ |
+| شدت | Stop |
+| شرط | `FormName = "Parvandeh_Apartment"` پس از بازگشت از `FrmApartment` |
+| اقدام | ۱) بیش از یک `Base_AddressPostCode` → Stop «تنها یک کد پستی». ۲) هر `Base_Using` با `CI_BuildingStep <> 1` → Stop باید «قابل بهره‌برداری» |
+| استثنا | ندارد |
+| اثر زیرسیستم | پرونده آپارتمان؛ حذف چک از داخل `FrmApartment` این مسیر `Run` را باقی می‌گذارد |
+| الگوی تغییر | هر دو محل را با هم عوض کنید (اینجا + `E04-APT`) |
+
+---
+
+# گروه E01-TAEED — تأیید مدیر
+
+منبع داده: `Sh_ManagerConfirm` / فیلتر `CI_ResourceManagerConfirm` + `EumManagerConfirmLicence`.
+
+الگوی مقایسه (همه `TaeedM*` مگر خلاف ذکر شود):
+
+1. آخرین ردیف با Licence=1 (تأیید) را بگیر.
+2. آخرین ردیف با Licence=2 (لغو) را بگیر.
+3. اگر تأیید وجود دارد و (لغو نیست یا تاریخ/ساعت تأیید بعد از لغو است) → برنده تأیید.
+4. بازگشت عددی طبق جدول زیر — **نه متن دکاو**.
+
+## قانون E01-TAEED-001 — معنی بازگشت `0` در برابر `1` (بحرانی)
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | بحرانی — اشتباه تفسیر = قفل یا باز شدن غلط ویرایش |
+| شرط | هر فراخوانی `TaeedM*` |
+| اقدام | در خود تابع: معمولاً `0` = تأیید برنده، `1` = تأیید برنده نیست |
+| استثنا | محل فراخوانی ممکن است شرط را برعکس بنویسد (`If TaeedMGavahi = 1`) |
+| اثر زیرسیستم | دسترسی ویرایش بروکف، بازدید، درخواست (پیوست گواهی) |
+| الگوی تغییر | امضای بازگشت را عوض نکنید. متن UI را با عدد هماهنگ نکنید مگر هر دو caller را بخوانید |
+
+**الگوی بروکف / بازدید برای `tmpTaeed`:**
+
+```
+tmpTaeed = 1   فقط اگر
+    TaeedMGavahi(...) = 1
+    And TaeedMLayehe(...) = 1
+    And TaeedMSolh(...) = 1
+    [بازدید آپارتمان +: TaeedMSabeghe(...) = 1]
+```
+
+یعنی در این callerها مقدار `1` یعنی «مانع ویرایش از این منبع نیست».  
+سپس `If tmpTaeed = 0` → Stop «تایید مدیر شده است مجاز به تغییر نمی باشید».
+
+**الگوی ۳٪ (برعکس جمله بالا در ظاهر، مطابق کد):**
+
+- `Taeed3darsad(...) = 0` → Stop تأیید خطای محاسباتی ۳٪
+- `Taeed3darsadcode13(...) = 0` → Stop تأیید ۳٪ کد ۱۳
+
+پس برای منبع ۱۰ و ۱۳، `0` یعنی «تأیید لازم برقرار است / مانع». قبل از کپی الگو، همان `If` موجود را عیناً بخوانید.
+
+---
+
+## قانون E01-TAEED-002 — نقشه منبع `CI_ResourceManagerConfirm`
+
+| تابع | CI_Resource | موضوع کسب‌وکار | کجا اجباری است |
+|------|-------------|----------------|----------------|
+| `TaeedMLayehe` | 1 | لایحه | بروکف، بازدید آپارتمان (`tmpTaeed`) |
+| `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید |
+| `TaeedMGavahi1` | 3 **یا** 4 | گواهی یا سابقه | درخواست: پیوست تأییدشده |
+| `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد) |
+| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت |
+| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید |
+| `TaeedMShenasnameFani` | 8 | شناسنامه فنی | شناسنامه |
+| `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان |
+| `TaeedMComm20` | 12 | کمیسیون ۲۰ | کمیسیون |
+| `Taeed3darsadcode13` | 13 | ۳٪ کد ۱۳ | بازدید آپارتمان |
+| `TaeedMTaghsid` | 16 | تقسیط | تقسیط |
+| `TaeedBime` | 20 | بیمه | گردش‌کار بیمه |
+| `TaeedMKaifiat` | 31 | کیفیت | — |
+| `TaeedMMokateb` | جدول `Sh_MokatebatConfirm` | مکاتبه؛ پارامتر `inputed_CI` پیش‌فرض **96** | مکاتبات |
+
+**الگوی SAMPA جدید تأیید مدیر:** کپی نزدیک‌ترین `TaeedM*` → فقط عدد CI و نام تابع و متن خطا. جدول مقایسه تاریخ/ساعت را بازنویسی نکنید.
+
+**صلح:** علاوه بر ManagerConfirm منبع 6، فیلدهای `Peace_AgreementTaeedDate` / `Time` در شرط وجود دارد. تغییر صلح بدون خواندن همین تابع، توافق را می‌شکند.
+
+---
+
+# گروه E01-HELP — کمکی‌های مشترک
+
+## قانون E01-HELP-001 — `GetIdWorkflow` (GUID → کد عددی)
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | زیرساخت — همه قفل‌های عددی درخواست/بازدید/فیش |
+| شرط | ورودی `NidWorkflowDeff` (GUID گردش‌کار تعریف) |
+| اقدام | `Select Case` / نگاشت → `Integer` داخلی |
+| استثنا | GUID ناشناخته → معمولاً 0 یا مقدار پیش‌فرض (سورس را ببینید؛ صفر را «استعلام» فرض نکنید) |
+| اثر زیرسیستم | ثبت درخواست، تبلت، فیش، آتش‌نشانی، جمع‌سپاری |
+| الگوی تغییر | GUID جدید را **هم** اینجا **هم** در `GetSara8Workflow` اضافه کنید |
+
+عددهای زیر از **مصرف‌کننده‌های مستندشده** جمع شده‌اند. جدول `Case` کامل داخل خود تابع است؛ این فهرست برای جستجو و جلوگیری از تصادم است.
+
+| کد | نقش مشاهده‌شده در کد اعتبارسنجی | مصرف |
+|----|----------------------------------|------|
+| 7 | جمع‌سپاری / استعلام مرتبط | `JamSepari`؛ قفل ناحیه ≠80 با مجموعه 350887 |
+| 9 | در مجموعه ناحیه و تبلت | ناحیه 350887؛ تبلت بازدید |
+| 18, 19, 40, 54 | مجموعه ناحیه 350887 | درخواست |
+| 23 | بررسی ملک | `DafaterTashilGari` |
+| 30, 81, 92, 97, 98, 99, 100, 102, 107, 108 | قفل تبلت بازدید | بخش ۳ |
+| 32, 75, 77, 78, 84, 88, 91, 100, 101, 104, 106 | وایت‌لیست درآمد/کمیسیون | بخش ۵ |
+| 42 | تهاتر | گروه `3A6740C8` لازم |
+| 45 | شناسایی اراضی | `Set_UserGroupId=3`؛ معاف کدپستی/کدملی |
+| 51, 94, 105, 112 | جمع‌سپاری (`JamSepari`) | ثبت از این مسیر Stop/Exit |
+| 53 | انتقال (همراه 109/83) | `TransferDang` |
+| 55 | خروج بدون ادامه | `Exit` در درخواست |
+| 56 | بیمه | فقط دو گروه؛ معاف فیش |
+| 58 | مجاز برای `Set_UserGroupId=5` همراه 90 | دسترسی |
+| 66 | هیئت فنی | گروه 7 ممنوع |
+| 69 | استعلام؛ معاف فیش | درخواست + `Fiche` |
+| 70 | ناحیه + تبلت | |
+| 71–74, 79 | پروانه شهرداری | فقط ثبت شهرداری / کاربر خاص |
+| 76 | استثنای تکرار هم‌گروه بایگانی | درخواست تکراری |
+| 82 | معافیت `Fiche` | درآمد |
+| 83 | گواهی (شهروندسپاری تاریخ‌دار) | ناحیه؛ انتقال؛ تفکیک؛ تبلت |
+| 85 | مسجد | `Set_UserGroupId=6` ممنوع |
+| 89 | اراضی رها | دو گروه ممنوع |
+| 90 | اصلاح نقشه | `Map` همیشه True؛ لیست گروه کوتاه‌تر |
+| 95 | استعلام | همراه 69 |
+| 96 | گواهی افراز | تاریخ/نام/شماره نامه |
+| 104, 110, 111 | عدم‌خلاف / پایانکار / تفکیک | `ReqTafkik_A`؛ تبلت |
+| 109 | گواهی انتقال | آتش‌نشانی؛ ناحیه؛ `TransferDang` |
+| 113 | مفاصا (`F16712D1`) | حریم جامع ۳ |
+
+**قانون برای AI:** شرط `GetIdWorkflow(...) = 90` را با مقایسه GUID خام `NidWorkflowDeff` قاطی نکنید مگر همان GUID در جدول تابع 90 باشد. یک گردش‌کار ممکن است در یک لیست با GUID و در لیست دیگر با عدد آمده باشد (تبلت بازدید).
+
+---
+
+## قانون E01-HELP-002 — `Fiche` (کنترل فیش درآمد)
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | Stop مسیر درآمد — معافیت انتخابی گردش‌کار |
+| شرط | وجود/وضعیت فیش روی `NidProc` |
+| اقدام | اگر فیش مانع باشد و گردش‌کار معاف نباشد → خطا |
+| استثنا (معافیت با `GetIdWorkflow`) | **56, 82, 69, 106, 110** و موارد دیگری که داخل خود `Fiche` آمده |
+| اثر زیرسیستم | درآمد، رایورز، تقسیط |
+| الگوی تغییر | گردش‌کار جدید را به لیست معاف **فقط اگر SAMPA معافیت فیش بخواهد** اضافه کنید |
+
+`FicheTaeed(NidProc)` (تعریف در فرمول موافقت اصولی):
+
+- بازگشت `0` = فیش تأییدشده **دارد** → در بروکف ویرایش قفل یا Warning (بسته به `F_changeb`).
+- غیر 0 = فیش تأیید مانع نیست.
+
+**قانون برای AI:** تغییر وضعیت فیش یا حساب ناحیه در `Fiche` روی بروکف و درخواست هم‌زمان اثر دارد. فقط یک فرم را عوض نکنید.
+
+---
+
+## قانون E01-HELP-003 — `MapPriceNew` (قیمت‌گذاری اضلاع GIS)
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | محاسباتی / خطا منطقی |
+| شرط | استخراج و تطبیق اضلاع ملک با لایه قیمت |
+| اقدام | در خطاهای منطقی بازگشت **`-1200`** |
+| استثنا | در بروکف فراخوانی **کامنت** است (شماره 93986) |
+| اثر زیرسیستم | درآمد ارزش معاملاتی / بروکف در صورت فعال‌سازی دوباره |
+| الگوی تغییر | فعال کردن فراخوانی بروکف بدون SAMPA رفتار ذخیره بروکف را عوض می‌کند |
+
+---
+
+## قانون E01-HELP-004 — `CheckChar`
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | Stop در اضلاع بروکف |
+| شرط | کاراکتر `/` یا `\` در رشته |
+| اقدام | نامعتبر |
+| اثر زیرسیستم | بروکف اضلاع |
+| الگوی تغییر | کاراکتر جدید را به همین تابع اضافه کنید تا همه اضلاع یکسان شوند |
+
+---
+
+## قانون E01-HELP-005 — `CheckGroupPathOccupation`
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | دسترسی درآمد |
+| شرط | GUID گروه کاربر |
+| اقدام | بازگشت `1` یا `2` — در درخواست، `<> 2` یعنی مدیر درآمد **نیست** |
+| اثر زیرسیستم | `jobAV` / سابقه محل فعالیت |
+| الگوی تغییر | مقدار `2` را در callerهای `jobAV` معنا کنید؛ عدد را عوض نکنید |
+
+---
+
+## قانون E01-HELP-006 — `UseBazdidT` / `Fpose` / `User137`
+
+| تابع | نقش | اثر |
+|------|------|-----|
+| `UseBazdidT` | کاربر در گروه عامل بازدید تبلت است؟ `1` = بله | قفل تبلت بازدید را دور می‌زند |
+| `Fpose` | گروه پوز | هم‌پوشانی با معافیت کد ملی |
+| `User137` | گروه/بایگانی 137 | اگر `=1` و `TmpArchiveGroup > 10` → پیام و SMS پیشخوان |
+
+کلید 137 در کد درخواست هاردکد است (`5tgb6yhn^YHN%TGB`) — SAMPA اعتبارسنجی آن را عوض نمی‌کند.
+
+---
+
+## قانون E01-HELP-007 — `taeeddate`
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | Stop قالب تاریخ |
+| شرط | تاریخ شمسی باید طول ثابت داشته باشد (در بازدید سند و تاریخ احداث: طول 10) |
+| اقدام | پیام فیلد (`"صدور سند"` و مشابه) |
+| اثر زیرسیستم | بازدید آپارتمان |
+
+---
+
+## قانون E01-HELP-008 — `LstUserGroupId` و `Set_UserGroupId`
+
+| تابع | رفتار دقیق کد |
+|------|----------------|
+| `LstUserGroupId(Lst)` | `1` اگر کاربر در **یکی** از GUIDهای آرایه باشد، وگرنه `0` |
+| `Set_UserGroupId` | نقش عددی **1 تا 9** از روی GUID گروه؛ **آخرین تطبیق برنده است** |
+
+نقش‌های استفاده‌شده در درخواست (جزئیات بخش ۵):
+
+| کد | محدودیت مشاهده‌شده |
+|----|---------------------|
+| 1 | فقط استعلام 69 و 95 |
+| 3 | شناسایی اراضی 45 |
+| 5 | فقط 58 و 90 |
+| 6 | مسجد 85 ممنوع |
+| 7 | هیئت فنی 66 ممنوع |
+| 2 | در بروکف: اگر `<> 2` و ملک روی نقشه نیست → Stop |
+
+**قانون برای AI:** چون آخرین تطبیق برنده است، ترتیب پر شدن لیست گروه کاربر رفتار نقش را عوض می‌کند. مرتب‌سازی گروه را «اصلاح بی‌ضرر» ندانید.
+
+---
+
+## قانون E01-HELP-009 — `MassDistanceMain`
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | محاسباتی انباری پشت‌بام |
+| شرط | `MassDistance_Main` / `MassDistance_Sub` روی کاربری |
+| اقدام | در بازدید و پرونده آپارتمان **کامنت** است (93033) |
+| الگوی تغییر | بدون SAMPA از کامنت خارج نکنید |
+
+---
+
+## قانون E01-HELP-010 — `msg` / `plogAHM` / `Msgbox`
+
+| فیلد | مقدار |
+|------|--------|
+| شدت | دیباگ |
+| شرط | محدود به GUID کاربر مشخص |
+| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله |
+| الگوی تغییر | قبل از انتشار پاک یا بی‌اثر نگه دارید؛ منطق کسب‌وکار داخل `msgbox` نگذارید |
+
+---
+
+## قانون E01-HELP-011 — `GetSara8Workflow` (ارجاع — متن کامل بخش ۵)
+
+این تابع در کلاس فرمول است ولی مصرف اصلی‌اش درخواست و بروکف است.
+
+- **Return = گروه بایگانی** (`M_ShahrsaziArchiveGroup`) نه کد نوع.
+- Side-effect: `GuidWorkFlow`, `M_ShahrsaziArchiveGroup`, `TmpArchiveGroup`.
+- در بروکف: `NidWDefff = GetSara8Workflow(UCase(NidWorkflowDeff))` (SP 219143).
+- در درخواست: Return دور ریخته می‌شود؛ `Rtype = GuidWorkFlow`.
+
+جدول نگاشت GUID → (`GuidWorkFlow`, گروه, موضوع 137) در **بخش ۵ / E05-WF**.
+
+---
+
+## چک‌لیست SAMPA برای این فایل
+
+1. فرم جدید: ردیف به جدول `E01-RUN-003` + فایل بخش جدید + شاخه `ElseIf`.
+2. منبع تأیید جدید: ردیف به `E01-TAEED-002` + کپی تابع.
+3. گردش‌کار جدید: عدد در `GetIdWorkflow` + ردیف در کاتالوگ بالا + `GetSara8Workflow`.
+4. معافیت فیش: فقط `E01-HELP-002`.
+5. هرگز معنی `0`/`1` تأیید مدیر را در یک caller عوض نکنید بدون بقیه callerها.
+
+## ایمنی
+
+این فایل منطق اجرا را عوض نمی‌کند. تغییر مستند باید با کد خوانده‌شده یکی باشد. اگر سورس `GetIdWorkflow` در دسترس آمد، جدول کدها را با `Case` واقعی کامل کنید — حدس GUID ممنوع است.
