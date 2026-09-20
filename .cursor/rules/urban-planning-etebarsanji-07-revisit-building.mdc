@@ -16,7 +16,7 @@ alwaysApply: false
 `Parameter.FormName = "Revisit_Building"` → `FrmRevisitBuilding()`.  
 داده: `Info8.GetRevisit_Building` (`GetBase_Using`, `GetBase_Front` / `Base_Front`, `GetBase_BuildingInfo`, `GetBase_CommonEstate`, `GetBase_OtherEquipment`, `Base_Wall`).  
 متغیر ماژول: `M_BaseUsingBuilding`, `M_ObjType`.  
-کمکی همین قطعه: `Get_MojazDataArea` (از این تابع **صدا زده نمی‌شود**)، `getTime`.  
+کمکی همین قطعه: `Get_MojazDataArea` (از **این** تابع صدا زده نمی‌شود؛ Call زنده در بخش ۸ با `M_ObjType=5`)، `getTime`.  
 کمکی مشترک: `CheckEditSara10`, `Checkforbazdid`, `ControlTask`, `MassDistanceMain`, `FicheTaeed`, `TaeedM*`, `UseBazdidT`, `GetSara8Workflow`, `HasTaeedTaghsit_Mng`.
 
 خیلی از `AddError(Stop)`ها در این تابع **`Exit Function` ندارند** — ممکن است چند خطا پشت هم بیاید و بقیه قوانین همان ذخیره هنوز اجرا شوند. با بازدید ملک که زیاد Exit می‌کند فرق دارد.
@@ -406,7 +406,7 @@ alwaysApply: false
 ---
 
 ## قانون E07-REVB-024 — `Get_MojazDataArea` (در این فرم صدا زده نمی‌شود)
-**به زبان ساده:** تابعی هست که زیربنای موجود قبل از تاریخ مجوز را با پایانکار مجاز مقایسه می‌کند و اگر کمتر باشد Warning می‌دهد. از `FrmRevisitBuilding` در متن ارسالی **فراخوانی ندارد**. `M_ObjType` داخل بازدید ساختمان صفر می‌ماند پس حتی اگر صدا شود شاخه 3 و 5 را رد می‌کند.
+**به زبان ساده:** تابعی هست که زیربنای موجود قبل از تاریخ مجوز را با پایانکار مجاز مقایسه می‌کند و اگر کمتر باشد Warning می‌دهد. از `FrmRevisitBuilding` در متن ارسالی **فراخوانی ندارد**. `M_ObjType` داخل بازدید ساختمان صفر می‌ماند پس حتی اگر صدا شود شاخه 3 و 5 را رد می‌کند. Call زنده در بازدید دستگاه است (`E08-REVHS-014`) با `M_ObjType=5`.
 
 | فیلد | مقدار |
 |------|--------|
@@ -414,7 +414,7 @@ alwaysApply: false
 | شرط کاغذی | `M_ObjType = 3` پرونده ملک والد یا `= 5` مشاع؛ آخرین سابقه بایگانی گروه 2/3/4 (پایانکار) نه 1 (پروانه) |
 | اقدام کاغذی | جمع `UsingArea` موجود با `GenerateDate <=` تاریخ مجوز در برابر زیربنای `MojazPayankar`؛ اگر موجود < مجاز → Warning تجدید احداث |
 | اثر زیرسیستم | ضابطه مجاز در برابر وضع موجود / پایانکار |
-| الگوی تغییر | صدا زدن بدون set کردن `M_ObjType` بی‌اثر است. ننویسید که امروز روی ذخیره ساختمان این Warning می‌آید |
+| الگوی تغییر | صدا زدن بدون set کردن `M_ObjType` بی‌اثر است. ننویسید که امروز روی ذخیره ساختمان این Warning می‌آید. الگوی Call: بخش ۸ |
 
 ---
 
@@ -426,9 +426,9 @@ alwaysApply: false
 4. خیلی Stopها Exit ندارند — تست یعنی چند پیام همزمان.
 5. `MassDistanceMain` را بدون SAMPA کامنت نکنید.
 6. آتش‌نشانی این فرم را به 109/94 آپارتمان وصل نکنید.
-7. `Get_MojazDataArea` را «فعال» مستند نکنید تا وقتی `Call` در سورس دیده شود.
+7. `Get_MojazDataArea` را روی ذخیره ساختمان «فعال» مستند نکنید؛ Call زنده بخش ۸ است (`E08-REVHS-014`).
 8. `HasTaeedTaghsit_Mng` را با خواندن بدنه کامل کنید.
 
 ## ایمنی
 
-فقط `FormName = Revisit_Building`. بازدید مغازه هنوز بخش جدا است. نوشتن `InfrastructureArea` و `FrontArea` روی گزارش و درآمد اثر دارد. مرتب‌سازی با `And` بیتی را «باگ واضح برای فیکس خاموش» ندانید.
+فقط `FormName = Revisit_Building`. بازدید دستگاه بخش ۸ است. بازدید مغازه هنوز بخش جدا است. نوشتن `InfrastructureArea` و `FrontArea` روی گزارش و درآمد اثر دارد. مرتب‌سازی با `And` بیتی را «باگ واضح برای فیکس خاموش» ندانید.

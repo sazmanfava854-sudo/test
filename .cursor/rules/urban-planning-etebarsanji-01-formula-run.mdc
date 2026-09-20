@@ -112,13 +112,14 @@ alwaysApply: false
 | `Revisit_Apartment` | `FrmRevisitApartment()` | بخش ۳ | |
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۸+ | مغازه، … |
+| `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۹+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۸+ | |
-| `MissFoul` | `frmsh_*` | ۸+ | |
-| `Payankar` | `frmsh_*` | ۸+ | |
-| `InquiryResponse` | `frmsh_*` | ۸+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۹+ | |
+| `MissFoul` | `frmsh_*` | ۹+ | |
+| `Payankar` | `frmsh_*` | ۹+ | |
+| `InquiryResponse` | `frmsh_*` | ۹+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | تحلیل تخلف | سه FormName یک تابع |
 | `ManagerConfirm` | `ManagerConfirm()` | `TaeedM*` | |
 | `Peace_List` | `FrmPeace()` | صلح | |
@@ -407,15 +408,15 @@ tmpTaeed = 1   فقط اگر
 ---
 
 ## قانون E01-HELP-009 — `MassDistanceMain`
-**به زبان ساده:** فاصله انباری پشت‌بام؛ در بازدید و پرونده آپارتمان خاموش است.
+**به زبان ساده:** فاصله انباری پشت‌بام. در بازدید ساختمان و بازدید دستگاه **فعال** است؛ در بازدید و پرونده آپارتمان و بازدید ملک کامنت است.
 
 
 | فیلد | مقدار |
 |------|--------|
 | شدت | محاسباتی انباری پشت‌بام |
 | شرط | `MassDistance_Main` / `MassDistance_Sub` روی کاربری |
-| اقدام | در بازدید و پرونده آپارتمان **کامنت** است (93033) |
-| الگوی تغییر | بدون SAMPA از کامنت خارج نکنید |
+| اقدام | بازدید آپارتمان و پرونده آپارتمان و بازدید ملک **کامنت** (93033). بازدید ساختمان `E07-REVB-007` و بازدید دستگاه `E08-REVHS-004` صدا می‌زنند |
+| الگوی تغییر | خاموش/روشن کردن بدون SAMPA رفتار سه فرم بازدید را عوض می‌کند |
 
 ---
 
@@ -427,8 +428,8 @@ tmpTaeed = 1   فقط اگر
 |------|--------|
 | شدت | دیباگ |
 | شرط | محدود به GUID کاربر مشخص |
-| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله |
-| الگوی تغییر | قبل از انتشار پاک یا بی‌اثر نگه دارید؛ منطق کسب‌وکار داخل `msgbox` نگذارید |
+| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`) |
+| الگوی تغییر | قبل از انتشار پاک یا بی‌اثر نگه دارید مگر SAMPA؛ منطق کسب‌وکار داخل `msgbox` نگذارید. پاک کردن Msgbox دستگاه رفتار UI شهر را عوض می‌کند |
 
 ---
 
@@ -442,6 +443,7 @@ tmpTaeed = 1   فقط اگر
 - Side-effect: `GuidWorkFlow`, `M_ShahrsaziArchiveGroup`, `TmpArchiveGroup`.
 - در بروکف: `NidWDefff = GetSara8Workflow(UCase(NidWorkflowDeff))` (SP 219143).
 - در درخواست: Return دور ریخته می‌شود؛ `Rtype = GuidWorkFlow`.
+- در بازدید دستگاه: Return در `ReqGroup` برای Call `Get_MojazDataArea` وقتی ∈ {2, 3} (`E08-REVHS-014`).
 
 جدول نگاشت GUID → (`GuidWorkFlow`, گروه, موضوع 137) در **بخش ۵ / E05-WF**.
 
