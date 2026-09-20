@@ -137,7 +137,9 @@ build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
 
-expect(build, "v23m-vs-build", "label")
+expect(build, "v23n-cs0136", "label")
+if "foreach (string n in" in webapp and "int n = 0" in webapp:
+    failmsg("CS0136: SeedDbParams must not reuse n")
 expect(csproj, "<OutDir>bin\\</OutDir>", "F5 output bin")
 expect(csproj, "Debug|Any CPU", "Any CPU with space")
 expect(engine, "IsRealCompileMethod", "do not invoke get_CompilerErrors")
