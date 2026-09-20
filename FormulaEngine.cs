@@ -203,6 +203,11 @@ namespace RuleTrace
                 if (t.IndexOf("NidWorkItem", StringComparison.OrdinalIgnoreCase) >= 0) return true;
                 if (t.IndexOf("پرونده پروانه", StringComparison.Ordinal) >= 0) return true;
                 if (t.IndexOf("بررسی نمی‌شود", StringComparison.Ordinal) >= 0) return true;
+                if (t.IndexOf("M_TarhMojaz", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (t.IndexOf("CI_PlanUsingType", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (t.IndexOf("Case تراکم", StringComparison.Ordinal) >= 0) return true;
+                if (t.IndexOf("Add_Zabeteh", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (t.IndexOf("کاربری طرح", StringComparison.Ordinal) >= 0) return true;
             }
             return false;
         }
@@ -1239,7 +1244,7 @@ namespace RuleTrace
                 try
                 {
                     n = FormulaMerger.InjectBodies(cls, sources, _log);
-                    _log("Hover      : " + n + "/" + sources.Count + " ClsFunction.Body داخلی از XmlBody (بدون Sub/Function تا ToString1 دوباره Wrap نکند)");
+                    _log("Hover      : " + n + "/" + sources.Count + " ClsFunction.Body یک متد کامل از XmlBody (بدون Class، با Sub/Function)");
                 }
                 catch (Exception ex)
                 {

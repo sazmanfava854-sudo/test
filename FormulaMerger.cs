@@ -833,14 +833,29 @@ namespace RuleTrace
         }
 
         /// <summary>
-        /// ClsFunction.Body is the INNER statements. Sara ToString1 wraps Sub/Function once.
-        /// Injecting the full method caused BC30088/BC30087 (End Select/End If) and logfilefj never ran.
+        /// ToString1 places Body at class scope. Each ClsFunction gets ONE full Sub/Function
+        /// (not the whole class dump, not inner statements). Whole-class inject → BC30088;
+        /// inner-only inject → BC30689.
         /// </summary>
         public static string BodyForInject(string code, string functionName)
         {
             string stripped = StripDuplicateClassShell(code);
-            string inner = PeelMethodWrapper(stripped, functionName);
-            return string.IsNullOrWhiteSpace(inner) ? stripped : inner;
+            string one = PickMethodBlock(stripped, functionName);
+            return string.IsNullOrWhiteSpace(one) ? stripped : one;
+        }
+
+        public static string PickMethodBlock(string code, string functionName)
+        {
+            if (string.IsNullOrWhiteSpace(code)) return string.Empty;
+            var methods = ExtractMethodBlocks(NormalizeNewlines(code));
+            if (methods.Count == 0) return code.Trim();
+            if (!string.IsNullOrWhiteSpace(functionName))
+            {
+                foreach (string block in methods)
+                    if (string.Equals(MethodKey(block), functionName, StringComparison.OrdinalIgnoreCase))
+                        return block;
+            }
+            return methods[0];
         }
 
         public static string PeelMethodWrapper(string code, string functionName)

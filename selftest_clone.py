@@ -136,10 +136,24 @@ webapp = read("WebApp.cs")
 build = read("BuildInfo.cs")
 selftest = read("SelfTest.cs")
 csproj = read("RuleTrace.csproj")
+hover = read("HoverDebug.cs")
+merger = read("FormulaMerger.cs")
 
-expect(build, "v23n-cs0136", "label")
+expect(build, "v23o-tarakom-case", "label")
 if "foreach (string n in" in webapp and "int n = 0" in webapp:
     failmsg("CS0136: SeedDbParams must not reuse n")
+expect(hover, "plogkhan", "parse plogkhan")
+expect(hover, "Add_Zabeteh", "parse Add_Zabeteh")
+expect(hover, "CaseValue", "Case binds CI_PlanUsingType")
+expect(hover, "M_TarhMojaz", "plan alias")
+expect(hover, "IsDensityProbe", "plogkhan/Case/Add_Zabeteh prefer")
+expect(case, "DumpIdTitles", "ci_Zabeteh ID Title")
+expect(case, "BindFormulaLookups", "lookup Case and Add_Zabeteh IDs")
+expect(case, "ci_Zabeteh", "Add_Zabeteh maps ci_Zabeteh")
+expect(merger, "PickMethodBlock", "one full method per function")
+expect(engine, "یک متد کامل", "inject one method")
+if "بدون Sub/Function تا ToString1" in engine:
+    failmsg("must not inject inner-only Body")
 expect(csproj, "<OutDir>bin\\</OutDir>", "F5 output bin")
 expect(csproj, "Debug|Any CPU", "Any CPU with space")
 expect(engine, "IsRealCompileMethod", "do not invoke get_CompilerErrors")
@@ -245,14 +259,17 @@ if csv != ["tahlil", "tavafogh"]:
 if "selectedScopes()" not in html:
     failmsg("payload selectedScopes")
 
-hover = read("HoverDebug.cs")
 expect(hover, "logfilefj", "parser logfilefj")
-expect(hover, r'logfilefj\s*\(', "logfilefj regex")
+expect(hover, "logfilefj|plogkhan", "logfilefj+plogkhan regex")
 expect(hover, "Flatten", "flatten Sara vars")
 expect(hover, "BindIdents", "bind line idents")
 expect(hover, "Tarakom", "tarakom alias")
 expect(case, "lookup CI_PlanUsingType/CI_PlanType", "zabeteh density lookup")
 expect(selftest, "tarakom=120", "selftest tarakom bind")
+expect(selftest, "plogkhan probe", "selftest plogkhan")
+expect(selftest, "step debugger includes plogkhan", "selftest step plogkhan")
+expect(html, "plogkhan", "debug tab plogkhan")
+expect(webapp, "BindFormulaLookups", "webapp looks up plan/using")
 expect(webapp, "SkipRelatedSources", "do not load every related class")
 expect(webapp, "LoadFormSources", "load ticked form only")
 expect(engine, "SkipRelatedSources", "Run can skip related flood")
@@ -329,12 +346,10 @@ if "TryCompileRawSource" not in inj_chunk:
 if "یک‌بار همان فرم را در سارا" in hover:
     failmsg("NoInstance must not tell user to open Sara")
 expect(selftest, "InjectXmlBody", "selftest inject")
-merger = read("FormulaMerger.cs")
 expect(merger, 'TrySet(fn, "EncryptXmlBody", null)', "inject clears EncryptXmlBody")
 expect(merger, "StripDuplicateClassShell", "inject strips class shell")
-expect(merger, "BodyForInject", "inject inner Body")
-expect(merger, "PeelMethodWrapper", "peel Sub/Function wrapper")
-expect(engine, "بدون Sub/Function", "inject log inner body")
+expect(merger, "BodyForInject", "inject one method Body")
+expect(merger, "PickMethodBlock", "pick matching function")
 wrapped = """Public Class Rule
 Public Sub Run()
  logfilefj("IS_BlandMartabe",IS_BlandMartabe)
@@ -355,24 +370,24 @@ inner_src = """Public Function ZaminForched()
  Info8.AddError(BIZ.SA.EumErrorAction.Stop,"واحد برای زمین",Rajaeie())
 End Function
 """
-if "Public Function" in inner_src and "Select Case" in inner_src:
-    peeled_lines = []
-    started = False
-    for line in inner_src.splitlines():
-        if re.match(r"\s*(?:Public\s+|Private\s+)*(?:Sub|Function)\s+\w+", line, re.I):
-            started = True
-            continue
-        if started and re.match(r"\s*End\s+(?:Sub|Function)\b", line, re.I):
-            break
-        if started:
-            peeled_lines.append(line)
-    peeled = "\n".join(peeled_lines)
-    if "Select Case" not in peeled or "End Select" not in peeled:
-        failmsg("peel keeps Select Case")
-    if "Public Function" in peeled or "End Function" in peeled:
-        failmsg("peel removes Function wrapper")
-    if "AddError" not in peeled:
-        failmsg("peel keeps AddError")
+if "Public Function" not in inner_src or "Select Case" not in inner_src:
+    failmsg("sample keeps Function wrapper")
+if "End Function" not in inner_src:
+    failmsg("sample keeps End Function")
+if "AddError" not in inner_src:
+    failmsg("sample keeps AddError")
+two = """Public Sub Run()
+ logfilefj("a",1)
+End Sub
+Public Function Tarakom()
+ plogkhan("شروع تراکم","*")
+End Function
+"""
+fn = re.search(r"(?:Public\s+)?Function\s+Tarakom\(\).*?End Function", two, re.S | re.I)
+if not fn or "plogkhan" not in fn.group(0):
+    failmsg("pick Tarakom keeps plogkhan")
+if "logfilefj" in fn.group(0):
+    failmsg("pick Tarakom must not include Run")
 
 print("SELFTEST CLONE", "OK" if fail == 0 else f"FAIL {fail}")
 sys.exit(0 if fail == 0 else 1)

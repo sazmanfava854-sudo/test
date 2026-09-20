@@ -28,12 +28,20 @@ namespace RuleTrace
             "Instanc ساخته نشد — XmlBody در ClsFunction.Body تزریق شد ولی موتور Sara هنوز Instanc نساخت (EncryptXmlBody/CompilerErrors). UI سارا لازم نیست. ClearCache را تیک نزنید. RuleTrace VB را بازنویسی نمی‌کند.";
 
         private static readonly Regex RxLog = new Regex(
-            @"logfilefj\s*\(\s*(?:""([^""]*)""|'([^']*)')\s*(?:,\s*(.*?))?\s*\)",
+            @"(?:logfilefj|plogkhan)\s*\(\s*(?:""([^""]*)""|'([^']*)')\s*(?:,\s*(.*?))?\s*\)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         private static readonly Regex RxAdd = new Regex(
             @"AddError\s*\(\s*[^,\n]+,\s*(?:""([^""]*)""|'([^']*)')\s*(?:,\s*(.*?))?\s*\)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private static readonly Regex RxAddZab = new Regex(
+            @"Add_Zabeteh\s*\(\s*(\d+)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private static readonly Regex RxCaseIds = new Regex(
+            @"^\s*Case\s+([\d\s,]+)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Multiline);
 
         private static readonly Regex RxIdent = new Regex(
             @"[A-Za-z_][A-Za-z0-9_]*",
@@ -47,7 +55,8 @@ namespace RuleTrace
             "Public", "Private", "Protected", "Friend", "Shared", "ByVal", "ByRef", "Optional",
             "Return", "Exit", "Call", "Set", "Get", "Let", "With", "Is", "Like", "Xor", "AndAlso",
             "OrElse", "Try", "Catch", "Finally", "Throw", "Imports", "Class", "Module", "Const",
-            "Info8", "AddError", "logfilefj", "Logfilefj", "logfileFJ", "BIZ", "SA", "EumErrorAction",
+            "Info8", "AddError", "logfilefj", "Logfilefj", "logfileFJ", "plogkhan", "Plogkhan",
+            "Add_Zabeteh", "Msg", "BIZ", "SA", "EumErrorAction",
             "warning", "Warning", "Stop", "UCase", "ToString", "UserGuid", "User", "Val", "CInt",
             "CDbl", "CStr", "CBool", "CDate", "IIf", "IsNothing", "IsDBNull", "True", "False",
         };
@@ -63,7 +72,7 @@ namespace RuleTrace
                 string t = raw.Trim();
                 if (t.Length == 0) continue;
                 if (t.StartsWith("'")) continue;
-                if (Regex.IsMatch(t, @"\bSub\s+Logfilefj\b", RegexOptions.IgnoreCase)) continue;
+                if (Regex.IsMatch(t, @"\bSub\s+(?:Logfilefj|Plogkhan)\b", RegexOptions.IgnoreCase)) continue;
 
                 foreach (Match m in RxLog.Matches(raw))
                 {
@@ -71,12 +80,37 @@ namespace RuleTrace
                     string expr = (m.Groups[3].Success ? m.Groups[3].Value : "").Trim();
                     expr = StripComment(expr);
                     if (string.IsNullOrWhiteSpace(name)) continue;
+                    string src = raw.IndexOf("plogkhan", StringComparison.OrdinalIgnoreCase) >= 0 ? "plogkhan" : "logfilefj";
                     list.Add(new HoverItem
                     {
                         Line = i + 1,
                         Name = name.Trim(),
                         Expr = expr,
-                        Source = "logfilefj",
+                        Source = src,
+                    });
+                }
+
+                Match cz = RxAddZab.Match(raw);
+                if (cz.Success)
+                {
+                    list.Add(new HoverItem
+                    {
+                        Line = i + 1,
+                        Name = cz.Groups[1].Value,
+                        Expr = "Add_Zabeteh",
+                        Source = "Add_Zabeteh",
+                    });
+                }
+
+                Match cse = RxCaseIds.Match(raw);
+                if (cse.Success)
+                {
+                    list.Add(new HoverItem
+                    {
+                        Line = i + 1,
+                        Name = Regex.Replace(cse.Groups[1].Value, @"\s+", ""),
+                        Expr = "Case",
+                        Source = "Case",
                     });
                 }
 
@@ -111,8 +145,10 @@ namespace RuleTrace
             new[] { "Masahat", "masahat", "Area", "مساحت" },
             new[] { "Ertefa", "ertefa", "Height", "ارتفاع" },
             new[] { "SathEshghal", "Occupancy", "سطح‌اشغال" },
-            new[] { "Karbari", "PlanUsingType", "CI_PlanUsingType", "UsingType" },
-            new[] { "PlanType", "CI_PlanType" },
+            new[] { "Karbari", "PlanUsingType", "CI_PlanUsingType", "UsingType", "M_Karbari" },
+            new[] { "PlanType", "CI_PlanType", "M_TarhMojaz", "TarhMojaz" },
+            new[] { "FnTarakom_Outvalue", "TarakomOut", "ValueTarakom" },
+            new[] { "CMabar_Under12", "Mabar_Under12" },
         };
 
         public static Dictionary<string, string> Flatten(IDictionary<string, string> parms, IList<Dictionary<string, object>> vars)
@@ -179,7 +215,34 @@ namespace RuleTrace
                 if (fromLog != null)
                 {
                     it.Value = fromLog;
-                    it.Source = "logfilefj";
+                    if (!IsDensityProbe(it.Source))
+                        it.Source = "logfilefj";
+                    continue;
+                }
+                if (string.Equals(it.Source, "Case", StringComparison.OrdinalIgnoreCase))
+                {
+                    string fired = CaseValue(map, it.Name);
+                    if (fired != null)
+                    {
+                        it.Value = fired;
+                        continue;
+                    }
+                }
+                if (string.Equals(it.Source, "Add_Zabeteh", StringComparison.OrdinalIgnoreCase))
+                {
+                    string zab = Lookup(map, "ci_Zabeteh:" + it.Name)
+                        ?? Lookup(map, "CI_Zabeteh:" + it.Name)
+                        ?? Lookup(map, it.Name);
+                    if (zab != null)
+                    {
+                        it.Value = zab;
+                        continue;
+                    }
+                }
+                if (string.Equals(it.Source, "plogkhan", StringComparison.OrdinalIgnoreCase))
+                {
+                    string pk = Lookup(map, it.Name) ?? Lookup(map, it.Expr);
+                    it.Value = !string.IsNullOrWhiteSpace(pk) ? pk : (it.Name ?? "");
                     continue;
                 }
                 string v = Lookup(map, it.Name);
@@ -292,6 +355,56 @@ namespace RuleTrace
             return items == null ? 0 : items.Count;
         }
 
+        public static string CaseValue(IDictionary<string, string> map, string caseList)
+        {
+            if (map == null || string.IsNullOrWhiteSpace(caseList)) return null;
+            string usingId = Lookup(map, "CI_PlanUsingType") ?? Lookup(map, "PlanUsingType") ?? Lookup(map, "M_Karbari");
+            if (string.IsNullOrWhiteSpace(usingId)) return null;
+            foreach (string part in caseList.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (string.Equals(part.Trim(), usingId.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    string title = Lookup(map, "PlanUsingTitle") ?? Lookup(map, "Title") ?? usingId;
+                    return usingId + " " + title;
+                }
+            }
+            return null;
+        }
+
+        public static List<TraceEvent> BuildTrace(IList<HoverItem> items)
+        {
+            var prefer = new List<HoverItem>();
+            var rest = new List<HoverItem>();
+            if (items != null)
+            {
+                foreach (HoverItem it in items)
+                {
+                    if (it == null) continue;
+                    if (string.Equals(it.Source, "plogkhan", StringComparison.OrdinalIgnoreCase)
+                        && string.IsNullOrEmpty(it.Value))
+                        it.Value = it.Name ?? "";
+                    if (string.IsNullOrEmpty(it.Value)) continue;
+                    if (IsDensityProbe(it.Source) || it.Source == "logfilefj")
+                        prefer.Add(it);
+                    else if (!(it.Source == "Sara" && it.Expr == it.Name && (it.Name ?? "").Length < 3))
+                        rest.Add(it);
+                }
+            }
+            var list = new List<TraceEvent>();
+            int i = 0;
+            foreach (HoverItem it in prefer)
+            {
+                list.Add(new TraceEvent { Index = i, Action = it.Source ?? "Sara", Key = it.Name ?? "", Title = it.Value });
+                i++;
+            }
+            foreach (HoverItem it in rest)
+            {
+                list.Add(new TraceEvent { Index = i, Action = it.Source ?? "Sara", Key = it.Name ?? "", Title = it.Value });
+                i++;
+            }
+            return list;
+        }
+
         public static int BoundCount(IList<HoverItem> items)
         {
             if (items == null) return 0;
@@ -299,6 +412,13 @@ namespace RuleTrace
             foreach (HoverItem it in items)
                 if (!string.IsNullOrEmpty(it.Value)) n++;
             return n;
+        }
+
+        private static bool IsDensityProbe(string source)
+        {
+            return string.Equals(source, "plogkhan", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "Case", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "Add_Zabeteh", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string FromTrace(IList<TraceEvent> trace, string name)
