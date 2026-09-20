@@ -583,8 +583,8 @@ namespace RuleTrace
         {
             if (req == null || db == null || db.Count == 0) return 0;
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string n in new[] { "tarakom", "Tarakom", "تراکم", "Masahat", "Ertefa" })
-                names.Add(n);
+            foreach (string alias in new[] { "tarakom", "Tarakom", "تراکم", "Masahat", "Ertefa" })
+                names.Add(alias);
             if (sources != null)
             {
                 foreach (MemberSource s in sources)
@@ -594,7 +594,7 @@ namespace RuleTrace
                         names.Add(id);
                 }
             }
-            int n = 0;
+            int seeded = 0;
             foreach (string name in names)
             {
                 string v = HoverDebug.Lookup(db, name);
@@ -602,9 +602,9 @@ namespace RuleTrace
                 string cur;
                 if (req.Parameters.TryGetValue(name, out cur) && !string.IsNullOrWhiteSpace(cur)) continue;
                 req.Parameters[name] = v;
-                n++;
+                seeded++;
             }
-            return n;
+            return seeded;
         }
 
         private static bool IsCopyLine(string m)

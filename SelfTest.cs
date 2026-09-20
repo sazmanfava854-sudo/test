@@ -184,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("vs-build", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("cs0136", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23m-vs-build, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23n-cs0136, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -737,7 +737,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23m-vs-build", "bootstrap label");
+                        fail += Expect(boot, "v23n-cs0136", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
