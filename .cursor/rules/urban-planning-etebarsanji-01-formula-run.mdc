@@ -110,13 +110,14 @@ alwaysApply: false
 | `Parvandeh_HouseSharing` … `Parvandeh_Job` | `Frm*` پرونده | — | هر نوع پرونده تابع جدا |
 | `Parvandeh_House` | `FrmHouse()` | `E01-RUN-004` | **دو بار** در زنجیره `ElseIf` |
 | `Revisit_Apartment` | `FrmRevisitApartment()` | بخش ۳ | |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۶+ | خانه، ساختمان، مغازه، … |
+| `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۷+ | ساختمان، مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۶+ | |
-| `MissFoul` | `frmsh_*` | ۶+ | |
-| `Payankar` | `frmsh_*` | ۶+ | |
-| `InquiryResponse` | `frmsh_*` | ۶+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۷+ | |
+| `MissFoul` | `frmsh_*` | ۷+ | |
+| `Payankar` | `frmsh_*` | ۷+ | |
+| `InquiryResponse` | `frmsh_*` | ۷+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | تحلیل تخلف | سه FormName یک تابع |
 | `ManagerConfirm` | `ManagerConfirm()` | `TaeedM*` | |
 | `Peace_List` | `FrmPeace()` | صلح | |
