@@ -24,7 +24,7 @@ alwaysApply: false
 فیش: `GetIncome_Fiche.GetAll_Fiche` + `FicheTaeed`.  
 ضابطه چیدمان: `GetZabetehChideman.GetBase_Using`.  
 کمیسیون: `GetCommission_List` / `Commission_Vote_All`.  
-کمکی همین قطعه: `Set_UserGroupId`, `Check_SP502372`, `NocalcTahlil`, `Get_Fiche1`, `ReadComVote`, `HasTaeedTaghsit_Mng`, `CheckEditTahlil`, `Get_KarbariTarh`, `FnMain`, `FnIsModified`, `FnReadLastVoteDate` (در مسیر این تابع **صدا نمی‌شود**).
+کمکی همین قطعه: `Set_UserGroupId`, `Check_SP502372`, `NocalcTahlil`, `Get_Fiche1`, `ReadComVote`, `HasTaeedTaghsit_Mng`, `CheckEditTahlil`, `Get_KarbariTarh`, `FnMain`, `FnIsModified`, `FnReadLastVoteDate` (از **ذخیره تحلیل** صدا نمی‌شود؛ تایید مدیر منبع 27 صدا می‌زند — `E10-MC-013`).
 
 تأیید مدیر اینجا `= 0` یعنی مانع (مطابق معنی خود `TaeedM*` و برخلاف ظاهر `tmpTaeed` بازدید). بیشتر Stopها **Exit ندارند** مگر فیش نوع ۲/۳، یکسان نبودن کاربر سازنده ردیف، سمپای 498074، و لیست تخلف سال.
 
@@ -375,15 +375,15 @@ alwaysApply: false
 
 ---
 
-## قانون E09-ANL-021 — `FnReadLastVoteDate` (در این فرم صدا نمی‌شود)
-**به زبان ساده:** تابعی برای تاریخ آخرین رأی به‌جز رأی فقط-پارکینگ (3015/3047) نوشته شده و چند Msgbox دارد. از `FrmAnalysisBuilding` در متن ارسالی فراخوانی **ندارد**.
+## قانون E09-ANL-021 — `FnReadLastVoteDate` (از ذخیره تحلیل صدا نمی‌شود)
+**به زبان ساده:** تابعی برای تاریخ آخرین رأی به‌جز رأی فقط-پارکینگ (3015/3047) نوشته شده و چند Msgbox دارد. از `FrmAnalysisBuilding` در متن ارسالی فراخوانی **ندارد**. تایید مدیر منبع 27 آن را صدا می‌زند سپس اگر `LastRayDate>"1400/12/29"` Stop می‌کند (`E10-MC-013`).
 
 | فیلد | مقدار |
 |------|--------|
-| SAMPA / SP | 443250 |
-| شدت | اگر صدا شود: Msgbox + نوشتن `LastRayDate` |
+| SAMPA / SP | 443250 (تعریف) / منبع 27 در `ManagerConfirm` |
+| شدت | روی ذخیره تحلیل: صدا نمی‌شود. روی تایید مدیر منبع 27: Msgbox + Stop اگر تاریخ رأی بعد از 1400/12/29 |
 | اقدام کاغذی | مرتب‌سازی رأی نزولی؛ اولین رأیی که فقط تخلف 3015/3047 دارد از لیست حذف؛ Max تاریخ بقیه |
-| الگوی تغییر | ننویسید که امروز روی ذخیره تحلیل این Msgboxها می‌آیند. زنده کردن بدون SAMPA UI کمیسیون را شلوغ می‌کند |
+| الگوی تغییر | ننویسید که امروز روی ذخیره تحلیل این Msgboxها می‌آیند. Msgbox زنده از مسیر تایید مدیر منبع 27 است نه از تحلیل |
 
 `ReadComVote` زنده است و `LastRayDate` را جدا set می‌کند.
 

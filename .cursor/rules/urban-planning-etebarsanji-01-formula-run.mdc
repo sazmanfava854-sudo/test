@@ -113,15 +113,15 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۰+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۱+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۱۰+ | |
-| `MissFoul` | `frmsh_*` | ۱۰+ | |
-| `Payankar` | `frmsh_*` | ۱۰+ | |
-| `InquiryResponse` | `frmsh_*` | ۱۰+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۱۱+ | |
+| `MissFoul` | `frmsh_*` | ۱۱+ | |
+| `Payankar` | `frmsh_*` | ۱۱+ | |
+| `InquiryResponse` | `frmsh_*` | ۱۱+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
-| `ManagerConfirm` | `ManagerConfirm()` | `TaeedM*` | |
+| `ManagerConfirm` | `ManagerConfirm()` | بخش ۱۰ (`E10-MC`) | زدن تأیید همین لحظه — نه `TaeedM*`. اثر جانبی SMS/آتش‌نشانی/گزارش؛ منبع 23 با `ChekCi`؛ Licence 3 = عدم تأیید |
 | `Peace_List` | `FrmPeace()` | صلح | |
 | `Agreement_List` | `FrmAgreement()` | توافق | |
 | `Commission` | `Commission()` | کمیسیون ماده ۱۰۰ | |
@@ -229,11 +229,25 @@ tmpTaeed = 1   فقط اگر
 | `TaeedMComm20` | 12 | کمیسیون ۲۰ | کمیسیون |
 | `Taeed3darsadcode13` | 13 | ۳٪ کد ۱۳ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
 | `TaeedMTaghsid` | 16 | تقسیط | تقسیط؛ `HasTaeedTaghsit_Mng` بخش ۹ |
-| `TaeedBime` | 20 | بیمه | گردش‌کار بیمه |
-| `TaeedMKaifiat` | 31 | کیفیت | — |
-| `TaeedMMokateb` | جدول `Sh_MokatebatConfirm` | مکاتبه؛ پارامتر `inputed_CI` پیش‌فرض **96** | مکاتبات |
+| `TaeedBime` | 20 | بیمه | گردش‌کار بیمه؛ Sara10 در `ManagerConfirm` (`E10-MC-015`) |
+| `TaeedMKaifiat` | 31 | کیفیت | پایانکار در `ManagerConfirm` (`E10-MC-030`) |
+| `TaeedMMokateb` | جدول `Sh_MokatebatConfirm` | مکاتبه؛ پارامتر `inputed_CI` پیش‌فرض **96** | مکاتبات؛ پارکینگ `TaeedMMokateb(116)` در `E10-MC-004` |
 
-**الگوی SAMPA جدید تأیید مدیر:** کپی نزدیک‌ترین `TaeedM*` → فقط عدد CI و نام تابع و متن خطا. جدول مقایسه تاریخ/ساعت را بازنویسی نکنید.
+منابعی که فقط هنگام **زدن** تأیید در `ManagerConfirm` دیده می‌شوند (تابع `TaeedM*` جدا ندارند):
+
+| CI | موضوع | قانون |
+|----|--------|--------|
+| 7 | مدیر دفتر | `E10-MC-030` |
+| 9 | احکام معوق قلع (ابطال‌شده) | `E10-MC-021` |
+| 18 | ثامن | `E10-MC-024` |
+| 23 | موقتاً به ۳ remap می‌شود (`ChekCi`) | `E10-MC-016` |
+| 27 | اصول سه‌گانه + `FnReadLastVoteDate` | `E10-MC-013` |
+| 33 | تقسیط بند ۳ مصوبه 24480 | `E10-MC-006` |
+| 34 | الزام / Elzam | `E10-MC-008` |
+
+Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` عدم تأیید (`E10-MC-022`).
+
+**الگوی SAMPA جدید تأیید مدیر:** کپی نزدیک‌ترین `TaeedM*` → فقط عدد CI و نام تابع و متن خطا. جدول مقایسه تاریخ/ساعت را بازنویسی نکنید. قفل هنگام زدن روی فرم را در بخش ۱۰ بگذارید نه اینجا.
 
 **صلح:** علاوه بر ManagerConfirm منبع 6، فیلدهای `Peace_AgreementTaeedDate` / `Time` در شرط وجود دارد. تغییر صلح بدون خواندن همین تابع، توافق را می‌شکند.
 
