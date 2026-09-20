@@ -13,7 +13,8 @@ alwaysApply: false
 |-----|-----------|----------------|
 | ۱ | `urban-planning-etebarsanji-01-formula-run.mdc` | `Run()` — مسیریابی فرم، متغیرهای ماژول، `TaeedM*`، `Fiche`, `MapPriceNew`, کمکی‌ها |
 | ۲ | `urban-planning-etebarsanji-02-barokaf.mdc` | `frmsh_barokaf()` — اعتبارسنجی **بروکف** (`FormName = Barokaf` → `FrmSh_Barokaf`) |
-| ۳+ | (در انتظار ارسال) | سایر فرم‌ها |
+| ۳ | `urban-planning-etebarsanji-03-revisit-apartment.mdc` | `FrmRevisitApartment()` — **بازدید آپارتمان** (`FormName = Revisit_Apartment`) |
+| ۴+ | (در انتظار ارسال) | سایر بازدیدها (`Revisit_House`, `Revisit_Building`, …) و فرم‌های دیگر |
 
 ## قراردادهای مشترک
 
@@ -24,4 +25,5 @@ alwaysApply: false
 
 ## وابستگی بین بخش‌ها
 
-بروکف (بخش ۲) مستقیماً از `TaeedMGavahi`, `TaeedMLayehe`, `TaeedMSolh`, `CheckChar` و الگوی `FicheTaeed` (تعریف در فرمول موافقت اصولی) استفاده می‌کند — جزئیات در بخش ۱.
+- بروکف (بخش ۲) از `TaeedMGavahi`, `TaeedMLayehe`, `TaeedMSolh`, `CheckChar` و `FicheTaeed` استفاده می‌کند.
+- بازدید آپارتمان (بخش ۳) از `ControlTask`/`Checkforbazdid` (بخش ۲)، `UseBazdidT`/`GetIdWorkflow`/`TaeedM*` (بخش ۱) و زنجیره تأیید شامل **سابقه** + ۳٪ استفاده می‌کند.
