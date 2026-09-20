@@ -113,17 +113,17 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۱+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۲+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۱۱+ | |
-| `MissFoul` | `frmsh_*` | ۱۱+ | |
-| `Payankar` | `frmsh_*` | ۱۱+ | |
-| `InquiryResponse` | `frmsh_*` | ۱۱+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۱۲+ | |
+| `MissFoul` | `frmsh_*` | ۱۲+ | |
+| `Payankar` | `frmsh_*` | ۱۲+ | |
+| `InquiryResponse` | `frmsh_*` | ۱۲+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
 | `ManagerConfirm` | `ManagerConfirm()` | بخش ۱۰ (`E10-MC`) | زدن تأیید همین لحظه — نه `TaeedM*`. اثر جانبی SMS/آتش‌نشانی/گزارش؛ منبع 23 با `ChekCi`؛ Licence 3 = عدم تأیید |
-| `Peace_List` | `FrmPeace()` | صلح | |
-| `Agreement_List` | `FrmAgreement()` | توافق | |
+| `Peace_List` | `FrmPeace()` | بخش ۱۱ (`E11-PEACE`) | ذخیره ردیف صلح — نه زدن تأیید منبع ۶. فیش فقط خانواده ۱ / 116–118؛ نوع ۲۶ می‌نویسد `Base_PlanMojaz` |
+| `Agreement_List` | `FrmAgreement()` | ۱۲+ | توافق |
 | `Commission` | `Commission()` | کمیسیون ماده ۱۰۰ | |
 | `Income` / `IncomeFromMenu` | `FnIncome()` | درآمد | |
 | `ShenasnameFani` | `FnShenasnameFani()` | شناسنامه فنی | |
@@ -222,8 +222,8 @@ tmpTaeed = 1   فقط اگر
 | `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید |
 | `TaeedMGavahi1` | 3 **یا** 4 | گواهی یا سابقه | درخواست: پیوست تأییدشده |
 | `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد) |
-| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت؛ تحلیل نوع ۳ (`E09-ANL-004`) |
-| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید |
+| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت؛ تحلیل نوع ۳ (`E09-ANL-004`)؛ **صلحنامه `FrmPeace`** (`E11-PEACE-004`) |
+| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید؛ **صلحنامه `FrmPeace`** (`E11-PEACE-003` — اینجا `=0` یعنی Stop+Exit) |
 | `TaeedMShenasnameFani` | 8 | شناسنامه فنی | شناسنامه |
 | `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
 | `TaeedMComm20` | 12 | کمیسیون ۲۰ | کمیسیون |
@@ -412,7 +412,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 |----|---------------------|
 | 1 | فقط استعلام 69 و 95 |
 | 3 | شناسایی اراضی 45 |
-| 5 | فقط 58 و 90 |
+| 5 | فقط 58 و 90 در درخواست؛ در صلحنامه نوع ۱۸ قفل است (`E11-PEACE-008`) |
 | 6 | مسجد 85 ممنوع |
 | 7 | هیئت فنی 66 ممنوع |
 | 2 | در بروکف: اگر `<> 2` و ملک روی نقشه نیست → Stop |
@@ -442,7 +442,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 |------|--------|
 | شدت | دیباگ |
 | شرط | محدود به GUID کاربر مشخص |
-| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`). در تحلیل `Msgbox("", 123456)` هر ردیف (`E09-ANL-019`) و ورود `ReadComVote` |
+| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`). در تحلیل `Msgbox("", 123456)` هر ردیف (`E09-ANL-019`) و ورود `ReadComVote`. در صلحنامه مسیر `1*` / `صلحنامه:` 1 تا 9 / `صلحنامه E:` زنده است (`E11-PEACE-012`) |
 | الگوی تغییر | قبل از انتشار پاک یا بی‌اثر نگه دارید مگر SAMPA؛ منطق کسب‌وکار داخل `msgbox` نگذارید. پاک کردن Msgbox دستگاه رفتار UI شهر را عوض می‌کند |
 
 ---
@@ -458,6 +458,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 - در بروکف: `NidWDefff = GetSara8Workflow(UCase(NidWorkflowDeff))` (SP 219143).
 - در درخواست: Return دور ریخته می‌شود؛ `Rtype = GuidWorkFlow`.
 - در بازدید دستگاه: Return در `ReqGroup` برای Call `Get_MojazDataArea` وقتی ∈ {2, 3} (`E08-REVHS-014`).
+- در صلحنامه: Return با `=1` در `And` فیش استفاده می‌شود و همان صدا `GuidWorkFlow` 116/117/118 را هم می‌سنجد (`E11-PEACE-002`).
 
 جدول نگاشت GUID → (`GuidWorkFlow`, گروه, موضوع 137) در **بخش ۵ / E05-WF**.
 
