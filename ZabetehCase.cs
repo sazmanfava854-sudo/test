@@ -200,11 +200,24 @@ namespace RuleTrace
             {
                 DumpZabeteh(sara, keys, vars, log);
                 FillKeys(keys, vars);
-                log("Zabeteh     : lookup CI_PlanUsingType/CI_PlanType برای مقدار تراکم و کاربری");
+                log("Zabeteh     : lookup CI_PlanUsingType/CI_PlanType برای طرح و کاربری Case تراکم");
                 LookupById(sara, "CI_PlanType", keys.PlanTypeId, vars, log);
                 LookupById(sara, "CI_PlanUsingType", keys.PlanUsingTypeId, vars, log);
                 LookupById(sara, "CI_Zabeteh", keys.CIZabetehId, vars, log);
+                DumpIdTitles(sara, "CI_Zabeteh", vars, log);
+                DumpIdTitles(sara, "CI_PlanType", vars, log);
+                Note(vars, "M_TarhMojaz", keys.PlanTypeId, "[dbo].[CI_PlanType]", "طرح مجاز");
+                Note(vars, "TarhTitle", FirstFromTable(vars, "CI_PlanType", "Title"), "[dbo].[CI_PlanType]", "نام طرح");
+                Note(vars, "CI_PlanUsingType", keys.PlanUsingTypeId, "[dbo].[CI_PlanUsingType]", "کاربری طرح / Case تراکم");
+                Note(vars, "PlanUsingTitle", FirstFromTable(vars, "CI_PlanUsingType", "Title"), "[dbo].[CI_PlanUsingType]", "عنوان کاربری طرح");
+                log("Zabeteh     : طرح M_TarhMojaz=" + (keys.PlanTypeId ?? "(خالی)")
+                    + " " + (FirstFromTable(vars, "CI_PlanType", "Title") ?? "")
+                    + " کاربری=" + (keys.PlanUsingTypeId ?? "(خالی)")
+                    + " " + (FirstFromTable(vars, "CI_PlanUsingType", "Title") ?? ""));
                 DumpStaticLayer(sara, keys, vars, log);
+                FillKeys(keys, vars);
+                if (!string.IsNullOrEmpty(keys.PlanUsingTypeId) && FirstFromTable(vars, "CI_PlanUsingType", "Title") == null)
+                    LookupById(sara, "CI_PlanUsingType", keys.PlanUsingTypeId, vars, log);
                 if (!IsEmptyGuid(keys.OverlayNidZabeteh))
                     log("Zabeteh     : Zabeteh_Details رد شد — CAST روی جدول بزرگ timeout می‌دهد. روکش کافی است؛ کد Member از dbo.Member بار می‌شود");
             }
@@ -349,9 +362,9 @@ namespace RuleTrace
                 k.OverlayNidZabeteh = FirstFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh")
                     ?? FirstFromTable(vars, "Zabeteh", "NidZabeteh");
             if (string.IsNullOrEmpty(k.PlanTypeId))
-                k.PlanTypeId = First(vars, "CI_PlanType", "NidPlanType", "PlanType", "PlanTypeId");
+                k.PlanTypeId = First(vars, "CI_PlanType", "NidPlanType", "PlanType", "PlanTypeId", "M_TarhMojaz", "TarhMojaz", "Tarh");
             if (string.IsNullOrEmpty(k.PlanUsingTypeId))
-                k.PlanUsingTypeId = First(vars, "CI_PlanUsingType", "NidPlanUsingType", "PlanUsingType");
+                k.PlanUsingTypeId = First(vars, "CI_PlanUsingType", "NidPlanUsingType", "PlanUsingType", "PlanUsingTypeId", "CI_PlanUsing", "M_Karbari", "KarbariTarh", "UsingTypeId", "PlanUsing", "Karbari");
             if (string.IsNullOrEmpty(k.CIZabetehId))
                 k.CIZabetehId = First(vars, "CI_Zabeteh", "NidCIZabeteh", "NidZabetehType");
             if (string.IsNullOrEmpty(k.Building))
@@ -450,9 +463,13 @@ namespace RuleTrace
             {
                 string nidZ = FirstFromTable(vars, "[dbo].[Zabeteh]", "NidZabeteh");
                 string plan = FirstFromTable(vars, "[dbo].[Zabeteh]", "CI_PlanType");
+                string usingType = FirstFromTable(vars, "[dbo].[Zabeteh]", "CI_PlanUsingType")
+                    ?? FirstFromTable(vars, "[dbo].[Zabeteh]", "PlanUsingType");
                 log("Zabeteh     : روکش ملک NidZabeteh=" + (nidZ ?? "(خالی)")
                     + " CI_PlanType=" + (plan ?? "(خالی)")
-                    + " — ضابطه هست؛ Active خالی یعنی صلح روی این درخواست اعمال نشده (همه ملک‌ها صلح ندارند)");
+                    + " M_TarhMojaz=" + (plan ?? "(خالی)")
+                    + " CI_PlanUsingType=" + (usingType ?? "(خالی)")
+                    + " — طرح سپس کاربری؛ فقط Case مطابق CI_PlanUsingType.ID اجرا می‌شود. Active خالی یعنی صلح روی این درخواست اعمال نشده");
             }
 
             if (cols.Contains("NidZabeteh") && !IsEmptyGuid(keys.ActiveNidZabeteh))
@@ -813,6 +830,145 @@ namespace RuleTrace
         private static bool IsGuidCol(string col)
         {
             return col.IndexOf("Nid", StringComparison.OrdinalIgnoreCase) >= 0 || col.IndexOf("Guid", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void Note(List<Dictionary<string, object>> vars, string name, string value, string table, string match)
+        {
+            if (vars == null || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(value)) return;
+            vars.Add(new Dictionary<string, object>
+            {
+                { "name", name },
+                { "value", value },
+                { "table", table ?? "" },
+                { "match", match ?? "" },
+            });
+        }
+
+        /// <summary>
+        /// After Member code is loaded: look up Add_Zabeteh(id) in ci_Zabeteh
+        /// and the property Case id in CI_PlanUsingType. Thousands of Case lines exist;
+        /// only the matching PlanUsingType.ID runs.
+        /// </summary>
+        public static void BindFormulaLookups(string sara, IList<MemberSource> sources, List<Dictionary<string, object>> vars, Action<string> log)
+        {
+            if (log == null) log = m => { };
+            if (vars == null) return;
+            var caseIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var zabIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (sources != null)
+            {
+                foreach (MemberSource s in sources)
+                {
+                    if (s == null || string.IsNullOrEmpty(s.Code)) continue;
+                    foreach (HoverItem it in HoverDebug.Parse(s.Code))
+                    {
+                        if (it == null) continue;
+                        if (string.Equals(it.Source, "Case", StringComparison.OrdinalIgnoreCase))
+                        {
+                            foreach (string part in (it.Name ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                string id = part.Trim();
+                                if (id.Length > 0) caseIds.Add(id);
+                            }
+                        }
+                        else if (string.Equals(it.Source, "Add_Zabeteh", StringComparison.OrdinalIgnoreCase)
+                            && !string.IsNullOrWhiteSpace(it.Name))
+                            zabIds.Add(it.Name.Trim());
+                    }
+                }
+            }
+
+            string usingId = First(vars, "CI_PlanUsingType", "PlanUsingType", "M_Karbari", "PlanUsingTypeId");
+            int looked = 0;
+            if (!string.IsNullOrWhiteSpace(sara))
+            {
+                if (!string.IsNullOrWhiteSpace(usingId))
+                {
+                    LookupById(sara, "CI_PlanUsingType", usingId, vars, log);
+                    string title = FirstFromTable(vars, "CI_PlanUsingType", "Title");
+                    if (!string.IsNullOrWhiteSpace(title))
+                    {
+                        Note(vars, "PlanUsingTitle", title, "[dbo].[CI_PlanUsingType]", "عنوان کاربری طرح");
+                        Note(vars, "CI_PlanUsingType:" + usingId, title, "[dbo].[CI_PlanUsingType]", "Case تراکم");
+                    }
+                    looked++;
+                }
+                int nZab = 0;
+                foreach (string id in zabIds)
+                {
+                    if (nZab >= 40) break;
+                    LookupById(sara, "CI_Zabeteh", id, vars, log);
+                    string title = LastTitle(vars, "CI_Zabeteh");
+                    if (!string.IsNullOrWhiteSpace(title))
+                    {
+                        Note(vars, "CI_Zabeteh:" + id, title, "[dbo].[CI_Zabeteh]", "Add_Zabeteh");
+                        Note(vars, "ci_Zabeteh:" + id, title, "[dbo].[CI_Zabeteh]", "Add_Zabeteh");
+                    }
+                    nZab++;
+                    looked++;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(usingId))
+                log("Zabeteh     : کاربری طرح (CI_PlanUsingType) خالی — از هزاران Case تراکم هیچ‌کدام انتخاب نشد تا ID کاربری مشخص شود");
+            else if (caseIds.Contains(usingId))
+                log("Zabeteh     : Case تراکم مطابق CI_PlanUsingType=" + usingId + " در کد هست");
+            else
+                log("Zabeteh     : CI_PlanUsingType=" + usingId + " در Caseهای این Member نیست (cases=" + caseIds.Count + ")");
+            log("Zabeteh     : Add_Zabeteh ids=" + zabIds.Count + " Case ids=" + caseIds.Count + " lookup=" + looked);
+        }
+
+        private static string LastTitle(List<Dictionary<string, object>> vars, string tableHint)
+        {
+            string last = null;
+            if (vars == null) return null;
+            foreach (var v in vars)
+            {
+                object t, n, val;
+                if (!v.TryGetValue("table", out t) || !v.TryGetValue("name", out n) || !v.TryGetValue("value", out val)) continue;
+                if (Convert.ToString(t).IndexOf(tableHint, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (!string.Equals(Convert.ToString(n), "Title", StringComparison.OrdinalIgnoreCase)) continue;
+                string s = Convert.ToString(val);
+                if (!string.IsNullOrWhiteSpace(s)) last = s;
+            }
+            return last;
+        }
+
+        /// <summary>Small lookup tables: ID → Title for Add_Zabeteh(132,…) and M_TarhMojaz.</summary>
+        private static void DumpIdTitles(string cs, string table, List<Dictionary<string, object>> vars, Action<string> log)
+        {
+            HashSet<string> cols;
+            Dictionary<string, string> types;
+            if (!TryMeta(cs, table, out cols, out types)) return;
+            if (!cols.Contains("ID") || !cols.Contains("Title")) return;
+            int n = 0;
+            try
+            {
+                using (var c = new SqlConnection(cs))
+                using (var cmd = new SqlCommand("SELECT TOP (400) [ID], [Title] FROM [dbo].[" + table.Replace("]", "") + "]", c) { CommandTimeout = 12 })
+                {
+                    c.Open();
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            if (r.IsDBNull(0) || r.IsDBNull(1)) continue;
+                            string id = Convert.ToString(r.GetValue(0), CultureInfo.InvariantCulture);
+                            string title = Convert.ToString(r.GetValue(1), CultureInfo.InvariantCulture);
+                            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(title)) continue;
+                            Note(vars, table + ":" + id, title, "[dbo].[" + table + "]", "ID→Title");
+                            Note(vars, id, title, "[dbo].[" + table + "]", "ID→Title");
+                            n++;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log("Zabeteh     : " + table + " ID/Title — " + FirstLine(ex.Message));
+                return;
+            }
+            log("Zabeteh     : [" + table + "] ID/Title rows=" + n);
         }
 
         private static void LookupById(string cs, string table, string id, List<Dictionary<string, object>> vars, Action<string> log)

@@ -37,7 +37,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 اگر Instanc بعد از RunRule خالی باشد، XmlBody از dbo.Member به `ClsFunction.Body` تزریق می‌شود و موتور Sara کامپایل می‌کند (نه ToString1، نه vbc چسبانده). **ClearCache را تیک نزنید.** UI سارا لازم نیست. RuleTrace VB را بازنویسی نمی‌کند.
 
-`logfilefj` همان `Info8.AddError(Warning, A, B)` است؛ بعد از اجرای زنده، B در tooltip می‌آید. Member 1296 را عوض نکنید.
+`logfilefj` همان `Info8.AddError(Warning, A, B)` است؛ `plogkhan` به همان اندازه مهم است (مثلاً شروع تراکم). طرح خانه از `CI_PlanType` / `M_TarhMojaz` است، کاربری از `CI_PlanUsingType`؛ از هزاران `Case` فقط همان ID اجرا می‌شود. `Add_Zabeteh(132,…)` نوع ضابطه را از `ci_Zabeteh` می‌آورد. Member 1296 را عوض نکنید.
 
 این برنامه `dbo.Member` را نمی‌نویسد و VB را کامپایل/بازنویسی نمی‌کند.
 

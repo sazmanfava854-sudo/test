@@ -4,7 +4,7 @@ namespace RuleTrace
 {
     internal static class BuildInfo
     {
-        public const string Label = "v23n-cs0136";
+        public const string Label = "v23o-tarakom-case";
 
         public static string Banner
         {

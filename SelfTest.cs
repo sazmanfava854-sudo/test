@@ -184,9 +184,9 @@ namespace RuleTrace
                 Console.Error.WriteLine("FAIL: banner does not describe no-VB-rewrite architecture: " + BuildInfo.Banner);
                 return 1;
             }
-            if (BuildInfo.Label.IndexOf("cs0136", StringComparison.OrdinalIgnoreCase) < 0)
+            if (BuildInfo.Label.IndexOf("tarakom-case", StringComparison.OrdinalIgnoreCase) < 0)
             {
-                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23n-cs0136, got " + BuildInfo.Label);
+                Console.Error.WriteLine("FAIL: BuildInfo.Label should be v23o-tarakom-case, got " + BuildInfo.Label);
                 return 1;
             }
             return 0;
@@ -471,6 +471,43 @@ namespace RuleTrace
             if (HoverDebug.NoInstance.IndexOf("باز کنید", StringComparison.Ordinal) >= 0)
                 fail += FailMsg("NoInstance must not tell user to open Sara");
             fail += HoverDebug.Idents("logfilefj(\"IS_BlandMartabe\",IS_BlandMartabe)").Contains("IS_BlandMartabe") ? 0 : FailMsg("idents on probe line");
+            const string tarakomCode =
+                " plogkhan(\"*************شروع تراکم****************\",\"*\")\r\n" +
+                " Case 32111134,32111124\r\n" +
+                "     if CMabar_Under12=0 Then\r\n" +
+                "                FnTarakom_Outvalue=0\r\n" +
+                " Add_Zabeteh(132,0,\"12-14-13-22-20-15-19-16-23-42-25-27-21-17\",\"\",\"\",0,0)\r\n";
+            var tprobes = HoverDebug.Parse(tarakomCode);
+            fail += tprobes.Exists(p => p.Source == "plogkhan") ? 0 : FailMsg("plogkhan probe");
+            fail += tprobes.Exists(p => p.Source == "Case" && (p.Name ?? "").IndexOf("32111134", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("Case 32111134");
+            fail += tprobes.Exists(p => p.Source == "Add_Zabeteh" && p.Name == "132") ? 0 : FailMsg("Add_Zabeteh 132");
+            var tmap = HoverDebug.Flatten(null, new List<Dictionary<string, object>>
+            {
+                new Dictionary<string, object> { { "name", "CI_PlanUsingType" }, { "value", "32111134" } },
+                new Dictionary<string, object> { { "name", "PlanUsingTitle" }, { "value", "تراکم زياد گونه 1" } },
+                new Dictionary<string, object> { { "name", "ci_Zabeteh:132" }, { "value", "کاربريهاي مجاز" } },
+                new Dictionary<string, object> { { "name", "M_TarhMojaz" }, { "value", "24" } },
+            });
+            HoverDebug.Bind(tprobes, null, tmap, null);
+            HoverItem fired = tprobes.Find(p => p.Source == "Case");
+            fail += fired != null && (fired.Value ?? "").IndexOf("32111134", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("Case binds CI_PlanUsingType");
+            HoverItem zab = tprobes.Find(p => p.Source == "Add_Zabeteh");
+            fail += zab != null && (zab.Value ?? "").IndexOf("مجاز", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("Add_Zabeteh binds ci_Zabeteh");
+            fail += HoverDebug.Lookup(tmap, "M_TarhMojaz") == "24" ? 0 : FailMsg("M_TarhMojaz");
+            HoverItem start = tprobes.Find(p => p.Source == "plogkhan");
+            fail += start != null && (start.Value ?? "").IndexOf("شروع تراکم", StringComparison.Ordinal) >= 0 ? 0 : FailMsg("plogkhan value شروع تراکم");
+            var step = HoverDebug.BuildTrace(tprobes);
+            fail += step.Count >= 2 ? 0 : FailMsg("step trace from plogkhan/Case");
+            fail += step.Exists(e => e.Action == "plogkhan") ? 0 : FailMsg("step debugger includes plogkhan");
+            fail += step.Exists(e => e.Action == "Case") ? 0 : FailMsg("step debugger includes matching Case");
+            fail += step.Exists(e => e.Action == "Add_Zabeteh") ? 0 : FailMsg("step debugger includes Add_Zabeteh");
+            var lookLogs = new List<string>();
+            ZabetehCase.BindFormulaLookups("", new List<MemberSource>
+            {
+                new MemberSource { Name = "Tarakom", Code = tarakomCode },
+            }, new List<Dictionary<string, object>>(), lookLogs.Add);
+            fail += lookLogs.Exists(l => l.IndexOf("Case ids=", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("BindFormulaLookups counts Case");
+            fail += lookLogs.Exists(l => l.IndexOf("CI_PlanUsingType", StringComparison.Ordinal) >= 0) ? 0 : FailMsg("BindFormulaLookups names CI_PlanUsingType");
 
             const string asansor =
                 "  tarakom = tarakom\r\n" +
@@ -680,6 +717,7 @@ namespace RuleTrace
             fail += Expect(html, "hoverTip", "hover tooltip");
             fail += Expect(html, "renderCode", "line hover renderer");
             fail += Expect(html, "logfilefj", "logfilefj replacement copy");
+            fail += Expect(html, "plogkhan", "plogkhan in debug tab");
             fail += Expect(html, "موس را روی خط", "hover instruction");
             fail += Expect(html, "has-val", "valued line class");
             fail += Expect(html, "ابزارهای بیشتر", "advanced tools collapsed");
@@ -737,7 +775,7 @@ namespace RuleTrace
                         fail += Expect(html, "RuleTrace", "served html");
                         fail += Expect(ping, "\"ok\":true", "ping ok");
                         fail += Expect(boot, "Solh", "bootstrap formulas");
-                        fail += Expect(boot, "v23n-cs0136", "bootstrap label");
+                        fail += Expect(boot, "v23o-tarakom-case", "bootstrap label");
                         fail += Expect(boot, "mustPick", "bootstrap must-pick");
                         fail += Expect(boot, "zabeteh", "bootstrap scopes");
                         return fail;
@@ -781,10 +819,10 @@ namespace RuleTrace
                 ? 0 : FailMsg("injected Body has logfilefj");
             fail += fn.Body != null && fn.Body.IndexOf("Public Class", StringComparison.OrdinalIgnoreCase) < 0
                 ? 0 : FailMsg("class shell stripped from Body");
-            fail += fn.Body != null && fn.Body.IndexOf("Public Sub", StringComparison.OrdinalIgnoreCase) < 0
-                ? 0 : FailMsg("injected Body must be inner statements, not Sub wrapper");
-            fail += fn.Body != null && fn.Body.IndexOf("End Sub", StringComparison.OrdinalIgnoreCase) < 0
-                ? 0 : FailMsg("injected Body must not keep End Sub");
+            fail += fn.Body != null && fn.Body.IndexOf("Public Sub", StringComparison.OrdinalIgnoreCase) >= 0
+                ? 0 : FailMsg("injected Body is one full Sub so ToString1 does not emit BC30689");
+            fail += fn.Body != null && fn.Body.IndexOf("End Sub", StringComparison.OrdinalIgnoreCase) >= 0
+                ? 0 : FailMsg("injected Body keeps End Sub");
             fail += fn.EncryptXmlBody == null ? 0 : FailMsg("EncryptXmlBody cleared so engine reads Body");
             fail += fn.ReCompile ? 0 : FailMsg("ReCompile set after inject");
             string stripped = FormulaMerger.StripDuplicateClassShell(sources[0].Code);
@@ -807,10 +845,18 @@ namespace RuleTrace
             fail += Expect(inner, "End Select", "inner keeps End Select");
             fail += Expect(inner, "End If", "inner keeps End If");
             fail += Expect(inner, "AddError", "inner keeps AddError");
-            if (inner.IndexOf("Public Function", StringComparison.OrdinalIgnoreCase) >= 0)
-                fail += FailMsg("BodyForInject peels Function wrapper");
-            if (inner.IndexOf("End Function", StringComparison.OrdinalIgnoreCase) >= 0)
-                fail += FailMsg("BodyForInject peels End Function");
+            fail += inner.IndexOf("Public Function", StringComparison.OrdinalIgnoreCase) >= 0
+                ? 0 : FailMsg("BodyForInject keeps Function wrapper");
+            fail += inner.IndexOf("End Function", StringComparison.OrdinalIgnoreCase) >= 0
+                ? 0 : FailMsg("BodyForInject keeps End Function");
+            const string two =
+                "Public Sub Run()\r\n logfilefj(\"a\",1)\r\nEnd Sub\r\n" +
+                "Public Function Tarakom()\r\n plogkhan(\"شروع تراکم\",\"*\")\r\nEnd Function\r\n";
+            string pick = FormulaMerger.BodyForInject(two, "Tarakom");
+            fail += pick.IndexOf("plogkhan", StringComparison.OrdinalIgnoreCase) >= 0
+                ? 0 : FailMsg("PickMethodBlock Tarakom");
+            fail += pick.IndexOf("logfilefj", StringComparison.OrdinalIgnoreCase) >= 0
+                ? FailMsg("PickMethodBlock must inject only Tarakom") : 0;
             return fail;
         }
 

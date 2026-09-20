@@ -254,6 +254,7 @@ namespace RuleTrace
                 var sources = new List<MemberSource>(eng.LastMemberSources ?? new List<MemberSource>());
                 var permitSummary = eng.Summary.ToList();
                 var caseVars = extra.ContainsKey("vars") ? extra["vars"] as List<Dictionary<string, object>> : null;
+                if (caseVars == null) caseVars = new List<Dictionary<string, object>>();
 
                 var req = new RunRequest
                 {
@@ -268,10 +269,15 @@ namespace RuleTrace
                 };
                 ParseParams(Json.Str(body, "parameters"), req);
 
+                try { ZabetehCase.BindFormulaLookups(_settings.Sara, sources, caseVars, log.Add); }
+                catch (Exception ex) { log.Add("Hover      : lookup طرح/کاربری — " + FirstLineSafe(ex.Message)); }
+                extra["vars"] = caseVars;
                 var dbMap = HoverDebug.Flatten(null, caseVars);
                 int seeded = SeedDbParams(req, sources, dbMap, log);
                 log.Add("Hover      : مقدار Sara=" + dbMap.Count + " seed=" + seeded
-                    + " tarakom=" + (HoverDebug.Lookup(dbMap, "tarakom") ?? "(خالی)"));
+                    + " M_TarhMojaz=" + (HoverDebug.Lookup(dbMap, "M_TarhMojaz") ?? "(خالی)")
+                    + " CI_PlanUsingType=" + (HoverDebug.Lookup(dbMap, "CI_PlanUsingType") ?? "(خالی)")
+                    + " tarakom=" + (HoverDebug.Lookup(dbMap, "tarakom") ?? HoverDebug.Lookup(dbMap, "PlanUsingTitle") ?? "(خالی)"));
 
                 var trace = new List<TraceEvent>();
                 var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -374,10 +380,14 @@ namespace RuleTrace
                     try { caseVars = ZabetehCase.ReadSelected(_settings.Sara, req.NidProc, scopes, log.Add); }
                     catch (Exception ex) { log.Add("Hover      : Sara vars — " + FirstLineSafe(ex.Message)); }
 
+                    try { ZabetehCase.BindFormulaLookups(_settings.Sara, sources, caseVars, log.Add); }
+                    catch (Exception ex) { log.Add("Hover      : lookup طرح/کاربری — " + FirstLineSafe(ex.Message)); }
                     var dbMap = HoverDebug.Flatten(null, caseVars);
                     int seeded = SeedDbParams(req, sources, dbMap, log);
                     log.Add("Hover      : مقدار Sara=" + dbMap.Count + " seed=" + seeded
-                        + " tarakom=" + (HoverDebug.Lookup(dbMap, "tarakom") ?? "(خالی)"));
+                        + " M_TarhMojaz=" + (HoverDebug.Lookup(dbMap, "M_TarhMojaz") ?? "(خالی)")
+                        + " CI_PlanUsingType=" + (HoverDebug.Lookup(dbMap, "CI_PlanUsingType") ?? "(خالی)")
+                        + " tarakom=" + (HoverDebug.Lookup(dbMap, "tarakom") ?? HoverDebug.Lookup(dbMap, "PlanUsingTitle") ?? "(خالی)"));
 
                     var trace = new List<TraceEvent>();
                     var parms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -583,7 +593,12 @@ namespace RuleTrace
         {
             if (req == null || db == null || db.Count == 0) return 0;
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string alias in new[] { "tarakom", "Tarakom", "تراکم", "Masahat", "Ertefa" })
+            foreach (string alias in new[]
+            {
+                "tarakom", "Tarakom", "تراکم", "Masahat", "Ertefa",
+                "M_TarhMojaz", "CI_PlanType", "CI_PlanUsingType", "M_Karbari",
+                "PlanUsingTitle", "FnTarakom_Outvalue", "CMabar_Under12", "UsingCodes",
+            })
                 names.Add(alias);
             if (sources != null)
             {
@@ -680,6 +695,7 @@ namespace RuleTrace
             probes = 0;
             bound = 0;
             var list = new List<object>();
+            var all = new List<HoverItem>();
             if (sources == null) return list;
             foreach (MemberSource s in sources)
             {
@@ -689,6 +705,12 @@ namespace RuleTrace
                 HoverDebug.BindIdents(s.Code, items, map);
                 probes += HoverDebug.ProbeCount(items);
                 bound += HoverDebug.BoundCount(items);
+                all.AddRange(items);
+                string code = s.Code ?? "";
+                bool tarakom = (s.Name ?? "").IndexOf("Tarakom", StringComparison.OrdinalIgnoreCase) >= 0
+                    || code.IndexOf("شروع تراکم", StringComparison.Ordinal) >= 0
+                    || code.IndexOf("FnTarakom", StringComparison.OrdinalIgnoreCase) >= 0
+                    || code.IndexOf("plogkhan", StringComparison.OrdinalIgnoreCase) >= 0;
                 list.Add(new Dictionary<string, object>
                 {
                     { "nidClass", s.NidClass },
@@ -700,11 +722,17 @@ namespace RuleTrace
                     { "active", s.IsActive },
                     { "chidman", s.NidMember == ChidmanAnalyzer.DefaultChidmanMemberId },
                     { "solhRun", s.NidClass == 344 && (s.NidMember == SolhNidDebug.SolhRunMember || s.NidMember == SolhNidDebug.SolhInitMember) },
+                    { "tarakom", tarakom },
                     { "code", Cap(s.Code) },
                     { "label", s.ToString() },
                     { "hover", HoverDebug.PackLines(items) },
                     { "probeCount", HoverDebug.ProbeCount(items) },
                 });
+            }
+            if (trace != null && trace.Count == 0)
+            {
+                foreach (TraceEvent ev in HoverDebug.BuildTrace(all))
+                    trace.Add(ev);
             }
             return list;
         }
@@ -713,6 +741,12 @@ namespace RuleTrace
         {
             int best = 0, nid = 0;
             if (packed == null) return 0;
+            foreach (object o in packed)
+            {
+                var d0 = o as Dictionary<string, object>;
+                if (d0 != null && Json.Bool(d0, "tarakom"))
+                    return Json.Int(d0, "nidMember");
+            }
             foreach (object o in packed)
             {
                 var d = o as Dictionary<string, object>;
