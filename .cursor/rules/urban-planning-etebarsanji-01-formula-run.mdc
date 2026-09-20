@@ -104,7 +104,7 @@ alwaysApply: false
 | `AllDiscount` / `EditAllDiscount` | `AllDisCount()` | بخش ۱۳ (`E13-DISC`) | هر دو FormName یک تابع. نوع ۲۲ سیبنا+Exit؛ ۱۲–۱۶/۱۹ Exit کمیته؛ سقف تعداد ۱۳۹۶ |
 | `Fine` | `FrmFine()` | بخش ۱۴ (`E14-FINE`) | ذخیره ردیف لایحه؛ `Check_com` منبع ۱ inline نه `TaeedMLayehe` |
 | `DutyExemption` | `FrmDutyExemption()` | معافیت عوارض | |
-| `Zabeteh` | `FrmZabeteh()` | ضابطه | |
+| `Zabeteh` | `FrmZabeteh()` | بخش ۱۵ (`E15-ZAB`) | دو فیش؛ گواهی+صلح منبع ۶؛ Sara10 Contains؛ `Exit Function` بی‌شرط GIS را می‌کشد |
 | `MapControl` | `FrmMapControl()` | GIS | |
 | `Parvandeh_Apartment` | `FrmApartment()` + inline | بخش ۴ | بعد از تابع: یک کد پستی؛ هر `CI_BuildingStep <> 1` → Stop |
 | `Parvandeh_HouseSharing` … `Parvandeh_Job` | `Frm*` پرونده | — | هر نوع پرونده تابع جدا |
@@ -113,13 +113,13 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۵+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۶+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۱۵+ | |
-| `MissFoul` | `frmsh_*` | ۱۵+ | |
-| `Payankar` | `frmsh_*` | ۱۵+ | |
-| `InquiryResponse` | `frmsh_*` | ۱۵+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۱۶+ | |
+| `MissFoul` | `frmsh_*` | ۱۶+ | |
+| `Payankar` | `frmsh_*` | ۱۶+ | |
+| `InquiryResponse` | `frmsh_*` | ۱۶+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
 | `ManagerConfirm` | `ManagerConfirm()` | بخش ۱۰ (`E10-MC`) | زدن تأیید همین لحظه — نه `TaeedM*`. اثر جانبی SMS/آتش‌نشانی/گزارش؛ منبع 23 با `ChekCi`؛ Licence 3 = عدم تأیید |
 | `Peace_List` | `FrmPeace()` | بخش ۱۱ (`E11-PEACE`) | ذخیره ردیف صلح — نه زدن تأیید منبع ۶. فیش فقط خانواده ۱ / 116–118؛ نوع ۲۶ می‌نویسد `Base_PlanMojaz` |
@@ -219,11 +219,11 @@ tmpTaeed = 1   فقط اگر
 | تابع | CI_Resource | موضوع کسب‌وکار | کجا اجباری است |
 |------|-------------|----------------|----------------|
 | `TaeedMLayehe` | 1 | لایحه | بروکف، بازدید آپارتمان (`tmpTaeed`)؛ تحلیل `E09-ANL-004` (`=0` Stop — نه `FrmFine`)؛ **خود `FrmFine` این تابع را صدا نمی‌زند** — منبع ۱ را در `Check_com` تکرار می‌کند (`E14-FINE-001`) |
-| `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید |
+| `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید؛ **ضابطه `FrmZabeteh`** (`E15-ZAB-004` — `=0` Stop+Exit مگر GUID `8445278B`) |
 | `TaeedMGavahi1` | 3 **یا** 4 | گواهی یا سابقه | درخواست: پیوست تأییدشده |
 | `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد) |
 | `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت؛ تحلیل نوع ۳ (`E09-ANL-004`)؛ **صلحنامه `FrmPeace`** (`E11-PEACE-004` Exit)؛ **توافق `FrmAgreement`** (`E12-AGREE-005` بدون Exit) |
-| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید؛ **صلحنامه `FrmPeace`** (`E11-PEACE-003` — `=0` یعنی Stop+Exit)؛ **توافق** (`E12-AGREE-004` — Stop بدون Exit) |
+| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید؛ **صلحنامه `FrmPeace`** (`E11-PEACE-003` — `=0` یعنی Stop+Exit)؛ **توافق** (`E12-AGREE-004` — Stop بدون Exit)؛ **ضابطه این تابع را صدا نمی‌زند** — منبع ۶ را در `FLg` تکرار می‌کند (`E15-ZAB-005`) |
 | `TaeedMShenasnameFani` | 8 | شناسنامه فنی | شناسنامه |
 | `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
 | `TaeedMComm20` | 12 | کمیسیون ۲۰ | کمیسیون |
@@ -323,6 +323,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 - بازگشت `0` = فیش تأییدشده **دارد** → در بروکف ویرایش قفل یا Warning (بسته به `F_changeb`).
 - غیر 0 = فیش تأیید مانع نیست.
 - در توافق صدا با **دو آرگومان** است: `FicheTaeed(NidProc, False)` (`E12-AGREE-002`). معنی آرگومان دوم را بدون تعریف تابع حدس نزنید.
+- در ضابطه **دو بار** صدا می‌شود: اول `GetZabeteh.NidProc` (ناظر Warning) (`E15-ZAB-003`)؛ دوم `GetRequest.info.NidProc` فقط چند `GuidWorkFlow`/GUID (`E15-ZAB-010`).
 
 **قانون برای AI:** تغییر وضعیت فیش یا حساب ناحیه در `Fiche` روی بروکف و درخواست هم‌زمان اثر دارد. فقط یک فرم را عوض نکنید.
 
@@ -462,6 +463,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 - در صلحنامه: Return با `=1` در `And` فیش استفاده می‌شود و همان صدا `GuidWorkFlow` 116/117/118 را هم می‌سنجد (`E11-PEACE-002`).
 - در توافق: Return دور ریخته می‌شود؛ `RqType = GuidWorkFlow` (`E12-AGREE-007`).
 - در جریمه لایحه: Return در `NidWPenalti` ذخیره و **استفاده نمی‌شود**؛ قفل فیلد از **`GuidWorkFlow = 151`** رد می‌شود (`E14-FINE-004`).
+- در ضابطه: Return در `NidWDefff1` می‌ماند؛ فیش دوم از **`GuidWorkFlow` ∈ {111,195,133,112,203,114}** است (`E15-ZAB-007` / `010`).
 
 جدول نگاشت GUID → (`GuidWorkFlow`, گروه, موضوع 137) در **بخش ۵ / E05-WF**.
 
