@@ -671,6 +671,8 @@ SP 477179 داخل `If 1=2` **مرده** است.
 |-----|-----|-------------|
 | نوع ملک 2 یا 3 و `M_ShahrsaziArchiveGroup` 1 یا 2 | ساخت متن SMS ثبت درخواست | `SendSMS` **کامنت** 144581 |
 | `User137(...) = 1` و `TmpArchiveGroup > 10` | پیام 137 + SMS پیشخوان بر اساس کد موضوع 1838–1883 | کلید 137 هاردکد |
+
+مامور بازدید (`E16-ASGN-010`) همان `User137` را با آستانه **`TmpArchiveGroup > 0`** و `SendSMS` بدون `SaveRequest` زنده دارد — با این قانون یکی نکنید.
 | اعمال قانون | `CreatTask` پلیس منطقه | فعال |
 | `4CD6E92B` عملکرد ناظر | `CreatTask` مالک؛ اگر `CI_Requester=14` → `IsConfirmAuthentication=1` | فعال |
 | `4C052600` ماده 14 | `AddRevisit` + `CreatTask` مالک | فعال |

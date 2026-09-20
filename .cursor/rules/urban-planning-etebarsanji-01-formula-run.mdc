@@ -98,7 +98,7 @@ alwaysApply: false
 | `EditRequest` | `EditRequest()` | — | `tmpStr` از Request |
 | `MovafeghatOsooli` | `MovafeghatOsooli()` | `FicheTaeed` اینجا تعریف می‌شود | بروکف به همین فیش وابسته است |
 | `MokatebatConfirm` | `MokatebatConfirm()` | `TaeedMMokateb` | |
-| `AssignRevisit` | `AssignRevisit()` | — | |
+| `AssignRevisit` | `AssignRevisit()` | بخش ۱۶ (`E16-ASGN`) | سرا۱۰ خالی؛ `tmpTaeed` چهار تأیید؛ فیش Return=1 Exit؛ SMS 137 زنده |
 | `RevisitAgent` | `RevisitAgent()` | — | |
 | `OfficesInquiry` | `OfficesInquiry()` | — | |
 | `AllDiscount` / `EditAllDiscount` | `AllDisCount()` | بخش ۱۳ (`E13-DISC`) | هر دو FormName یک تابع. نوع ۲۲ سیبنا+Exit؛ ۱۲–۱۶/۱۹ Exit کمیته؛ سقف تعداد ۱۳۹۶ |
@@ -113,13 +113,13 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۶+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۷+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۱۶+ | |
-| `MissFoul` | `frmsh_*` | ۱۶+ | |
-| `Payankar` | `frmsh_*` | ۱۶+ | |
-| `InquiryResponse` | `frmsh_*` | ۱۶+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۱۷+ | |
+| `MissFoul` | `frmsh_*` | ۱۷+ | |
+| `Payankar` | `frmsh_*` | ۱۷+ | |
+| `InquiryResponse` | `frmsh_*` | ۱۷+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
 | `ManagerConfirm` | `ManagerConfirm()` | بخش ۱۰ (`E10-MC`) | زدن تأیید همین لحظه — نه `TaeedM*`. اثر جانبی SMS/آتش‌نشانی/گزارش؛ منبع 23 با `ChekCi`؛ Licence 3 = عدم تأیید |
 | `Peace_List` | `FrmPeace()` | بخش ۱۱ (`E11-PEACE`) | ذخیره ردیف صلح — نه زدن تأیید منبع ۶. فیش فقط خانواده ۱ / 116–118؛ نوع ۲۶ می‌نویسد `Base_PlanMojaz` |
@@ -218,12 +218,12 @@ tmpTaeed = 1   فقط اگر
 
 | تابع | CI_Resource | موضوع کسب‌وکار | کجا اجباری است |
 |------|-------------|----------------|----------------|
-| `TaeedMLayehe` | 1 | لایحه | بروکف، بازدید آپارتمان (`tmpTaeed`)؛ تحلیل `E09-ANL-004` (`=0` Stop — نه `FrmFine`)؛ **خود `FrmFine` این تابع را صدا نمی‌زند** — منبع ۱ را در `Check_com` تکرار می‌کند (`E14-FINE-001`) |
-| `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید؛ **ضابطه `FrmZabeteh`** (`E15-ZAB-004` — `=0` Stop+Exit مگر GUID `8445278B`) |
+| `TaeedMLayehe` | 1 | لایحه | بروکف، بازدید آپارتمان (`tmpTaeed`)؛ **مامور بازدید `AssignRevisit`** (`E16-ASGN-002`)؛ تحلیل `E09-ANL-004` (`=0` Stop — نه `FrmFine`)؛ **خود `FrmFine` این تابع را صدا نمی‌زند** — منبع ۱ را در `Check_com` تکرار می‌کند (`E14-FINE-001`) |
+| `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید؛ **ضابطه `FrmZabeteh`** (`E15-ZAB-004` — `=0` Stop+Exit مگر GUID `8445278B`)؛ **مامور بازدید** داخل `tmpTaeed` (`E16-ASGN-002`) |
 | `TaeedMGavahi1` | 3 **یا** 4 | گواهی یا سابقه | درخواست: پیوست تأییدشده |
-| `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد) |
+| `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد)؛ **مامور بازدید** داخل `tmpTaeed` (`E16-ASGN-002`) |
 | `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت؛ تحلیل نوع ۳ (`E09-ANL-004`)؛ **صلحنامه `FrmPeace`** (`E11-PEACE-004` Exit)؛ **توافق `FrmAgreement`** (`E12-AGREE-005` بدون Exit) |
-| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید؛ **صلحنامه `FrmPeace`** (`E11-PEACE-003` — `=0` یعنی Stop+Exit)؛ **توافق** (`E12-AGREE-004` — Stop بدون Exit)؛ **ضابطه این تابع را صدا نمی‌زند** — منبع ۶ را در `FLg` تکرار می‌کند (`E15-ZAB-005`) |
+| `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید؛ **صلحنامه `FrmPeace`** (`E11-PEACE-003` — `=0` یعنی Stop+Exit)؛ **توافق** (`E12-AGREE-004` — Stop بدون Exit)؛ **ضابطه این تابع را صدا نمی‌زند** — منبع ۶ را در `FLg` تکرار می‌کند (`E15-ZAB-005`)؛ **مامور بازدید** داخل `tmpTaeed` (`E16-ASGN-002`) |
 | `TaeedMShenasnameFani` | 8 | شناسنامه فنی | شناسنامه |
 | `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
 | `TaeedMComm20` | 12 | کمیسیون ۲۰ | کمیسیون |
@@ -324,6 +324,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 - غیر 0 = فیش تأیید مانع نیست.
 - در توافق صدا با **دو آرگومان** است: `FicheTaeed(NidProc, False)` (`E12-AGREE-002`). معنی آرگومان دوم را بدون تعریف تابع حدس نزنید.
 - در ضابطه **دو بار** صدا می‌شود: اول `GetZabeteh.NidProc` (ناظر Warning) (`E15-ZAB-003`)؛ دوم `GetRequest.info.NidProc` فقط چند `GuidWorkFlow`/GUID (`E15-ZAB-010`).
+- مامور بازدید `FicheTaeed` نیست؛ `GetAll_Fiche` وضعیت ۳ یا ۵ است (`E16-ASGN-003`).
 
 **قانون برای AI:** تغییر وضعیت فیش یا حساب ناحیه در `Fiche` روی بروکف و درخواست هم‌زمان اثر دارد. فقط یک فرم را عوض نکنید.
 
@@ -380,7 +381,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 |------|------|-----|
 | `UseBazdidT` | کاربر در گروه عامل بازدید تبلت است؟ `1` = بله | قفل تبلت بازدید را دور می‌زند |
 | `Fpose` | گروه پوز | هم‌پوشانی با معافیت کد ملی |
-| `User137` | گروه/بایگانی 137 | اگر `=1` و `TmpArchiveGroup > 10` → پیام و SMS پیشخوان |
+| `User137` | گروه/بایگانی 137 | اگر `=1` و `TmpArchiveGroup > 10` → پیام و SMS پیشخوان **در درخواست**. در مامور بازدید آستانه **`TmpArchiveGroup > 0`** است و ثبت 137 مرده (`E16-ASGN-010`) |
 
 کلید 137 در کد درخواست هاردکد است (`5tgb6yhn^YHN%TGB`) — SAMPA اعتبارسنجی آن را عوض نمی‌کند.
 
@@ -464,6 +465,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 - در توافق: Return دور ریخته می‌شود؛ `RqType = GuidWorkFlow` (`E12-AGREE-007`).
 - در جریمه لایحه: Return در `NidWPenalti` ذخیره و **استفاده نمی‌شود**؛ قفل فیلد از **`GuidWorkFlow = 151`** رد می‌شود (`E14-FINE-004`).
 - در ضابطه: Return در `NidWDefff1` می‌ماند؛ فیش دوم از **`GuidWorkFlow` ∈ {111,195,133,112,203,114}** است (`E15-ZAB-007` / `010`).
+- در مامور بازدید: **Return `= 1`** قفل فیش و Warning خوداظهاری است (`E16-ASGN-003` / `004`) نه `GuidWorkFlow`.
 
 جدول نگاشت GUID → (`GuidWorkFlow`, گروه, موضوع 137) در **بخش ۵ / E05-WF**.
 
