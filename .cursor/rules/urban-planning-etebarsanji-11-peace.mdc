@@ -33,7 +33,7 @@ alwaysApply: false
 | سطح/تراکم مجاز | `Peace_List.Base_PlanMojaz(0)` (`BusyArea`, `DensityPercent`) |
 | مساحت وضع موجود برای نوع ۲۶ | `GetBarokaf.GetBase_HouseInfo_Revisit.CurrentArea` |
 
-کمکی همین قطعه: `FicheTaeed` (تعریف در موافقت اصولی)، `GetSara8Workflow` (`E05-WF-001` / `E01-HELP-011`)، `TaeedMSolh` منبع ۶، `TaeedMMovafeghat` منبع ۵، `Set_UserGroupId` (`E01-HELP-008`).
+کمکی همین قطعه: `FicheTaeed` (تعریف بخش ۱۸ / `E18-MOV`)، `GetSara8Workflow` (`E05-WF-001` / `E01-HELP-011`)، `TaeedMSolh` منبع ۶، `TaeedMMovafeghat` منبع ۵، `Set_UserGroupId` (`E01-HELP-008`).
 
 متغیر ماژول: `Peace_AgreementTaeedDate` / `Peace_AgreementTaeedTime` — همین تابع اول خالی‌شان می‌کند؛ `TaeedMSolh` ممکن است پرشان کند (`E01-TAEED-002`). قفل مقایسه تاریخ ردیف با این دو **کامنت** است (`E11-PEACE-005`).
 
@@ -395,4 +395,4 @@ End if
 
 # ایمنی
 
-فقط `FormName = Peace_List`. تغییر قفل فیش یا تأیید صلح روی درآمد و دسترسی ویرایش اثر دارد. نوشتن `BusyArea` / `DensityPercent` نوع ۲۶ روی **ضابطه مجاز** اثر دارد. `Agreement_List` بخش ۱۲ است. بازدید مغازه / پروانه / پایانکار این فایل نیستند (بخش ۱۸+). ضابطه فرم `FrmZabeteh` منبع ۶ را جدا می‌خواند (`E15-ZAB-005`) نه این ذخیره نامه. Msgbox و ایندکس ثابت `(0)` را «باگ واضح برای فیکس خاموش» ندانید.
+فقط `FormName = Peace_List`. تغییر قفل فیش یا تأیید صلح روی درآمد و دسترسی ویرایش اثر دارد. نوشتن `BusyArea` / `DensityPercent` نوع ۲۶ روی **ضابطه مجاز** اثر دارد. `Agreement_List` بخش ۱۲ است. بازدید مغازه / پروانه / پایانکار این فایل نیستند (بخش ۲۰+). ضابطه فرم `FrmZabeteh` منبع ۶ را جدا می‌خواند (`E15-ZAB-005`) نه این ذخیره نامه. Msgbox و ایندکس ثابت `(0)` را «باگ واضح برای فیکس خاموش» ندانید.

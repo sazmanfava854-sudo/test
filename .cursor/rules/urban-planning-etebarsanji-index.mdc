@@ -10,7 +10,7 @@ alwaysApply: false
 مخاطب: **هوش مصنوعی (Cursor)** و **برنامه‌نویس فرمول شهرسازی**.  
 منبع حقیقت: **کد واقعی**، نه قصد نانوشته. اگر شرط با نام تابع یا متن UI فرق دارد، **شرط کد** ملاک است.
 
-کاربر بخش‌های فرمول را به‌ترتیب می‌فرستد. هر بخش یک فایل `.mdc` است. بخش‌های ۱۸+ پس از ارسال کد اضافه می‌شوند.
+کاربر بخش‌های فرمول را به‌ترتیب می‌فرستد. هر بخش یک فایل `.mdc` است. بخش‌های ۲۰+ پس از ارسال کد اضافه می‌شوند.
 
 ---
 
@@ -42,6 +42,8 @@ alwaysApply: false
        →  ضابطه (قفل ذخیره کاربری طرح)
        →  مامور بازدید (اعلام مأمور روی درخواست)
        →  درآمد (ردیف بدهکار/بستانکار، فیش، قطار شهری)
+       →  موافقت اصولی (نامه + تعریف FicheTaeed)
+       →  درخواست شهروندسپاری (UGP)
 ```
 
 | مرحله کارشناس | FormName در کد | فایل قانون |
@@ -62,9 +64,11 @@ alwaysApply: false
 | ذخیره/ویرایش ضابطه | `Zabeteh` | بخش ۱۵ |
 | اعلام مامور بازدید | `AssignRevisit` | بخش ۱۶ |
 | ذخیره درآمد | `Income` / `IncomeFromMenu` | بخش ۱۷ |
+| ذخیره موافقت اصولی | `MovafeghatOsooli` | بخش ۱۸ |
+| ثبت شهروندسپاری | `RequestUGP` | بخش ۱۹ |
 | همه فرم‌ها اول از اینجا رد می‌شوند | هر نامی | بخش ۱ (`Run`) |
 
-اگر خطای کاربر روی **فرم درخواست** است، بخش ۵ را باز کنید نه بخش ۲. اگر روی **بازدید آپارتمان** است بخش ۳، **بازدید ملک** بخش ۶، **بازدید ساختمان** بخش ۷، **بازدید دستگاه** بخش ۸، **تحلیل ساختمان** بخش ۹، **تایید مدیر** بخش ۱۰، **صلحنامه** بخش ۱۱، **توافق** بخش ۱۲، **تخفیفات** بخش ۱۳، **جریمه لایحه** بخش ۱۴، **ضابطه** بخش ۱۵، **مامور بازدید** بخش ۱۶، **درآمد** بخش ۱۷ — ذخیره بازدید را با اعلام مأمور یکی فرض نکنید؛ تخفیف را با درآمد یکی فرض نکنید.
+اگر خطای کاربر روی **فرم درخواست** است، بخش ۵ را باز کنید نه بخش ۲. اگر روی **بازدید آپارتمان** است بخش ۳، **بازدید ملک** بخش ۶، **بازدید ساختمان** بخش ۷، **بازدید دستگاه** بخش ۸، **تحلیل ساختمان** بخش ۹، **تایید مدیر** بخش ۱۰، **صلحنامه** بخش ۱۱، **توافق** بخش ۱۲، **تخفیفات** بخش ۱۳، **جریمه لایحه** بخش ۱۴، **ضابطه** بخش ۱۵، **مامور بازدید** بخش ۱۶، **درآمد** بخش ۱۷، **موافقت اصولی** بخش ۱۸، **شهروندسپاری** بخش ۱۹ — ذخیره بازدید را با اعلام مأمور یکی فرض نکنید؛ تخفیف را با درآمد یکی فرض نکنید؛ درخواست سرا۸ را با UGP یکی فرض نکنید.
 
 ### وقتی ذخیره شکست می‌خورد چه می‌بینید؟
 
@@ -133,6 +137,9 @@ alwaysApply: false
 - «تهاتر نوع ۸ درآمد و نوع ۲۲ سیبنا را یکی می‌کنم» — نوع ۸ روی `Income_Discount` است (`E17-INC-003`)؛ نوع ۲۲ روی فرم تخفیفات است (`E13-DISC-002`).
 - «فیش انتقال و فیش بازآفرینی را یکی می‌کنم» — انتقال وضعیت ۷ و جفت 150/151 است (`E17-INC-005`)؛ بازآفرینی گروه 156 است (`E17-INC-006`).
 - «If خالی تقسیط درآمد را حذف مرده می‌کنم» — شاخه `tarikhFich<"1397/10/15"` معافیت نقش است (`E17-INC-008`).
+- «درخواست سرا۸ و شهروندسپاری را یکی می‌کنم» — `FrmSh_Request` بخش ۵ است؛ `RequestUGP` بخش ۱۹ است.
+- «قفل فیش موافقت را مثل بروکف می‌دانم» — روی خود `MovafeghatOsooli` Stop فیش کامنت است (`E18-MOV-001`).
+- «`Check_Hoshmand=False` را نادیده می‌گیرم» — توافق 163 را از اعتبار فیش حذف می‌کند (`E18-MOV-006`).
 - «تحلیل و جریمه لایحه را یکی می‌کنم» — تحلیل `CI_Penalty` است؛ لایحه `Commission_FinePenalty` است (`E14-FINE`).
 - «تأیید لایحه `TaeedMLayehe` و ذخیره جریمه `FrmFine` را یکی می‌کنم» — یکی خواندن منبع ۱ است؛ یکی ذخیره ردیف است. `FrmFine` تابع `TaeedMLayehe` را صدا نمی‌زند.
 - «فرم ضابطه و محاسبه ضابطه شهر را یکی می‌کنم» — `FrmZabeteh` قفل ذخیره است نه موتور محاسبه (`E15-ZAB`).
@@ -221,6 +228,13 @@ alwaysApply: false
 | ابلاغ قانون درآمد های پایدار | `E17-INC-010` (Stop+Exit؛ قطار بعدش نمی‌رسد) |
 | پنجره Msgbox هنگام ذخیره درآمد | `E17-INC-007` (شش Msgbox) سپس Catch `E17-INC-013` |
 | کد حسابداری ندارد / نوع بستانکاری | `E17-INC-009` |
+| تایید مدیر شده مجاز به تغییر نیستید (موافقت) | `E18-MOV-002` (`TaeedMovafeghatOsooli`) |
+| مشکل در خواندن فیش های درامد | `E18-MOV-008` (عنوان «تحلیل») |
+| از سامانه ایساپ اقدام نمایید (UGP) | `E19-UGP-004` |
+| بدلیل داشتن درخواست جاری از گروه پایانکار | `E19-UGP-003` |
+| امکان انتخاب این دفتر یا کارشناس مورد نظر وجود ندارد | `E19-UGP-008` |
+| درخواست مشابه در شهرسازی (UGP) | `E19-UGP-009` سپس `E19-UGP-010` |
+| ثبت درخواست با مشکل با شکست مواجه شد | `E19-UGP-013` (Catch شاخه) |
 | عمق با مساحت زمین جور نیست | `E06-REVH-020` |
 | نما / جرم‌گذاری / مرحله ساختمان خالی | `E07-REVB-015` |
 | تجاری خطی/غیرخطی | `E07-REVB-017` |
@@ -238,7 +252,7 @@ alwaysApply: false
 
 1. `Parameter.FormName` را در جدول بخش‌ها پیدا کنید.
 2. فایل همان بخش را باز کنید و **همه قوانین همان تابع** را بخوانید — نه فقط عنوان نزدیک.
-3. قانون را با شناسه (`E01-…` تا `E17-…`) در پاسخ نام ببرید.
+3. قانون را با شناسه (`E01-…` تا `E19-…`) در پاسخ نام ببرید.
 4. الگوی موجود را کپی کنید؛ معماری تازه نسازید.
 5. Finglish و English را با هم جستجو کنید (`takhfif` / `discount` / `jarime` / `fine` / `zabeteh` / `mamor`).
 6. بلوک `If 1=2`، کامنت SAMPA، و `msgbox` را **فعال نکنید** مگر درخواست صریح.
@@ -283,6 +297,8 @@ alwaysApply: false
 | `E15-ZAB` | ضابطه (`FrmZabeteh` / `Zabeteh`) |
 | `E16-ASGN` | مامور بازدید (`AssignRevisit`) |
 | `E17-INC` | درآمد (`FnIncome` / `Income` + `IncomeFromMenu`) |
+| `E18-MOV` | موافقت اصولی + تعریف `FicheTaeed` |
+| `E19-UGP` | درخواست شهروندسپاری (`RequestUGP`) |
 
 هر قانون در فایل بخش با این بلوک مشخص است:
 
@@ -323,7 +339,9 @@ alwaysApply: false
 | ۱۵ | `urban-planning-etebarsanji-15-zabeteh.mdc` | `FrmZabeteh` + فلگ سرا۱۰ / دو فیش | `Zabeteh` |
 | ۱۶ | `urban-planning-etebarsanji-16-assign-revisit.mdc` | `AssignRevisit` + فیش قطعی / GIS / SMS | `AssignRevisit` |
 | ۱۷ | `urban-planning-etebarsanji-17-income.mdc` | `FnIncome` + `Check_Taghsid` / `FicheEnteghal` / `fn_FicheBazafrini_Shahrdari` / `getValueGhatar` | `Income` / `IncomeFromMenu` |
-| ۱۸+ | (در انتظار ارسال کد) | بازدید مغازه، پروانه، پایانکار، `RevisitAgent`، … | — |
+| ۱۸ | `urban-planning-etebarsanji-18-movafeghat.mdc` | `MovafeghatOsooli` + تعریف `FicheTaeed` | `MovafeghatOsooli` |
+| ۱۹ | `urban-planning-etebarsanji-19-request-ugp.mdc` | `RequestUGP` + `NewRequestOrder` / `NUser` / `CheckPayanKarGroup` | `RequestUGP` |
+| ۲۰+ | (در انتظار ارسال کد) | بازدید مغازه، پروانه، پایانکار، `RevisitAgent`، `Edite_Fani`، … | — |
 
 ---
 
@@ -424,6 +442,13 @@ alwaysApply: false
 | `E17-INC-008` | قفل تقسیط؛ If خالی `tarikhFich` | تقسیط | ۱۷ |
 | `E17-INC-010` | سیاهی پایدار Stop+Exit | درآمد | ۱۷ |
 | `E17-INC-012` | می‌نویسد عوارض قطار 100101 ثامن | درآمد+رایورز | ۱۷ |
+| `E18-MOV-001` | قفل فیش خود موافقت کامنت | درآمد | ۱۸ |
+| `E18-MOV-004` | `FicheTaeed` از Request می‌خواند نه لزوماً آرگومان | درآمد | ۱۸ |
+| `E18-MOV-006` | `Check_Hoshmand=False` بدون 163 | درآمد | ۱۸ |
+| `E19-UGP-003` | `CheckPayanKarGroup` پایانکار جاری | ثبت | ۱۹ |
+| `E19-UGP-010` | تکرار هم‌گروه `GetSara8Workflow` | ثبت | ۱۹ |
+| `E19-UGP-013` | `NewRequestOrder` تسک/SP | اثر جانبی | ۱۹ |
+| `E19-UGP-017` | `ExecSp` رمز در سورس | اثر جانبی | ۱۹ |
 
 ### فهرست کامل شناسه‌ها (همه قوانین نوشته‌شده)
 
@@ -448,8 +473,10 @@ alwaysApply: false
 | ۱۵ | `E15-ZAB-001`…`014` |
 | ۱۶ | `E16-ASGN-001`…`012` |
 | ۱۷ | `E17-INC-001`…`013` |
+| ۱۸ | `E18-MOV-001`…`008` |
+| ۱۹ | `E19-UGP-001`…`020` |
 
-جستجو: در فایل بخش عبارت `## قانون E0` یا `## قانون E10-MC` یا `## قانون E11-PEACE` یا `## قانون E12-AGREE` یا `## قانون E13-DISC` یا `## قانون E14-FINE` یا `## قانون E15-ZAB` یا `## قانون E16-ASGN` یا `## قانون E17-INC` را بزنید. هر قانون جدول SAMPA / شرط / اقدام / استثنا / زیرسیستم / الگوی تغییر دارد.
+جستجو: در فایل بخش عبارت `## قانون E0` یا `## قانون E10-MC` یا `## قانون E11-PEACE` یا `## قانون E12-AGREE` یا `## قانون E13-DISC` یا `## قانون E14-FINE` یا `## قانون E15-ZAB` یا `## قانون E16-ASGN` یا `## قانون E17-INC` یا `## قانون E18-MOV` یا `## قانون E19-UGP` را بزنید. هر قانون جدول SAMPA / شرط / اقدام / استثنا / زیرسیستم / الگوی تغییر دارد.
 
 ---
 
@@ -467,7 +494,7 @@ alwaysApply: false
 منبع: `CI_ResourceManagerConfirm` + `EumManagerConfirmLicence` (`1` = تأیید، `2` = لغو، در فرم `ManagerConfirm` همچنین `3` = عدم تأیید).  
 آخرین تأیید با آخرین لغو با `ConfirmationDate` و در تساوی `ConfirmationTime` مقایسه می‌شود.
 
-**قانون طلایی:** مقدار برگشتی `0` یعنی «تأیید فعال/برنده»، `1` یعنی «بدون تأیید برنده یا لغو برنده». **همیشه محل فراخوانی را بخوانید.** در بروکف و بازدید، `tmpTaeed=1` وقتی است که توابع `=1` برگردانند (یعنی مانع ویرایش نیست). در ۳٪ و در تحلیل ساختمان (`E09-ANL-004`) و در صلحنامه (`E11-PEACE-003` / `004`) شرط `=0` → Stop + در صلح Exit. در توافق (`E12-AGREE-004` / `005`) همان `=0` → Stop **بدون** Exit. در جریمه لایحه (`E14-FINE-001`) تابع `TaeedMLayehe` صدا نمی‌شود؛ همان مقایسه منبع ۱ در `Check_com` است (`0` محلی = تأیید برنده = Stop بدون Exit). در ضابطه (`E15-ZAB-004`) `TaeedMGavahi()=0` → Stop+Exit مگر یک GUID؛ صلح منبع ۶ را `TaeedMSolh` صدا نمی‌زند (`E15-ZAB-005`). در مامور بازدید (`E16-ASGN-002`) همان الگوی `tmpTaeed=1` بازدید است (چهار تأیید با سابقه). در درآمد (`E17-INC-008`) `TaeedMTaghsid()=0` → Stop «وجود تائید تقسیط» مگر `Modir_Daramad` یا `GetIdWorkflow=500` (کل بلوک رد می‌شود).
+**قانون طلایی:** مقدار برگشتی `0` یعنی «تأیید فعال/برنده»، `1` یعنی «بدون تأیید برنده یا لغو برنده». **همیشه محل فراخوانی را بخوانید.** در بروکف و بازدید، `tmpTaeed=1` وقتی است که توابع `=1` برگردانند (یعنی مانع ویرایش نیست). در ۳٪ و در تحلیل ساختمان (`E09-ANL-004`) و در صلحنامه (`E11-PEACE-003` / `004`) شرط `=0` → Stop + در صلح Exit. در توافق (`E12-AGREE-004` / `005`) همان `=0` → Stop **بدون** Exit. در جریمه لایحه (`E14-FINE-001`) تابع `TaeedMLayehe` صدا نمی‌شود؛ همان مقایسه منبع ۱ در `Check_com` است (`0` محلی = تأیید برنده = Stop بدون Exit). در ضابطه (`E15-ZAB-004`) `TaeedMGavahi()=0` → Stop+Exit مگر یک GUID؛ صلح منبع ۶ را `TaeedMSolh` صدا نمی‌زند (`E15-ZAB-005`). در مامور بازدید (`E16-ASGN-002`) همان الگوی `tmpTaeed=1` بازدید است (چهار تأیید با سابقه). در درآمد (`E17-INC-008`) `TaeedMTaghsid()=0` → Stop «وجود تائید تقسیط» مگر `Modir_Daramad` یا `GetIdWorkflow=500` (کل بلوک رد می‌شود). در موافقت اصولی (`E18-MOV-002`) `TaeedMovafeghatOsooli()=1` یعنی `tmpTaeed=1` (مانع نیست) مثل بروکف؛ وگرنه Stop+Exit.
 
 جزئیات جدول CI: بخش ۱، گروه `E01-TAEED`. خود زدن تأیید روی فرم مدیران بخش ۱۰ (`E10-MC`) است نه `TaeedM*`.
 
@@ -485,7 +512,8 @@ alwaysApply: false
 در جریمه لایحه (`E14-FINE-004`) Return در `NidWPenalti` می‌ماند و استفاده نمی‌شود؛ قفل فیلد وقتی `GuidWorkFlow = 151` باشد رد می‌شود.  
 در ضابطه (`E15-ZAB-007`) Return در `NidWDefff1` می‌ماند؛ فیش دوم `GuidWorkFlow` را می‌خواند (`E15-ZAB-010`).  
 در مامور بازدید (`E16-ASGN-003`) **Return `=1`** قفل فیش است.  
-در درآمد (`E17-INC-002`) Return در `NidWDefff` می‌ماند؛ قفل بدهکار/تهاتر از **`GuidWorkFlow=218`** است نه Return.
+در درآمد (`E17-INC-002`) Return در `NidWDefff` می‌ماند؛ قفل بدهکار/تهاتر از **`GuidWorkFlow=218`** است نه Return.  
+در شهروندسپاری (`E19-UGP-010`) Return در `ReqGroupOld/New` **مصرف می‌شود** (گروه بایگانی) — با دور ریختن بخش ۵ قاطی نکنید.
 
 ### ناحیه و ثامن
 
@@ -504,12 +532,14 @@ alwaysApply: false
 | بروکف | `Barokaf`, `BaroKaf`, `Darmasir`, `F_changeb`, `F_Omghb` |
 | بازدید | `bazdid`, `Revisit`, `ChekUser`, `tablet`, `UseBazdidT`, `FrmRevisitHouse`, `Revisit_House`, `frmRevisitHouseSharing`, `Revisit_HouseSharing`, `dastgah`, `AssignRevisit`, `مامور` |
 | تحلیل تخلف | `tahlil`, `AnalysisBuilding`, `CI_Penalty`, `FnMain`, `NocalcTahlil`, `kasri`, `HasTaeedTaghsit_Mng` |
-| درخواست | `darkhast`, `Request`, `FrmSh_Request`, `NidWorkflowDeff` |
-| درآمد / فیش | `daramad`, `Fiche`, `FicheTaeed`, `Income`, `FnIncome`, `IncomeFromMenu`, `Income_OddmentAccount`, `Check_Taghsid`, `FicheEnteghal`, `getValueGhatar`, `fn_FicheBazafrini_Shahrdari` |
+| درخواست | `darkhast`, `Request`, `FrmSh_Request`, `NidWorkflowDeff`, `RequestUGP`, `NewRequestOrder`, `CheckPayanKarGroup` |
+| درآمد / فیش | `daramad`, `Fiche`, `FicheTaeed`, `Check_Hoshmand`, `Income`, `FnIncome`, `IncomeFromMenu`, `Income_OddmentAccount`, `Check_Taghsid`, `FicheEnteghal`, `getValueGhatar`, `fn_FicheBazafrini_Shahrdari` |
 | تخفیف | `takhfif`, `AllDiscount`, `EditAllDiscount`, `AllDisCount`, `CI_Sara8Sys_DiscountType`, `RayanehCode`, `SuggestedDiscountValue` |
 | جریمه | `jarime`, `Fine`, `FrmFine`, `Commission_FinePenalty`, `CI_CommissionFinePenalty`, `Check_DoubleRow`, `HasShaki` |
 | ضابطه | `zabeteh`, `FrmZabeteh`, `Zabeteh`, `Base_PlanMojaz`, `Base_PlanMosavab`, `IsEditZabeteh`, `M_KarbariMojazMoj`, `TadvinZavabet` |
 | صلح | `solh`, `Peace`, `TaeedMSolh`, `FrmPeace`, `Peace_List`, `CI_PeaceType`, `PriorityPeace`, `Base_PlanMojaz` |
+| موافقت اصولی | `movafeghat`, `MovafeghatOsooli`, `TaeedMovafeghatOsooli`, `FicheTaeed`, `Check_Hoshmand` |
+| شهروندسپاری | `UGP`, `RequestUGP`, `NewRequestOrder`, `CheckPayanKarGroup`, `shahrvandspari` |
 | توافق | `tavafogh`, `Agreement`, `FrmAgreement`, `Agreement_List`, `CI_AgreementType`, `PriorityAgreement`, `MapHarim_Entezami_GH`, `Get_MYMojazData` |
 | مفاصا | `mafasa`, `5AEC0F88`, `F16712D1` |
 | کد ملی | `CheckMeli`, `CheckMeli2`, `NationalCode`, `meli` |
@@ -538,7 +568,9 @@ Run (E01)
  ├─ FrmFine (E14) ── جریمه لایحه؛ Check_com منبع ۱ بدون Exit؛ قفل فیلد TmpU=2/7؛ شاکی می‌نویسد نظر ۹؛ Check_DoubleRow روی لیست جاری
  ├─ FrmZabeteh (E15) ── قفل ذخیره ضابطه؛ دو فیش؛ گواهی+صلح ۶؛ Sara10 Contains؛ Exit بی‌شرط GIS لایه 678 را می‌کشد
  ├─ AssignRevisit (E16) ── اعلام مأمور؛ سرا۱۰ خالی؛ tmpTaeed چهار تأیید؛ فیش Return=1؛ GIS 10096؛ SMS 137 زنده
- └─ FnIncome (E17) ── دو FormName؛ 218 بدهکار/تهاتر ۸؛ Check_Taghsid ≠ Taghsid()؛ انتقال ۷ و 150/151؛ بازآفرینی 156؛ 500 کل قفل تقسیط؛ If خالی tarikhFich؛ سیاهی Exit؛ می‌نویسد 100101 ثامن؛ Catch فقط Msgbox
+ ├─ FnIncome (E17) ── دو FormName؛ 218 بدهکار/تهاتر ۸؛ Check_Taghsid ≠ Taghsid()؛ انتقال ۷ و 150/151؛ بازآفرینی 156؛ 500 کل قفل تقسیط؛ If خالی tarikhFich؛ سیاهی Exit؛ می‌نویسد 100101 ثامن؛ Catch فقط Msgbox
+ ├─ MovafeghatOsooli (E18) ── فیش کامنت؛ TaeedMovafeghatOsooli tmpTaeed؛ می‌نویسد 351؛ تعریف FicheTaeed (Request.NidProc؛ Check_Hoshmand 163)
+ └─ RequestUGP (E19) ── جدا از بخش ۵؛ CheckPayanKarGroup؛ GetSara8Workflow مصرف می‌شود؛ NewRequestOrder تسک؛ IsHere؛ ExecSp رمز در سورس
 ```
 
 - بروکف **سابقه** و ۳٪ را چک نمی‌کند؛ بازدید آپارتمان، ملک، ساختمان و دستگاه چک می‌کنند (دستگاه فقط یک ۳٪، بدون code13). تحلیل هر دو ۳٪ را دارد ولی صلح/سابقه ندارد.
@@ -562,6 +594,8 @@ Run (E01)
 - `FrmZabeteh` موتور محاسبه نیست. دو `FicheTaeed` دو `NidProc` دارند. `Exit Function` بی‌شرط مغایرت سند/لایه 678 را مرده می‌کند. مجاز روی مصوب `(0)` می‌نشیند.
 - `AssignRevisit` با `ChekUser` بازدید یکی نیست. سرا۱۰ خالی است. فیش `GetAll_Fiche` وضعیت ۳/۵ است نه `FicheTaeed`. 137 ثبت مرده؛ SMS زنده. `TmpArchiveGroup` اول ۰ می‌شود.
 - `FnIncome` دو FormName دارد. `Check_Taghsid` ≠ `Taghsid()` ≠ `TaeedMTaghsid`. `GetIdWorkflow=500` نقش و قفل تقسیط را خاموش می‌کند. If اول تقسیط بدنه خالی است. `getValueGhatar` روی ثامن `value` کد 100101 را **می‌نویسد**. سیاهی پایدار Exit دارد پس قطار ممکن است نرسد. Catch اصلی فقط Msgbox است.
+- `FicheTaeed` تعریف بخش ۱۸ است. روی خود موافقت قفل فیش کامنت است. `GetAll_Fiche` از `GetRequest.Info.NidProc` است. `Check_Hoshmand=False` گروه 163 را حذف می‌کند.
+- `RequestUGP` با بخش ۵ یکی نیست. `CheckPayanKarGroup=False` قفل است. `IsHere` پیش‌فرض ۰ است. راز SQL/املاک/قطع درخت را در مستند کپی نکنید.
 
 ---
 
@@ -572,10 +606,10 @@ Run (E01)
 | ضابطه | `E02-BARO-013`، `E06-REVH-017`، `E08-REVHS-013` (`AreaAfterEdit` دستگاه)، `E08-REVHS-014` (`Get_MojazDataArea`)، `E07-REVB-015` (`InfrastructureArea`)، `E04-APT-007`، عمق ملک `E06-REVH-020`، صلح نوع ۲۶ `E11-PEACE-010` (`BusyArea`/`DensityPercent`)، قفل چیدمان صلح `E11-PEACE-011`، توافق `FrontArea` `E12-AGREE-014`، سقف طبقه معبر `E12-AGREE-017`، قفل ذخیره فرم ضابطه `E15-ZAB` (فیش، گواهی، صلح ۶، سرا۱۰) |
 | تخلف / تحلیل | تغییر مساحت/کاربری بازدید و پرونده؛ کد 138/216/217؛ قفل `CI_Penalty` تحلیل `E09-ANL-014` / کسری پارکینگ `E09-ANL-017` |
 | کمیسیون ماده ۱۰۰ | اعمال قانون (`24B35887`)، لیست سیاه کمیسیون ۲۰، گروه `4a58bd9f`؛ رأی قدیم تحلیل `E09-ANL-009`؛ جریمه لایحه `E14-FINE` (شاکی، ۳٪، ردیف تکراری) |
-| درآمد / فیش | `Fiche`, `FicheTaeed` (بروکف، بازدید ملک، بازدید ساختمان، **تحلیل نوع ۲/۳**، **صلحنامه خانواده ۱ / 116–118** `E11-PEACE-002`، **توافق همیشه** `E12-AGREE-002` — نه دستگاه؛ **ضابطه دو بار** `E15-ZAB-003` / `010`)، فیش قطعی مامور بازدید `GetAll_Fiche` وضعیت ۳/۵ `E16-ASGN-003`، `ComfirmFiche` تایید مدیر `E10-MC-027`، `jobAV`, کد 352، وصول درآمد، تخفیف `E13-DISC` (تهاتر سیبنا، کمیته، ایثارگری، نوع ۲۰ استمهال)، **ذخیره درآمد `FnIncome`** (`E17-INC`: 218، جفت پروانه/پایانکار، انتقال ۷/150/151، بازآفرینی 156، سیاهی پایدار Exit) |
+| درآمد / فیش | `Fiche`, `FicheTaeed` (تعریف `E18-MOV-004`…`006`؛ بروکف، بازدید ملک، بازدید ساختمان، **تحلیل نوع ۲/۳**، **صلحنامه خانواده ۱ / 116–118** `E11-PEACE-002`، **توافق همیشه False** `E12-AGREE-002` — نه دستگاه؛ **ضابطه دو بار** `E15-ZAB-003` / `010`؛ **خود موافقت Stop فیش کامنت** `E18-MOV-001`)، فیش قطعی مامور بازدید `GetAll_Fiche` وضعیت ۳/۵ `E16-ASGN-003`، `ComfirmFiche` تایید مدیر `E10-MC-027`، `jobAV`, کد 352، وصول درآمد، تخفیف `E13-DISC` (تهاتر سیبنا، کمیته، ایثارگری، نوع ۲۰ استمهال)، **ذخیره درآمد `FnIncome`** (`E17-INC`: 218، جفت پروانه/پایانکار، انتقال ۷/150/151، بازآفرینی 156، سیاهی پایدار Exit) |
 | رایورز | تغییر مبلغ/فیش تأیید؛ SMS و حساب ناحیه؛ ارسال 137 از `ManagerConfirm` (`E10-MC-029`)؛ SMS مامور بازدید بدون SaveRequest (`E16-ASGN-011`)؛ نوشتن عوارض قطار 100101 ثامن `E17-INC-012` |
 | تقسیط | `TaeedMTaghsid` (منبع 16)، `HasTaeedTaghsit_Mng` در بازدید ساختمان و تحلیل (`E09-ANL-006`) و توافق (`E12-AGREE-003`)، الزام تایید تقسیط هنگام گواهی `E10-MC-012`، قفل ذخیره درآمد `E17-INC-008` (`TaeedMTaghsid=0`؛ If خالی `tarikhFich`)؛ تخلیه ناقص `Check_Taghsid` `E17-INC-004` |
-| دسترسی | `ChekUser`, تبلت, `Set_UserGroupId`, وایت‌لیست پلیس/کارگزار/درآمد؛ وایت‌لیست Sara10 تایید مدیر `E10-MC-015`؛ نقش `TmpU` جریمه لایحه `E14-FINE-003`؛ نقش محلی ضابطه سرا۱۰ `E15-ZAB-001` |
+| دسترسی | `ChekUser`, تبلت, `Set_UserGroupId`, وایت‌لیست پلیس/کارگزار/درآمد؛ وایت‌لیست Sara10 تایید مدیر `E10-MC-015`؛ نقش `TmpU` جریمه لایحه `E14-FINE-003`؛ نقش محلی ضابطه سرا۱۰ `E15-ZAB-001`؛ ثبت UGP `E19-UGP` (تکرار، لیست سیاه کاربر، `NUser` ناحیه) |
 | GIS | `Map`, `MapAmlak`, `MapHarimJame3`, `GettyMap`, `MapMosharekati`, `MapGosal` / `MapTarhJame3` در تایید مدیر، `MapHarim_Entezami_GH` توافق لایه‌های 1987/10695 (`E12-AGREE-011`)، همپوشانی مرده ضابطه لایه 678 کد ۳۹ `E15-ZAB-012`، Find مامور 5/839/1991/3710/3706/10096 `E16-ASGN-007` |
 | آتش‌نشانی | `E03-REV-011` (109/94)، `E07-REVB-023` (`2C1EE596`)، `FireFighting_Func` تایید مدیر `E10-MC-028` — دستگاه ندارد |
 | نوسازی صنفی | بدهی نوسازی/صنفی هنگام گواهی `E10-MC-026` (جدا از فیش درآمد ساخت) |
@@ -592,7 +626,7 @@ Run (E01)
 4. ناحیه 80 را با بقیه شهر یکی نکنید مگر متن SAMPA صریح باشد.
 5. `Sara10` / ایساپ / شهروندسپاری سه کانال جدا هستند.
 6. منطق مرده (`If 1=2`) را بدون SAMPA زنده نکنید.
-7. کلید 137 و رمز ArchiveCore را در SAMPA اعتبارسنجی عوض نکنید.
+7. کلید 137 و رمز ArchiveCore و رشته اتصال `ExecSp` شهروندسپاری را در SAMPA اعتبارسنجی عوض نکنید / کپی نکنید.
 
 ---
 
@@ -606,6 +640,7 @@ Run (E01)
 | `GuidWorkFlow` | کد نوع درخواست پس از معادل‌سازی | با Return تابع یکی نیست؛ در `FrmFine` مقدار 151 قفل فیلد را خاموش می‌کند (`E14-FINE-004`)؛ در `FrmZabeteh` فیش دوم 111/195/133/112/203/114 (`E15-ZAB-010`)؛ در `FnIncome` مقدار **218** بدهکار و تهاتر نوع ۸ را می‌بندد (`E17-INC-002` / `003`) |
 | `tarikhFich` | تاریخ فیش شهرداری (تایید مدیر نوع دیگر) | `FnIncome` آن را **نمی‌نویسد**؛ If خالی تقسیط `<"1397/10/15"` از مقدار ماژول می‌خواند (`E17-INC-008` / `E10-MC-026`) |
 | `UserIdGroup` / `Modir_Daramad` / `GroupDaramad` | نقش تحلیل/درآمد | `FnIncome` اول `UserIdGroup=0` سپس `Set_UserGroupId` مگر `GetIdWorkflow=500`؛ دو GUID مدیر درآمد را True می‌کنند (`E17-INC-007` / `008` / `E09-ANL-010`) |
+| `IsHere` / `List_ReAg` / `Request_EslahParvaneh` / `M_DtMojazPayankar` / `strOut` | شهروندسپاری | `NewRequestOrder` فقط با `IsHere=1` احراز می‌کند (`E19-UGP-014`)؛ `KindParvane` در مسیر زنده `RequestUGP` صدا نمی‌شود |
 | `Darmasir` | مجموع در مسیر بروکف | سطح ماژول؛ بین فراخوانی‌ها باقی می‌ماند |
 | `jobAV` | محل فعالیت / شغل | وایت‌لیست گروه را دور می‌زند |
 | `HarimAmniyati` | در شروع `Run` = False | توافق اگر نقشه Return=1 و ناحیه نوسازی 11 باشد True می‌کند (`E12-AGREE-013`) |

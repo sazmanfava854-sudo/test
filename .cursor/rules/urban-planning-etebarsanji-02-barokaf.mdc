@@ -243,7 +243,7 @@ alwaysApply: false
 | اقدام | `F_changeb=False` → **Stop** «مجاز به تغییر نیست». `F_changeb=True` → **Warning** همان متن (ذخیره با هشدار) |
 | استثنا | اگر `FicheTaeed <> 0` این بلوک قفل نمی‌کند |
 | اثر زیرسیستم | درآمد + رایورز + بروکف |
-| الگوی تغییر | تعریف تابع در `MovafeghatOsooli` است؛ هر دو فرم را با هم ببینید |
+| الگوی تغییر | تعریف تابع در `MovafeghatOsooli` است (`E18-MOV-004`)؛ هر دو فرم را با هم ببینید. روی خود موافقت Stop فیش کامنت است |
 
 بدون `E02-BARO-007` این قانون ناقص است.
 
@@ -416,7 +416,7 @@ alwaysApply: false
 | نام | محل |
 |-----|------|
 | `Map`, `Set_UserGroupId`, `LstUserGroupId` | کلاس فرمول / بخش ۱ و ۵ |
-| `FicheTaeed` | `MovafeghatOsooli` |
+| `FicheTaeed` | `MovafeghatOsooli` — متن کامل `E18-MOV` |
 | `GetSara8Workflow`, `SaveCheck`, `getTime` | مشترک |
 | `TaeedMGavahi`, `TaeedMLayehe`, `TaeedMSolh`, `CheckChar` | بخش ۱ |
 | `MapPriceNew` | کامنت 93986 |

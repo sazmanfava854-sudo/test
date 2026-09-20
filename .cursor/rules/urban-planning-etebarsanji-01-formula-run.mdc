@@ -96,10 +96,10 @@ alwaysApply: false
 | FormName | Call | قانون وابسته | یادداشت حیاتی |
 |----------|------|----------------|----------------|
 | `EditRequest` | `EditRequest()` | — | `tmpStr` از Request |
-| `MovafeghatOsooli` | `MovafeghatOsooli()` | `FicheTaeed` اینجا تعریف می‌شود | بروکف به همین فیش وابسته است |
+| `MovafeghatOsooli` | `MovafeghatOsooli()` | بخش ۱۸ (`E18-MOV`) | تعریف `FicheTaeed`؛ قفل فیش خود فرم کامنت؛ `tmpTaeed` منبع ۵؛ می‌نویسد نوع 351 |
 | `MokatebatConfirm` | `MokatebatConfirm()` | `TaeedMMokateb` | |
 | `AssignRevisit` | `AssignRevisit()` | بخش ۱۶ (`E16-ASGN`) | سرا۱۰ خالی؛ `tmpTaeed` چهار تأیید؛ فیش Return=1 Exit؛ SMS 137 زنده |
-| `RevisitAgent` | `RevisitAgent()` | ۱۸+ | |
+| `RevisitAgent` | `RevisitAgent()` | ۲۰+ | |
 | `OfficesInquiry` | `OfficesInquiry()` | — | |
 | `AllDiscount` / `EditAllDiscount` | `AllDisCount()` | بخش ۱۳ (`E13-DISC`) | هر دو FormName یک تابع. نوع ۲۲ سیبنا+Exit؛ ۱۲–۱۶/۱۹ Exit کمیته؛ سقف تعداد ۱۳۹۶ |
 | `Fine` | `FrmFine()` | بخش ۱۴ (`E14-FINE`) | ذخیره ردیف لایحه؛ `Check_com` منبع ۱ inline نه `TaeedMLayehe` |
@@ -113,13 +113,13 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۸+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۲۰+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۱۸+ | |
-| `MissFoul` | `frmsh_*` | ۱۸+ | |
-| `Payankar` | `frmsh_*` | ۱۸+ | |
-| `InquiryResponse` | `frmsh_*` | ۱۸+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۲۰+ | |
+| `MissFoul` | `frmsh_*` | ۲۰+ | |
+| `Payankar` | `frmsh_*` | ۲۰+ | |
+| `InquiryResponse` | `frmsh_*` | ۲۰+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
 | `ManagerConfirm` | `ManagerConfirm()` | بخش ۱۰ (`E10-MC`) | زدن تأیید همین لحظه — نه `TaeedM*`. اثر جانبی SMS/آتش‌نشانی/گزارش؛ منبع 23 با `ChekCi`؛ Licence 3 = عدم تأیید |
 | `Peace_List` | `FrmPeace()` | بخش ۱۱ (`E11-PEACE`) | ذخیره ردیف صلح — نه زدن تأیید منبع ۶. فیش فقط خانواده ۱ / 116–118؛ نوع ۲۶ می‌نویسد `Base_PlanMojaz` |
@@ -127,11 +127,11 @@ alwaysApply: false
 | `Commission` | `Commission()` | کمیسیون ماده ۱۰۰ | |
 | `Income` / `IncomeFromMenu` | `FnIncome()` | بخش ۱۷ (`E17-INC`) | هر دو FormName یک تابع. 218 بدهکار/تهاتر ۸؛ `Check_Taghsid` ≠ `Taghsid()`؛ انتقال ۷ و 150/151؛ بازآفرینی 156؛ `GetIdWorkflow=500` کل قفل تقسیط؛ If خالی `tarikhFich`؛ سیاهی Exit؛ می‌نویسد 100101 ثامن؛ Catch فقط Msgbox |
 | `ShenasnameFani` | `FnShenasnameFani()` | شناسنامه فنی | |
-| `RequestUGP` | `RequestUGP()` | UGP | |
-| `MovafeghatOsooliUGP` | `Edite_Fani()` | UGP | |
-| `Agreement_ListUGP` | `Edite_Fani()` در **ابتدا** | UGP | قبل از مسیریاب اصلی |
+| `RequestUGP` | `RequestUGP()` | بخش ۱۹ (`E19-UGP`) | جدا از `Request`. `CheckPayanKarGroup`؛ `NewRequestOrder` تسک؛ `IsHere`؛ `ExecSp` رمز در سورس |
+| `MovafeghatOsooliUGP` | `Edite_Fani()` | ۲۰+ | |
+| `Agreement_ListUGP` | `Edite_Fani()` در **ابتدا** | ۲۰+ | قبل از مسیریاب اصلی |
 
-**قانون برای AI:** اگر کاربر «اعتبارسنجی درخواست» گفت، فقط `Request` نیست — `EditRequest` و `RequestUGP` توابع جدا دارند. بدون کد آن توابع حدس نزنید.
+**قانون برای AI:** اگر کاربر «اعتبارسنجی درخواست» گفت، فقط `Request` نیست — `EditRequest` و `RequestUGP` توابع جدا دارند. بدون کد `EditRequest` حدس نزنید. `RequestUGP` بخش ۱۹ است.
 
 ---
 
@@ -222,7 +222,7 @@ tmpTaeed = 1   فقط اگر
 | `TaeedMGavahi` | 3 | گواهی | بروکف، بازدید؛ **ضابطه `FrmZabeteh`** (`E15-ZAB-004` — `=0` Stop+Exit مگر GUID `8445278B`)؛ **مامور بازدید** داخل `tmpTaeed` (`E16-ASGN-002`) |
 | `TaeedMGavahi1` | 3 **یا** 4 | گواهی یا سابقه | درخواست: پیوست تأییدشده |
 | `TaeedMSabeghe` | 4 | سابقه | بازدید آپارتمان (بروکف ندارد)؛ **مامور بازدید** داخل `tmpTaeed` (`E16-ASGN-002`) |
-| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت؛ تحلیل نوع ۳ (`E09-ANL-004`)؛ **صلحنامه `FrmPeace`** (`E11-PEACE-004` Exit)؛ **توافق `FrmAgreement`** (`E12-AGREE-005` بدون Exit) |
+| `TaeedMMovafeghat` / `TaeedMovafeghatOsooli` | 5 | موافقت اصولی | موافقت **خود فرم `MovafeghatOsooli`** (`E18-MOV-002` — `=1` یعنی `tmpTaeed` مانع نیست)؛ تحلیل نوع ۳ (`E09-ANL-004`)؛ **صلحنامه `FrmPeace`** (`E11-PEACE-004` Exit)؛ **توافق `FrmAgreement`** (`E12-AGREE-005` بدون Exit) |
 | `TaeedMSolh` | 6 | صلح (+ `Peace_AgreementTaeedDate/Time`) | بروکف، بازدید؛ **صلحنامه `FrmPeace`** (`E11-PEACE-003` — `=0` یعنی Stop+Exit)؛ **توافق** (`E12-AGREE-004` — Stop بدون Exit)؛ **ضابطه این تابع را صدا نمی‌زند** — منبع ۶ را در `FLg` تکرار می‌کند (`E15-ZAB-005`)؛ **مامور بازدید** داخل `tmpTaeed` (`E16-ASGN-002`) |
 | `TaeedMShenasnameFani` | 8 | شناسنامه فنی | شناسنامه |
 | `Taeed3darsad` | 10 | خطای محاسباتی ۳٪ | بازدید آپارتمان؛ تحلیل `E09-ANL-004` |
@@ -319,12 +319,14 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 | اثر زیرسیستم | درآمد، رایورز، تقسیط |
 | الگوی تغییر | گردش‌کار جدید را به لیست معاف **فقط اگر SAMPA معافیت فیش بخواهد** اضافه کنید |
 
-`FicheTaeed(NidProc)` (تعریف در فرمول موافقت اصولی):
+`FicheTaeed(TmpNid, Optional Check_Hoshmand = True)` — تعریف کامل بخش ۱۸ (`E18-MOV-004`…`008`):
 
 - بازگشت `0` = فیش تأییدشده **دارد** → در بروکف ویرایش قفل یا Warning (بسته به `F_changeb`).
-- غیر 0 = فیش تأیید مانع نیست.
-- در توافق صدا با **دو آرگومان** است: `FicheTaeed(NidProc, False)` (`E12-AGREE-002`). معنی آرگومان دوم را بدون تعریف تابع حدس نزنید.
+- غیر 0 = فیش تأیید مانع نیست. پیش‌فرض `Check_com=1`.
+- `GetAll_Fiche` از **`GetRequest.Info.NidProc`** است نه لزوماً آرگومان `TmpNid`.
+- در توافق صدا با **دو آرگومان** است: `FicheTaeed(NidProc, False)` (`E12-AGREE-002`) یعنی بدون گروه حساب 163 (`E18-MOV-006`).
 - در ضابطه **دو بار** صدا می‌شود: اول `GetZabeteh.NidProc` (ناظر Warning) (`E15-ZAB-003`)؛ دوم `GetRequest.info.NidProc` فقط چند `GuidWorkFlow`/GUID (`E15-ZAB-010`).
+- روی خود موافقت Stop فیش **کامنت** است (`E18-MOV-001`).
 - مامور بازدید `FicheTaeed` نیست؛ `GetAll_Fiche` وضعیت ۳ یا ۵ است (`E16-ASGN-003`).
 - درآمد `FicheTaeed` نیست: `FicheEnteghal` وضعیت ۷ و جفت 150/151 (`E17-INC-005`)؛ `fn_FicheBazafrini_Shahrdari` گروه 156 (`E17-INC-006`)؛ `Check_Taghsid` وضعیت ۳/۵ + لیست قسط (`E17-INC-004`). با `FicheBazAfrini_No_Taeed` تایید مدیر یکی نکنید.
 

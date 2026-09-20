@@ -332,4 +332,4 @@ Try/Catch دور تابع اصلی: Catch فقط **`Msgbox("ErroDaramad", ex.tos
 
 # ایمنی
 
-فقط FormNameهای `Income` و `IncomeFromMenu`. تغییر لیست سیاه یا قطار روی **درآمد و رایورز** اثر دارد. بازدید مغازه / پروانه / پایانکار / `RevisitAgent` بخش ۱۸+ است.
+فقط FormNameهای `Income` و `IncomeFromMenu`. تغییر لیست سیاه یا قطار روی **درآمد و رایورز** اثر دارد. بازدید مغازه / پروانه / پایانکار / `RevisitAgent` بخش ۲۰+ است.
