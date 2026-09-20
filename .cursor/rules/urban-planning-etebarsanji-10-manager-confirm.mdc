@@ -237,7 +237,7 @@ GUID `4c052600-bab2-48f8-a1c7-5df81741281c` در مسیر **زنده** جدا ب
 | اثر زیرسیستم | تقسیط + درآمد |
 | الگوی تغییر | `Return True` اول `TaghsidTaeed28` را بدون SAMPA حذف نکنید. `Taghsid` مقدار 1=دارد تقسیط، 2=چک سررسیدنشده در حالت Check=1 |
 
-`Taghsid(nidpro, Check)` فیش گروه‌حساب شهرداری را می‌خواند؛ اگر `LoadObj` قسط لیست داشته باشد 1 برمی‌گرداند.
+`Taghsid(nidpro, Check)` فیش گروه‌حساب شهرداری را می‌خواند؛ اگر `LoadObj` قسط لیست داشته باشد 1 برمی‌گرداند. با `Check_Taghsid` درآمد (`E17-INC-004`) یکی نیست — آن تابع تخلیه ناقص را Stop می‌کند و آرگومان‌ها را مصرف نمی‌کند. `tarikhFich` اینجا روی نوع دیگر پر می‌شود و در `FnIncome` خوانده می‌شود (`E17-INC-008`).
 
 ---
 
@@ -591,7 +591,7 @@ GUID `4c052600-bab2-48f8-a1c7-5df81741281c` در مسیر **زنده** جدا ب
 | `ElzamNewWebServices` / `Tamin` | وب‌سرویس ثبت / تامین |
 | `ObligationBime` / `TaeedBime` | منابع 30 و 20 |
 | `GetCreatedTaskDate` / `ControlCheck` | نود Camunda / چک‌لیست |
-| `FicheBazAfrini_No_Taeed` و خانواده | فیش بازآفرینی 156 / قطار 153 / سپرده 151 / 150 / معبر |
+| `FicheBazAfrini_No_Taeed` و خانواده | فیش بازآفرینی 156 / قطار 153 / سپرده 151 / 150 / معبر — با `fn_FicheBazafrini_Shahrdari` / `FicheEnteghal` درآمد (`E17-INC-005` / `006`) یکی نکنید |
 | `GhaleCom100` | احراز قلع |
 | `NodeType` | تسک باز |
 | `AllVot_InTotalcod` | رأی 700028 |

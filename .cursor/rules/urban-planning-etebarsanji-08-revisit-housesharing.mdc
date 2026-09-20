@@ -512,4 +512,4 @@ alwaysApply: false
 
 ## ایمنی
 
-فقط `FormName = Revisit_HouseSharing`. بازدید مغازه و بقیه فرم‌ها بخش ۱۷+ است. نوشتن `AreaAfterEdit` بروکف و `FrontArea` روی ضابطه و درآمد اثر دارد. مرتب‌سازی با `And` بیتی و `Msgbox` زنده را «باگ واضح برای فیکس خاموش» ندانید.
+فقط `FormName = Revisit_HouseSharing`. بازدید مغازه و بقیه فرم‌ها بخش ۱۸+ است. نوشتن `AreaAfterEdit` بروکف و `FrontArea` روی ضابطه و درآمد اثر دارد. مرتب‌سازی با `And` بیتی و `Msgbox` زنده را «باگ واضح برای فیکس خاموش» ندانید.
