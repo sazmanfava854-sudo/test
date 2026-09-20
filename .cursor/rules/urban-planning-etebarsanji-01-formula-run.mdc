@@ -101,7 +101,7 @@ alwaysApply: false
 | `AssignRevisit` | `AssignRevisit()` | — | |
 | `RevisitAgent` | `RevisitAgent()` | — | |
 | `OfficesInquiry` | `OfficesInquiry()` | — | |
-| `AllDiscount` / `EditAllDiscount` | `AllDisCount()` | درآمد / تخفیف | هر دو FormName یک تابع |
+| `AllDiscount` / `EditAllDiscount` | `AllDisCount()` | بخش ۱۳ (`E13-DISC`) | هر دو FormName یک تابع. نوع ۲۲ سیبنا+Exit؛ ۱۲–۱۶/۱۹ Exit کمیته؛ سقف تعداد ۱۳۹۶ |
 | `Fine` | `FrmFine()` | جریمه کمیسیون | |
 | `DutyExemption` | `FrmDutyExemption()` | معافیت عوارض | |
 | `Zabeteh` | `FrmZabeteh()` | ضابطه | |
@@ -113,13 +113,13 @@ alwaysApply: false
 | `Revisit_House` | `FrmRevisitHouse()` | بخش ۶ | فیش + نوشتن `AreaAfterEdit` بروکف |
 | `Revisit_Building` | `FrmRevisitBuilding()` | بخش ۷ | فیش مشروط؛ `InfrastructureArea`؛ آتش‌نشانی جدا |
 | `Revisit_HouseSharing` | `frmRevisitHouseSharing()` | بخش ۸ | بدون فیش؛ `AreaAfterEdit` بروکف؛ Call `Get_MojazDataArea` |
-| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۳+ | مغازه، … |
+| `Revisit_*` دیگر | `FrmRevisit*` / `frmRevisit*` | ۱۴+ | مغازه، … |
 | `Barokaf` | `FrmSh_Barokaf()` | بخش ۲ | |
 | `Request` | `FrmSh_Request()` | بخش ۵ | |
-| `Parvaneh` | `frmsh_Parvaneh()` | ۱۳+ | |
-| `MissFoul` | `frmsh_*` | ۱۳+ | |
-| `Payankar` | `frmsh_*` | ۱۳+ | |
-| `InquiryResponse` | `frmsh_*` | ۱۳+ | |
+| `Parvaneh` | `frmsh_Parvaneh()` | ۱۴+ | |
+| `MissFoul` | `frmsh_*` | ۱۴+ | |
+| `Payankar` | `frmsh_*` | ۱۴+ | |
+| `InquiryResponse` | `frmsh_*` | ۱۴+ | |
 | `AnalysisBuilding_1` / `_2` / `_3` | `FrmAnalysisBuilding()` | بخش ۹ | سه FormName یک تابع؛ فیش/تقسیط فقط ۲ و ۳ |
 | `ManagerConfirm` | `ManagerConfirm()` | بخش ۱۰ (`E10-MC`) | زدن تأیید همین لحظه — نه `TaeedM*`. اثر جانبی SMS/آتش‌نشانی/گزارش؛ منبع 23 با `ChekCi`؛ Licence 3 = عدم تأیید |
 | `Peace_List` | `FrmPeace()` | بخش ۱۱ (`E11-PEACE`) | ذخیره ردیف صلح — نه زدن تأیید منبع ۶. فیش فقط خانواده ۱ / 116–118؛ نوع ۲۶ می‌نویسد `Base_PlanMojaz` |
@@ -443,7 +443,7 @@ Licence در خود فرم مدیران: `1` تأیید، `2` ابطال، `3` �
 |------|--------|
 | شدت | دیباگ |
 | شرط | محدود به GUID کاربر مشخص |
-| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`). در تحلیل `Msgbox("", 123456)` هر ردیف (`E09-ANL-019`) و ورود `ReadComVote`. در صلحنامه مسیر `1*` / `صلحنامه:` 1 تا 9 / `صلحنامه E:` زنده است (`E11-PEACE-012`). در توافق `Msgbox("F", عرض معبر/طبقه)` زنده است (`E12-AGREE-017`) |
+| اقدام | در بروکف `msgbox` خالی و `Msgbox("a", n)` برای trace مرحله. در بازدید دستگاه `Msgbox` روی کد 250 **بدون فیلتر کاربر** زنده است (`E08-REVHS-019`). در تحلیل `Msgbox("", 123456)` هر ردیف (`E09-ANL-019`) و ورود `ReadComVote`. در صلحنامه مسیر `1*` / `صلحنامه:` 1 تا 9 / `صلحنامه E:` زنده است (`E11-PEACE-012`). در توافق `Msgbox("F", عرض معبر/طبقه)` زنده است (`E12-AGREE-017`). در تخفیف `Msgbox("##########B#########:" …)` و `logfilefj` زنده‌اند (`E13-DISC-011`) |
 | الگوی تغییر | قبل از انتشار پاک یا بی‌اثر نگه دارید مگر SAMPA؛ منطق کسب‌وکار داخل `msgbox` نگذارید. پاک کردن Msgbox دستگاه رفتار UI شهر را عوض می‌کند |
 
 ---
