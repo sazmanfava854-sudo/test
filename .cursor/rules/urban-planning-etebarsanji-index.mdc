@@ -14,7 +14,8 @@ alwaysApply: false
 | ۱ | `urban-planning-etebarsanji-01-formula-run.mdc` | `Run()` — مسیریابی فرم، متغیرهای ماژول، `TaeedM*`، `Fiche`, `MapPriceNew`, کمکی‌ها |
 | ۲ | `urban-planning-etebarsanji-02-barokaf.mdc` | `frmsh_barokaf()` — اعتبارسنجی **بروکف** (`FormName = Barokaf` → `FrmSh_Barokaf`) |
 | ۳ | `urban-planning-etebarsanji-03-revisit-apartment.mdc` | `FrmRevisitApartment()` — **بازدید آپارتمان** (`FormName = Revisit_Apartment`) |
-| ۴+ | (در انتظار ارسال) | سایر بازدیدها (`Revisit_House`, `Revisit_Building`, …) و فرم‌های دیگر |
+| ۴ | `urban-planning-etebarsanji-04-parvandeh-apartment.mdc` | `FrmApartment()` — **پرونده آپارتمان** + `CheckMeli` / `CheckMeli2` |
+| ۵+ | (در انتظار ارسال) | سایر پرونده‌ها / بازدیدها |
 
 ## قراردادهای مشترک
 
