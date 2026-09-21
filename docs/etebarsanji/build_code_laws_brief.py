@@ -105,7 +105,7 @@ def add_p(doc, text, *, size=12, bold=False, color=DARK, align="justify",
     set_paragraph_rtl(p, align=align, space_after=space_after, space_before=space_before)
     if first_line is not None:
         p.paragraph_format.first_line_indent = Cm(first_line)
-    fill_mixed(p, text, size=size, bold=bold, color=color, font=font)
+    fill_mixed(p, half_space(str(text)), size=size, bold=bold, color=color, font=font)
     return p
 
 
@@ -139,7 +139,7 @@ def set_cell_text(cell, text, *, bold=False, size=10.5, color=DARK, align="right
     for i, piece in enumerate(pieces):
         p = cell.paragraphs[0] if i == 0 else cell.add_paragraph()
         set_paragraph_rtl(p, align=align, space_after=2, space_before=2, line=1.1)
-        fill_mixed(p, piece, size=size, bold=bold, color=color, font=font)
+        fill_mixed(p, half_space(piece), size=size, bold=bold, color=color, font=font)
     if fill:
         shade_cell(cell, fill)
     set_cell_border(
@@ -163,10 +163,10 @@ def add_bullet(doc, text, *, bold_prefix=None):
     set_paragraph_rtl(p, align="justify", space_after=4, space_before=1)
     p.paragraph_format.left_indent = Cm(0.4)
     if bold_prefix:
-        fill_mixed(p, "•  " + bold_prefix, size=12, bold=True, color=NAVY)
-        fill_mixed(p, text, size=12, color=DARK)
+        fill_mixed(p, "•  " + half_space(bold_prefix), size=12, bold=True, color=NAVY)
+        fill_mixed(p, half_space(text), size=12, color=DARK)
     else:
-        fill_mixed(p, "•  " + text, size=12, color=DARK)
+        fill_mixed(p, "•  " + half_space(text), size=12, color=DARK)
     return p
 
 
@@ -185,11 +185,11 @@ def add_callout(doc, title, body, fill=GOLD_BG):
     cell.text = ""
     p1 = cell.paragraphs[0]
     set_paragraph_rtl(p1, align="right", space_after=4, space_before=4)
-    fill_mixed(p1, title, size=12, bold=True, color=NAVY, font=HEAD_FONT)
-    for piece in shorten(body):
+    fill_mixed(p1, half_space(title), size=12, bold=True, color=NAVY, font=HEAD_FONT)
+    for piece in as_paragraphs(body):
         p2 = cell.add_paragraph()
         set_paragraph_rtl(p2, align="justify", space_after=4, space_before=0)
-        fill_mixed(p2, piece, size=11.5, color=DARK)
+        fill_mixed(p2, half_space(piece), size=11.5, color=DARK)
     doc.add_paragraph()
 
 
@@ -220,35 +220,81 @@ def simplify_text(s: str) -> str:
         s = s.replace(a, b)
     s = re.sub(r"\s+", " ", s).strip()
     s = re.sub(r"\s+[—\-]\s*$", "", s)
+    return half_space(s)
+
+
+ZWNJ = "\u200c"
+
+
+def half_space(s: str) -> str:
+    """Persian half-space and punctuation. Do not touch English names."""
+    if not s:
+        return s
+    s = s.replace("\u200c", "")
+    s = re.sub(r"(?<![آ-ی])(ن?می)[\s]*([\u0600-\u06FF])", r"\1" + ZWNJ + r"\2", s)
+    s = re.sub(
+        r"(شده|کرده|بوده|آمده|رفته|گرفته|زده|داده|نوشته|گفته)[\s]*(اند|ام|ای|ایم|اید)\b",
+        r"\1" + ZWNJ + r"\2",
+        s,
+    )
+    for stem in ("فرم", "ذخیره", "کنترل", "ردیف", "قفل", "قانون", "برنامه", "ابزار"):
+        s = s.replace(stem + "ها", stem + ZWNJ + "ها")
+        s = s.replace(stem + "های", stem + ZWNJ + "های")
+    s = re.sub(r"همه[\s]*ی", "همه" + ZWNJ + "ی", s)
+    for a, b in (
+        ("همین جا", "همین‌جا"),
+        ("همینجا", "همین‌جا"),
+        ("این جا", "این‌جا"),
+        ("آن ها", "آن‌ها"),
+        ("این ها", "این‌ها"),
+        ("بی حساب", "بی‌حساب"),
+        ("هیچ کدام", "هیچ‌کدام"),
+        ("به خاطر", "به‌خاطر"),
+        ("به جز", "به‌جز"),
+        ("آن چه", "آنچه"),
+        (" :", ":"),
+        ("،.", "."),
+        ("..", "."),
+    ):
+        s = s.replace(a, b)
+    s = re.sub(r"\s+([،؛.؟!])", r"\1", s)
+    s = re.sub(r"([،؛])(\S)", r"\1 \2", s)
+    s = re.sub(r"\s+", " ", s).strip()
     return s
 
 
-def shorten(text: str):
-    """One idea per sentence. Do not split on «و» because the meaning breaks."""
-    if not text:
+def as_paragraphs(texts, max_paras=2):
+    """Join short fragments into one or two punctuated paragraphs."""
+    if not texts:
         return []
-    t = simplify_text(text)
-    t = t.replace("؛", ". ")
-    t = t.replace(" — ", ". ").replace(" – ", ". ")
-    parts = re.split(r"(?<=[.؟!])\s+", t)
-    out = []
-    for part in parts:
-        part = part.strip(" .،")
-        if not part:
-            continue
-        if len(part) > 160:
-            chunks = re.split(r"،\s+", part)
-            buf = chunks[0]
-            for ch in chunks[1:]:
-                if len(buf) + len(ch) < 120:
-                    buf += "، " + ch
-                else:
-                    out.append(buf + ".")
-                    buf = ch
-            out.append(buf if buf.endswith((".", "؟", "!")) else buf + ".")
-        else:
-            out.append(part if part.endswith((".", "؟", "!")) else part + ".")
-    return out or ([simplify_text(text) + "."] if text else [])
+    if isinstance(texts, str):
+        texts = [texts]
+    bits = []
+    for t in texts:
+        t = simplify_text(t) if t else ""
+        t = t.strip(" .،؛")
+        if t:
+            bits.append(t)
+    if not bits:
+        return []
+    joined = ". ".join(bits)
+    if not joined.endswith((".", "؟", "!")):
+        joined += "."
+    joined = half_space(joined)
+    joined = re.sub(r"\.\s*\.", ".", joined)
+    if len(joined) > 450 and max_paras >= 2:
+        mid = len(joined) // 2
+        cut = joined.rfind(". ", 0, mid + 100)
+        if cut > 100:
+            a, b = joined[: cut + 1].strip(), joined[cut + 1:].strip()
+            if b and not b.endswith((".", "؟", "!")):
+                b += "."
+            return [half_space(a), half_space(b)]
+    return [joined]
+
+
+def shorten(text: str):
+    return as_paragraphs(text)
 
 
 RULES = Path("/workspace/.cursor/rules")
@@ -308,104 +354,61 @@ SECTION_TITLE = {
 
 SECTION_BLURB = {
     "urban-planning-etebarsanji-01-formula-run.mdc": [
-        "وقتی کارشناس ذخیره می‌زند، اول این قسمت اجرا می‌شود.",
-        "از روی نام فرم، برنامه همان صفحه را صدا می‌زند.",
-        "تأیید مدیر و فیش شهرداری هم همین‌جا تعریف شده‌اند.",
-        "محل فرایند هم همین‌جا مشخص می‌شود. نام در برنامه: GetIdWorkflow",
-        "نام این قسمت در برنامه: Run",
+        "وقتی کارشناس ذخیره می‌زند، نخست همین قسمت اجرا می‌شود؛ نام آن در برنامه Run است. این فایل خودِ بروکف یا درخواست نیست، بلکه لابی ورود همه‌ی ذخیره‌هاست: Run از روی نام فرم، تابع همان صفحه را صدا می‌زند. تأیید مدیر، فیش شهرداری و محل فرایند هم همین‌جا تعریف شده‌اند. محل فرایند یعنی این درخواست مال کدام فرایند است و نام آن در برنامه GetIdWorkflow است.",
     ],
     "urban-planning-etebarsanji-02-barokaf.mdc": [
-        "این فرم بر و کف ملک را ذخیره می‌کند.",
-        "اگر تأیید مدیر یا فیش مانع باشد، ذخیره انجام نمی‌شود.",
-        "گاهی مساحت باقیمانده را هم در ملک می‌نویسد.",
-        "نام این فرم در برنامه: Barokaf",
+        "این فرم بر و کف ملک را ذخیره می‌کند و نام آن در برنامه Barokaf است. اگر تأیید مدیر یا فیش مانع باشد، ذخیره انجام نمی‌شود؛ گاهی مساحت باقیمانده هم در ملک نوشته می‌شود.",
     ],
     "urban-planning-etebarsanji-03-revisit-apartment.mdc": [
-        "این فرم وضع موجود واحد آپارتمان را ذخیره می‌کند.",
-        "مالک، زیربنا و چند قفل مشترک اینجا کنترل می‌شود.",
-        "نام این فرم در برنامه: Revisit_Apartment",
+        "این فرم وضع موجود واحد آپارتمان را ذخیره می‌کند و نام آن در برنامه Revisit_Apartment است. مالک، زیربنا و چند قفل مشترک همین‌جا کنترل می‌شود.",
     ],
     "urban-planning-etebarsanji-04-parvandeh-apartment.mdc": [
-        "این فرم پرونده آپارتمان است.",
-        "کد ملی، مالک و زیربنا را قبل از ذخیره چک می‌کند.",
-        "نام این فرم در برنامه: Parvandeh_Apartment",
+        "این فرم پرونده آپارتمان است و نام آن در برنامه Parvandeh_Apartment است. پیش از ذخیره، کد ملی، مالک و زیربنا را بررسی می‌کند.",
     ],
     "urban-planning-etebarsanji-05-request.mdc": [
-        "این فرم درخواست را از داخل سرا۸ ثبت می‌کند.",
-        "بعضی نوع درخواست‌ها اینجا بسته است و باید از مسیر دیگر بیاید.",
-        "نام این فرم در برنامه: Request",
+        "این فرم درخواست را از داخل سرا۸ ثبت می‌کند و نام آن در برنامه Request است. بعضی نوع درخواست‌ها از این مسیر بسته است و باید از جای دیگر بیاید.",
     ],
     "urban-planning-etebarsanji-06-revisit-house.mdc": [
-        "این فرم بازدید زمین یا خانه است.",
-        "وضع موجود ملک را ذخیره می‌کند.",
-        "نام این فرم در برنامه: Revisit_House",
+        "این فرم بازدید زمین یا خانه است و نام آن در برنامه Revisit_House است. وضع موجود ملک را ذخیره می‌کند.",
     ],
     "urban-planning-etebarsanji-07-revisit-building.mdc": [
-        "این فرم بازدید ساختمان است.",
-        "وضع موجود بنا را ذخیره می‌کند.",
-        "نام این فرم در برنامه: Revisit_Building",
+        "این فرم بازدید ساختمان است و نام آن در برنامه Revisit_Building است. وضع موجود بنا را ذخیره می‌کند.",
     ],
     "urban-planning-etebarsanji-08-revisit-housesharing.mdc": [
-        "این فرم بازدید دستگاه و مشاع است.",
-        "سهم و وضع موجود مشاع را ذخیره می‌کند.",
-        "نام این فرم در برنامه: Revisit_HouseSharing",
+        "این فرم بازدید دستگاه و مشاع است و نام آن در برنامه Revisit_HouseSharing است. سهم و وضع موجود مشاع را ذخیره می‌کند و با بازدید ملک یا ساختمان یکی نیست.",
     ],
     "urban-planning-etebarsanji-09-analysis-building.mdc": [
-        "این فرم ردیف تخلف را ذخیره می‌کند.",
-        "بعد از این مرحله، جریمه و کمیسیون از همین ردیف‌ها تغذیه می‌شوند.",
-        "نام این فرم در برنامه: AnalysisBuilding",
+        "این فرم ردیف تخلف را ذخیره می‌کند و نام آن در برنامه AnalysisBuilding است. پس از این مرحله، جریمه و کمیسیون از همین ردیف‌ها تغذیه می‌شوند.",
     ],
     "urban-planning-etebarsanji-10-manager-confirm.mdc": [
-        "این فرم تأیید مدیر را می‌زند.",
-        "اگر تأیید ثبت شود، فرم‌های دیگر معمولاً دیگر قابل ویرایش نیستند.",
-        "نام این فرم در برنامه: ManagerConfirm",
+        "این فرم تأیید مدیر را می‌زند و نام آن در برنامه ManagerConfirm است. اگر تأیید ثبت شود، فرم‌های دیگر معمولاً دیگر قابل ویرایش نیستند.",
     ],
     "urban-planning-etebarsanji-11-peace.mdc": [
-        "این فرم ردیف صلحنامه را ذخیره می‌کند.",
-        "صلح می‌تواند ضابطه را عوض کند. برای همین قفل‌هایش مهم است.",
-        "نام این فرم در برنامه: Peace_List",
+        "این فرم ردیف صلحنامه را ذخیره می‌کند و نام آن در برنامه Peace_List است. صلح می‌تواند ضابطه را عوض کند؛ برای همین قفل‌هایش مهم است.",
     ],
     "urban-planning-etebarsanji-12-agreement.mdc": [
-        "این فرم ردیف توافق را ذخیره می‌کند.",
-        "مثل صلح، روی ضابطه اثر دارد.",
-        "نام این فرم در برنامه: Agreement_List",
+        "این فرم ردیف توافق را ذخیره می‌کند و نام آن در برنامه Agreement_List است. مانند صلح، روی ضابطه اثر دارد.",
     ],
     "urban-planning-etebarsanji-13-discount.mdc": [
-        "این فرم تخفیف را ثبت می‌کند.",
-        "اگر تخفیف بی‌حساب ثبت شود، مبلغ درآمد عوض می‌شود.",
-        "نام این فرم در برنامه: AllDiscount",
+        "این فرم تخفیف را ثبت می‌کند و نام آن در برنامه AllDiscount است. اگر تخفیف بی‌حساب ثبت شود، مبلغ درآمد عوض می‌شود.",
     ],
     "urban-planning-etebarsanji-14-fine.mdc": [
-        "این فرم ردیف جریمه لایحه کمیسیون ماده ۱۰۰ است.",
-        "به رأی کمیسیون و مبلغ جریمه وصل است.",
-        "نام این فرم در برنامه: Fine",
+        "این فرم ردیف جریمه لایحه کمیسیون ماده ۱۰۰ است و نام آن در برنامه Fine است. به رأی کمیسیون و مبلغ جریمه وصل است.",
     ],
     "urban-planning-etebarsanji-15-zabeteh.mdc": [
-        "این فرم کاربری و ضابطه طرح را ذخیره می‌کند.",
-        "اگر اینجا غلط ذخیره شود، بقیه محاسبات روی داده غلط می‌رود.",
-        "نام این فرم در برنامه: Zabeteh",
+        "این فرم کاربری و ضابطه طرح را ذخیره می‌کند و نام آن در برنامه Zabeteh است. اگر اینجا غلط ذخیره شود، بقیه محاسبات روی داده غلط می‌رود.",
     ],
     "urban-planning-etebarsanji-16-assign-revisit.mdc": [
-        "این فرم مأمور بازدید را روی درخواست می‌گذارد.",
-        "بدون مأمور، بازدید جلو نمی‌رود.",
-        "نام این فرم در برنامه: AssignRevisit",
+        "این فرم مأمور بازدید را روی درخواست می‌گذارد و نام آن در برنامه AssignRevisit است. بدون مأمور، بازدید جلو نمی‌رود.",
     ],
     "urban-planning-etebarsanji-17-income.mdc": [
-        "این فرم ردیف بدهکار و بستانکار درآمد است.",
-        "به فیش، تقسیط و ارسال مالی وصل است.",
-        "نام این فرم در برنامه: Income",
+        "این فرم ردیف بدهکار و بستانکار درآمد است و نام آن در برنامه Income است. به فیش، تقسیط و ارسال مالی وصل است.",
     ],
     "urban-planning-etebarsanji-18-movafeghat.mdc": [
-        "این فصل دو چیز دارد.",
-        "اول: ذخیره نامه موافقت اصولی.",
-        "دوم: تعریف فیش مشترک شهر. نام آن در برنامه: FicheTaeed",
-        "قفل فیش روی خود این فرم الان برای کارشناس اجرا نمی‌شود.",
-        "نام فرم موافقت در برنامه: MovafeghatOsooli",
+        "این فصل دو چیز دارد: ذخیره نامه موافقت اصولی با نام MovafeghatOsooli، و تعریف فیش مشترک شهر با نام FicheTaeed. قفل فیش روی خود این فرم الان برای کارشناس اجرا نمی‌شود.",
     ],
     "urban-planning-etebarsanji-19-request-ugp.mdc": [
-        "این فرم درخواست را از درگاه شهروندسپاری می‌گیرد.",
-        "با ثبت درخواست داخلی سرا۸ یکی نیست.",
-        "نام این فرم در برنامه: RequestUGP",
+        "این فرم درخواست را از درگاه شهروندسپاری می‌گیرد و نام آن در برنامه RequestUGP است. با ثبت درخواست داخلی سرا۸ یکی نیست.",
     ],
 }
 
@@ -631,7 +634,7 @@ def law_simple(law):
     title = law["title"] or ""
     simple = law["simple"] or ""
     if "GetIdWorkflow" in title + simple:
-        return "محل فرایند یعنی این درخواست مال کدام فرایند است. نام در برنامه: GetIdWorkflow"
+        return "محل فرایند یعنی این درخواست مال کدام فرایند است و نام آن در برنامه GetIdWorkflow است."
     if DEBUG_RE.search(title) or DEBUG_RE.search(simple):
         return "بعضی فرم‌ها موقع ذخیره یک پنجره پیام برای برنامه‌نویس باز می‌کنند. این پنجره قفل ذخیره نیست."
     return simple
@@ -674,8 +677,8 @@ def emit_table(doc, tbl):
 
 def law_block(doc, law):
     add_heading_custom(doc, law_heading(law), 3)
-    for piece in shorten(law_simple(law)):
-        add_p(doc, piece, size=11.5, space_after=4)
+    for para in as_paragraphs(law_simple(law)):
+        add_p(doc, para, size=11.5, first_line=0.35)
     sampa = law["fields"].get("SAMPA / SP")
     if sampa:
         add_p(doc, "شماره درخواست: " + strip_parens(simplify_text(sampa)),
@@ -722,17 +725,11 @@ def build():
     ])
 
     add_heading_custom(doc, "یک. این برنامه‌ها چه هستند", 1)
-    add_p(doc, "وقتی کارشناس ذخیره می‌زند، یک برنامه کنترل اجرا می‌شود.")
-    add_p(doc, "اول تابع Run اجرا می‌شود.")
-    add_p(doc, "Run از روی نام فرم، تابع همان صفحه را صدا می‌زند.")
-    add_p(doc, "چند ابزار برای همه فرم‌ها مشترک است:")
-    add_bullet(doc, "تأیید مدیر. نام در برنامه: TaeedM")
-    add_bullet(doc, "محل فرایند. نام در برنامه: GetIdWorkflow")
-    add_bullet(doc, "فیش شهرداری. نام در برنامه: Fiche و FicheTaeed")
-    add_p(doc, "محل فرایند یعنی این درخواست مال کدام فرایند است.")
-    add_p(doc, "این برنامه ضابطه کامل شهر را حساب نمی‌کند.")
-    add_p(doc, "فقط می‌پرسد: داده کامل است؟ این کاربر اجازه دارد؟ فیش یا تأیید مدیر مانع است؟")
-    add_p(doc, "گاهی هم یک عدد می‌نویسد. مثل مساحت بعد از مسیر. گاهی پیامک یا کارتابل می‌سازد.")
+    for para in as_paragraphs([
+        "وقتی کارشناس ذخیره می‌زند، نخست یک برنامه کنترل اجرا می‌شود؛ نام آن در برنامه Run است. Run از روی نام فرم، تابع همان صفحه را صدا می‌زند. توابع مشترک همه فرم‌ها همین‌جا تعریف شده‌اند: تأیید مدیر با نام TaeedM، فیش شهرداری با نام Fiche و FicheTaeed، و محل فرایند با نام GetIdWorkflow. محل فرایند یعنی این درخواست مال کدام فرایند است.",
+        "این برنامه ضابطه کامل شهر را حساب نمی‌کند؛ فقط می‌پرسد داده کامل است یا نه، این کاربر اجازه دارد یا نه، و فیش یا تأیید مدیر مانع است یا نه. گاهی هم عددی می‌نویسد، مثل مساحت بعد از مسیر، و گاهی پیامک یا کارتابل می‌سازد.",
+    ]):
+        add_p(doc, para, first_line=0.5)
     add_table(doc, ["نام فارسی فرم", "نام داخل برنامه", "کار فرم"], [
         ["مسیریاب و ابزار مشترک", "Run", "ورود همه ذخیره‌ها"],
         ["بروکف", "Barokaf", "قفل بر و کف. نوشتن مساحت باقیمانده"],
@@ -754,11 +751,7 @@ def build():
         ["موافقت اصولی", "MovafeghatOsooli", "نامه موافقت و تعریف فیش مشترک"],
         ["شهروندسپاری", "RequestUGP", "ثبت از درگاه بیرونی"],
     ])
-    add_p(doc, "هر کنترل یک جدول کوچک دارد. هر ردیف یک موضوع است.")
-    add_bullet(doc, "نتیجه برای کاربر: توقف یعنی ذخیره انجام نمی‌شود. هشدار یعنی فقط پیام می‌آید.")
-    add_bullet(doc, "چه وقت این کنترل روشن است: در چه شرایطی این قفل یا پیام دیده می‌شود.")
-    add_bullet(doc, "برنامه چه کار می‌کند: بعد از آن شرط، برنامه چه می‌گوید یا چه چیزی را قفل می‌کند.")
-    add_p(doc, "اگر ردیفی نوشته باشد «الان برای کارشناس اجرا نمی‌شود»، یعنی این کنترل در برنامه هست ولی الان جلوی کار کارشناس را نمی‌گیرد.")
+    add_p(doc, "هر کنترل یک جدول کوچک دارد و هر ردیف یک موضوع است. «نتیجه برای کاربر» یعنی توقف ذخیره را قطع می‌کند و هشدار فقط پیام می‌دهد. «چه وقت این کنترل روشن است» همان شرط اجراست و «برنامه چه کار می‌کند» کار بعد از آن شرط را می‌گوید. اگر ردیفی نوشته باشد «الان برای کارشناس اجرا نمی‌شود»، یعنی این کنترل در برنامه هست، ولی الان جلوی کار کارشناس را نمی‌گیرد.")
     add_callout(doc, "تأیید مدیر را این‌طور بخوانید",
                 "در خود تابع تأیید، عدد صفر یعنی تأیید برنده است. در بروکف و بازدید و موافقت اصولی اگر تابع عدد یک بدهد یعنی مانع نیست. در صلح و توافق و تحلیل و ضابطه معمولاً صفر یعنی توقف. همیشه همان فرم را نگاه کنید.")
     add_callout(doc, "فیش را این‌طور بخوانید",
@@ -766,17 +759,13 @@ def build():
                 fill=TEAL_BG)
 
     add_heading_custom(doc, "دو. کنترل هر فرم", 1)
-    add_p(doc, "از اینجا هر فصل فقط یک فرم است.")
-    add_p(doc, "مثال: فصل موافقت اصولی فقط همان فرم را می‌گوید. فرم دیگر را قاطی نکنید.")
+    add_p(doc, "از اینجا هر فصل فقط یک فرم است؛ برای نمونه فصل موافقت اصولی همان فرم را می‌گوید و فرم دیگر را قاطی نمی‌کند.", first_line=0.5)
 
     for sec in parsed:
         add_heading_custom(doc, SECTION_TITLE.get(sec["file"], sec["title"]), 1)
         add_heading_custom(doc, "این فرم چیست", 2)
-        for para in SECTION_BLURB.get(sec["file"], []):
-            add_p(doc, para, size=11.5, space_after=4)
-        for para in sec.get("paras") or []:
-            for piece in shorten(para)[:4]:
-                add_p(doc, piece, size=11.5, space_after=4)
+        for para in as_paragraphs(SECTION_BLURB.get(sec["file"], [])):
+            add_p(doc, para, size=11.5, first_line=0.5)
         for tbl in sec.get("tables") or []:
             emit_table(doc, tbl)
         add_heading_custom(doc, "کنترل‌هایی که موقع ذخیره اجرا می‌شود", 2)
@@ -790,9 +779,7 @@ def build():
     add_table(doc, ["فرم", "تعداد کنترل"],
               [[SECTION_TITLE.get(s["file"], s["title"]), str(len(s["laws"]))] for s in parsed]
               + [["جمع", str(total)]])
-    add_p(doc, "اگر متن روی صفحه با شرط برنامه فرق داشت، شرط برنامه درست است.")
-    add_p(doc, "کنترلی که الان اجرا نمی‌شود را خودتان در برنامه عوض نکنید.")
-    add_p(doc, "بازدید مغازه، پروانه و پایانکار اختصاصی، پاسخ استعلام و ویرایش درخواست هنوز در این متن نیستند.")
+    add_p(doc, "اگر متن روی صفحه با شرط برنامه فرق داشت، شرط برنامه درست است. کنترلی که الان اجرا نمی‌شود را خودتان در برنامه عوض نکنید. بازدید مغازه، پروانه و پایانکار اختصاصی، پاسخ استعلام و ویرایش درخواست هنوز در این متن نیستند.", first_line=0.5)
 
     outs = [
         Path("/workspace/docs/etebarsanji/گزارش-قوانین-کد-اعتبارسنجی-شهرسازی.docx"),
