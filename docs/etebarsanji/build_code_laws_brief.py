@@ -5,11 +5,31 @@
 import re
 import sys
 from pathlib import Path
+import importlib.util
 
 # Reuse RTL Word helpers
 _HELPERS = Path("/workspace/docs/etebarsanji/build_support_brief.py").read_text()
 _HELPERS = _HELPERS.split("def setup_doc():", 1)[0]
 exec(_HELPERS, globals())
+
+_wf_spec = importlib.util.spec_from_file_location(
+    "workflow_titles", "/workspace/docs/etebarsanji/workflow_titles.py"
+)
+_wf = importlib.util.module_from_spec(_wf_spec)
+_wf_spec.loader.exec_module(_wf)
+BY_PREFIX = _wf.BY_PREFIX
+
+FULL_GUID = re.compile(
+    r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}"
+)
+# 8-char id, full GUID, or truncated catalog form like 88543DAB-…
+GUID_TOKEN = re.compile(
+    r"(?<![0-9A-Fa-f])"
+    r"([0-9A-Fa-f]{8})"
+    r"(?:(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}|-…|-[\.]{1,3})?"
+    r"(?![0-9A-Fa-f])",
+    re.I,
+)
 
 # One LTR island = letters/digits/code signs stuck together (names, GUID, name=1).
 ASCII_ISLAND = re.compile(
@@ -179,6 +199,8 @@ def simplify_text(s: str) -> str:
         return ""
     s = CATALOG_ID.sub("", s)
     s = s.replace("`", "")
+    s = replace_workflows(s)
+    s = strip_parens(s)
     pairs = [
         ("Stop + Exit Function", "توقف می‌شود. ذخیره انجام نمی‌شود. بقیه کنترل‌های همین فرم اجرا نمی‌شوند"),
         ("Stop+Exit Function", "توقف می‌شود. ذخیره انجام نمی‌شود. بقیه کنترل‌های همین فرم اجرا نمی‌شوند"),
@@ -256,10 +278,10 @@ SECRET = re.compile(r"zxc@|172\.16\.8|aGVkYWlhdC|d158aeeb|Password=|User ID=esup
 CATALOG_ID = re.compile(r"\(?`?E\d{2}-[A-Z]+(?:-\d{3,}|\-\*)`?\)?")
 SECTION_PREFIX = re.compile(r"^بخش\s+[۰-۹0-9]+\s*[—\-]\s*")
 FIELD_ORDER = [
-    "SAMPA / SP", "تابع", "شدت", "شرط", "شرط زنده", "اقدام", "استثنا",
+    "تابع", "شدت", "شرط", "شرط زنده", "اقدام", "استثنا",
     "معنی", "خالی", "موجود", "مرده", "اثر زیرسیستم",
 ]
-SKIP_FIELDS = {"الگوی تغییر", "تله"}
+SKIP_FIELDS = {"الگوی تغییر", "تله", "SAMPA / SP"}
 DEBUG_RE = re.compile(r"msgbox|logfilefj|\btrace\b|plogAHM", re.I)
 
 SECTION_TITLE = {
@@ -388,12 +410,37 @@ SECTION_BLURB = {
 }
 
 
+def replace_workflows(text: str) -> str:
+    """Show گردش‌کار by WorkflowTitel, never by GUID."""
+    if not text:
+        return text
+
+    def one(m):
+        return BY_PREFIX.get(m.group(1).upper(), m.group(0))
+
+    text = GUID_TOKEN.sub(one, text)
+    text = re.sub(r"(.{2,80}?) یا \1(?=\s|$|،|\.)", r"\1", text)
+    text = re.sub(r"(.{2,80}?)، \1(?=\s|$|،|\.)", r"\1", text)
+    return text
+
+
+def strip_parens(text: str) -> str:
+    if not text:
+        return text
+    text = text.replace("(", " ").replace(")", " ")
+    text = text.replace("（", " ").replace("）", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 def clean(s: str) -> str:
     s = CATALOG_ID.sub("", s)
     s = s.replace("`", "")
     s = s.replace("**", "")
     s = s.replace("\\_", "_")
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
+    s = replace_workflows(s)
+    s = strip_parens(s)
     s = re.sub(r"\s+", " ", s).strip()
     s = re.sub(r"\s+[—\-]\s*$", "", s)
     return s
@@ -414,30 +461,33 @@ def parse_md_table(lines):
     return rows
 
 
+def extract_md_tables(block: str):
+    tables, tlines = [], []
+    for line in block.splitlines():
+        if line.strip().startswith("|"):
+            tlines.append(line)
+        elif tlines:
+            rows = parse_md_table(tlines)
+            if rows:
+                tables.append(rows)
+            tlines = []
+    if tlines:
+        rows = parse_md_table(tlines)
+        if rows:
+            tables.append(rows)
+    return tables
+
+
 def first_field_table(block: str) -> dict:
     """First markdown table after the simple-language line."""
-    lines = block.splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if line.strip().startswith("|") and "فیلد" in line:
-            start = i
-            break
-        if line.strip().startswith("|") and start is None:
-            start = i
-            break
-    if start is None:
-        return {}
-    chunk = []
-    for line in lines[start:]:
-        if line.strip().startswith("|"):
-            chunk.append(line)
-        elif chunk:
-            break
-    rows = parse_md_table(chunk)
     fields = {}
-    for row in rows:
-        if len(row) >= 2 and row[0] not in ("فیلد", "مقدار"):
-            fields[row[0]] = row[1]
+    for tbl in extract_md_tables(block):
+        keys = [r[0] for r in tbl if r]
+        if any(k in FIELD_ORDER or k in ("فیلد", "SAMPA / SP") for k in keys):
+            for row in tbl:
+                if len(row) >= 2 and row[0] not in ("فیلد", "مقدار"):
+                    fields[row[0]] = row[1]
+            break
     return fields
 
 
@@ -499,10 +549,17 @@ def parse_file(path: Path):
         simple = clean(sm.group(1)) if sm else ""
         fields = first_field_table(rest)
         extra = []
-        # numbered steps / bullets after table
+        extra_tables = []
         after = rest
         if "**به زبان ساده:**" in after:
             after = after.split("**به زبان ساده:**", 1)[1]
+        fields_tbl_done = False
+        for tbl in extract_md_tables(after):
+            keys = [r[0] for r in tbl if r]
+            if not fields_tbl_done and any(k in FIELD_ORDER or k in ("فیلد", "SAMPA / SP") for k in keys):
+                fields_tbl_done = True
+                continue
+            extra_tables.append(tbl)
         for line in after.splitlines():
             s = line.strip()
             if s.startswith("|") or s.startswith("#") or s == "---":
@@ -514,9 +571,10 @@ def parse_file(path: Path):
             "title": ltitle,
             "simple": simple,
             "fields": fields,
-            "extra": extra[:8],
+            "extra": extra,
+            "extra_tables": extra_tables,
         })
-    return {"title": title, "paras": paras[:12], "tables": tables[:2], "laws": laws}
+    return {"title": title, "paras": paras, "tables": tables, "laws": laws}
 
 
 def setup_doc():
@@ -564,6 +622,8 @@ def law_heading(law):
     if DEBUG_RE.search(heading):
         return "پنجره پیام هنگام ذخیره"
     heading = simplify_text(heading)
+    heading = re.sub(r"\s+SAMPA(?:\s+\d{5,8})?$", "", heading, flags=re.I)
+    heading = re.sub(r"\s+\d{5,8}$", "", heading)
     return heading or "کنترل"
 
 
@@ -602,21 +662,39 @@ def word_field_value(key, raw):
     return "\n".join(p.rstrip(".") for p in parts[:3])
 
 
+def emit_table(doc, tbl):
+    if not tbl:
+        return
+    width = max(len(r) for r in tbl)
+    headers = tbl[0] + [""] * (width - len(tbl[0]))
+    body = [r + [""] * (width - len(r)) for r in tbl[1:]]
+    if body:
+        add_table(doc, headers, body)
+
+
 def law_block(doc, law):
     add_heading_custom(doc, law_heading(law), 3)
     for piece in shorten(law_simple(law)):
         add_p(doc, piece, size=11.5, space_after=4)
+    sampa = law["fields"].get("SAMPA / SP")
+    if sampa:
+        add_p(doc, "شماره درخواست: " + strip_parens(simplify_text(sampa)),
+              size=11, bold=True, color=TEAL, align="right", space_after=6)
     rows = []
-    seen = set()
     for k in FIELD_ORDER:
         if k in SKIP_FIELDS or k not in law["fields"]:
             continue
         val = word_field_value(k, law["fields"][k])
         if val:
             rows.append([FIELD_LABEL.get(k, k), val])
-            seen.add(k)
     if rows:
         add_table(doc, ["ردیف", "توضیح"], rows)
+    for tbl in law.get("extra_tables") or []:
+        emit_table(doc, tbl)
+    for e in law.get("extra") or []:
+        piece = shorten(e)
+        if piece:
+            add_bullet(doc, piece[0].rstrip("."))
 
 
 def build():
@@ -639,11 +717,11 @@ def build():
     add_table(doc, ["موضوع", "توضیح"], [
         ["این متن از کجا آمده", "از روی برنامه واقعی. حدس زده نشده است."],
         ["هر فصل چطور خوانده شود", "اول ببینید این فرم چیست. بعد ببینید چه چیزی را قفل می‌کند."],
-        ["نام انگلیسی", "نام داخل برنامه است. جدا نوشته شده تا با فارسی قاطی نشود."],
+        ["نام گردش‌کار", "با عنوان واقعی نوشته شده است. شناسه نشان داده نمی‌شود."],
         ["سامانه زنده", "با نوشتن این گزارش عوض نشده است."],
     ])
 
-    add_heading_custom(doc, "الف) این برنامه‌ها چه هستند", 1)
+    add_heading_custom(doc, "یک. این برنامه‌ها چه هستند", 1)
     add_p(doc, "وقتی کارشناس ذخیره می‌زند، یک برنامه کنترل اجرا می‌شود.")
     add_p(doc, "اول تابع Run اجرا می‌شود.")
     add_p(doc, "Run از روی نام فرم، تابع همان صفحه را صدا می‌زند.")
@@ -687,7 +765,7 @@ def build():
                 "تابع فیش اگر عدد یک بدهد یعنی مانعی پیدا نشده. اگر صفر بدهد یعنی فیش مانع دارد. توافق این تابع را طوری صدا می‌زند که گروه حساب ۱۶۳ چک نشود. روی خود فرم موافقت اصولی قفل فیش الان برای کارشناس اجرا نمی‌شود.",
                 fill=TEAL_BG)
 
-    add_heading_custom(doc, "ب) کنترل هر فرم", 1)
+    add_heading_custom(doc, "دو. کنترل هر فرم", 1)
     add_p(doc, "از اینجا هر فصل فقط یک فرم است.")
     add_p(doc, "مثال: فصل موافقت اصولی فقط همان فرم را می‌گوید. فرم دیگر را قاطی نکنید.")
 
@@ -696,6 +774,11 @@ def build():
         add_heading_custom(doc, "این فرم چیست", 2)
         for para in SECTION_BLURB.get(sec["file"], []):
             add_p(doc, para, size=11.5, space_after=4)
+        for para in sec.get("paras") or []:
+            for piece in shorten(para)[:4]:
+                add_p(doc, piece, size=11.5, space_after=4)
+        for tbl in sec.get("tables") or []:
+            emit_table(doc, tbl)
         add_heading_custom(doc, "کنترل‌هایی که موقع ذخیره اجرا می‌شود", 2)
         if not sec["laws"]:
             add_p(doc, "برای این فرم کنترلی استخراج نشد.", color=GRAY)
