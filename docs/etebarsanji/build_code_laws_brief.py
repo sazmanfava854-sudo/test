@@ -29,9 +29,8 @@ FIELD_LABEL = {
     "خالی": "اگر چیزی نباشد",
     "موجود": "اگر از قبل باشد",
     "تله": "نقطه اشتباه رایج",
-    "مرده": "الان خاموش است",
+    "مرده": "الان برای کارشناس اجرا نمی‌شود",
     "اثر زیرسیستم": "روی چه کاری اثر دارد",
-    "الگوی تغییر": "اگر بخواهید عوض کنید",
 }
 
 
@@ -116,9 +115,11 @@ def add_heading_custom(doc, text, level=1):
 def set_cell_text(cell, text, *, bold=False, size=10.5, color=DARK, align="right",
                   font=BODY_FONT, fill=None):
     cell.text = ""
-    p = cell.paragraphs[0]
-    set_paragraph_rtl(p, align=align, space_after=2, space_before=2, line=1.1)
-    fill_mixed(p, text, size=size, bold=bold, color=color, font=font)
+    pieces = [x.strip() for x in str(text).split("\n") if x.strip()] or [""]
+    for i, piece in enumerate(pieces):
+        p = cell.paragraphs[0] if i == 0 else cell.add_paragraph()
+        set_paragraph_rtl(p, align=align, space_after=2, space_before=2, line=1.1)
+        fill_mixed(p, piece, size=size, bold=bold, color=color, font=font)
     if fill:
         shade_cell(cell, fill)
     set_cell_border(
@@ -256,8 +257,10 @@ CATALOG_ID = re.compile(r"\(?`?E\d{2}-[A-Z]+(?:-\d{3,}|\-\*)`?\)?")
 SECTION_PREFIX = re.compile(r"^بخش\s+[۰-۹0-9]+\s*[—\-]\s*")
 FIELD_ORDER = [
     "SAMPA / SP", "تابع", "شدت", "شرط", "شرط زنده", "اقدام", "استثنا",
-    "معنی", "خالی", "موجود", "تله", "مرده", "اثر زیرسیستم", "الگوی تغییر",
+    "معنی", "خالی", "موجود", "مرده", "اثر زیرسیستم",
 ]
+SKIP_FIELDS = {"الگوی تغییر", "تله"}
+DEBUG_RE = re.compile(r"msgbox|logfilefj|\btrace\b|plogAHM", re.I)
 
 SECTION_TITLE = {
     "urban-planning-etebarsanji-01-formula-run.mdc": "مسیریاب و ابزار مشترک",
@@ -286,6 +289,7 @@ SECTION_BLURB = {
         "وقتی کارشناس ذخیره می‌زند، اول این قسمت اجرا می‌شود.",
         "از روی نام فرم، برنامه همان صفحه را صدا می‌زند.",
         "تأیید مدیر و فیش شهرداری هم همین‌جا تعریف شده‌اند.",
+        "محل فرایند هم همین‌جا مشخص می‌شود. نام در برنامه: GetIdWorkflow",
         "نام این قسمت در برنامه: Run",
     ],
     "urban-planning-etebarsanji-02-barokaf.mdc": [
@@ -373,7 +377,7 @@ SECTION_BLURB = {
         "این فصل دو چیز دارد.",
         "اول: ذخیره نامه موافقت اصولی.",
         "دوم: تعریف فیش مشترک شهر. نام آن در برنامه: FicheTaeed",
-        "قفل فیش روی خود این فرم الان خاموش است.",
+        "قفل فیش روی خود این فرم الان برای کارشناس اجرا نمی‌شود.",
         "نام فرم موافقت در برنامه: MovafeghatOsooli",
     ],
     "urban-planning-etebarsanji-19-request-ugp.mdc": [
@@ -554,25 +558,65 @@ def setup_doc():
 def law_heading(law):
     heading = law["title"] or (law["simple"][:70] if law["simple"] else "کنترل")
     heading = CATALOG_ID.sub("", heading).strip(" —-")
+    blob = heading + " " + (law["simple"] or "")
+    if "GetIdWorkflow" in blob:
+        return "محل فرایند"
+    if DEBUG_RE.search(heading):
+        return "پنجره پیام هنگام ذخیره"
     heading = simplify_text(heading)
     return heading or "کنترل"
 
 
+def law_simple(law):
+    title = law["title"] or ""
+    simple = law["simple"] or ""
+    if "GetIdWorkflow" in title + simple:
+        return "محل فرایند یعنی این درخواست مال کدام فرایند است. نام در برنامه: GetIdWorkflow"
+    if DEBUG_RE.search(title) or DEBUG_RE.search(simple):
+        return "بعضی فرم‌ها موقع ذخیره یک پنجره پیام برای برنامه‌نویس باز می‌کنند. این پنجره قفل ذخیره نیست."
+    return simple
+
+
+def word_field_value(key, raw):
+    """One short Persian value per table row. Drop change-advice and debug dumps."""
+    if not raw or key in SKIP_FIELDS:
+        return None
+    if key == "شدت":
+        t = simplify_text(raw)
+        if "دیباگ" in t:
+            return "پیام برای برنامه‌نویس است. ذخیره را قفل نمی‌کند."
+        if "زیرساخت" in t:
+            return "ابزار مشترک است. خودش صفحه را قفل نمی‌کند."
+        return t
+    if key == "اقدام" and DEBUG_RE.search(raw):
+        return (
+            "یک پنجره پیام باز می‌شود.\n"
+            "این پیام برای پیگیری برنامه است.\n"
+            "ذخیره به‌خاطر این پنجره قفل نمی‌شود."
+        )
+    if key == "اقدام" and re.search(r"Select Case|ElseIf|\bIf\b|Catch|ToString", raw):
+        return None
+    parts = shorten(raw)
+    if not parts:
+        return None
+    return "\n".join(p.rstrip(".") for p in parts[:3])
+
+
 def law_block(doc, law):
     add_heading_custom(doc, law_heading(law), 3)
-    for piece in shorten(law["simple"]):
+    for piece in shorten(law_simple(law)):
         add_p(doc, piece, size=11.5, space_after=4)
     rows = []
     seen = set()
     for k in FIELD_ORDER:
-        if k in law["fields"]:
-            rows.append([FIELD_LABEL.get(k, k), simplify_text(law["fields"][k])])
+        if k in SKIP_FIELDS or k not in law["fields"]:
+            continue
+        val = word_field_value(k, law["fields"][k])
+        if val:
+            rows.append([FIELD_LABEL.get(k, k), val])
             seen.add(k)
-    for k, v in law["fields"].items():
-        if k not in seen:
-            rows.append([FIELD_LABEL.get(k, k), simplify_text(v)])
     if rows:
-        add_table(doc, ["موضوع", "در برنامه"], rows)
+        add_table(doc, ["ردیف", "توضیح"], rows)
 
 
 def build():
@@ -605,8 +649,9 @@ def build():
     add_p(doc, "Run از روی نام فرم، تابع همان صفحه را صدا می‌زند.")
     add_p(doc, "چند ابزار برای همه فرم‌ها مشترک است:")
     add_bullet(doc, "تأیید مدیر. نام در برنامه: TaeedM")
-    add_bullet(doc, "تبدیل نوع درخواست به عدد. نام در برنامه: GetIdWorkflow")
+    add_bullet(doc, "محل فرایند. نام در برنامه: GetIdWorkflow")
     add_bullet(doc, "فیش شهرداری. نام در برنامه: Fiche و FicheTaeed")
+    add_p(doc, "محل فرایند یعنی این درخواست مال کدام فرایند است.")
     add_p(doc, "این برنامه ضابطه کامل شهر را حساب نمی‌کند.")
     add_p(doc, "فقط می‌پرسد: داده کامل است؟ این کاربر اجازه دارد؟ فیش یا تأیید مدیر مانع است؟")
     add_p(doc, "گاهی هم یک عدد می‌نویسد. مثل مساحت بعد از مسیر. گاهی پیامک یا کارتابل می‌سازد.")
@@ -631,15 +676,15 @@ def build():
         ["موافقت اصولی", "MovafeghatOsooli", "نامه موافقت و تعریف فیش مشترک"],
         ["شهروندسپاری", "RequestUGP", "ثبت از درگاه بیرونی"],
     ])
-    add_p(doc, "در جدول‌های بعدی این کلمه‌ها را می‌بینید:")
-    add_bullet(doc, "توقف یعنی ذخیره انجام نمی‌شود.")
-    add_bullet(doc, "هشدار یعنی پیام می‌آید. ذخیره معمولاً ادامه دارد.")
-    add_bullet(doc, "خروج یعنی بقیه کنترل‌های همان فرم اجرا نمی‌شوند.")
-    add_bullet(doc, "خاموش یعنی الان مانع نیست. روشن کردنش رفتار شهر را عوض می‌کند.")
+    add_p(doc, "هر کنترل یک جدول کوچک دارد. هر ردیف یک موضوع است.")
+    add_bullet(doc, "نتیجه برای کاربر: توقف یعنی ذخیره انجام نمی‌شود. هشدار یعنی فقط پیام می‌آید.")
+    add_bullet(doc, "چه وقت این کنترل روشن است: در چه شرایطی این قفل یا پیام دیده می‌شود.")
+    add_bullet(doc, "برنامه چه کار می‌کند: بعد از آن شرط، برنامه چه می‌گوید یا چه چیزی را قفل می‌کند.")
+    add_p(doc, "اگر ردیفی نوشته باشد «الان برای کارشناس اجرا نمی‌شود»، یعنی این کنترل در برنامه هست ولی الان جلوی کار کارشناس را نمی‌گیرد.")
     add_callout(doc, "تأیید مدیر را این‌طور بخوانید",
                 "در خود تابع تأیید، عدد صفر یعنی تأیید برنده است. در بروکف و بازدید و موافقت اصولی اگر تابع عدد یک بدهد یعنی مانع نیست. در صلح و توافق و تحلیل و ضابطه معمولاً صفر یعنی توقف. همیشه همان فرم را نگاه کنید.")
     add_callout(doc, "فیش را این‌طور بخوانید",
-                "تابع فیش اگر عدد یک بدهد یعنی مانعی پیدا نشده. اگر صفر بدهد یعنی فیش مانع دارد. توافق این تابع را طوری صدا می‌زند که گروه حساب ۱۶۳ چک نشود. روی خود فرم موافقت اصولی قفل فیش خاموش است.",
+                "تابع فیش اگر عدد یک بدهد یعنی مانعی پیدا نشده. اگر صفر بدهد یعنی فیش مانع دارد. توافق این تابع را طوری صدا می‌زند که گروه حساب ۱۶۳ چک نشود. روی خود فرم موافقت اصولی قفل فیش الان برای کارشناس اجرا نمی‌شود.",
                 fill=TEAL_BG)
 
     add_heading_custom(doc, "ب) کنترل هر فرم", 1)
@@ -663,7 +708,7 @@ def build():
               [[SECTION_TITLE.get(s["file"], s["title"]), str(len(s["laws"]))] for s in parsed]
               + [["جمع", str(total)]])
     add_p(doc, "اگر متن روی صفحه با شرط برنامه فرق داشت، شرط برنامه درست است.")
-    add_p(doc, "کنترل خاموش را بدون درخواست رسمی روشن نکنید.")
+    add_p(doc, "کنترلی که الان اجرا نمی‌شود را خودتان در برنامه عوض نکنید.")
     add_p(doc, "بازدید مغازه، پروانه و پایانکار اختصاصی، پاسخ استعلام و ویرایش درخواست هنوز در این متن نیستند.")
 
     outs = [
