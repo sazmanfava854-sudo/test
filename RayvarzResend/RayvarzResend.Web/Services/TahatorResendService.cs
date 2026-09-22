@@ -54,22 +54,22 @@ public sealed class TahatorResendService
         if (pair == null)
         {
             var lone = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
+            var canSendLone = lone != null && TahatorRowBuilder.IsTahatorFiche(lone);
             return new TahatorCheckResult
             {
                 FicheNo = ficheNo,
                 ExistsInIncomeFiche = lone != null,
                 Fiche = lone,
-                NeedsSend = false,
+                NeedsSend = canSendLone,
                 Message = lone == null
                     ? "فیش در Income_Fiche یافت نشد."
-                    : "جفت تهاتر (۱۵۷ مبلغ + ۱۵۸ درآمد) کامل نیست — هر دو فیش با همان NidIncome لازم است."
+                    : canSendLone
+                        ? "آماده ارسال همین فیش — فیش دیگر به‌صورت خودکار ارسال نمی‌شود."
+                        : "این فیش تهاتر (۱۵۷/۱۵۸) نیست."
             };
         }
 
         var members = new List<TahatorPairMemberStatus>();
-        var anyNeedsSend = false;
-        var allInHeader = true;
-        var allInRayvarz = true;
         var rayvarzCheckWarnings = new List<string>();
         IncomeFicheTahatorSnapshot? inputSnapshot = null;
 
@@ -96,9 +96,6 @@ public sealed class TahatorResendService
 
             var notSent = !inRayvarz && !rayvarzCheckFailed ? await TryGetDocNotSentAsync(no, ct) : null;
             var needs = TahatorSendPolicy.NeedsSend(inRayvarz, rayvarzCheckFailed);
-            anyNeedsSend |= needs;
-            allInHeader &= inHeader;
-            allInRayvarz &= inRayvarz;
 
             members.Add(new TahatorPairMemberStatus
             {
@@ -121,17 +118,14 @@ public sealed class TahatorResendService
             : string.Equals(ficheNo, pair.IncomeFiche!.FicheNo, StringComparison.Ordinal)
                 ? pair.IncomeFiche
                 : pair.AmountFiche;
-        var rayvarzCount = members.Count(m => m.ExistsInRayvarz);
-        var headerOnlyCount = members.Count(m => m.ExistsInAccountingDocHeader && !m.ExistsInRayvarz);
-        var msg = allInRayvarz
-            ? "هر دو فیش در رایورز (incmdocsys) هست — ارسال لازم نیست."
-            : rayvarzCount == 1
-                ? $"یکی از دو فیش جفت در رایورز است ({rayvarzCount}/۲) — فقط فیش دیگر ارسال می‌شود."
-                : anyNeedsSend
-                    ? headerOnlyCount > 0
-                        ? $"آماده ارسال مجدد (فقط فیش درخواستی): جفت مرجع ۱۵۷={pair.AmountFicheNo} ↔ ۱۵۸={pair.IncomeFicheNo}."
-                        : $"آماده ارسال تهاتر (فقط فیش درخواستی) — جفت مرجع: ۱۵۷={pair.AmountFicheNo} ↔ ۱۵۸={pair.IncomeFicheNo}."
-                    : "وضعیت جفت تهاتر نامشخص.";
+        var requestedMember = members.FirstOrDefault(m =>
+            string.Equals(m.FicheNo, ficheNo, StringComparison.Ordinal));
+        var requestedNeedsSend = requestedMember?.NeedsSend == true;
+        var msg = requestedMember?.ExistsInRayvarz == true
+            ? "این فیش در رایورز ثبت شده است — ارسال لازم نیست."
+            : requestedNeedsSend
+                ? "آماده ارسال همین فیش — فیش دیگر به‌صورت خودکار ارسال نمی‌شود."
+                : "وضعیت این فیش برای ارسال مشخص نیست.";
         var warning = rayvarzCheckWarnings.Count > 0
             ? string.Join(" | ", rayvarzCheckWarnings)
             : null;
@@ -141,15 +135,15 @@ public sealed class TahatorResendService
         return new TahatorCheckResult
         {
             FicheNo = ficheNo,
-            ExistsInAccountingDocHeader = allInHeader,
+            ExistsInAccountingDocHeader = requestedMember?.ExistsInAccountingDocHeader == true,
             ExistsInIncomeFiche = true,
-            ExistsInRayvarz = allInRayvarz,
+            ExistsInRayvarz = requestedMember?.ExistsInRayvarz == true,
             Snapshot = inputSnapshot,
             Fiche = primary,
             Pair = pair,
             PairMembers = members,
             DocNotSentError = members.FirstOrDefault(m => !string.IsNullOrWhiteSpace(m.DocNotSentError))?.DocNotSentError,
-            NeedsSend = anyNeedsSend,
+            NeedsSend = requestedNeedsSend,
             Warning = warning,
             Message = msg
         };
@@ -161,21 +155,23 @@ public sealed class TahatorResendService
         var dryRun = IsDryRun;
         var force = req.Force;
         var ficheNo = NormalizeFicheNo(req.FicheNo);
-        steps.Add($"0) جفت تهاتر — FicheNo={ficheNo} | DryRun={dryRun} | force={force}");
+        steps.Add($"0) ارسال تهاتر فقط فیش درخواستی — FicheNo={ficheNo} | DryRun={dryRun} | force={force}");
+
+        var loaded = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
+        if (loaded == null)
+            return Fail(ficheNo, dryRun, steps, $"فیش {ficheNo} در Income_Fiche یافت نشد.");
+        if (!TahatorRowBuilder.IsTahatorFiche(loaded))
+            return Fail(ficheNo, dryRun, steps, $"فیش {ficheNo} تهاتر (۱۵۷/۱۵۸) نیست.");
 
         var pair = await _fiches.ResolveTahatorPairAsync(ficheNo, ct);
-        if (pair?.AmountFiche == null || pair.IncomeFiche == null)
-        {
-            return Fail(ficheNo, dryRun, steps,
-                "جفت تهاتر (۱۵۷ مبلغ + ۱۵۸ درآمد) یافت نشد — هر دو فیش با همان NidIncome لازم است.");
-        }
-
+        var targetFiche = ResolveRequestedTahatorFiche(pair, ficheNo) ?? loaded;
         steps.Add(
-            $"0b) NidIncome={pair.NidIncome} | جفت مرجع: ۱۵۷={pair.AmountFicheNo} ↔ ۱۵۸={pair.IncomeFicheNo}");
+            pair?.AmountFiche != null && pair.IncomeFiche != null
+                ? $"0b) جفت در Sara هست (۱۵۷={pair.AmountFicheNo} / ۱۵۸={pair.IncomeFicheNo}) — فقط {ficheNo} ارسال می‌شود"
+                : $"0b) ارسال فقط {ficheNo} — فیش دیگر به‌صورت خودکار ارسال نمی‌شود");
 
-        var targetFiche = ResolveRequestedTahatorFiche(pair, ficheNo);
-        if (targetFiche == null)
-            return Fail(ficheNo, dryRun, steps, $"فیش {ficheNo} در جفت تهاتر resolve‌شده نیست.");
+        if (!string.Equals(targetFiche.FicheNo.Trim(), ficheNo, StringComparison.Ordinal))
+            return Fail(ficheNo, dryRun, steps, $"فیش resolve‌شده با شماره درخواستی یکی نیست.");
 
         steps.Add($"0c) ارسال فقط فیش درخواستی: {ficheNo} (گروه {targetFiche.IncomeAccountGroup})");
 
@@ -534,8 +530,10 @@ WHERE FicheNo = @f";
             fiche.FicheNo.Trim(), isAmount, years, ct);
     }
 
-    private static FicheHeaderDto? ResolveRequestedTahatorFiche(TahatorPairInfo pair, string ficheNo)
+    private static FicheHeaderDto? ResolveRequestedTahatorFiche(TahatorPairInfo? pair, string ficheNo)
     {
+        if (pair == null)
+            return null;
         if (string.Equals(ficheNo, pair.AmountFicheNo, StringComparison.Ordinal))
             return pair.AmountFiche;
         if (string.Equals(ficheNo, pair.IncomeFicheNo, StringComparison.Ordinal))

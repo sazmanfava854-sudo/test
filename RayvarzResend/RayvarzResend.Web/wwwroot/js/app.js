@@ -2168,7 +2168,7 @@ function buildMappingRows(f) {
     { field: 'شناسه پرداخت', value: f.paymentId || '—' },
     { field: 'کد نوسازی', value: f.bnkAcntNo || '—' },
     { field: 'منطقه / شعبه', value: branch ? `${branch.id} — ${branch.name}` : (region ? `منطقه ${region}` : '—') },
-    { field: 'صندوق', value: fund || f.suggestedFund || '—' },
+    { field: 'منبع', value: fund || f.suggestedFund || '—' },
     { field: 'تاریخ سند', value: $('docDate').value || '—' },
     { field: 'تاریخ عملیات', value: $('actDate').value || '—' },
     { field: 'تاریخ سررسید', value: $('dueDate').value || '—' },
@@ -2210,7 +2210,7 @@ function renderFiche(f) {
       <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">صندوق</span>
+      <span class="stat-label">منبع</span>
       <span class="stat-value">${$('fund')?.value || f.suggestedFund || '-'}</span>
     </div>
     <div class="stat-card">

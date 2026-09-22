@@ -99,6 +99,8 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("FinancialAssistant", html);
         Assert.Contains("id=\"fund\"", html);
         Assert.Contains("خلاصه ارسال", html);
+        Assert.Contains("field-label\">منبع", html);
+        Assert.DoesNotContain("field-label\">صندوق", html);
         Assert.Contains("<th>کد درآمد</th>", html);
         Assert.Contains("<th>شرح</th>", html);
         Assert.Contains("<th>مبلغ (ریال)</th>", html);
@@ -114,6 +116,9 @@ public class DeliveryReleaseTests
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         Assert.Contains("function showSendResult(", js);
         Assert.Contains("function fillFundSelect(", js);
+        Assert.Contains("stat-label\">منبع", js);
+        Assert.Contains("field: 'منبع'", js);
+        Assert.DoesNotContain("field: 'صندوق'", js);
         Assert.Contains("function showTahatorSendResult(", js);
         Assert.Contains("showAppInfo(`در حال ارسال فیش", js);
         Assert.DoesNotContain("function fillSourceIdDisplay(", js);
@@ -132,8 +137,22 @@ public class DeliveryReleaseTests
         Assert.Contains("ارسال فقط فیش درخواستی", src);
         Assert.Contains("var ordered = new[] { targetFiche };", src);
         Assert.Contains("AccountingDocWriter", src);
+        Assert.Contains("فیش دیگر به‌صورت خودکار ارسال نمی‌شود", src);
+        Assert.DoesNotContain("هر دو فیش با همان NidIncome لازم است", src);
+        Assert.DoesNotContain("فقط فیش دیگر ارسال می‌شود", src);
         Assert.DoesNotContain("force=true برای ارسال اجباری", src);
         Assert.Contains("این فیش قبلاً در رایورز ثبت شده است.", src);
+    }
+
+    [Fact]
+    public void Bulk_tahator_does_not_auto_send_or_skip_pair_partner()
+    {
+        var path = WebFile("Services", "UnsentFicheService.cs");
+        var src = File.ReadAllText(path);
+        Assert.DoesNotContain("processedTahatorPairs", src);
+        Assert.DoesNotContain("جفت تهاتر قبلاً در همین دسته پردازش می‌شود", src);
+        Assert.DoesNotContain("جفت ۱۵۷+۱۵۸ کامل نیست", src);
+        Assert.Contains("فقط همین فیش", src);
     }
 
     [Fact]

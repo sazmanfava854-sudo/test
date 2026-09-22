@@ -49,7 +49,6 @@ public class UnsentFicheService
         if (req.FicheNos == null || req.FicheNos.Count == 0)
             return result;
 
-        var processedTahatorPairs = new HashSet<Guid>();
         var index = 0;
 
         foreach (var rawNo in req.FicheNos.Distinct(StringComparer.Ordinal))
@@ -67,7 +66,7 @@ public class UnsentFicheService
 
             try
             {
-                var outcome = await ProcessOneAsync(req, ficheNo, processedTahatorPairs, user, ct);
+                var outcome = await ProcessOneAsync(req, ficheNo, user, ct);
                 item.SendPath = outcome.SendPath;
                 item.Success = outcome.Success;
                 item.Skipped = outcome.Skipped;
@@ -102,15 +101,13 @@ public class UnsentFicheService
         if (req.FicheNos == null || req.FicheNos.Count == 0)
             return plan;
 
-        var processedTahatorPairs = new HashSet<Guid>();
-
         foreach (var rawNo in req.FicheNos.Distinct(StringComparer.Ordinal))
         {
             var ficheNo = rawNo.Trim();
             if (string.IsNullOrWhiteSpace(ficheNo))
                 continue;
 
-            plan.Items.Add(await PlanOneAsync(req, ficheNo, processedTahatorPairs, user, ct));
+            plan.Items.Add(await PlanOneAsync(req, ficheNo, user, ct));
         }
 
         return plan;
@@ -119,7 +116,6 @@ public class UnsentFicheService
     private async Task<UnsentBatchPlanItem> PlanOneAsync(
         UnsentBatchSendRequest req,
         string ficheNo,
-        HashSet<Guid> processedTahatorPairs,
         ClaimsPrincipal user,
         CancellationToken ct)
     {
@@ -166,29 +162,10 @@ public class UnsentFicheService
 
         if (TahatorRowBuilder.IsTahatorFiche(fiche))
         {
-            var pair = await _repo.ResolveTahatorPairAsync(ficheNo, ct);
-            if (pair == null)
-            {
-                item.SendPath = "Tahator";
-                item.Detail = "جفت تهاتر ناقص";
-                item.BlockReason = "جفت ۱۵۷+۱۵۸ کامل نیست";
-                return item;
-            }
-
-            if (processedTahatorPairs.Contains(pair.NidIncome))
-            {
-                item.SendPath = "Tahator";
-                item.Detail = "همراه جفت تهاتر";
-                item.BlockReason = "جفت تهاتر قبلاً در همین دسته پردازش می‌شود";
-                return item;
-            }
-
-            processedTahatorPairs.Add(pair.NidIncome);
             item.SendPath = "Tahator";
-            item.TahatorPairFicheNo = string.Equals(pair.AmountFicheNo, ficheNo, StringComparison.Ordinal)
-                ? pair.IncomeFicheNo
-                : pair.AmountFicheNo;
-            item.Detail = $"جفت ۱۵۷={pair.AmountFicheNo} → ۱۵۸={pair.IncomeFicheNo}";
+            item.Detail = fiche.IncomeAccountGroup == TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+                ? "تهاتر مبلغ — فقط همین فیش"
+                : "تهاتر درآمد — فقط همین فیش";
             item.CanSend = true;
             return item;
         }
@@ -226,11 +203,10 @@ public class UnsentFicheService
     private async Task<ProcessOutcome> ProcessOneAsync(
         UnsentBatchSendRequest req,
         string ficheNo,
-        HashSet<Guid> processedTahatorPairs,
         ClaimsPrincipal user,
         CancellationToken ct)
     {
-        var plan = await PlanOneAsync(req, ficheNo, processedTahatorPairs, user, ct);
+        var plan = await PlanOneAsync(req, ficheNo, user, ct);
         if (!plan.CanSend)
         {
             return new ProcessOutcome(
