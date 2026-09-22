@@ -7,6 +7,8 @@
 
 تنظیمات: فقط `RayvarzResend.Web\appsettings.json`
 
+اگر `dotnet run` خطای JSON داد، بعد از ویرایش ConnectionStrings ویرگول بعد از `}` جا مانده است. بخش اتصال الان انتهای فایل است — فقط Server و Password را عوض کنید؛ `"` داخل رمز را به‌صورت `\"` بنویسید.
+
 ## اجرا
 
 ```powershell

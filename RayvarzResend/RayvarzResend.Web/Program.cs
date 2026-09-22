@@ -9,7 +9,19 @@ using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder;
+try
+{
+    AppSettingsJsonGuard.ValidateOrThrow(Directory.GetCurrentDirectory());
+    builder = WebApplication.CreateBuilder(args);
+}
+catch (Exception ex) when (AppSettingsJsonGuard.IsLoadError(ex))
+{
+    Console.OutputEncoding = System.Text.Encoding.UTF8;
+    Console.Error.WriteLine(AppSettingsJsonGuard.Describe(ex, Directory.GetCurrentDirectory()));
+    Environment.Exit(1);
+    throw;
+}
 AppSettingsConfiguration.UseSingleAppSettingsJsonOnly(builder.Configuration);
 if (builder.Configuration is IConfigurationRoot configRoot)
     configRoot.Reload();

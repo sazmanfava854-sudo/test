@@ -29,4 +29,38 @@ public class AppSettingsConfigurationTests
         Assert.DoesNotContain(paths, p => string.Equals(p, "appsettings.Development.json", StringComparison.OrdinalIgnoreCase));
         Assert.True(config.Sources.Count >= 2);
     }
+
+    [Fact]
+    public void Appsettings_json_parses()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "appsettings.json"));
+        AppSettingsJsonGuard.ValidateOrThrow(Path.GetDirectoryName(path));
+    }
+
+    [Fact]
+    public void Guard_describes_missing_comma_after_connection_strings()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "rr-appsettings-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "appsettings.json"), """
+                {
+                  "ConnectionStrings": {
+                    "Sara": "Server=.;Database=x;"
+                  }
+                  "Auth": { "SessionHours": 8 }
+                }
+                """);
+            var ex = Assert.Throws<InvalidDataException>(() => AppSettingsJsonGuard.ValidateOrThrow(dir));
+            Assert.Contains("appsettings.json", AppSettingsJsonGuard.Describe(ex, dir));
+            Assert.Contains("ویرگول", AppSettingsJsonGuard.Describe(ex, dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

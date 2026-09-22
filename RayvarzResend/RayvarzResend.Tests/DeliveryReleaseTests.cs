@@ -65,6 +65,9 @@ public class DeliveryReleaseTests
         Assert.Contains("\"Tahator\"", json);
         Assert.Contains("FinancialAssistant", json);
         Assert.Contains("https://city.mashhad.ir:5065", json);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.True(doc.RootElement.TryGetProperty("ConnectionStrings", out _));
+        Assert.True(doc.RootElement.TryGetProperty("Auth", out _));
     }
 
     [Fact]
