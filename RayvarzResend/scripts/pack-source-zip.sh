@@ -32,6 +32,6 @@ rm -f "$OUT_ZIP"
 (cd "$STAGE" && zip -r -q "$OUT_ZIP" RayvarzResend)
 echo "Created $OUT_ZIP ($(du -h "$OUT_ZIP" | cut -f1))"
 echo "--- login ---"
-unzip -p "$OUT_ZIP" RayvarzResend/RayvarzResend.Web/wwwroot/login.html | grep -F 'ورود با کد ملی' || true
+unzip -p "$OUT_ZIP" RayvarzResend/RayvarzResend.Web/wwwroot/login.html | grep -F 'ورود به دستیار مالی' || true
 echo "--- files ---"
 unzip -l "$OUT_ZIP" | grep -E 'login.html|app.js|TahatorResendService.cs|AccountingDocWriter.cs|appsettings.json|DELIVERY-SOURCE.md' || true

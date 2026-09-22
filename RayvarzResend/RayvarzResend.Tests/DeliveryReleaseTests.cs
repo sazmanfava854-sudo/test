@@ -80,23 +80,24 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void Unpublished_login_page_uses_national_id_copy_without_admin_hint()
+    public void Unpublished_login_page_has_no_national_id_hint()
     {
-        var path = WebFile("wwwroot", "login.html");
-        var html = File.ReadAllText(path);
-        Assert.Contains("ورود با کد ملی و رمز عبور", html);
+        var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("کد ملی", html);
         Assert.Contains("رمز عبور", html);
+        Assert.DoesNotContain("ورود با کد ملی و رمز عبور", html);
+        Assert.DoesNotContain("با کد ملی وارد شود", html);
         Assert.DoesNotContain("نام کاربری admin", html);
         Assert.DoesNotContain("ادمین می‌تواند", html);
     }
 
     [Fact]
-    public void Unpublished_single_tab_uses_persian_summary_and_financial_assistant()
+    public void Unpublished_single_tab_hides_financial_assistant_and_keeps_persian_rows()
     {
         var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
-        Assert.Contains("id=\"sourceIdDisplay\"", html);
-        Assert.Contains("value=\"FinancialAssistant\"", html);
+        Assert.DoesNotContain("sourceIdDisplay", html);
+        Assert.DoesNotContain("FinancialAssistant", html);
+        Assert.Contains("id=\"fund\"", html);
         Assert.Contains("خلاصه ارسال", html);
         Assert.Contains("<th>کد درآمد</th>", html);
         Assert.Contains("<th>شرح</th>", html);
@@ -112,9 +113,12 @@ public class DeliveryReleaseTests
     {
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         Assert.Contains("function showSendResult(", js);
-        Assert.Contains("function fillSourceIdDisplay(", js);
+        Assert.Contains("function fillFundSelect(", js);
         Assert.Contains("function showTahatorSendResult(", js);
         Assert.Contains("showAppInfo(`در حال ارسال فیش", js);
+        Assert.DoesNotContain("function fillSourceIdDisplay(", js);
+        Assert.DoesNotContain("جفت مرجع", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
+        Assert.DoesNotContain("جزئیات فیش", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
         Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnSend'")[1].Split("bindClick('btnUnsentSearch'")[0]);
         Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnUnsentSend'")[1].Split("bindClick('btnInstallmentPreview'")[0]);
     }
@@ -128,6 +132,24 @@ public class DeliveryReleaseTests
         Assert.Contains("ارسال فقط فیش درخواستی", src);
         Assert.Contains("var ordered = new[] { targetFiche };", src);
         Assert.Contains("AccountingDocWriter", src);
+        Assert.DoesNotContain("force=true برای ارسال اجباری", src);
+        Assert.Contains("این فیش قبلاً در رایورز ثبت شده است.", src);
+    }
+
+    [Fact]
+    public void Operator_branch_fund_map_matches_district_table()
+    {
+        var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.Contains("id = 201, name = \"منطقه 1\", fund = 200201012", program);
+        Assert.Contains("id = 209, name = \"منطقه 9\", fund = 200209004", program);
+        Assert.Contains("id = 212, name = \"منطقه 12\", fund = 200212004", program);
+        Assert.Contains("id = 218, name = \"منطقه ثامن\", fund = 200218011", program);
+        Assert.DoesNotContain("fund = 200209008", program);
+        Assert.DoesNotContain("fund = 212210016", program);
+
+        var json = File.ReadAllText(WebFile("appsettings.json"));
+        Assert.Contains("\"209\": 200209004", json);
+        Assert.Contains("\"212\": 200212004", json);
     }
 
     private static string WebFile(params string[] parts)

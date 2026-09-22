@@ -471,7 +471,6 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         nidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     },
     branches = new[] {
-        new { id = 102, name = "شعبه مرکز", fund = 0 },
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
         new { id = 203, name = "منطقه 3", fund = 200203013 },
@@ -480,11 +479,12 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         new { id = 206, name = "منطقه 6", fund = 200206006 },
         new { id = 207, name = "منطقه 7", fund = 200207009 },
         new { id = 208, name = "منطقه 8", fund = 200208010 },
-        new { id = 209, name = "منطقه 9", fund = 200209008 },
+        new { id = 209, name = "منطقه 9", fund = 200209004 },
         new { id = 210, name = "منطقه 10", fund = 200210020 },
         new { id = 211, name = "منطقه 11", fund = 200211007 },
-        new { id = 212, name = "منطقه 12", fund = 212210016 },
-        new { id = 218, name = "منطقه ثامن", fund = 200218011 }
+        new { id = 212, name = "منطقه 12", fund = 200212004 },
+        new { id = 218, name = "منطقه ثامن", fund = 200218011 },
+        new { id = 102, name = "شعبه مرکز", fund = 0 }
     }
 }).RequireAuthorization(authenticated);
 

@@ -240,8 +240,7 @@ public sealed class TahatorResendService
             if (toSend.Count == 0)
             {
                 var allSkipped = ficheResults.All(r => r.Skipped);
-                var detail = string.Join(" | ", ficheResults.Select(r =>
-                    $"{r.FicheNo}:{r.SkipReason ?? (r.Success ? "OK" : "FAIL")}"));
+                steps.Add($"1x) فیش {ficheNo} قبلاً در رایورز است — ارسال نشد");
                 return new TahatorSendResult
                 {
                     Success = allSkipped && ficheResults.All(r => r.Success),
@@ -253,8 +252,8 @@ public sealed class TahatorResendService
                     Steps = steps,
                     SkipReason = "AllInRayvarz",
                     Message = dryRun
-                        ? $"ارسال نشد (DryRun): همه فیش‌ها در رایورز هستند — {detail}. برای تست واقعی: Rayvarz:DryRun=false و Restart."
-                        : $"ارسال نشد: همه فیش‌ها در رایورز (incmdocsys) هستند — {detail}. force=true برای ارسال اجباری."
+                        ? "ارسال آزمایشی انجام نشد — این فیش قبلاً در رایورز ثبت شده است."
+                        : "این فیش قبلاً در رایورز ثبت شده است."
                 };
             }
 
@@ -412,10 +411,10 @@ public sealed class TahatorResendService
                 DocNotSentError = ficheResults.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.DocNotSentError))?.DocNotSentError,
                 Steps = steps,
                 Message = dryRun
-                    ? $"DryRun تهاتر — فقط {ficheNo}: SOAP ساخته شد؛ Sara تغییر نکرد."
+                    ? $"ارسال آزمایشی فیش {ficheNo} — به رایورز ارسال نشد."
                     : success
-                        ? $"فیش تهاتر {ficheNo} ارسال شد. (جفت مرجع: ۱۵۷={pair.AmountFicheNo}، ۱۵۸={pair.IncomeFicheNo}) — تایید وضعیت در Sara دستی."
-                        : $"ارسال تهاتر {ficheNo} ناموفق — جزئیات در ficheResults."
+                        ? $"فیش {ficheNo} ارسال شد."
+                        : $"ارسال فیش {ficheNo} ناموفق بود."
             };
         }
         catch (Exception ex)

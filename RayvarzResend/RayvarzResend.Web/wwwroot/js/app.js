@@ -148,14 +148,35 @@ function applyRegionalUserRestrictions() {
   }
 }
 
-function resolveSourceSystemId() {
-  const raw = config?.sourceSystemId;
-  return (raw && String(raw).trim()) ? String(raw).trim() : 'FinancialAssistant';
+function fillFundSelect(selectEl) {
+  if (!selectEl || !config?.branches) return;
+  selectEl.innerHTML = '';
+  config.branches.forEach((b) => {
+    if (!b.fund || Number(b.fund) <= 0) return;
+    const opt = document.createElement('option');
+    opt.value = b.fund;
+    opt.textContent = `${b.fund} — ${b.name}`;
+    selectEl.appendChild(opt);
+  });
 }
 
-function fillSourceIdDisplay() {
-  const el = $('sourceIdDisplay');
-  if (el) el.value = resolveSourceSystemId();
+function applyOperatorFund(f) {
+  const branchId = parseInt($('branch').value, 10);
+  const mapped = config.branches.find((b) => b.id === branchId);
+  const districtFund = mapped && Number(mapped.fund) > 0 ? Number(mapped.fund) : 0;
+  const suggested = Number(f?.suggestedFund || 0);
+  const districtFunds = new Set(
+    (config.branches || []).filter((b) => Number(b.fund) > 0).map((b) => Number(b.fund))
+  );
+  if (suggested > 0 && !districtFunds.has(suggested) && suggested !== districtFund) {
+    setFundValue(suggested);
+    return;
+  }
+  if (districtFund > 0) {
+    setFundValue(districtFund);
+    return;
+  }
+  if (suggested > 0) setFundValue(suggested);
 }
 
 function setFundValue(fund) {
@@ -165,7 +186,8 @@ function setFundValue(fund) {
   if (![...sel.options].some((o) => o.value === value)) {
     const opt = document.createElement('option');
     opt.value = value;
-    opt.textContent = value;
+    const mapped = (config.branches || []).find((b) => String(b.fund) === value);
+    opt.textContent = mapped ? `${mapped.fund} — ${mapped.name}` : value;
     sel.appendChild(opt);
   }
   sel.value = value;
@@ -173,36 +195,35 @@ function setFundValue(fund) {
 }
 
 function applyBranchFromFiche(f) {
-  fillSourceIdDisplay();
   if (f.resolvedDistrictBranch) {
     const branchId = f.resolvedDistrictBranch;
     const match = config.branches.find(b => b.id === branchId);
     if (match) {
       $('branch').value = branchId;
-      if (!setFundValue(f.suggestedFund)) syncFundFromBranch();
+      applyOperatorFund(f);
       return true;
     }
   }
   const region = f.dutyRegion || f.incomeRegion;
   const branchId = region ? branchFromRegion(region) : null;
   if (!branchId) {
-    setFundValue(f.suggestedFund);
+    applyOperatorFund(f);
     return false;
   }
   const match = config.branches.find(b => b.id === branchId);
   if (!match) {
-    setFundValue(f.suggestedFund);
+    applyOperatorFund(f);
     return false;
   }
   $('branch').value = branchId;
-  if (!setFundValue(f.suggestedFund)) syncFundFromBranch();
+  applyOperatorFund(f);
   return true;
 }
 
 function syncFundFromBranch() {
   const branchId = parseInt($('branch').value);
   const item = config.branches.find(b => b.id === branchId);
-  if (item) $('fund').value = item.fund;
+  if (item && Number(item.fund) > 0) $('fund').value = String(item.fund);
 }
 
 function syncBranchFromFund() {
@@ -2142,12 +2163,11 @@ function buildMappingRows(f) {
   const fund = $('fund').value;
   const region = f.dutyRegion || f.incomeRegion;
   return [
-    { field: 'کد منبع', value: resolveSourceSystemId() },
     { field: 'شماره فیش', value: f.ficheNo || '—' },
     { field: 'شناسه قبض', value: f.billId || '—' },
     { field: 'شناسه پرداخت', value: f.paymentId || '—' },
     { field: 'کد نوسازی', value: f.bnkAcntNo || '—' },
-    { field: 'منطقه / شعبه', value: branch ? branch.name : (region ? `منطقه ${region}` : '—') },
+    { field: 'منطقه / شعبه', value: branch ? `${branch.id} — ${branch.name}` : (region ? `منطقه ${region}` : '—') },
     { field: 'صندوق', value: fund || f.suggestedFund || '—' },
     { field: 'تاریخ سند', value: $('docDate').value || '—' },
     { field: 'تاریخ عملیات', value: $('actDate').value || '—' },
@@ -2190,8 +2210,8 @@ function renderFiche(f) {
       <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">کد منبع</span>
-      <span class="stat-value">${resolveSourceSystemId()}</span>
+      <span class="stat-label">صندوق</span>
+      <span class="stat-value">${$('fund')?.value || f.suggestedFund || '-'}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">کد نوسازی</span>
@@ -2236,14 +2256,8 @@ async function init() {
   fillBranchSelect(branchSel);
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
   fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
+  fillFundSelect(fundSel);
   applyRegionalUserRestrictions();
-  fillSourceIdDisplay();
-  config.branches.forEach(b => {
-    const optFund = document.createElement('option');
-    optFund.value = b.fund;
-    optFund.textContent = `${b.fund} — ${b.name}`;
-    fundSel.appendChild(optFund);
-  });
 
   branchSel.onchange = () => { syncFundFromBranch(); if (currentFiche) renderMappingTable(currentFiche); };
   fundSel.onchange = () => { syncBranchFromFund(); if (currentFiche) renderMappingTable(currentFiche); };
@@ -2360,7 +2374,6 @@ function setupEventHandlers() {
     updateIdentifierHint();
     applyBranchFromFiche(data);
     applyFicheDatesToForm(data);
-    fillSourceIdDisplay();
     renderFiche(data);
     updateSendButton(data);
     $('resultSection').hidden = true;
@@ -2869,18 +2882,12 @@ function showTahatorSendResult(data) {
       : data.success
         ? 'ارسال موفق'
         : 'ارسال ناموفق';
-  const details = (data.ficheResults || []).map((r) => {
-    const state = r.skipped ? 'رد شد' : (r.success ? 'موفق' : 'ناموفق');
-    return `${r.ficheNo}: ${state}`;
-  }).join(' | ') || '—';
   renderSendResultCard([
     { label: 'وضعیت', value: statusFa },
     { label: 'شماره فیش', value: data.ficheNo || '—' },
-    { label: 'جفت مرجع', value: data.pair ? `۱۵۷=${data.pair.amountFicheNo} — ۱۵۸=${data.pair.incomeFicheNo}` : '—' },
-    { label: 'جزئیات فیش', value: details },
     { label: 'پیام', value: data.message || '—' },
     { label: 'خطای ارسال', value: data.docNotSentError || '—' }
-  ], tone);
+  ].filter((row) => row.value && row.value !== '—'), tone);
 }
 
 function formatTahatorCheck(d) {

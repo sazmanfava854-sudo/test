@@ -708,11 +708,6 @@ input:focus, select:focus {
   border-radius: var(--radius-sm);
 }
 
-#sourceIdDisplay {
-  background: var(--surface-2);
-  cursor: default;
-}
-
 @media (max-width: 760px) {
   .mapping-row {
     grid-template-columns: 1fr;
