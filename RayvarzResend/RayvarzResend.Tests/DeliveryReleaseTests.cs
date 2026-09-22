@@ -64,6 +64,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"AccountingDoc\"", json);
         Assert.Contains("\"Tahator\"", json);
         Assert.Contains("FinancialAssistant", json);
+        Assert.Contains("https://city.mashhad.ir:5065", json);
     }
 
     [Fact]

@@ -197,6 +197,23 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void BuildCallbackAbsoluteUrl_uses_city_mashhad_public_base()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            PublicBaseUrl = "https://city.mashhad.ir:5065"
+        });
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost:5000");
+
+        var callback = service.BuildCallbackAbsoluteUrl(context.Request);
+
+        Assert.Equal("https://city.mashhad.ir:5065/auth/callback", callback);
+        Assert.DoesNotContain("login.html", callback);
+    }
+
+    [Fact]
     public void ParseCallbackQuery_reads_username_and_refresh_token_aliases()
     {
         var service = CreateService();
