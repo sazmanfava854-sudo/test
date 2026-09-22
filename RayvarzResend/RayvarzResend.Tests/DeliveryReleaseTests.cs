@@ -78,4 +78,65 @@ public class DeliveryReleaseTests
         Assert.Contains("AddSingleton<RayvarzPayloadBuilder>", program);
         Assert.Contains("[FromServices] RayvarzPayloadBuilder", program);
     }
+
+    [Fact]
+    public void Unpublished_login_page_uses_national_id_copy_without_admin_hint()
+    {
+        var path = WebFile("wwwroot", "login.html");
+        var html = File.ReadAllText(path);
+        Assert.Contains("ورود با کد ملی و رمز عبور", html);
+        Assert.Contains("کد ملی", html);
+        Assert.Contains("رمز عبور", html);
+        Assert.DoesNotContain("نام کاربری admin", html);
+        Assert.DoesNotContain("ادمین می‌تواند", html);
+    }
+
+    [Fact]
+    public void Unpublished_single_tab_uses_persian_summary_and_financial_assistant()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
+        Assert.Contains("id=\"sourceIdDisplay\"", html);
+        Assert.Contains("value=\"FinancialAssistant\"", html);
+        Assert.Contains("خلاصه ارسال", html);
+        Assert.Contains("<th>کد درآمد</th>", html);
+        Assert.Contains("<th>شرح</th>", html);
+        Assert.Contains("<th>مبلغ (ریال)</th>", html);
+        Assert.DoesNotContain("btnPreview", html);
+        Assert.DoesNotContain("پیش نمایش xml", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("id=\"sendResultCard\"", html);
+        Assert.DoesNotContain("id=\"resultBox\"", html);
+    }
+
+    [Fact]
+    public void Unpublished_single_send_has_no_browser_confirm()
+    {
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        Assert.Contains("function showSendResult(", js);
+        Assert.Contains("function fillSourceIdDisplay(", js);
+        Assert.Contains("function showTahatorSendResult(", js);
+        Assert.Contains("showAppInfo(`در حال ارسال فیش", js);
+        Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnSend'")[1].Split("bindClick('btnUnsentSearch'")[0]);
+        Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnUnsentSend'")[1].Split("bindClick('btnInstallmentPreview'")[0]);
+    }
+
+    [Fact]
+    public void Unpublished_tahator_sends_only_requested_fiche()
+    {
+        var path = WebFile("Services", "TahatorResendService.cs");
+        var src = File.ReadAllText(path);
+        Assert.Contains("ResolveRequestedTahatorFiche", src);
+        Assert.Contains("ارسال فقط فیش درخواستی", src);
+        Assert.Contains("var ordered = new[] { targetFiche };", src);
+        Assert.Contains("AccountingDocWriter", src);
+    }
+
+    private static string WebFile(params string[] parts)
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            new[] { AppContext.BaseDirectory, "..", "..", "..", "..", "RayvarzResend.Web" }
+                .Concat(parts)
+                .ToArray()));
+        Assert.True(File.Exists(path), path);
+        return path;
+    }
 }

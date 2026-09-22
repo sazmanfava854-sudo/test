@@ -2528,10 +2528,9 @@ function setupEventHandlers() {
     const dry = config?.dryRun;
     const kind = $('unsentFicheKind').value;
     const kindLabel = kind === 'Duty' ? 'نوسازی/صنفی' : 'شهرسازی';
-    const warn = dry
-      ? `DryRun فعال — ${selected.length} فیش ${kindLabel} فقط SOAP می‌سازد. ادامه؟`
-      : `ارسال ${selected.length} فیش ${kindLabel} به رایورز؟`;
-    if (!confirm(warn)) return;
+    showAppInfo(dry
+      ? `در حال ارسال آزمایشی ${selected.length} فیش ${kindLabel}…`
+      : `در حال ارسال ${selected.length} فیش ${kindLabel} به رایورز…`);
 
     const btn = $('btnUnsentSend');
     btn.disabled = true;
