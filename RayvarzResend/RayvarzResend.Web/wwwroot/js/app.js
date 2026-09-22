@@ -2086,12 +2086,6 @@ function formatDiagnostics(d) {
   return lines.join('\n') + '\n';
 }
 
-function ficheStatusClass(f) {
-  if (f.canSend) return 'status-ok';
-  if (f.existsInRayvarz || f.blockReason) return 'status-err';
-  return 'status-warn';
-}
-
 function updateSendButton(f) {
   const btn = $('btnSend');
   if (!btn) return;
@@ -2190,7 +2184,6 @@ function renderMappingTable(f) {
 
 function renderFiche(f) {
   $('ficheSection').hidden = false;
-  const statusClass = ficheStatusClass(f);
   const alertHtml = f.blockReason
     ? `<div class="fiche-alert fiche-alert-err" role="alert">${f.blockReason}</div>`
     : '';
@@ -2216,14 +2209,6 @@ function renderFiche(f) {
     <div class="stat-card">
       <span class="stat-label">کد نوسازی</span>
       <span class="stat-value">${f.bnkAcntNo || '-'}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">وضعیت</span>
-      <span class="stat-value"><span class="status-pill ${statusClass}">${f.statusMessage}</span></span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">در رایورز</span>
-      <span class="stat-value">${f.existsInRayvarz ? 'بله — تکراری' : 'خیر'}</span>
     </div>
   `;
 

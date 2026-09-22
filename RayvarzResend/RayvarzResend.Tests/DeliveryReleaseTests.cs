@@ -129,6 +129,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
+    public void Fiche_summary_hides_duplicate_rayvarz_status()
+    {
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        var summary = js.Split("function renderFiche(")[1].Split("function init(")[0];
+        Assert.DoesNotContain("stat-label\">وضعیت", summary);
+        Assert.DoesNotContain("stat-label\">در رایورز", summary);
+        Assert.DoesNotContain("بله — تکراری", summary);
+    }
+
+    [Fact]
     public void Unpublished_tahator_sends_only_requested_fiche()
     {
         var path = WebFile("Services", "TahatorResendService.cs");
