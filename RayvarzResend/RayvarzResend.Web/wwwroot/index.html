@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=37" />
+  <link rel="stylesheet" href="css/style.css?v=38" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -76,8 +76,12 @@
               <select id="branch"></select>
             </label>
             <label class="field">
-              <span class="field-label">کد منبع</span>
+              <span class="field-label">صندوق</span>
               <select id="fund"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">کد منبع</span>
+              <input id="sourceIdDisplay" type="text" readonly value="FinancialAssistant" />
             </label>
             <label class="field">
               <span class="field-label">تاریخ سند</span>
@@ -103,7 +107,6 @@
           </div>
           <div class="actions">
             <button id="btnLoad" class="btn primary" type="button">دریافت فیش</button>
-            <button id="btnPreview" class="btn secondary perm-unsent" type="button" disabled hidden>پیش‌نمایش XML</button>
             <button id="btnSend" class="btn danger" type="button" disabled>ارسال به رایورز</button>
           </div>
         </div>
@@ -208,16 +211,16 @@
       <div id="ficheSummary" class="summary-grid"></div>
 
       <div class="subsection">
-        <h3>مپینگ SOAP</h3>
-        <div id="mappingTable" class="mapping-table"></div>
+        <h3>خلاصه ارسال</h3>
+        <div id="mappingTable" class="mapping-table mapping-table-fa"></div>
       </div>
 
       <div class="subsection">
-        <h3>ردیف‌های IncmNo</h3>
+        <h3>ردیف‌های درآمد</h3>
         <div class="table-wrap">
           <table id="rowsTable">
             <thead>
-              <tr><th>#</th><th>IncmNo</th><th>شرح</th><th>Val</th></tr>
+              <tr><th>ردیف</th><th>کد درآمد</th><th>شرح</th><th>مبلغ (ریال)</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -230,15 +233,7 @@
         <span class="card-icon" aria-hidden="true">✓</span>
         <h2>نتیجه ارسال</h2>
       </div>
-      <pre id="resultBox" class="code-block"></pre>
-    </section>
-
-    <section class="card card-enter" id="xmlSection" hidden>
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">&lt;/&gt;</span>
-        <h2>XML پیش‌نمایش</h2>
-      </div>
-      <pre id="xmlBox" class="code-block"></pre>
+      <div id="sendResultCard" class="send-result-card"></div>
     </section>
     </div>
 
@@ -742,6 +737,6 @@
   </div>
   <script src="https://unpkg.com/@majidh1/jalalidatepicker/dist/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=70"></script>
+  <script src="js/app.js?v=71"></script>
 </body>
 </html>

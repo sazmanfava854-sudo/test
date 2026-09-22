@@ -63,6 +63,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"DryRun\": false", json);
         Assert.Contains("\"AccountingDoc\"", json);
         Assert.Contains("\"Tahator\"", json);
+        Assert.Contains("FinancialAssistant", json);
     }
 
     [Fact]

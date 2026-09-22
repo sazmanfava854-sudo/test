@@ -210,6 +210,21 @@ public class IncomeSoapParityTests
             Rows = { new IncmRowDto { IncmNo = 1262, Val = payable, IncmRowDsc = "عوارض بر مشاغل" } }
         };
 
+    [Fact]
+    public void SourceId_defaults_to_FinancialAssistant_when_config_empty()
+    {
+        var fiche = MakeIncomeFiche("050933509456", 209, 200209008, "9-8-72-47-1-0-2", 1m, "1", "2");
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Rayvarz:SoapAction"] = "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument",
+                ["Rayvarz:ServiceUrl"] = "http://example.local/svc"
+            })
+            .Build();
+        var xml = new SoapBuilder(config).Build(fiche, 209, 200209008, null, null, null);
+        Assert.Contains("<b:SourceId>FinancialAssistant</b:SourceId>", xml);
+    }
+
     private static string BuildSoap(FicheHeaderDto fiche, int branch, int fund, string? refRowMode = null)
     {
         var settings = new Dictionary<string, string?>

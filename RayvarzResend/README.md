@@ -92,7 +92,7 @@ WHERE f.FicheNo = @FicheNo;
 | فیلد SOAP | منبع |
 |-----------|------|
 | TransactionId | پیش‌فرض **GUID جدید در هر ارسال** (`TransactionIdMode=newGuidPerSend`) تا خطای «تراکنش تکراری» نشود؛ برای رفتار سامانه اصلی: `nidFiche` |
-| SourceId | `appsettings → SourceSystemId` (`11111`) |
+| SourceId | `appsettings → SourceSystemId` (`FinancialAssistant`) |
 | RowDocNo | `FicheNo` |
 | Ref2 / Ref3 | `BillID` / `PaymentID` |
 | Qty | `Payable` (مبلغ کل) |

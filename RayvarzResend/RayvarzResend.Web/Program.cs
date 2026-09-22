@@ -400,7 +400,9 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     soapVersion = RayvarzSoapHttp.SoapVersionLabel(RayvarzSoapHttp.ResolveSoapVersion(config)),
     refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "zero",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
-    sourceSystemId = config["Rayvarz:SourceSystemId"],
+    sourceSystemId = string.IsNullOrWhiteSpace(config["Rayvarz:SourceSystemId"])
+        ? SoapBuilder.DefaultSourceSystemId
+        : config["Rayvarz:SourceSystemId"]!.Trim(),
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "5",
