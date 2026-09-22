@@ -9,7 +9,22 @@ using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
 using RayvarzResend.Web.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder;
+try
+{
+    AppSettingsJsonGuard.ValidateOrThrow(Directory.GetCurrentDirectory());
+    builder = WebApplication.CreateBuilder(args);
+}
+catch (Exception ex) when (AppSettingsJsonGuard.IsLoadError(ex))
+{
+    Console.OutputEncoding = System.Text.Encoding.UTF8;
+    Console.Error.WriteLine(AppSettingsJsonGuard.Describe(ex, Directory.GetCurrentDirectory()));
+    Environment.Exit(1);
+    throw;
+}
+AppSettingsConfiguration.UseSingleAppSettingsJsonOnly(builder.Configuration);
+if (builder.Configuration is IConfigurationRoot configRoot)
+    configRoot.Reload();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -70,6 +85,7 @@ builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
 builder.Services.AddSingleton<ShimasAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
+builder.Services.AddSingleton<AccountingDocWriter>();
 builder.Services.AddSingleton<FicheSendService>();
 builder.Services.AddSingleton<UnsentFicheService>();
 builder.Services.AddSingleton<TahatorResendService>();
@@ -156,7 +172,7 @@ app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
     {
         if (shimas.Options.AllowLocalLoginFallback)
             return Results.Redirect("/login.html");
-        return Results.Content("SSO پیکربندی نشده — lkey را در appsettings تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
+        return Results.Content("SSO پیکربندی نشده — ClientId و ClientSecret را در Auth:Shimas تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
     }
 
     var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
@@ -177,6 +193,9 @@ app.MapGet("/auth/callback", async (
         var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
         return Results.Redirect($"/login.html?error={error}");
     }
+
+    if (!string.IsNullOrWhiteSpace(callback.Domain))
+        validation.Profile.Domain = callback.Domain;
 
     var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
     if (user == null)
@@ -250,6 +269,7 @@ app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserReposit
                 NationalId = created.NationalId,
                 Position = created.Position,
                 District = created.District,
+                Domain = created.Domain,
                 IsAdmin = created.IsAdmin,
                 IsActive = created.IsActive,
                 CreatedAtUtc = created.CreatedAtUtc.ToString("O")
@@ -384,6 +404,9 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
 {
     releaseVersion = ReleaseInfo.Number,
     releaseLabel = ReleaseInfo.Label,
+    releaseDisplayName = ReleaseInfo.DisplayName,
+    contentRoot = app.Environment.ContentRootPath,
+    appSettingsFile = Path.Combine(app.Environment.ContentRootPath, "appsettings.json"),
     dryRun = config.GetValue<bool>("Rayvarz:DryRun"),
     serviceUrl = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrl"]),
     serviceUrlMsb = RayvarzUrlNormalizer.Normalize(config, config["Rayvarz:ServiceUrlMsb"] ?? ""),
@@ -393,7 +416,9 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     soapVersion = RayvarzSoapHttp.SoapVersionLabel(RayvarzSoapHttp.ResolveSoapVersion(config)),
     refRowDocNoInDetail = config["Rayvarz:RefRowDocNoInDetail"] ?? "zero",
     allowInvalidSsl = config.GetValue<bool>("Rayvarz:AllowInvalidSsl"),
-    sourceSystemId = config["Rayvarz:SourceSystemId"],
+    sourceSystemId = string.IsNullOrWhiteSpace(config["Rayvarz:SourceSystemId"])
+        ? SoapBuilder.DefaultSourceSystemId
+        : config["Rayvarz:SourceSystemId"]!.Trim(),
     payloadSource = config["Rayvarz:PayloadSource"] ?? "LegacyCSharp",
     ruleEngineNidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     uiVersion = "5",
@@ -406,9 +431,17 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true },
     tahator = new
     {
-        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
         pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
         pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
+    },
+    accountingDoc = new
+    {
+        dryRun = config.GetValue<bool?>("AccountingDoc:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
+        pollTimeoutSeconds = config.GetValue("AccountingDoc:PollTimeoutSeconds",
+            config.GetValue("Tahator:PollTimeoutSeconds", 60)),
+        pollIntervalMs = config.GetValue("AccountingDoc:PollIntervalMs",
+            config.GetValue("Tahator:PollIntervalMs", 2000)),
     },
     installment = new
     {
@@ -454,7 +487,6 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         nidMember = config.GetValue("RuleEngine:NidMemberRayvarzRun", 1388),
     },
     branches = new[] {
-        new { id = 102, name = "شعبه مرکز", fund = 0 },
         new { id = 201, name = "منطقه 1", fund = 200201012 },
         new { id = 202, name = "منطقه 2", fund = 200202012 },
         new { id = 203, name = "منطقه 3", fund = 200203013 },
@@ -463,11 +495,12 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         new { id = 206, name = "منطقه 6", fund = 200206006 },
         new { id = 207, name = "منطقه 7", fund = 200207009 },
         new { id = 208, name = "منطقه 8", fund = 200208010 },
-        new { id = 209, name = "منطقه 9", fund = 200209008 },
+        new { id = 209, name = "منطقه 9", fund = 200209004 },
         new { id = 210, name = "منطقه 10", fund = 200210020 },
         new { id = 211, name = "منطقه 11", fund = 200211007 },
-        new { id = 212, name = "منطقه 12", fund = 212210016 },
-        new { id = 218, name = "منطقه ثامن", fund = 200218011 }
+        new { id = 212, name = "منطقه 12", fund = 200212004 },
+        new { id = 218, name = "منطقه ثامن", fund = 200218011 },
+        new { id = 102, name = "شعبه مرکز", fund = 0 }
     }
 }).RequireAuthorization(authenticated);
 

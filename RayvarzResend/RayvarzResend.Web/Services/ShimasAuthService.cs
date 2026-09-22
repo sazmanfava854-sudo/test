@@ -61,14 +61,18 @@ public sealed class ShimasAuthService
 
     public string BuildExternalLoginUrl(string callbackAbsoluteUrl)
     {
-        if (!_options.SsoReady)
-            throw new InvalidOperationException("lkey هنوز تنظیم نشده است");
+        var clientId = _options.EffectiveClientId;
+        if (string.IsNullOrWhiteSpace(clientId))
+            throw new InvalidOperationException("ClientId / lkey هنوز تنظیم نشده است");
 
-        return QueryHelpers.AddQueryString(_options.LoginUrl, new Dictionary<string, string?>
+        var query = new Dictionary<string, string?>
         {
-            [_options.LKeyParameter] = _options.LKey.Trim(),
+            [_options.LKeyParameter] = clientId,
+            [_options.ClientIdParameter] = clientId,
             [_options.ReturnUrlParameter] = callbackAbsoluteUrl
-        });
+        };
+
+        return QueryHelpers.AddQueryString(_options.LoginUrl, query);
     }
 
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
@@ -87,13 +91,21 @@ public sealed class ShimasAuthService
         var username = ReadQuery(query,
             "username", "userName", "UserName",
             "nationalId", "NationalId", "nationalCode", "NationalCode", "code");
+        var domain = ReadQuery(query,
+            "domain", "Domain", "sAMAccountName", "samAccountName", "accountName", "AccountName");
         var refreshToken = ReadQuery(query,
             "refresh_token", "refreshToken", "RefreshToken",
             "token", "Token", "access_token", "accessToken");
 
+        var normalizedDomain = AppUserDomainNormalizer.Normalize(domain);
+        var normalizedUsername = AppUserDomainNormalizer.Normalize(username);
+        if (string.IsNullOrEmpty(normalizedUsername))
+            normalizedUsername = normalizedDomain;
+
         return new ShimasCallbackPayload
         {
-            Username = username,
+            Username = normalizedUsername,
+            Domain = normalizedDomain,
             RefreshToken = refreshToken
         };
     }
@@ -135,7 +147,9 @@ public sealed class ShimasAuthService
         if (username.Length == 0)
             return null;
 
-        var existing = await _users.FindByUsernameAsync(username, ct);
+        var existing = await _users.FindBySsoIdentityAsync(username, ct)
+            ?? await _users.FindBySsoIdentityAsync(profile.Domain, ct)
+            ?? await _users.FindByUsernameAsync(username, ct);
         if (existing != null)
             return existing.IsActive ? existing : null;
 
@@ -161,7 +175,10 @@ public sealed class ShimasAuthService
             request.Content = JsonContent.Create(new
             {
                 username,
-                refresh_token = refreshToken
+                refresh_token = refreshToken,
+                client_id = _options.EffectiveClientId,
+                client_secret = _options.ClientSecret,
+                lkey = _options.EffectiveClientId
             });
 
             using var response = await client.SendAsync(request, ct);
@@ -247,6 +264,7 @@ public sealed class ShimasAuthService
         return new ShimasUserProfile
         {
             Username = username,
+            Domain = AppUserDomainNormalizer.Normalize(username),
             FirstName = parts.Length > 0 ? parts[0] : username,
             LastName = parts.Length > 1 ? parts[1] : "کاربر"
         };

@@ -41,6 +41,7 @@ public sealed class AppAuthService
         var firstName = _config["Auth:BootstrapAdmin:FirstName"] ?? "مدیر";
         var lastName = _config["Auth:BootstrapAdmin:LastName"] ?? "سیستم";
         var nationalId = _config["Auth:BootstrapAdmin:NationalId"] ?? "1234567890";
+        var domain = _config["Auth:BootstrapAdmin:Domain"] ?? "admin";
 
         await _users.CreateUserAsync(new CreateAppUserRequest
         {
@@ -49,6 +50,7 @@ public sealed class AppAuthService
             FirstName = firstName,
             LastName = lastName,
             NationalId = nationalId,
+            Domain = domain,
             Position = "مدیر سیستم",
             IsAdmin = true
         }, ct);
@@ -79,6 +81,7 @@ public sealed class AppAuthService
             NationalId = user.NationalId,
             Position = user.Position,
             District = user.District,
+            Domain = user.Domain,
             DisplayName = BuildDisplayName(user),
             IsAdmin = user.IsAdmin,
             CanAccessUnsentFiches = perms.CanAccessUnsentFiches,

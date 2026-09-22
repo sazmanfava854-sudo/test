@@ -300,6 +300,26 @@ public class TahatorHelpersTests
     }
 
     [Fact]
+    public void TahatorPairResolver_prefers_matching_payable_over_exportation()
+    {
+        var exportShared = Guid.Parse("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
+        var exportOther = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var candidates = new List<TahatorPairResolver.Candidate>
+        {
+            new("050833533195", 157, 3, exportShared, 12_000_000_000m),
+            new("050833533243", 158, 3, exportShared, 13_348_156_950m),
+            new("050833533196", 158, 3, exportOther, 12_000_000_000m),
+        };
+
+        var pair = TahatorPairResolver.Resolve(
+            candidates, "050833533195", 157, exportShared, 12_000_000_000m);
+
+        Assert.NotNull(pair);
+        Assert.Equal("050833533195", pair.Value.AmountFicheNo);
+        Assert.Equal("050833533196", pair.Value.IncomeFicheNo);
+    }
+
+    [Fact]
     public void TahatorPairResolver_prefers_same_NidExportation_and_excludes_status_4()
     {
         var exportActive = Guid.Parse("CB71424F-BA17-4A7A-8FEB-E5394BED24AD");
@@ -343,9 +363,9 @@ public class TahatorHelpersTests
         };
         Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorAmount, pair.AmountFiche!.IncomeAccountGroup);
         Assert.Equal(TahatorRowBuilder.IncomeAccountGroupTahatorIncome, pair.IncomeFiche!.IncomeAccountGroup);
-        // SendAsync sends AmountFiche (157) before IncomeFiche (158) — VB Tahator1 then Tahator
-        var order = new[] { pair.AmountFiche, pair.IncomeFiche }.Select(f => f.IncomeAccountGroup).ToArray();
-        Assert.Equal<int?>(new int?[] { 157, 158 }, order);
+        // SendAsync فقط فیش درخواستی را ارسال می‌کند؛ جفت برای نمایش/چک است.
+        Assert.Equal(157, pair.AmountFiche!.IncomeAccountGroup);
+        Assert.Equal(158, pair.IncomeFiche!.IncomeAccountGroup);
     }
 
     [Fact]

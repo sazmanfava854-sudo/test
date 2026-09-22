@@ -41,8 +41,31 @@ public class ShimasAuthServiceTests
         var url = service.BuildExternalLoginUrl("https://app.example.com/auth/callback");
 
         Assert.Contains("lkey=test-lkey-123", url);
+        Assert.Contains("client_id=test-lkey-123", url);
+        Assert.DoesNotContain("secret=", url, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("D2fbf", url);
         Assert.Contains("returnUrl=", url);
         Assert.Contains(Uri.EscapeDataString("https://app.example.com/auth/callback"), url);
+    }
+
+    [Fact]
+    public void BuildExternalLoginUrl_uses_ClientId_when_LKey_empty()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "19cf3C33",
+            ClientSecret = "D2fbf",
+            LKey = "",
+            LoginUrl = "https://login.mashhad.ir/Authentication/Login.aspx"
+        });
+
+        var url = service.BuildExternalLoginUrl("https://city.mashhad.ir:5065/auth/callback");
+
+        Assert.Contains("lkey=19cf3C33", url);
+        Assert.Contains("client_id=19cf3C33", url);
+        Assert.DoesNotContain("D2fbf", url);
+        Assert.Contains(Uri.EscapeDataString("https://city.mashhad.ir:5065/auth/callback"), url);
     }
 
     [Fact]
@@ -157,14 +180,54 @@ public class ShimasAuthServiceTests
             FirstName = "موجود",
             LastName = "کاربر",
             NationalId = "1122334455",
+            Domain = "hoseine-sh",
             District = "1"
         });
 
         var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = true }, memory);
-        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = "1122334455" });
+        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = @"MASHHAD\hoseine-sh" });
 
         Assert.NotNull(user);
         Assert.Equal(existing.Id, user!.Id);
+    }
+
+    [Fact]
+    public async Task ResolveOrCreateUserAsync_matches_domain_field()
+    {
+        var memory = new InMemoryAppUserStore();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
+        config["Auth:UseInMemoryStore"] = "true";
+        var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
+        var existing = await repo.CreateUserAsync(new CreateAppUserRequest
+        {
+            Username = "0011223344",
+            Password = "Secret@123",
+            FirstName = "حسین",
+            LastName = "حسینی",
+            NationalId = "0011223344",
+            Domain = "hoseine-sh",
+            District = "1"
+        });
+
+        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = false }, memory);
+        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = "hoseine-sh" });
+
+        Assert.NotNull(user);
+        Assert.Equal(existing.Id, user!.Id);
+        Assert.Equal("hoseine-sh", user.Domain);
+    }
+
+    [Fact]
+    public void ParseCallbackQuery_strips_windows_domain_prefix()
+    {
+        var service = CreateService();
+        var context = new DefaultHttpContext();
+        context.Request.QueryString = new QueryString("?userName=MASHHAD%5Choseine-sh&refreshToken=abc-token-xyz");
+
+        var payload = service.ParseCallbackQuery(context.Request.Query);
+
+        Assert.Equal("hoseine-sh", payload.Username);
+        Assert.Equal("abc-token-xyz", payload.RefreshToken);
     }
 
     [Fact]
@@ -194,6 +257,23 @@ public class ShimasAuthServiceTests
         var callback = service.BuildCallbackAbsoluteUrl(context.Request);
 
         Assert.Equal("http://5.252.216.140:8070/auth/callback", callback);
+    }
+
+    [Fact]
+    public void BuildCallbackAbsoluteUrl_uses_city_mashhad_public_base()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            PublicBaseUrl = "https://city.mashhad.ir:5065"
+        });
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost:5000");
+
+        var callback = service.BuildCallbackAbsoluteUrl(context.Request);
+
+        Assert.Equal("https://city.mashhad.ir:5065/auth/callback", callback);
+        Assert.DoesNotContain("login.html", callback);
     }
 
     [Fact]

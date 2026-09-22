@@ -94,7 +94,7 @@ public class SoapBuilder
         if (fund <= 0 && fiche.SuggestedFund is > 0)
             fund = fiche.SuggestedFund.Value;
 
-        var sourceSystemId = _config["Rayvarz:SourceSystemId"];
+        var sourceSystemId = ResolveSourceSystemId();
         var transactionId = ResolveTransactionId(fiche);
         var action = _config["Rayvarz:SoapAction"] ?? "http://tempuri.org/IReceiveIncmVchrServices/SaveDocument";
         var serviceUrl = ResolveWsAddressingTo();
@@ -194,7 +194,7 @@ public class SoapBuilder
         var phasTyp = ResolveSoapDataContractEnum(_config["Rayvarz:PhasTyp"], "7", PhasTypCodeToWireName);
         var vchrTyp = ResolveSoapDataContractEnum(_config["Rayvarz:VchrTyp"], "0", VchrTypCodeToWireName);
         var actTyp = ResolveSoapActTyp(_config["Rayvarz:ActTyp"], "3");
-        var sourceSystemId = _config["Rayvarz:SourceSystemId"];
+        var sourceSystemId = ResolveSourceSystemId();
         var transactionId = Guid.NewGuid().ToString();
         const string docDateRay = "14000101";
         const string rowDateRay = "14000101";
@@ -278,6 +278,14 @@ public class SoapBuilder
             FicheCategory.Income when fiche.DocTyp is 17 or 18 => "عوارض تهاتر درامد",
             _ => fiche.DocTypDsc ?? fiche.DocDsc ?? ""
         };
+
+    public const string DefaultSourceSystemId = "FinancialAssistant";
+
+    private string ResolveSourceSystemId()
+    {
+        var configured = _config["Rayvarz:SourceSystemId"];
+        return string.IsNullOrWhiteSpace(configured) ? DefaultSourceSystemId : configured.Trim();
+    }
 
     private string ResolveIncmMkrTyp(FicheCategory category, bool isTahator = false)
     {

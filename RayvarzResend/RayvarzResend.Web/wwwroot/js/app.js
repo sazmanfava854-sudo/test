@@ -148,31 +148,82 @@ function applyRegionalUserRestrictions() {
   }
 }
 
+function fillFundSelect(selectEl) {
+  if (!selectEl || !config?.branches) return;
+  selectEl.innerHTML = '';
+  config.branches.forEach((b) => {
+    if (!b.fund || Number(b.fund) <= 0) return;
+    const opt = document.createElement('option');
+    opt.value = b.fund;
+    opt.textContent = `${b.fund} — ${b.name}`;
+    selectEl.appendChild(opt);
+  });
+}
+
+function applyOperatorFund(f) {
+  const branchId = parseInt($('branch').value, 10);
+  const mapped = config.branches.find((b) => b.id === branchId);
+  const districtFund = mapped && Number(mapped.fund) > 0 ? Number(mapped.fund) : 0;
+  const suggested = Number(f?.suggestedFund || 0);
+  const districtFunds = new Set(
+    (config.branches || []).filter((b) => Number(b.fund) > 0).map((b) => Number(b.fund))
+  );
+  if (suggested > 0 && !districtFunds.has(suggested) && suggested !== districtFund) {
+    setFundValue(suggested);
+    return;
+  }
+  if (districtFund > 0) {
+    setFundValue(districtFund);
+    return;
+  }
+  if (suggested > 0) setFundValue(suggested);
+}
+
+function setFundValue(fund) {
+  const sel = $('fund');
+  if (!sel || fund == null || fund === '' || Number(fund) <= 0) return false;
+  const value = String(fund);
+  if (![...sel.options].some((o) => o.value === value)) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    const mapped = (config.branches || []).find((b) => String(b.fund) === value);
+    opt.textContent = mapped ? `${mapped.fund} — ${mapped.name}` : value;
+    sel.appendChild(opt);
+  }
+  sel.value = value;
+  return sel.value === value;
+}
+
 function applyBranchFromFiche(f) {
   if (f.resolvedDistrictBranch) {
     const branchId = f.resolvedDistrictBranch;
     const match = config.branches.find(b => b.id === branchId);
     if (match) {
       $('branch').value = branchId;
-      if (f.suggestedFund) $('fund').value = f.suggestedFund;
-      else syncFundFromBranch();
+      applyOperatorFund(f);
       return true;
     }
   }
   const region = f.dutyRegion || f.incomeRegion;
   const branchId = region ? branchFromRegion(region) : null;
-  if (!branchId) return false;
+  if (!branchId) {
+    applyOperatorFund(f);
+    return false;
+  }
   const match = config.branches.find(b => b.id === branchId);
-  if (!match) return false;
+  if (!match) {
+    applyOperatorFund(f);
+    return false;
+  }
   $('branch').value = branchId;
-  syncFundFromBranch();
+  applyOperatorFund(f);
   return true;
 }
 
 function syncFundFromBranch() {
   const branchId = parseInt($('branch').value);
   const item = config.branches.find(b => b.id === branchId);
-  if (item) $('fund').value = item.fund;
+  if (item && Number(item.fund) > 0) $('fund').value = String(item.fund);
 }
 
 function syncBranchFromFund() {
@@ -264,7 +315,6 @@ function setRayvarzSendMode(mode) {
   if (rayvarzSendMode === 'bulk') {
     $('ficheSection')?.setAttribute('hidden', '');
     $('resultSection')?.setAttribute('hidden', '');
-    $('xmlSection')?.setAttribute('hidden', '');
   }
 }
 
@@ -1360,17 +1410,20 @@ let datePickersReady = false;
 
 function initDatePickers() {
   if (typeof jalaliDatepicker === 'undefined') {
-    console.warn('jalaliDatepicker load نشد — CDN را چک کنید');
+    console.warn('jalaliDatepicker load نشد — فایل lib/jalalidatepicker را چک کنید');
     return;
   }
   if (!datePickersReady) {
     jalaliDatepicker.startWatch({
       time: false,
-      autoShow: false,
+      autoShow: true,
       autoHide: true,
       hideAfterChange: true,
+      autoReadOnlyInput: false,
       persianDigits: false,
       zIndex: 2500,
+      container: 'body',
+      selector: 'input[data-jdp]',
       separatorChars: { date: '/', between: ' ', time: ':' }
     });
     datePickersReady = true;
@@ -1381,15 +1434,12 @@ function initDatePickers() {
     btn.dataset.bound = '1';
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const input = document.getElementById(btn.dataset.for || '');
-      if (input) jalaliDatepicker.show(input);
+      if (!input || input.disabled) return;
+      input.focus();
+      setTimeout(() => jalaliDatepicker.show(input), 0);
     });
-  });
-
-  document.querySelectorAll('input[data-jdp]').forEach((input) => {
-    if (input.dataset.jdpBound === '1') return;
-    input.dataset.jdpBound = '1';
-    input.addEventListener('click', () => jalaliDatepicker.show(input));
   });
 }
 
@@ -1772,6 +1822,7 @@ async function loadUsersTable() {
       .join('، ') || '—';
     tr.innerHTML = `
       <td>${u.nationalId || u.username}</td>
+      <td dir="ltr">${u.domain || '—'}</td>
       <td>${u.firstName || '—'}</td>
       <td>${u.lastName || '—'}</td>
       <td>${u.position || '—'}</td>
@@ -1914,6 +1965,7 @@ function openUserEdit(userId) {
   }
   if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
+  if ($('editUserDomain')) $('editUserDomain').value = user.domain || '';
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
   renderUserGroupSelect();
   const primaryGroupId = (user.groupIds || [])[0];
@@ -1935,6 +1987,7 @@ async function saveUserEdit() {
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
+    domain: ($('editUserDomain')?.value || '').trim(),
     groupIds
   };
   const res = await apiFetch(`/api/admin/users/${editingUserId}`, {
@@ -1965,18 +2018,23 @@ async function resetUserPassword() {
 
 async function createUserFromForm() {
   const nationalId = ($('newUserNationalId')?.value || '').trim();
+  const domain = ($('newUserDomain')?.value || '').trim();
   const payload = {
     username: nationalId,
     password: $('newUserPassword')?.value || '',
     firstName: ($('newUserFirstName')?.value || '').trim(),
     lastName: ($('newUserLastName')?.value || '').trim(),
     nationalId,
+    domain,
     position: ($('newUserPosition')?.value || '').trim(),
     district: branchIdToDistrict($('newUserDistrict')?.value || ''),
     isAdmin: !!$('newUserIsAdmin')?.checked
   };
   if (!payload.firstName || !payload.lastName || !payload.nationalId || !payload.password) {
     return alert('نام، نام خانوادگی، کد ملی و رمز عبور الزامی است');
+  }
+  if (!payload.domain) {
+    return alert('دامین الزامی است (مثلاً hoseine-sh)');
   }
   if (payload.nationalId.length !== 10 || !/^\d+$/.test(payload.nationalId)) {
     return alert('کد ملی باید ۱۰ رقم باشد');
@@ -1995,10 +2053,11 @@ async function createUserFromForm() {
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
     if (box) {
       box.hidden = false;
-      box.textContent = `کاربر ${data.user?.nationalId || data.user?.username || nationalId} با موفقیت ثبت شد.`;
+      box.textContent = `کاربر ${data.user?.nationalId || data.user?.username || nationalId} با دامین ${data.user?.domain || domain} ثبت شد.`;
     }
     $('newUserPassword').value = '';
     $('newUserNationalId').value = '';
+    if ($('newUserDomain')) $('newUserDomain').value = '';
     await loadUsersTable();
   } catch (e) {
     if (box) {
@@ -2036,57 +2095,63 @@ function formatDiagnostics(d) {
   return lines.join('\n') + '\n';
 }
 
-function ficheStatusClass(f) {
-  if (f.canSend) return 'status-ok';
-  if (f.existsInRayvarz || f.blockReason) return 'status-err';
-  return 'status-warn';
-}
-
 function updateSendButton(f) {
   const btn = $('btnSend');
-  const previewBtn = $('btnPreview');
+  if (!btn) return;
   if (!f) {
     btn.disabled = true;
     btn.title = 'ابتدا فیش را دریافت کنید';
-    if (previewBtn) previewBtn.disabled = true;
     return;
   }
   if (isTahatorIncomeFiche(f)) {
     btn.disabled = false;
-    if (previewBtn) previewBtn.disabled = true;
     btn.title = config?.tahator?.dryRun ?? config?.dryRun
       ? 'تهاتر — DryRun فعال'
-      : 'ارسال جفت تهاتر (۱۵۷+۱۵۸) به رایورز';
+      : 'ارسال فیش تهاتر (فقط شماره وارد شده) به رایورز';
     return;
   }
   if (!f.canSend) {
     btn.disabled = true;
-    if (previewBtn) previewBtn.disabled = true;
     btn.title = f.blockReason || f.statusMessage || 'قابل ارسال نیست';
     return;
   }
   btn.disabled = false;
-  if (previewBtn) previewBtn.disabled = false;
   btn.title = config?.dryRun
-    ? 'DryRun فعال — SOAP ساخته می‌شود ولی به MSB POST نمی‌شود'
-    : 'ارسال SaveDocument به MSB';
+    ? 'DryRun فعال — ارسال آزمایشی'
+    : 'ارسال به رایورز';
+}
+
+function renderSendResultCard(items, tone) {
+  $('resultSection').hidden = false;
+  const card = $('sendResultCard');
+  if (!card) return;
+  card.className = `send-result-card send-result-${tone}`;
+  card.innerHTML = items.map((row) => `
+    <div class="send-result-row">
+      <div class="send-result-label">${row.label}</div>
+      <div class="send-result-value">${row.value ?? '—'}</div>
+    </div>
+  `).join('');
 }
 
 function showSendResult(data) {
-  $('resultSection').hidden = false;
-  let msg = `Success: ${data.success}\nMessage: ${data.message || '-'}\nDryRun: ${data.dryRun}\n`;
-  if (data.pursuitDocNo) msg += `PursuitDocNo: ${data.pursuitDocNo}\n`;
-  if (data.verifiedInRayvarz !== undefined) msg += `VerifiedInRayvarz: ${data.verifiedInRayvarz}\n`;
-  if (data.docNotSentError) msg += `DocNotSent: ${data.docNotSentError}\n`;
-  if (data.warning) msg += `Warning: ${data.warning}\n`;
-  if (data.soapResponse) {
-    const preview = data.soapResponse.length > 3500
-      ? data.soapResponse.slice(0, 3500) + '\n...(truncated)'
-      : data.soapResponse;
-    msg += `\n--- SoapResponse ---\n${preview}\n`;
-  }
-  msg += formatDiagnostics(data.diagnostics);
-  $('resultBox').textContent = msg;
+  const tone = data.success
+    ? (data.verifiedInRayvarz === false ? 'warn' : 'ok')
+    : 'err';
+  const statusFa = data.dryRun
+    ? 'آزمایشی — به رایورز ارسال نشد'
+    : data.success
+      ? (data.verifiedInRayvarz === false ? 'ارسال شد ولی در رایورز تأیید نشد' : 'ارسال موفق')
+      : 'ارسال ناموفق';
+  renderSendResultCard([
+    { label: 'وضعیت', value: statusFa },
+    { label: 'پیام', value: data.message || '—' },
+    { label: 'شماره پیگیری', value: data.pursuitDocNo || '—' },
+    { label: 'ثبت در رایورز', value: data.verifiedInRayvarz ? 'بله' : (data.verifiedInRayvarz === false ? 'خیر' : '—') },
+    { label: 'واسط حسابداری', value: data.accountingDocWritten ? (data.accountingDocMessage || 'ثبت شد') : (data.accountingDocMessage || '—') },
+    { label: 'خطای ارسال', value: data.docNotSentError || '—' },
+    { label: 'هشدار', value: data.warning || '—' }
+  ], tone);
 }
 
 function bnkAcntNoSource(f) {
@@ -2099,43 +2164,28 @@ function bnkAcntNoSource(f) {
 function buildMappingRows(f) {
   const branch = config.branches.find(b => b.id === parseInt($('branch').value));
   const fund = $('fund').value;
-  const docDate = $('docDate').value;
-  const actDate = $('actDate').value;
-  const dueDate = $('dueDate').value;
-  const sourceId = config.sourceSystemId ?? null;
-
+  const region = f.dutyRegion || f.incomeRegion;
   return [
-    { field: 'TransactionId (سند)', source: 'newGuidPerSend (پیش‌فرض) یا NidFiche از config', value: f.nidFiche ? `${f.nidFiche} → GUID جدید در XML` : '-' },
-    { field: 'SourceId (ردیف)', source: 'appsettings → Rayvarz:SourceSystemId (خالی = NULL)', value: sourceId ?? 'NULL' },
-    { field: 'Id (ردیف)', source: 'همان NidFiche — شناسه تراکنش فیش', value: f.nidFiche || '-' },
-    { field: 'RowDocNo (هدر)', source: 'FicheNo — فقط در DocumentItem', value: f.ficheNo },
-    { field: 'RefRowDocNo (دیتیل)', source: 'نوسازی/صنفی: 0 | درآمد: از config', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? '0' : (config?.refRowDocNoInDetail === 'ficheNo' ? '(FicheNo)' : '1') },
-    { field: 'Ref2', source: 'Income_Fiche.BillID / Duty_Fiche.BillID', value: f.billId || '-' },
-    { field: 'Ref3', source: 'Income_Fiche.PaymentID / Duty_Fiche.PaymentID', value: f.paymentId || '-' },
-    { field: 'BnkAcntNo (کد نوسازی)', source: bnkAcntNoSource(f), value: f.bnkAcntNo || '-' },
-    { field: 'منطقه فیش (راهنما)', source: 'نوسازی/صنفی: OtherFields → منطقه | درآمد: Base_NosaziCode.District', value: (f.dutyRegion || f.incomeRegion) ? `منطقه ${f.dutyRegion || f.incomeRegion} → branch=${branchFromRegion(f.dutyRegion || f.incomeRegion) || '?'}` : '(نامشخص)' },
-    { field: 'Fund', source: 'انتخاب منطقه', value: fund },
-    { field: 'branch', source: 'انتخاب شعبه', value: branch ? `${branch.id} — ${branch.name}` : $('branch').value },
-    { field: 'DocDate', source: 'Income_Fiche / Duty_Fiche: PaymentDate → BankPaymentDate', value: docDate || '-' },
-    { field: 'ActDate / RowDate', source: 'وضعیت=1 → PaymentDate؛ وگرنه BankPaymentDate (با fallback)', value: actDate || '-' },
-    { field: 'Due', source: 'BankPaymentDate → PaymentDate', value: dueDate || '-' },
-    { field: 'شعبه (nosazo)', source: 'BillID/PaymentID → DistrickBranch', value: f.resolvedDistrictBranch ? `${f.resolvedDistrictBranch} (Fund پیشنهادی: ${f.suggestedFund || '-'})` : (f.dutyRegion || f.incomeRegion || '-') },
-    { field: 'DocTyp / DocTypDsc', source: 'نوع فیش', value: `${f.docTyp} — ${f.docDsc}` },
-    { field: 'DocRow', source: 'شماره ردیف سند (ثابت ۱)', value: '1' },
-    { field: 'IncmRow', source: 'شماره ردیف درآمد (۱، ۲، ۳…)', value: `${(f.rows || []).length} ردیف` },
-    { field: 'Qty (دیتیل)', source: 'نوسازی/صنفی: PayablePrice کل فیش (در هر ردیف یکسان) | درآمد: Val همان ردیف', value: (f.category === 'DutyNosazi' || f.category === 'DutySenfi') ? Number(f.payable).toLocaleString() : (f.rows || []).map(r => Number(r.val).toLocaleString()).join(' / ') },
-    { field: 'Val (دیتیل)', source: 'جمع Val باید = Payable؛ نوسازی = Payable − سایر ردیف‌ها', value: (() => { const sum = (f.rows || []).reduce((a, r) => a + Number(r.val), 0); return `${(f.rows || []).map(r => Number(r.val).toLocaleString()).join(' + ')} = ${sum.toLocaleString()} (Payable: ${Number(f.payable).toLocaleString()})`; })() },
-    { field: 'Bank', source: 'ConfirmBankCode — فقط اگر پرداخت شده', value: f.bankCode || '(خالی — NULL)' },
-    { field: 'RefreconstructionNo', source: 'Sh_RequestInfo.NidWorkItem (درآمد)', value: f.refReconstructionNo || '(NULL)' }
+    { field: 'شماره فیش', value: f.ficheNo || '—' },
+    { field: 'شناسه قبض', value: f.billId || '—' },
+    { field: 'شناسه پرداخت', value: f.paymentId || '—' },
+    { field: 'کد نوسازی', value: f.bnkAcntNo || '—' },
+    { field: 'منطقه / شعبه', value: branch ? `${branch.id} — ${branch.name}` : (region ? `منطقه ${region}` : '—') },
+    { field: 'منبع', value: fund || f.suggestedFund || '—' },
+    { field: 'تاریخ سند', value: $('docDate').value || '—' },
+    { field: 'تاریخ عملیات', value: $('actDate').value || '—' },
+    { field: 'تاریخ سررسید', value: $('dueDate').value || '—' },
+    { field: 'نوع سند', value: f.docDsc || f.docTypDsc || String(f.docTyp || '—') },
+    { field: 'مبلغ قابل پرداخت', value: `${Number(f.payable || 0).toLocaleString('fa-IR')} ریال` },
+    { field: 'تعداد ردیف درآمد', value: String((f.rows || []).length) }
   ];
 }
 
 function renderMappingTable(f) {
   const rows = buildMappingRows(f);
   $('mappingTable').innerHTML = rows.map(r => `
-    <div class="mapping-row">
+    <div class="mapping-row mapping-row-fa">
       <div class="mapping-field">${r.field}</div>
-      <div class="mapping-source">${r.source}</div>
       <div class="mapping-value">${r.value}</div>
     </div>
   `).join('');
@@ -2143,7 +2193,6 @@ function renderMappingTable(f) {
 
 function renderFiche(f) {
   $('ficheSection').hidden = false;
-  const statusClass = ficheStatusClass(f);
   const alertHtml = f.blockReason
     ? `<div class="fiche-alert fiche-alert-err" role="alert">${f.blockReason}</div>`
     : '';
@@ -2163,17 +2212,12 @@ function renderFiche(f) {
       <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
     </div>
     <div class="stat-card">
-      <span class="stat-label">کد نوسازی (BnkAcntNo)</span>
+      <span class="stat-label">منبع</span>
+      <span class="stat-value">${$('fund')?.value || f.suggestedFund || '-'}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">کد نوسازی</span>
       <span class="stat-value">${f.bnkAcntNo || '-'}</span>
-      <span class="stat-hint">${bnkAcntNoSource(f)}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">وضعیت</span>
-      <span class="stat-value"><span class="status-pill ${statusClass}">${f.statusMessage}</span></span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">در رایورز</span>
-      <span class="stat-value">${f.existsInRayvarz ? 'بله — تکراری' : 'خیر'}</span>
     </div>
   `;
 
@@ -2206,13 +2250,8 @@ async function init() {
   fillBranchSelect(branchSel);
   fillBranchSelect($('unsentDistrict'), { includeAll: true });
   fillBranchSelect($('newUserDistrict'), { includeAll: true, allLabel: 'انتخاب منطقه' });
+  fillFundSelect(fundSel);
   applyRegionalUserRestrictions();
-  config.branches.forEach(b => {
-    const optFund = document.createElement('option');
-    optFund.value = b.fund;
-    optFund.textContent = `${b.fund} — ${b.name}`;
-    fundSel.appendChild(optFund);
-  });
 
   branchSel.onchange = () => { syncFundFromBranch(); if (currentFiche) renderMappingTable(currentFiche); };
   fundSel.onchange = () => { syncBranchFromFund(); if (currentFiche) renderMappingTable(currentFiche); };
@@ -2293,7 +2332,7 @@ function bindClick(id, handler) {
 }
 
 function setupEventHandlers() {
-  const required = ['btnLoad', 'btnPreview', 'btnSend'];
+  const required = ['btnLoad', 'btnSend'];
   const missing = required.filter((id) => !$(id));
   if (missing.length) {
     alert(`فایل index.html قدیمی است یا ناقص.\nدکمه‌های گم‌شده: ${missing.join(', ')}\nاز شاخه rayvarz-resend دوباره کپی کنید.`);
@@ -2332,39 +2371,13 @@ function setupEventHandlers() {
     renderFiche(data);
     updateSendButton(data);
     $('resultSection').hidden = true;
-    $('xmlSection').hidden = true;
   } catch (e) {
     showAppError(e.message);
     currentFiche = null;
     $('ficheSection').hidden = true;
-    $('btnPreview').disabled = true;
     updateSendButton(null);
   } finally {
     $('btnLoad').disabled = false;
-  }
-  });
-
-  bindClick('btnPreview', async () => {
-  if (!currentFiche) return;
-  if (!isTahatorIncomeFiche(currentFiche) && !currentFiche.canSend) {
-    return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل پیش‌نمایش نیست');
-  }
-  $('btnPreview').disabled = true;
-  try {
-    const res = await apiFetch('/api/fiche/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(false))
-    });
-    const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
-    $('xmlSection').hidden = false;
-    $('xmlBox').textContent = data.xml;
-    $('xmlSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (e) {
-    showAppError(e.message);
-  } finally {
-    $('btnPreview').disabled = false;
   }
   });
 
@@ -2375,12 +2388,8 @@ function setupEventHandlers() {
   }
 
   if (isTahatorIncomeFiche(currentFiche)) {
-    const dry = config?.tahator?.dryRun ?? config?.dryRun;
-    const warn = dry
-      ? `DryRun فعال — تهاتر ${currentFiche.ficheNo} فقط SOAP می‌سازد. ادامه؟`
-      : `ارسال تهاتر ${currentFiche.ficheNo} به رایورز؟`;
-    if (!confirm(warn)) return;
     $('btnSend').disabled = true;
+    showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
     try {
       const res = await apiFetch('/api/tahator/send', {
         method: 'POST',
@@ -2389,16 +2398,12 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      $('resultSection').hidden = false;
       showTahatorSendResult(data);
-      if (data.previewXml || data.soapResponse) {
-        $('xmlSection').hidden = false;
-        $('xmlBox').textContent = data.soapResponse || data.previewXml;
-      }
-      if (data.dryRun) showAppInfo('DryRun تهاتر: SOAP ساخته شد؛ POST واقعی زده نشد.');
+      if (data.dryRun) showAppInfo('ارسال آزمایشی تهاتر — به رایورز ارسال نشد.');
       else if (data.skipped) showAppWarning(data.message);
       else if (data.success) showAppSuccess(data.message || 'ارسال تهاتر موفق');
       else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
       showAppError(e.message);
     } finally {
@@ -2408,9 +2413,8 @@ function setupEventHandlers() {
     return;
   }
 
-  if (!confirm(`ارسال فیش ${currentFiche.ficheNo} به رایورز؟`)) return;
-
   $('btnSend').disabled = true;
+  showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
   try {
     const res = await apiFetch('/api/fiche/send', {
       method: 'POST',
@@ -2420,22 +2424,16 @@ function setupEventHandlers() {
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
-    $('resultSection').hidden = false;
     showSendResult(data);
 
     if (data.dryRun) {
-      showAppInfo('توجه: DryRun فعال است — چیزی به رایورز ارسال نشد، فقط XML ساخته شد.');
+      showAppInfo('ارسال آزمایشی — به رایورز ارسال نشد.');
     } else if (data.success && data.verifiedInRayvarz === false) {
-      showAppWarning('هشدار: ارسال تأیید نشد — فیش در incmdocsys نیست. پاسخ SOAP و DocNotSent را ببینید.');
+      showAppWarning('ارسال انجام شد ولی در رایورز تأیید نشد.');
     } else if (!data.success) {
-      showAppError(data.message || data.docNotSentError || 'ارسال ناموفق — Message و پاسخ SOAP را بررسی کنید.');
+      showAppError(data.message || data.docNotSentError || 'ارسال ناموفق');
     } else if (data.success && data.verifiedInRayvarz) {
-      showAppSuccess('فیش در رایورز ثبت شد (VerifiedInRayvarz=true).');
-    }
-
-    if (data.previewXml || data.soapResponse) {
-      $('xmlSection').hidden = false;
-      $('xmlBox').textContent = data.soapResponse || data.previewXml;
+      showAppSuccess('فیش در رایورز ثبت شد.');
     }
     $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
@@ -2537,10 +2535,9 @@ function setupEventHandlers() {
     const dry = config?.dryRun;
     const kind = $('unsentFicheKind').value;
     const kindLabel = kind === 'Duty' ? 'نوسازی/صنفی' : 'شهرسازی';
-    const warn = dry
-      ? `DryRun فعال — ${selected.length} فیش ${kindLabel} فقط SOAP می‌سازد. ادامه؟`
-      : `ارسال ${selected.length} فیش ${kindLabel} به رایورز؟`;
-    if (!confirm(warn)) return;
+    showAppInfo(dry
+      ? `در حال ارسال آزمایشی ${selected.length} فیش ${kindLabel}…`
+      : `در حال ارسال ${selected.length} فیش ${kindLabel} به رایورز…`);
 
     const btn = $('btnUnsentSend');
     btn.disabled = true;
@@ -2871,7 +2868,20 @@ function setupAuthAndAdminHandlers() {
 }
 
 function showTahatorSendResult(data) {
-  $('resultBox').textContent = formatTahatorSend(data);
+  const tone = data.success ? (data.skipped ? 'warn' : 'ok') : 'err';
+  const statusFa = data.dryRun
+    ? 'آزمایشی — به رایورز ارسال نشد'
+    : data.skipped
+      ? 'ارسال نشد (قبلاً در رایورز است)'
+      : data.success
+        ? 'ارسال موفق'
+        : 'ارسال ناموفق';
+  renderSendResultCard([
+    { label: 'وضعیت', value: statusFa },
+    { label: 'شماره فیش', value: data.ficheNo || '—' },
+    { label: 'پیام', value: data.message || '—' },
+    { label: 'خطای ارسال', value: data.docNotSentError || '—' }
+  ].filter((row) => row.value && row.value !== '—'), tone);
 }
 
 function formatTahatorCheck(d) {
@@ -2908,7 +2918,7 @@ function formatTahatorSend(d) {
     `  ${r.incomeAccountGroup} ${r.ficheNo}: Success=${r.success} Skipped=${r.skipped}${r.skipReason ? ' (' + r.skipReason + ')' : ''} DocTyp=${r.docTyp} Branch=${r.branch}/${r.fund}${r.soapMessage ? ' — ' + r.soapMessage : ''}`
   );
   return [
-    '=== نتیجه ارسال جفت تهاتر ===',
+    '=== نتیجه ارسال تهاتر ===',
     `FicheNo ورودی: ${d.ficheNo}`,
     d.pair ? `جفت: ۱۵۷=${d.pair.amountFicheNo} → ۱۵۸=${d.pair.incomeFicheNo}` : '',
     `Success: ${d.success}`,
