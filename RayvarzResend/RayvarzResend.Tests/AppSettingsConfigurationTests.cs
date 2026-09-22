@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using RayvarzResend.Web;
 using Xunit;
@@ -37,6 +38,20 @@ public class AppSettingsConfigurationTests
             AppContext.BaseDirectory, "..", "..", "..", "..",
             "RayvarzResend.Web", "appsettings.json"));
         AppSettingsJsonGuard.ValidateOrThrow(Path.GetDirectoryName(path));
+    }
+
+    [Fact]
+    public void Appsettings_shimas_has_client_id_and_secret()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..",
+            "RayvarzResend.Web", "appsettings.json"));
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var shimas = doc.RootElement.GetProperty("Auth").GetProperty("Shimas");
+        Assert.True(shimas.GetProperty("Enabled").GetBoolean());
+        Assert.Equal("19cf3C33", shimas.GetProperty("ClientId").GetString());
+        Assert.Equal("D2fbf", shimas.GetProperty("ClientSecret").GetString());
+        Assert.Equal("19cf3C33", shimas.GetProperty("LKey").GetString());
     }
 
     [Fact]

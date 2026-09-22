@@ -172,7 +172,7 @@ app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
     {
         if (shimas.Options.AllowLocalLoginFallback)
             return Results.Redirect("/login.html");
-        return Results.Content("SSO پیکربندی نشده — lkey را در appsettings تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
+        return Results.Content("SSO پیکربندی نشده — ClientId و ClientSecret را در Auth:Shimas تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
     }
 
     var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);

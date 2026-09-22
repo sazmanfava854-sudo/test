@@ -61,14 +61,18 @@ public sealed class ShimasAuthService
 
     public string BuildExternalLoginUrl(string callbackAbsoluteUrl)
     {
-        if (!_options.SsoReady)
-            throw new InvalidOperationException("lkey هنوز تنظیم نشده است");
+        var clientId = _options.EffectiveClientId;
+        if (string.IsNullOrWhiteSpace(clientId))
+            throw new InvalidOperationException("ClientId / lkey هنوز تنظیم نشده است");
 
-        return QueryHelpers.AddQueryString(_options.LoginUrl, new Dictionary<string, string?>
+        var query = new Dictionary<string, string?>
         {
-            [_options.LKeyParameter] = _options.LKey.Trim(),
+            [_options.LKeyParameter] = clientId,
+            [_options.ClientIdParameter] = clientId,
             [_options.ReturnUrlParameter] = callbackAbsoluteUrl
-        });
+        };
+
+        return QueryHelpers.AddQueryString(_options.LoginUrl, query);
     }
 
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
@@ -161,7 +165,10 @@ public sealed class ShimasAuthService
             request.Content = JsonContent.Create(new
             {
                 username,
-                refresh_token = refreshToken
+                refresh_token = refreshToken,
+                client_id = _options.EffectiveClientId,
+                client_secret = _options.ClientSecret,
+                lkey = _options.EffectiveClientId
             });
 
             using var response = await client.SendAsync(request, ct);

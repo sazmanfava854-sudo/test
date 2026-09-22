@@ -2,8 +2,10 @@
 
 اجرا با `dotnet run` از همین پوشه — بدون exe publish.
 
-ورود کاربران: `https://city.mashhad.ir:5065/login.html`  
-صفحه ورود: عنوان «ورود به دستیار مالی» + کد ملی و رمز عبور (بدون جملهٔ «با کد ملی وارد شود»).
+ورود یکپارچه (شیماس): `Auth:Shimas` در `appsettings.json`  
+- ClientId / LKey: `19cf3C33`  
+- ClientSecret: `D2fbf` (فقط سمت سرور؛ در URL مرورگر نمی‌رود)  
+- callback ثبت‌شده: `https://city.mashhad.ir:5065/auth/callback`
 
 تنظیمات: فقط `RayvarzResend.Web\appsettings.json`
 
@@ -21,7 +23,7 @@ dotnet run
 | مورد | رفتار |
 |------|--------|
 | منبع | جدول منطقه → کد شعبه / کد منبع (بدون FinancialAssistant در صفحه) |
-| ورود | بدون متن «با کد ملی وارد شود» |
+| ورود | لاگین یکپارچه با ClientId `19cf3C33`؛ هدایت به login.mashhad.ir |
 | تهاتر | فقط فیش وارد/انتخاب‌شده؛ جفت ۱۵۷/۱۵۸ خودکار ارسال نمی‌شود |
 | واسط Sara | پس از ارسال موفق: `Accounting_DocHeader` و `Accounting_DocDetails` |
 | نتیجه ارسال | کارت داخل برنامه؛ بدون جفت مرجع / جزئیات فیش / force=true |

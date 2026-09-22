@@ -41,8 +41,31 @@ public class ShimasAuthServiceTests
         var url = service.BuildExternalLoginUrl("https://app.example.com/auth/callback");
 
         Assert.Contains("lkey=test-lkey-123", url);
+        Assert.Contains("client_id=test-lkey-123", url);
+        Assert.DoesNotContain("secret=", url, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("D2fbf", url);
         Assert.Contains("returnUrl=", url);
         Assert.Contains(Uri.EscapeDataString("https://app.example.com/auth/callback"), url);
+    }
+
+    [Fact]
+    public void BuildExternalLoginUrl_uses_ClientId_when_LKey_empty()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "19cf3C33",
+            ClientSecret = "D2fbf",
+            LKey = "",
+            LoginUrl = "https://login.mashhad.ir/Authentication/Login.aspx"
+        });
+
+        var url = service.BuildExternalLoginUrl("https://city.mashhad.ir:5065/auth/callback");
+
+        Assert.Contains("lkey=19cf3C33", url);
+        Assert.Contains("client_id=19cf3C33", url);
+        Assert.DoesNotContain("D2fbf", url);
+        Assert.Contains(Uri.EscapeDataString("https://city.mashhad.ir:5065/auth/callback"), url);
     }
 
     [Fact]
