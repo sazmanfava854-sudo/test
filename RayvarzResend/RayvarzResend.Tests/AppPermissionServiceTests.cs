@@ -24,6 +24,7 @@ public class AppPermissionServiceTests
             FirstName = "A",
             LastName = "B",
             NationalId = "9999999999",
+            Domain = "admin-test",
             IsAdmin = true
         });
 
@@ -57,6 +58,7 @@ public class AppPermissionServiceTests
             FirstName = "کاربر",
             LastName = "تاریخ",
             NationalId = "2234567890",
+            Domain = "fiche-date-user",
             District = "1",
             IsAdmin = false
         });
@@ -90,6 +92,7 @@ public class AppPermissionServiceTests
             FirstName = "کاربر",
             LastName = "تست",
             NationalId = "1234567890",
+            Domain = "installment-user",
             District = "1",
             IsAdmin = false
         });
@@ -123,6 +126,7 @@ public class AppPermissionServiceTests
             FirstName = "کاربر",
             LastName = "بانک",
             NationalId = "3234567890",
+            Domain = "bank-inquiry-user",
             District = "1",
             IsAdmin = false
         });

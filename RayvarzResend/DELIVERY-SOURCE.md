@@ -5,7 +5,8 @@
 ورود یکپارچه (شیماس): `Auth:Shimas` در `appsettings.json`  
 - ClientId / LKey: `19cf3C33`  
 - ClientSecret: `D2fbf` (فقط سمت سرور؛ در URL مرورگر نمی‌رود)  
-- callback ثبت‌شده: `https://city.mashhad.ir:5065/auth/callback`
+- callback: `https://city.mashhad.ir:5065/auth/callback`  
+- هر کاربر در تب مدیریت باید **دامین** داشته باشد (مثلاً `hoseine-sh`) تا با لاگین کلی یکی شود.
 
 تنظیمات: فقط `RayvarzResend.Web\appsettings.json`
 

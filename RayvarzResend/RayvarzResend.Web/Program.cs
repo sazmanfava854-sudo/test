@@ -194,6 +194,9 @@ app.MapGet("/auth/callback", async (
         return Results.Redirect($"/login.html?error={error}");
     }
 
+    if (!string.IsNullOrWhiteSpace(callback.Domain))
+        validation.Profile.Domain = callback.Domain;
+
     var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
     if (user == null)
     {
@@ -266,6 +269,7 @@ app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserReposit
                 NationalId = created.NationalId,
                 Position = created.Position,
                 District = created.District,
+                Domain = created.Domain,
                 IsAdmin = created.IsAdmin,
                 IsActive = created.IsActive,
                 CreatedAtUtc = created.CreatedAtUtc.ToString("O")

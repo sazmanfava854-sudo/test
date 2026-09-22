@@ -180,14 +180,54 @@ public class ShimasAuthServiceTests
             FirstName = "موجود",
             LastName = "کاربر",
             NationalId = "1122334455",
+            Domain = "hoseine-sh",
             District = "1"
         });
 
         var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = true }, memory);
-        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = "1122334455" });
+        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = @"MASHHAD\hoseine-sh" });
 
         Assert.NotNull(user);
         Assert.Equal(existing.Id, user!.Id);
+    }
+
+    [Fact]
+    public async Task ResolveOrCreateUserAsync_matches_domain_field()
+    {
+        var memory = new InMemoryAppUserStore();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
+        config["Auth:UseInMemoryStore"] = "true";
+        var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
+        var existing = await repo.CreateUserAsync(new CreateAppUserRequest
+        {
+            Username = "0011223344",
+            Password = "Secret@123",
+            FirstName = "حسین",
+            LastName = "حسینی",
+            NationalId = "0011223344",
+            Domain = "hoseine-sh",
+            District = "1"
+        });
+
+        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = false }, memory);
+        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = "hoseine-sh" });
+
+        Assert.NotNull(user);
+        Assert.Equal(existing.Id, user!.Id);
+        Assert.Equal("hoseine-sh", user.Domain);
+    }
+
+    [Fact]
+    public void ParseCallbackQuery_strips_windows_domain_prefix()
+    {
+        var service = CreateService();
+        var context = new DefaultHttpContext();
+        context.Request.QueryString = new QueryString("?userName=MASHHAD%5Choseine-sh&refreshToken=abc-token-xyz");
+
+        var payload = service.ParseCallbackQuery(context.Request.Query);
+
+        Assert.Equal("hoseine-sh", payload.Username);
+        Assert.Equal("abc-token-xyz", payload.RefreshToken);
     }
 
     [Fact]

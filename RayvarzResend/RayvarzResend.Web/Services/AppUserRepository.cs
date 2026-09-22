@@ -86,6 +86,16 @@ public sealed class AppUserRepository
             IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
                 ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
                     CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0);
+
+            IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
+                ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
+                    CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
+
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE name = N'UQ_AppUser_Domain' AND object_id = OBJECT_ID(N'dbo.AppUser'))
+                CREATE UNIQUE INDEX UQ_AppUser_Domain ON dbo.AppUser ([Domain])
+                    WHERE [Domain] <> N'';
             """;
         await using var cmd = new SqlCommand(sql, conn);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -113,7 +123,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District,
+            SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
             WHERE Username = @u
@@ -126,6 +136,41 @@ public sealed class AppUserRepository
         return await reader.ReadAsync(ct) ? ReadUser(reader) : null;
     }
 
+    public async Task<AppUserRecord?> FindBySsoIdentityAsync(string identity, CancellationToken ct = default)
+    {
+        var raw = (identity ?? "").Trim();
+        var account = AppUserDomainNormalizer.Normalize(raw);
+        if (string.IsNullOrEmpty(raw) && string.IsNullOrEmpty(account))
+            return null;
+
+        if (_useInMemory)
+            return _memory.FindBySsoIdentity(raw);
+
+        await EnsureSchemaAsync(ct);
+        const string sql = """
+            SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
+                   IsAdmin, IsActive, CreatedAtUtc
+            FROM dbo.AppUser
+            WHERE (@d <> N'' AND [Domain] = @d)
+               OR (@d <> N'' AND Username = @d)
+               OR (@raw <> N'' AND Username = @raw)
+               OR (@raw <> N'' AND NationalId = @raw)
+               OR (@d <> N'' AND NationalId = @d)
+            ORDER BY CASE
+                WHEN @d <> N'' AND [Domain] = @d THEN 0
+                WHEN @d <> N'' AND Username = @d THEN 1
+                WHEN @raw <> N'' AND Username = @raw THEN 2
+                ELSE 3 END
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@d", account);
+        cmd.Parameters.AddWithValue("@raw", raw);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadUser(reader) : null;
+    }
+
     public async Task<AppUserRecord?> FindByIdAsync(Guid id, CancellationToken ct = default)
     {
         if (_useInMemory)
@@ -133,7 +178,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District,
+            SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
             WHERE Id = @id
@@ -153,7 +198,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT Id, Username, FirstName, LastName, NationalId, Position, District, IsAdmin, IsActive, CreatedAtUtc
+            SELECT Id, Username, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
             ORDER BY CreatedAtUtc DESC, Username
             """;
@@ -173,6 +218,7 @@ public sealed class AppUserRepository
                 NationalId = reader.GetString(reader.GetOrdinal("NationalId")),
                 Position = reader.GetString(reader.GetOrdinal("Position")),
                 District = reader.GetString(reader.GetOrdinal("District")),
+                Domain = ReadOptionalString(reader, "Domain"),
                 IsAdmin = reader.GetBoolean(reader.GetOrdinal("IsAdmin")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
                 CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O")
@@ -344,10 +390,17 @@ public sealed class AppUserRepository
             user.IsAdmin = req.IsAdmin.Value;
         if (req.IsActive.HasValue)
             user.IsActive = req.IsActive.Value;
+        if (req.Domain != null)
+        {
+            var domain = AppUserDomainNormalizer.Normalize(req.Domain);
+            if (!AppUserDomainNormalizer.IsValid(domain))
+                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
+            user.Domain = domain;
+        }
 
         const string sql = """
             UPDATE dbo.AppUser
-            SET IsAdmin = @admin, IsActive = @active
+            SET IsAdmin = @admin, IsActive = @active, [Domain] = @domain
             WHERE Id = @id
             """;
         await using var conn = new SqlConnection(_cs);
@@ -356,7 +409,15 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@id", id);
         cmd.Parameters.AddWithValue("@admin", user.IsAdmin);
         cmd.Parameters.AddWithValue("@active", user.IsActive);
-        await cmd.ExecuteNonQueryAsync(ct);
+        cmd.Parameters.AddWithValue("@domain", user.Domain ?? "");
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex) when (ex.Number is 2627 or 2601)
+        {
+            throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
+        }
 
         if (req.GroupIds != null)
             await SetUserGroupsAsync(id, req.GroupIds, ct);
@@ -465,6 +526,7 @@ public sealed class AppUserRepository
             NationalId = req.NationalId!,
             Position = req.Position ?? "",
             District = req.District ?? "",
+            Domain = req.Domain ?? "",
             IsAdmin = req.IsAdmin,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
@@ -472,9 +534,9 @@ public sealed class AppUserRepository
 
         const string sql = """
             INSERT INTO dbo.AppUser
-                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, IsAdmin, IsActive, CreatedAtUtc)
+                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc)
             VALUES
-                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @admin, 1, @created)
+                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @domain, @admin, 1, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -487,6 +549,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@nid", user.NationalId);
         cmd.Parameters.AddWithValue("@pos", user.Position);
         cmd.Parameters.AddWithValue("@dist", user.District);
+        cmd.Parameters.AddWithValue("@domain", user.Domain);
         cmd.Parameters.AddWithValue("@admin", user.IsAdmin);
         cmd.Parameters.AddWithValue("@created", user.CreatedAtUtc);
         try
@@ -495,7 +558,7 @@ public sealed class AppUserRepository
         }
         catch (SqlException ex) when (ex.Number is 2627 or 2601)
         {
-            throw new InvalidOperationException("کاربر با این کد ملی قبلاً ثبت شده است");
+            throw new InvalidOperationException("کاربر با این کد ملی یا دامین قبلاً ثبت شده است");
         }
 
         return user;
@@ -507,9 +570,11 @@ public sealed class AppUserRepository
         if (username.Length == 0)
             throw new ArgumentException("username الزامی است");
 
+        var domain = AppUserDomainNormalizer.Normalize(
+            string.IsNullOrWhiteSpace(profile.Domain) ? username : profile.Domain);
         var normalized = SsoUserProvisioningHelper.NormalizeProfile(profile);
         if (_useInMemory)
-            return _memory.CreateSsoUser(username, normalized);
+            return _memory.CreateSsoUser(username, domain, normalized);
 
         await EnsureSchemaAsync(ct);
         var user = new AppUserRecord
@@ -522,6 +587,7 @@ public sealed class AppUserRepository
             NationalId = normalized.NationalId,
             Position = normalized.Position,
             District = normalized.District,
+            Domain = domain,
             IsAdmin = false,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
@@ -529,9 +595,9 @@ public sealed class AppUserRepository
 
         const string sql = """
             INSERT INTO dbo.AppUser
-                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, IsAdmin, IsActive, CreatedAtUtc)
+                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc)
             VALUES
-                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, 0, 1, @created)
+                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @domain, 0, 1, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -544,6 +610,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@nid", user.NationalId);
         cmd.Parameters.AddWithValue("@pos", user.Position);
         cmd.Parameters.AddWithValue("@dist", user.District);
+        cmd.Parameters.AddWithValue("@domain", user.Domain);
         cmd.Parameters.AddWithValue("@created", user.CreatedAtUtc);
         try
         {
@@ -566,6 +633,19 @@ public sealed class AppUserRepository
         return reader.IsDBNull(ordinal) ? false : reader.GetBoolean(ordinal);
     }
 
+    private static string ReadOptionalString(SqlDataReader reader, string column)
+    {
+        try
+        {
+            var ordinal = reader.GetOrdinal(column);
+            return reader.IsDBNull(ordinal) ? "" : (reader.GetString(ordinal) ?? "").Trim();
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return "";
+        }
+    }
+
     private static AppUserRecord ReadUser(SqlDataReader reader) => new()
     {
         Id = reader.GetGuid(reader.GetOrdinal("Id")),
@@ -576,6 +656,7 @@ public sealed class AppUserRepository
         NationalId = reader.GetString(reader.GetOrdinal("NationalId")),
         Position = reader.GetString(reader.GetOrdinal("Position")),
         District = reader.GetString(reader.GetOrdinal("District")),
+        Domain = ReadOptionalString(reader, "Domain"),
         IsAdmin = reader.GetBoolean(reader.GetOrdinal("IsAdmin")),
         IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
         CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc"))

@@ -10,6 +10,8 @@ public sealed class AppUserRecord
     public string NationalId { get; set; } = "";
     public string Position { get; set; } = "";
     public string District { get; set; } = "";
+    /// <summary>نام کاربری ویندوز / لاگین یکپارچه — مثلاً hoseine-sh.</summary>
+    public string Domain { get; set; } = "";
     public bool IsAdmin { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; }
@@ -30,6 +32,7 @@ public sealed class CreateAppUserRequest
     public string? NationalId { get; set; }
     public string? Position { get; set; }
     public string? District { get; set; }
+    public string? Domain { get; set; }
     public bool IsAdmin { get; set; }
 }
 
@@ -42,6 +45,7 @@ public sealed class AppUserDto
     public string NationalId { get; set; } = "";
     public string Position { get; set; } = "";
     public string District { get; set; } = "";
+    public string Domain { get; set; } = "";
     public bool IsAdmin { get; set; }
     public bool IsActive { get; set; }
     public string CreatedAtUtc { get; set; } = "";
@@ -58,6 +62,7 @@ public sealed class AuthSessionDto
     public string NationalId { get; set; } = "";
     public string Position { get; set; } = "";
     public string District { get; set; } = "";
+    public string Domain { get; set; } = "";
     public bool IsAdmin { get; set; }
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
@@ -124,6 +129,7 @@ public sealed class UpdateAppUserRequest
 {
     public bool? IsAdmin { get; set; }
     public bool? IsActive { get; set; }
+    public string? Domain { get; set; }
     public List<Guid>? GroupIds { get; set; }
 }
 

@@ -19,6 +19,10 @@ public sealed class InMemoryAppUserStore
         var username = req.Username!;
         if (_byUsername.ContainsKey(username))
             throw new InvalidOperationException("کاربر با این کد ملی قبلاً ثبت شده است");
+        var domain = (req.Domain ?? "").Trim();
+        if (!string.IsNullOrEmpty(domain)
+            && _byId.Values.Any(u => u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
 
         var user = new AppUserRecord
         {
@@ -30,6 +34,7 @@ public sealed class InMemoryAppUserStore
             NationalId = (req.NationalId ?? "").Trim(),
             Position = (req.Position ?? "").Trim(),
             District = (req.District ?? "").Trim(),
+            Domain = domain,
             IsAdmin = req.IsAdmin,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
@@ -42,6 +47,23 @@ public sealed class InMemoryAppUserStore
 
     public AppUserRecord? FindByUsername(string username) =>
         _byUsername.TryGetValue(username.Trim(), out var user) ? user : null;
+
+    public AppUserRecord? FindBySsoIdentity(string identity)
+    {
+        var raw = (identity ?? "").Trim();
+        var account = AppUserDomainNormalizer.Normalize(raw);
+        if (string.IsNullOrEmpty(raw) && string.IsNullOrEmpty(account))
+            return null;
+
+        AppUserRecord? Match(Func<AppUserRecord, bool> pred) =>
+            _byId.Values.FirstOrDefault(pred);
+
+        return Match(u => !string.IsNullOrEmpty(account) && u.Domain.Equals(account, StringComparison.OrdinalIgnoreCase))
+            ?? Match(u => !string.IsNullOrEmpty(account) && u.Username.Equals(account, StringComparison.OrdinalIgnoreCase))
+            ?? Match(u => !string.IsNullOrEmpty(raw) && u.Username.Equals(raw, StringComparison.OrdinalIgnoreCase))
+            ?? Match(u => !string.IsNullOrEmpty(raw) && u.NationalId.Equals(raw, StringComparison.OrdinalIgnoreCase))
+            ?? Match(u => !string.IsNullOrEmpty(account) && u.NationalId.Equals(account, StringComparison.OrdinalIgnoreCase));
+    }
 
     public AppUserRecord? FindById(Guid id) =>
         _byId.TryGetValue(id, out var user) ? user : null;
@@ -58,6 +80,7 @@ public sealed class InMemoryAppUserStore
                 NationalId = u.NationalId,
                 Position = u.Position,
                 District = u.District,
+                Domain = u.Domain,
                 IsAdmin = u.IsAdmin,
                 IsActive = u.IsActive,
                 CreatedAtUtc = u.CreatedAtUtc.ToString("O"),
@@ -165,6 +188,15 @@ public sealed class InMemoryAppUserStore
             user.IsAdmin = req.IsAdmin.Value;
         if (req.IsActive.HasValue)
             user.IsActive = req.IsActive.Value;
+        if (req.Domain != null)
+        {
+            var domain = AppUserDomainNormalizer.Normalize(req.Domain);
+            if (!AppUserDomainNormalizer.IsValid(domain))
+                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
+            if (_byId.Values.Any(u => u.Id != id && u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
+            user.Domain = domain;
+        }
         if (req.GroupIds != null)
             SetUserGroups(id, req.GroupIds);
 
@@ -180,6 +212,7 @@ public sealed class InMemoryAppUserStore
 
     public AppUserRecord CreateSsoUser(
         string username,
+        string domain,
         (string FirstName, string LastName, string NationalId, string Position, string District) normalized)
     {
         if (_byUsername.ContainsKey(username))
@@ -195,6 +228,7 @@ public sealed class InMemoryAppUserStore
             NationalId = normalized.NationalId,
             Position = normalized.Position,
             District = normalized.District,
+            Domain = domain ?? "",
             IsAdmin = false,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow

@@ -147,7 +147,8 @@ body {
   border-color: var(--primary);
 }
 
-jdp-container {
+jdp-container,
+jdp-overlay {
   z-index: 2500 !important;
 }
 

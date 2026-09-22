@@ -3,6 +3,7 @@ namespace RayvarzResend.Web.Models;
 public sealed class ShimasUserProfile
 {
     public string Username { get; set; } = "";
+    public string Domain { get; set; } = "";
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
     public string NationalId { get; set; } = "";
@@ -33,5 +34,6 @@ public sealed class ShimasAuthStatusDto
 public sealed class ShimasCallbackPayload
 {
     public string Username { get; set; } = "";
+    public string Domain { get; set; } = "";
     public string RefreshToken { get; set; } = "";
 }

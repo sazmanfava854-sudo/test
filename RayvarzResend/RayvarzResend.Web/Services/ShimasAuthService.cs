@@ -91,13 +91,21 @@ public sealed class ShimasAuthService
         var username = ReadQuery(query,
             "username", "userName", "UserName",
             "nationalId", "NationalId", "nationalCode", "NationalCode", "code");
+        var domain = ReadQuery(query,
+            "domain", "Domain", "sAMAccountName", "samAccountName", "accountName", "AccountName");
         var refreshToken = ReadQuery(query,
             "refresh_token", "refreshToken", "RefreshToken",
             "token", "Token", "access_token", "accessToken");
 
+        var normalizedDomain = AppUserDomainNormalizer.Normalize(domain);
+        var normalizedUsername = AppUserDomainNormalizer.Normalize(username);
+        if (string.IsNullOrEmpty(normalizedUsername))
+            normalizedUsername = normalizedDomain;
+
         return new ShimasCallbackPayload
         {
-            Username = username,
+            Username = normalizedUsername,
+            Domain = normalizedDomain,
             RefreshToken = refreshToken
         };
     }
@@ -139,7 +147,9 @@ public sealed class ShimasAuthService
         if (username.Length == 0)
             return null;
 
-        var existing = await _users.FindByUsernameAsync(username, ct);
+        var existing = await _users.FindBySsoIdentityAsync(username, ct)
+            ?? await _users.FindBySsoIdentityAsync(profile.Domain, ct)
+            ?? await _users.FindByUsernameAsync(username, ct);
         if (existing != null)
             return existing.IsActive ? existing : null;
 
@@ -254,6 +264,7 @@ public sealed class ShimasAuthService
         return new ShimasUserProfile
         {
             Username = username,
+            Domain = AppUserDomainNormalizer.Normalize(username),
             FirstName = parts.Length > 0 ? parts[0] : username,
             LastName = parts.Length > 1 ? parts[1] : "کاربر"
         };

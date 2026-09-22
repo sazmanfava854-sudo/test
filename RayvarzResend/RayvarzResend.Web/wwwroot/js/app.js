@@ -1410,17 +1410,20 @@ let datePickersReady = false;
 
 function initDatePickers() {
   if (typeof jalaliDatepicker === 'undefined') {
-    console.warn('jalaliDatepicker load نشد — CDN را چک کنید');
+    console.warn('jalaliDatepicker load نشد — فایل lib/jalalidatepicker را چک کنید');
     return;
   }
   if (!datePickersReady) {
     jalaliDatepicker.startWatch({
       time: false,
-      autoShow: false,
+      autoShow: true,
       autoHide: true,
       hideAfterChange: true,
+      autoReadOnlyInput: false,
       persianDigits: false,
       zIndex: 2500,
+      container: 'body',
+      selector: 'input[data-jdp]',
       separatorChars: { date: '/', between: ' ', time: ':' }
     });
     datePickersReady = true;
@@ -1431,15 +1434,12 @@ function initDatePickers() {
     btn.dataset.bound = '1';
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const input = document.getElementById(btn.dataset.for || '');
-      if (input) jalaliDatepicker.show(input);
+      if (!input || input.disabled) return;
+      input.focus();
+      setTimeout(() => jalaliDatepicker.show(input), 0);
     });
-  });
-
-  document.querySelectorAll('input[data-jdp]').forEach((input) => {
-    if (input.dataset.jdpBound === '1') return;
-    input.dataset.jdpBound = '1';
-    input.addEventListener('click', () => jalaliDatepicker.show(input));
   });
 }
 
@@ -1822,6 +1822,7 @@ async function loadUsersTable() {
       .join('، ') || '—';
     tr.innerHTML = `
       <td>${u.nationalId || u.username}</td>
+      <td dir="ltr">${u.domain || '—'}</td>
       <td>${u.firstName || '—'}</td>
       <td>${u.lastName || '—'}</td>
       <td>${u.position || '—'}</td>
@@ -1964,6 +1965,7 @@ function openUserEdit(userId) {
   }
   if ($('editUserIsActive')) $('editUserIsActive').checked = !!user.isActive;
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
+  if ($('editUserDomain')) $('editUserDomain').value = user.domain || '';
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
   renderUserGroupSelect();
   const primaryGroupId = (user.groupIds || [])[0];
@@ -1985,6 +1987,7 @@ async function saveUserEdit() {
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
+    domain: ($('editUserDomain')?.value || '').trim(),
     groupIds
   };
   const res = await apiFetch(`/api/admin/users/${editingUserId}`, {
@@ -2015,18 +2018,23 @@ async function resetUserPassword() {
 
 async function createUserFromForm() {
   const nationalId = ($('newUserNationalId')?.value || '').trim();
+  const domain = ($('newUserDomain')?.value || '').trim();
   const payload = {
     username: nationalId,
     password: $('newUserPassword')?.value || '',
     firstName: ($('newUserFirstName')?.value || '').trim(),
     lastName: ($('newUserLastName')?.value || '').trim(),
     nationalId,
+    domain,
     position: ($('newUserPosition')?.value || '').trim(),
     district: branchIdToDistrict($('newUserDistrict')?.value || ''),
     isAdmin: !!$('newUserIsAdmin')?.checked
   };
   if (!payload.firstName || !payload.lastName || !payload.nationalId || !payload.password) {
     return alert('نام، نام خانوادگی، کد ملی و رمز عبور الزامی است');
+  }
+  if (!payload.domain) {
+    return alert('دامین الزامی است (مثلاً hoseine-sh)');
   }
   if (payload.nationalId.length !== 10 || !/^\d+$/.test(payload.nationalId)) {
     return alert('کد ملی باید ۱۰ رقم باشد');
@@ -2045,10 +2053,11 @@ async function createUserFromForm() {
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
     if (box) {
       box.hidden = false;
-      box.textContent = `کاربر ${data.user?.nationalId || data.user?.username || nationalId} با موفقیت ثبت شد.`;
+      box.textContent = `کاربر ${data.user?.nationalId || data.user?.username || nationalId} با دامین ${data.user?.domain || domain} ثبت شد.`;
     }
     $('newUserPassword').value = '';
     $('newUserNationalId').value = '';
+    if ($('newUserDomain')) $('newUserDomain').value = '';
     await loadUsersTable();
   } catch (e) {
     if (box) {

@@ -14,6 +14,7 @@ public static class AppUserInputNormalizer
         req.NationalId = (req.NationalId ?? "").Trim();
         req.Position = (req.Position ?? "").Trim();
         req.District = (req.District ?? "").Trim();
+        req.Domain = AppUserDomainNormalizer.Normalize(req.Domain);
         req.Username = ResolveLoginUsername(req);
 
         if (string.IsNullOrWhiteSpace(req.FirstName))
@@ -22,6 +23,8 @@ public static class AppUserInputNormalizer
             throw new ArgumentException("نام خانوادگی الزامی است");
         if (!IsValidNationalId(req.NationalId))
             throw new ArgumentException("کد ملی باید ۱۰ رقم باشد");
+        if (!AppUserDomainNormalizer.IsValid(req.Domain))
+            throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
         if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
             throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
         if (!req.IsAdmin && string.IsNullOrWhiteSpace(req.District))
