@@ -235,8 +235,14 @@ function syncBranchFromFund() {
 function formatShamsiDisplay(yyyymmdd) {
   if (!yyyymmdd) return '-';
   const d = String(yyyymmdd).replace(/\D/g, '');
-  if (d.length < 8) return String(yyyymmdd);
-  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+  if (d.length < 8) return toPersianDigits(String(yyyymmdd));
+  return toPersianDigits(`${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`);
+}
+
+function formatBillPayDisplay(value) {
+  const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
+  if (!digits) return '-';
+  return toPersianDigits(digits);
 }
 
 function clearGridSelection(selectionSet, cacheMap) {
@@ -1670,11 +1676,11 @@ function renderUnsentTable(items, meta = {}) {
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
       <td>${formatNosaziCode(item.bnkAcntNo)}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
-      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td class="num-cell">${formatBillPayDisplay(item.billId)}</td>
+      <td class="num-cell">${formatBillPayDisplay(item.paymentId)}</td>
+      <td class="num-cell">${formatShamsiDisplay(item.bankPaymentDate)}</td>
+      <td class="num-cell">${formatShamsiDisplay(item.paymentDate)}</td>
+      <td class="num-cell">${formatBillPayDisplay(item.ficheNo)}</td>
       <td>${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
     </tr>
   `;

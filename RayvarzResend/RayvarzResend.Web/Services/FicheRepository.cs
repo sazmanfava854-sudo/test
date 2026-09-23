@@ -990,7 +990,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               FROM dbo.Income_Fiche f WITH (NOLOCK)
               {IncomeNosaziJoins}
               INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                ON {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
+                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("f.BillID", "f.PaymentID")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
@@ -1011,7 +1011,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                ON {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
+                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("d.BillID", "d.PaymentID")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)
@@ -1091,8 +1091,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             NidWorkItem = reader.IsDBNull(reader.GetOrdinal("NidWorkItem"))
                 ? ""
                 : reader.GetString(reader.GetOrdinal("NidWorkItem")).Trim(),
-            BillId = reader.GetString(reader.GetOrdinal("BillID")).Trim(),
-            PaymentId = reader.GetString(reader.GetOrdinal("PaymentID")).Trim(),
+            BillId = BankInquiryConfirmHelper.NormalizeBillOrPayId(reader.GetString(reader.GetOrdinal("BillID"))),
+            PaymentId = BankInquiryConfirmHelper.NormalizeBillOrPayId(reader.GetString(reader.GetOrdinal("PaymentID"))),
             Payable = ReadDecimal(reader, "Payable"),
             PaymentDate = ReadRowDate(reader, "PaymentDate"),
             BankPaymentDate = ReadRowDate(reader, "BankPaymentDate"),

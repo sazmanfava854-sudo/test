@@ -243,6 +243,21 @@ jdp-overlay {
   font-family: inherit;
 }
 
+#unsentTable {
+  direction: ltr;
+}
+
+#unsentTable th,
+#unsentTable td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+#unsentTable td.num-cell {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 th.col-check, td.col-check {
   width: 42px;
   text-align: center;

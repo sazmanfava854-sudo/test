@@ -46,6 +46,13 @@ public class UnsentFicheService
                 foundKeys.Add(key);
         }
 
+        foreach (var item in items)
+        {
+            var key = UnsentBillPayLookupHelper.MatchKey(item.BillId, item.PaymentId);
+            if (key.Length > 0 && rawByKey.TryGetValue(key, out var raw))
+                ApplyExcelDisplayIds(item, raw.RawBill, raw.RawPay);
+        }
+
         var missPairs = pairs
             .Where(p => !foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(p.BillId, p.PaymentId)))
             .ToList();
@@ -324,5 +331,13 @@ public class UnsentFicheService
             DocNotSentError: sendResult.DocNotSentError,
             BillId: plan.BillId,
             PaymentId: plan.PaymentId);
+    }
+
+    private static void ApplyExcelDisplayIds(UnsentFicheListItem item, string rawBill, string rawPay)
+    {
+        if (!string.IsNullOrWhiteSpace(rawBill))
+            item.BillId = rawBill.Trim();
+        if (!string.IsNullOrWhiteSpace(rawPay))
+            item.PaymentId = rawPay.Trim();
     }
 }
