@@ -69,21 +69,35 @@ public static class UnsentBillPayLookupHelper
         return map;
     }
 
-    public static string DescribeMiss(BillPayMissDiagnostic? diagnostic)
+    public static string DescribeMiss(
+        BillPayMissDiagnostic? diagnostic,
+        string? displayBillId = null,
+        string? displayPaymentId = null)
     {
+        var idSuffix = FormatMissIdSuffix(displayBillId, displayPaymentId);
         if (diagnostic == null || !diagnostic.Found)
-            return "قابل ارسال نیست — فیشی با این شناسه‌ها پیدا نشد";
+            return $"قابل ارسال نیست — فیشی با این شناسه‌ها پیدا نشد{idSuffix}";
 
         if (diagnostic.SwappedColumns)
-            return "قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده";
+            return $"قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده{idSuffix}";
 
         if (diagnostic.AlreadySent)
-            return $"فیش {diagnostic.FicheNo}: قبلاً ارسال شده";
+            return $"فیش {diagnostic.FicheNo}: قبلاً ارسال شده{idSuffix}";
 
         if (diagnostic.Cancelled)
-            return $"فیش {diagnostic.FicheNo}: لغو شده";
+            return $"فیش {diagnostic.FicheNo}: لغو شده{idSuffix}";
 
-        return "قابل ارسال نیست";
+        return $"قابل ارسال نیست{idSuffix}";
+    }
+
+    private static string FormatMissIdSuffix(string? displayBillId, string? displayPaymentId)
+    {
+        var bill = (displayBillId ?? "").Trim();
+        var pay = (displayPaymentId ?? "").Trim();
+        if (bill.Length == 0 && pay.Length == 0)
+            return "";
+
+        return $" — شناسه قبض: {bill}، شناسه پرداخت: {pay}";
     }
 
     public static string? ValidateRequest(UnsentBillPayLookupRequest? req)

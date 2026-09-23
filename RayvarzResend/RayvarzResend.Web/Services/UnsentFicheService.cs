@@ -59,11 +59,13 @@ public class UnsentFicheService
             var lookupKey = pair.BillId + "|" + pair.PaymentId;
             rawByKey.TryGetValue(lookupKey, out var raw);
             diagnostics.TryGetValue(lookupKey, out var diagnostic);
+            var displayBill = string.IsNullOrEmpty(raw.RawBill) ? pair.BillId : raw.RawBill;
+            var displayPay = string.IsNullOrEmpty(raw.RawPay) ? pair.PaymentId : raw.RawPay;
             misses.Add(new UnsentBillPayMiss
             {
-                BillId = string.IsNullOrEmpty(raw.RawBill) ? pair.BillId : raw.RawBill,
-                PaymentId = string.IsNullOrEmpty(raw.RawPay) ? pair.PaymentId : raw.RawPay,
-                Reason = UnsentBillPayLookupHelper.DescribeMiss(diagnostic)
+                BillId = displayBill,
+                PaymentId = displayPay,
+                Reason = UnsentBillPayLookupHelper.DescribeMiss(diagnostic, displayBill, displayPay)
             });
         }
 

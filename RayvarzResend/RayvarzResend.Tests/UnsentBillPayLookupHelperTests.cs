@@ -72,13 +72,16 @@ public class UnsentBillPayLookupHelperTests
     public void DescribeMiss_explains_rayvarz_and_swapped_columns()
     {
         Assert.Equal(
-            "فیش 123: قبلاً ارسال شده",
-            UnsentBillPayLookupHelper.DescribeMiss(new BillPayMissDiagnostic
-            {
-                Found = true,
-                FicheNo = "123",
-                AlreadySent = true
-            }));
+            "فیش 123: قبلاً ارسال شده — شناسه قبض: 3091418652060، شناسه پرداخت: 1426270355",
+            UnsentBillPayLookupHelper.DescribeMiss(
+                new BillPayMissDiagnostic
+                {
+                    Found = true,
+                    FicheNo = "123",
+                    AlreadySent = true
+                },
+                "3091418652060",
+                "1426270355"));
 
         Assert.Contains(
             "جابه‌جا",

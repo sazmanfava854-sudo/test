@@ -628,6 +628,7 @@ function appendUnsentItems(items) {
     }
     existing.add(item.ficheNo);
     next.push(item);
+    selectedUnsentFicheNos.add(item.ficheNo);
     added += 1;
   });
   renderUnsentTable(next, {
@@ -1669,12 +1670,12 @@ function renderUnsentTable(items, meta = {}) {
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
       <td>${formatNosaziCode(item.bnkAcntNo)}</td>
-      <td>${item.billId || '-'}</td>
-      <td>${item.paymentId || '-'}</td>
+      <td>${toPersianDigits(item.billId || '-')}</td>
+      <td>${toPersianDigits(item.paymentId || '-')}</td>
       <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
       <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${item.ficheNo}</td>
-      <td>${Number(item.payable || 0).toLocaleString()}</td>
+      <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
     </tr>
   `;
   }).join('');
@@ -2621,7 +2622,7 @@ function setupEventHandlers() {
 
       const { added } = appendUnsentItems(data.items || []);
       const missLines = (data.misses || [])
-        .map((m) => (m.reason || '').trim())
+        .map((m) => toPersianDigits((m.reason || '').trim()))
         .filter(Boolean);
 
       if (box) {
