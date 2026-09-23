@@ -267,6 +267,8 @@ public class UnsentFicheListItem
 public class UnsentBatchPlanItem
 {
     public string FicheNo { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
     public string SendPath { get; set; } = "";
     public string Detail { get; set; } = "";
     public bool CanSend { get; set; }
@@ -297,6 +299,8 @@ public class UnsentBatchSendRequest
 public class UnsentBatchSendItemResult
 {
     public string FicheNo { get; set; } = "";
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
     public string SendPath { get; set; } = "";
     public bool Success { get; set; }
     public bool Skipped { get; set; }
@@ -304,6 +308,36 @@ public class UnsentBatchSendItemResult
     public string? SkipReason { get; set; }
     public bool VerifiedInRayvarz { get; set; }
     public string? DocNotSentError { get; set; }
+}
+
+public class UnsentBillPayPair
+{
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+}
+
+public class UnsentBillPayLookupRequest
+{
+    public UnsentFicheKind FicheKind { get; set; } = UnsentFicheKind.Income;
+    public List<UnsentBillPayPair> Pairs { get; set; } = new();
+}
+
+public class UnsentBillPayMiss
+{
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public string Reason { get; set; } = "";
+}
+
+public class UnsentBillPayLookupResult
+{
+    public UnsentFicheKind FicheKind { get; set; }
+    public int Requested { get; set; }
+    public int Found { get; set; }
+    public int NotFound { get; set; }
+    public List<UnsentFicheListItem> Items { get; set; } = new();
+    public List<UnsentBillPayMiss> Misses { get; set; } = new();
+    public string? Error { get; set; }
 }
 
 public class UnsentBatchSendResult

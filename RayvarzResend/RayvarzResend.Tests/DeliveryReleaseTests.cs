@@ -169,6 +169,34 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
+    public void Bulk_excel_import_and_epay_gate_are_wired()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
+        Assert.Contains("id=\"btnUnsentExcel\"", html);
+        Assert.Contains("ورود از اکسل", html);
+        Assert.Contains("id=\"unsentExcelFile\"", html);
+        Assert.Contains("js/app.js?v=77", html);
+
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        Assert.Contains("function parseUnsentExcelFile(", js);
+        Assert.Contains("function mapUnsentExcelHeaderIndex(", js);
+        Assert.Contains("function appendUnsentItems(", js);
+        Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
+        Assert.Contains("شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId", js.Split("bindClick('btnUnsentSend'")[1]);
+        Assert.Contains("<th>شناسه قبض</th>", html);
+        Assert.Contains("<th>شناسه پرداخت</th>", html);
+
+        var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.Contains("/api/unsent/lookup-by-bill-pay", program);
+        Assert.Contains("EpayFichePresenceChecker", program);
+
+        var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
+        Assert.Contains("EnsurePresentOrThrowAsync", send);
+        Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
+        Assert.Contains("CheckAsync", File.ReadAllText(WebFile("Services", "TahatorResendService.cs")));
+    }
+
+    [Fact]
     public void Operator_branch_fund_map_matches_district_table()
     {
         var program = File.ReadAllText(WebFile("Program.cs"));

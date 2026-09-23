@@ -27,6 +27,45 @@ public class UnsentFicheService
             ? _repo.SearchUnsentDutyAsync(req, ct)
             : _repo.SearchUnsentIncomeAsync(req, ct);
 
+    public async Task<UnsentBillPayLookupResult> LookupByBillPayAsync(
+        UnsentBillPayLookupRequest req,
+        CancellationToken ct = default)
+    {
+        var validation = UnsentBillPayLookupHelper.ValidateRequest(req);
+        if (validation != null)
+            return new UnsentBillPayLookupResult { FicheKind = req.FicheKind, Error = validation };
+
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(req.Pairs);
+        var items = await _repo.FindUnsentByBillPayAsync(req.FicheKind, pairs, ct);
+        var foundKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            var key = UnsentBillPayLookupHelper.MatchKey(item.BillId, item.PaymentId);
+            if (key.Length > 0)
+                foundKeys.Add(key);
+        }
+
+        var misses = pairs
+            .Where(p => !foundKeys.Contains(p.BillId + "|" + p.PaymentId))
+            .Select(p => new UnsentBillPayMiss
+            {
+                BillId = p.BillId,
+                PaymentId = p.PaymentId,
+                Reason = "در دیتابیس یافت نشد"
+            })
+            .ToList();
+
+        return new UnsentBillPayLookupResult
+        {
+            FicheKind = req.FicheKind,
+            Requested = pairs.Count,
+            Found = items.Count,
+            NotFound = misses.Count,
+            Items = items,
+            Misses = misses
+        };
+    }
+
     public Task<UnsentBatchPlanResult> PlanBatchAsync(
         UnsentBatchSendRequest req,
         ClaimsPrincipal user,
@@ -71,7 +110,9 @@ public class UnsentFicheService
                 item.Success = outcome.Success;
                 item.Skipped = outcome.Skipped;
                 item.SkipReason = outcome.SkipReason;
-                item.Message = outcome.Message;
+                item.Message = EpayFichePresenceChecker.MapBatchMessage(outcome.Message);
+                item.BillId = outcome.BillId;
+                item.PaymentId = outcome.PaymentId;
                 item.VerifiedInRayvarz = outcome.VerifiedInRayvarz;
                 item.DocNotSentError = outcome.DocNotSentError;
 
@@ -84,7 +125,7 @@ public class UnsentFicheService
             }
             catch (Exception ex)
             {
-                item.Message = ex.Message;
+                item.Message = EpayFichePresenceChecker.MapBatchMessage(ex.Message);
                 result.Failed++;
             }
         }
@@ -145,6 +186,13 @@ public class UnsentFicheService
             return item;
         }
 
+        item.BillId = fiche.BillIdRaw;
+        item.PaymentId = fiche.PaymentIdRaw;
+        if (string.IsNullOrWhiteSpace(item.BillId))
+            item.BillId = fiche.BillId;
+        if (string.IsNullOrWhiteSpace(item.PaymentId))
+            item.PaymentId = fiche.PaymentId;
+
         if (req.FicheKind == UnsentFicheKind.Income && fiche.Category != FicheCategory.Income)
         {
             item.SendPath = "Skip";
@@ -198,7 +246,9 @@ public class UnsentFicheService
         string Message,
         string? SkipReason = null,
         bool VerifiedInRayvarz = false,
-        string? DocNotSentError = null);
+        string? DocNotSentError = null,
+        string BillId = "",
+        string PaymentId = "");
 
     private async Task<ProcessOutcome> ProcessOneAsync(
         UnsentBatchSendRequest req,
@@ -214,7 +264,9 @@ public class UnsentFicheService
                 Success: false,
                 Skipped: true,
                 Message: plan.BlockReason ?? "رد شد",
-                SkipReason: plan.SendPath);
+                SkipReason: plan.SendPath,
+                BillId: plan.BillId,
+                PaymentId: plan.PaymentId);
         }
 
         if (plan.SendPath == "Tahator")
@@ -226,15 +278,17 @@ public class UnsentFicheService
                 tahResult.Skipped,
                 tahResult.Message ?? (tahResult.Success ? "ارسال تهاتر موفق" : "ارسال تهاتر ناموفق"),
                 tahResult.SkipReason,
-                DocNotSentError: tahResult.DocNotSentError);
+                DocNotSentError: tahResult.DocNotSentError,
+                BillId: plan.BillId,
+                PaymentId: plan.PaymentId);
         }
 
         var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
         if (fiche == null)
-            return new ProcessOutcome(plan.SendPath, false, true, "فیش یافت نشد", "NotFound");
+            return new ProcessOutcome(plan.SendPath, false, true, "فیش یافت نشد", "NotFound", BillId: plan.BillId, PaymentId: plan.PaymentId);
 
         if (!FicheBranchResolver.TryResolve(fiche, out var branch, out var fund, out var branchError))
-            return new ProcessOutcome(plan.SendPath, false, true, branchError ?? FicheBranchResolver.RegionNotResolvedMessage, "RegionUnresolved");
+            return new ProcessOutcome(plan.SendPath, false, true, branchError ?? FicheBranchResolver.RegionNotResolvedMessage, "RegionUnresolved", BillId: plan.BillId, PaymentId: plan.PaymentId);
 
         var sendReq = new SendFicheRequest
         {
@@ -253,6 +307,8 @@ public class UnsentFicheService
             Skipped: false,
             sendResult.Message ?? (sendResult.Success ? "ارسال موفق" : "ارسال ناموفق"),
             VerifiedInRayvarz: sendResult.VerifiedInRayvarz,
-            DocNotSentError: sendResult.DocNotSentError);
+            DocNotSentError: sendResult.DocNotSentError,
+            BillId: plan.BillId,
+            PaymentId: plan.PaymentId);
     }
 }
