@@ -175,7 +175,10 @@ public class DeliveryReleaseTests
         Assert.Contains("id=\"btnUnsentExcel\"", html);
         Assert.Contains("ورود از اکسل", html);
         Assert.Contains("id=\"unsentExcelFile\"", html);
-        Assert.Contains("js/app.js?v=77", html);
+        Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
+        Assert.DoesNotContain("cdn.sheetjs.com", html);
+        Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
+        Assert.Contains("js/app.js?v=78", html);
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         Assert.Contains("function parseUnsentExcelFile(", js);
