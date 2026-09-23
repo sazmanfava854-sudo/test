@@ -2578,16 +2578,17 @@ function setupEventHandlers() {
     });
   }
 
-  bindClick('btnUnsentExcel', () => {
-    $('unsentExcelFile')?.click();
-  });
-
   $('unsentExcelFile')?.addEventListener('change', async () => {
     const input = $('unsentExcelFile');
+    const status = $('unsentExcelStatus');
     const file = input?.files?.[0];
-    if (!file) return;
+    if (!file) {
+      if (status) status.textContent = 'فایلی انتخاب نشده';
+      return;
+    }
 
     const box = $('unsentResultBox');
+    if (status) status.textContent = 'در حال خواندن فایل…';
     if (box) {
       box.hidden = false;
       box.textContent = 'در حال خواندن فایل اکسل…';
@@ -2626,6 +2627,9 @@ function setupEventHandlers() {
         ].join('\n');
       }
 
+      if (status) {
+        status.textContent = `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف خوانده شد`;
+      }
       if (added > 0) {
         showAppSuccess(`${added} فیش معتبر از اکسل به گرید اضافه شد`);
       } else if ((data.found || 0) > 0) {
@@ -2635,9 +2639,9 @@ function setupEventHandlers() {
       }
     } catch (e) {
       if (box) box.textContent = e.message;
-      showAppError(e.message);
-    } finally {
+      if (status) status.textContent = e.message;
       if (input) input.value = '';
+      showAppError(e.message);
     }
   });
 

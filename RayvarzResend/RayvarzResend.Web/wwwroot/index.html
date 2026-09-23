@@ -149,10 +149,38 @@
           <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
       </div>
+      <div class="installment-template-spec">
+        <strong>قالب فایل اکسل — ۲ ستون الزامی</strong>
+        <table class="installment-template-table">
+          <thead>
+            <tr>
+              <th>ستون ۱</th>
+              <th>ستون ۲</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>شناسه قبض</code></td>
+              <td><code>شناسه پرداخت</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="form-grid unsent-form-grid">
+        <label class="field field-required installment-excel-field">
+          <span class="field-label">فایل اکسل (.xlsx)</span>
+          <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" />
+        </label>
+        <div class="field">
+          <span class="field-label">وضعیت فایل</span>
+          <span id="unsentExcelStatus" class="installment-excel-status">فایلی انتخاب نشده</span>
+        </div>
+      </div>
+      <div class="actions installment-template-actions">
+        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت اکسل</a>
+      </div>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentExcel" class="btn secondary" type="button">ورود از اکسل</button>
-        <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
         <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
@@ -659,7 +687,6 @@
           <label class="field field-required">
             <span class="field-label">دامین</span>
             <input id="newUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh" dir="ltr" />
-            <span class="field-hint">نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
@@ -744,6 +771,6 @@
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=77"></script>
+  <script src="js/app.js?v=78"></script>
 </body>
 </html>

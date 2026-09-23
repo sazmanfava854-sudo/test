@@ -172,10 +172,15 @@ public class DeliveryReleaseTests
     public void Bulk_excel_import_and_epay_gate_are_wired()
     {
         var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
-        Assert.Contains("id=\"btnUnsentExcel\"", html);
-        Assert.Contains("ورود از اکسل", html);
         Assert.Contains("id=\"unsentExcelFile\"", html);
-        Assert.Contains("js/app.js?v=77", html);
+        Assert.Contains("id=\"unsentExcelStatus\"", html);
+        Assert.Contains("id=\"unsentTemplateDownload\"", html);
+        Assert.Contains("قالب فایل اکسل — ۲ ستون الزامی", html);
+        Assert.Contains("دانلود تمپلیت اکسل", html);
+        Assert.Contains("templates/unsent-bill-pay-template.xlsx", html);
+        Assert.DoesNotContain("نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh", html);
+        Assert.Contains("js/app.js?v=78", html);
+        Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         Assert.Contains("function parseUnsentExcelFile(", js);
