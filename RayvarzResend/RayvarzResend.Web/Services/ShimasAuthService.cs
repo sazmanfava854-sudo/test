@@ -32,16 +32,21 @@ public sealed class ShimasAuthService
 
     public ShimasAuthOptions Options => _options;
 
-    public ShimasAuthStatusDto GetStatus(HttpRequest? request = null) => new()
+    public ShimasAuthStatusDto GetStatus(HttpRequest? request = null)
     {
-        Enabled = _options.Enabled,
-        SsoReady = _options.SsoReady,
-        PreferSsoLogin = _options.PreferSsoLogin,
-        LocalLoginAvailable = _options.LocalLoginAvailable,
-        LoginPath = "/auth/login",
-        CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
-        RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl()
-    };
+        var host = request?.Host.Host;
+        var preferSso = _options.PreferSsoLoginForHost(host);
+        return new ShimasAuthStatusDto
+        {
+            Enabled = _options.Enabled,
+            SsoReady = _options.SsoReady,
+            PreferSsoLogin = preferSso,
+            LocalLoginAvailable = _options.LocalLoginAvailableForHost(host),
+            LoginPath = preferSso ? "/auth/login" : "/login.html",
+            CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
+            RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl()
+        };
+    }
 
     public string? ResolvePublicCallbackUrl()
     {
@@ -52,9 +57,9 @@ public sealed class ShimasAuthService
         return $"{baseUrl}{NormalizeCallbackPath(_options.CallbackPath)}";
     }
 
-    public string ResolveLoginRedirectPath()
+    public string ResolveLoginRedirectPath(HttpRequest? request = null)
     {
-        if (_options.PreferSsoLogin)
+        if (_options.PreferSsoLoginForHost(request?.Host.Host))
             return "/auth/login";
         return "/login.html";
     }

@@ -90,6 +90,65 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void Localhost_keeps_local_login_while_public_host_uses_sso()
+    {
+        var options = new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "19cf3C33",
+            ClientSecret = "D2fbf",
+            AllowLocalLoginFallback = true,
+            PublicBaseUrl = "https://city.mashhad.ir:5065"
+        };
+
+        Assert.True(ShimasAuthOptions.IsLoopbackHost("localhost"));
+        Assert.True(ShimasAuthOptions.IsLoopbackHost("localhost:5000"));
+        Assert.True(ShimasAuthOptions.IsLoopbackHost("127.0.0.1"));
+        Assert.False(ShimasAuthOptions.IsLoopbackHost("city.mashhad.ir"));
+
+        Assert.False(options.PreferSsoLoginForHost("localhost"));
+        Assert.True(options.LocalLoginAvailableForHost("localhost"));
+        Assert.True(options.PreferSsoLoginForHost("city.mashhad.ir"));
+        Assert.False(options.LocalLoginAvailableForHost("city.mashhad.ir"));
+
+        var service = CreateService(options);
+        var local = new DefaultHttpContext();
+        local.Request.Host = new HostString("localhost", 5000);
+        Assert.Equal("/login.html", service.ResolveLoginRedirectPath(local.Request));
+        Assert.False(service.GetStatus(local.Request).PreferSsoLogin);
+        Assert.True(service.GetStatus(local.Request).LocalLoginAvailable);
+
+        var server = new DefaultHttpContext();
+        server.Request.Host = new HostString("city.mashhad.ir", 5065);
+        Assert.Equal("/auth/login", service.ResolveLoginRedirectPath(server.Request));
+        Assert.True(service.GetStatus(server.Request).PreferSsoLogin);
+    }
+
+    [Fact]
+    public async Task Existing_admin_without_domain_gets_bootstrap_domain()
+    {
+        var memory = new InMemoryAppUserStore();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
+        config["Auth:UseInMemoryStore"] = "true";
+        var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
+        await repo.CreateUserAsync(new CreateAppUserRequest
+        {
+            Username = "admin",
+            Password = "Admin@1234",
+            FirstName = "مدیر",
+            LastName = "سیستم",
+            NationalId = "1234567890",
+            Domain = "placeholder",
+            IsAdmin = true
+        });
+        memory.FindByUsername("admin")!.Domain = "";
+
+        Assert.True(await repo.EnsureAdminDomainIfEmptyAsync("admin", "admin"));
+        Assert.Equal("admin", memory.FindByUsername("admin")!.Domain);
+        Assert.False(await repo.EnsureAdminDomainIfEmptyAsync("admin", "other-domain"));
+    }
+
+    [Fact]
     public void ResolveLoginRedirectPath_uses_local_when_sso_disabled()
     {
         var service = CreateService(new ShimasAuthOptions { Enabled = false });

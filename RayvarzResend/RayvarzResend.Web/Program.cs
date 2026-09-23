@@ -57,7 +57,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
         options.Events.OnRedirectToAccessDenied = ctx =>
@@ -69,7 +69,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
     });
@@ -147,7 +147,7 @@ app.Use(async (context, next) =>
         if (context.User?.Identity?.IsAuthenticated != true)
         {
             var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-            context.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            context.Response.Redirect(shimas.ResolveLoginRedirectPath(context.Request));
             return;
         }
     }
@@ -166,7 +166,7 @@ app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
 
 app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
 {
-    if (!shimas.Options.PreferSsoLogin)
+    if (!shimas.Options.PreferSsoLoginForHost(http.Request.Host.Host))
         return Results.Redirect("/login.html");
 
     if (!shimas.Options.SsoReady)
@@ -211,7 +211,7 @@ app.MapGet("/auth/callback", async (
 
 app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
 {
-    if (!shimas.Options.LocalLoginAvailable)
+    if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
         return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
 
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))

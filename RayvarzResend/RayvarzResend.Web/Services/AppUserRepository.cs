@@ -134,6 +134,43 @@ public sealed class AppUserRepository
         return result is int i ? i : Convert.ToInt32(result);
     }
 
+    /// <summary>ادمین موجود که قبل از ستون Domain ساخته شده، دامین خالی می‌گیرد.</summary>
+    public async Task<bool> EnsureAdminDomainIfEmptyAsync(string username, string domain, CancellationToken ct = default)
+    {
+        domain = AppUserDomainNormalizer.Normalize(domain);
+        username = (username ?? "").Trim();
+        if (!AppUserDomainNormalizer.IsValid(domain) || username.Length == 0)
+            return false;
+
+        if (_useInMemory)
+            return _memory.EnsureAdminDomainIfEmpty(username, domain);
+
+        await EnsureSchemaAsync(ct);
+        const string sql = """
+            UPDATE dbo.AppUser
+            SET [Domain] = @domain
+            WHERE Id = (
+                SELECT TOP 1 Id
+                FROM dbo.AppUser
+                WHERE IsAdmin = 1
+                  AND ISNULL([Domain], N'') = N''
+                  AND (
+                    Username = @username
+                    OR NOT EXISTS (
+                        SELECT 1 FROM dbo.AppUser named
+                        WHERE named.IsAdmin = 1 AND named.Username = @username))
+                ORDER BY CASE WHEN Username = @username THEN 0 ELSE 1 END, CreatedAtUtc)
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.AppUser taken WHERE taken.[Domain] = @domain);
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@domain", domain);
+        cmd.Parameters.AddWithValue("@username", username);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
     public async Task<AppUserRecord?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
         if (_useInMemory)
