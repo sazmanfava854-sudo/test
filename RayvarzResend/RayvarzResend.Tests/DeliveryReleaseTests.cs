@@ -169,6 +169,47 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
+    public void Bulk_excel_import_and_epay_gate_are_wired()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
+        Assert.Contains("id=\"unsentExcelFile\"", html);
+        Assert.Contains("id=\"unsentExcelStatus\"", html);
+        Assert.Contains("id=\"unsentTemplateDownload\"", html);
+        Assert.Contains("ورود از اکسل", html);
+        Assert.Contains("دانلود تمپلیت", html);
+        Assert.DoesNotContain("btnUnsentPlan", html);
+        Assert.DoesNotContain("بررسی مسیر ارسال", html);
+        Assert.DoesNotContain("قالب فایل اکسل — ۲ ستون الزامی", html);
+        Assert.Contains("templates/unsent-bill-pay-template.xlsx", html);
+        Assert.DoesNotContain("نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh", html);
+        Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
+        Assert.DoesNotContain("cdn.sheetjs.com", html);
+        Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
+        Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
+        Assert.Contains("result-log", html);
+        Assert.Contains("js/app.js?v=86", html);
+        Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
+
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        Assert.Contains("function parseUnsentExcelFile(", js);
+        Assert.Contains("function mapUnsentExcelHeaderIndex(", js);
+        Assert.Contains("function appendUnsentItems(", js);
+        Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
+        Assert.Contains("شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId", js.Split("bindClick('btnUnsentSend'")[1]);
+        Assert.Contains("<th>شناسه قبض</th>", html);
+        Assert.Contains("<th>شناسه پرداخت</th>", html);
+
+        var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.Contains("/api/unsent/lookup-by-bill-pay", program);
+        Assert.Contains("EpayFichePresenceChecker", program);
+
+        var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
+        Assert.Contains("EnsurePresentOrThrowAsync", send);
+        Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
+        Assert.Contains("CheckAsync", File.ReadAllText(WebFile("Services", "TahatorResendService.cs")));
+    }
+
+    [Fact]
     public void Operator_branch_fund_map_matches_district_table()
     {
         var program = File.ReadAllText(WebFile("Program.cs"));

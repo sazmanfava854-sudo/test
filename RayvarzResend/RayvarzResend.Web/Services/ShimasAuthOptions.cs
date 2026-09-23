@@ -38,4 +38,34 @@ public sealed class ShimasAuthOptions
     public bool SsoReady => Enabled && HasLKey;
     public bool LocalLoginAvailable => !Enabled || (!SsoReady && AllowLocalLoginFallback);
     public bool PreferSsoLogin => Enabled && (SsoReady || !AllowLocalLoginFallback);
+
+    /// <summary>localhost برای تست نسخه غیرپابلیش — SSO فقط روی آدرس عمومی سرور.</summary>
+    public static bool IsLoopbackHost(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+            return false;
+
+        var name = host.Trim();
+        if (name.StartsWith('['))
+        {
+            var end = name.IndexOf(']');
+            name = end > 1 ? name[1..end] : name;
+        }
+        else
+        {
+            var colon = name.LastIndexOf(':');
+            if (colon > 0 && name.Count(static c => c == ':') == 1)
+                name = name[..colon];
+        }
+
+        return name.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || name == "127.0.0.1"
+            || name == "::1";
+    }
+
+    public bool PreferSsoLoginForHost(string? host) =>
+        PreferSsoLogin && !IsLoopbackHost(host);
+
+    public bool LocalLoginAvailableForHost(string? host) =>
+        LocalLoginAvailable || IsLoopbackHost(host);
 }

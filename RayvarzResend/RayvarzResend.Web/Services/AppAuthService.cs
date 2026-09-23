@@ -33,15 +33,19 @@ public sealed class AppAuthService
         }
 
         await _users.EnsureSchemaAsync(ct);
-        if (await _users.CountUsersAsync(ct) > 0)
-            return;
-
         var username = _config["Auth:BootstrapAdmin:Username"] ?? "admin";
         var password = _config["Auth:BootstrapAdmin:Password"] ?? "Admin@1234";
         var firstName = _config["Auth:BootstrapAdmin:FirstName"] ?? "مدیر";
         var lastName = _config["Auth:BootstrapAdmin:LastName"] ?? "سیستم";
         var nationalId = _config["Auth:BootstrapAdmin:NationalId"] ?? "1234567890";
         var domain = _config["Auth:BootstrapAdmin:Domain"] ?? "admin";
+
+        if (await _users.CountUsersAsync(ct) > 0)
+        {
+            if (await _users.EnsureAdminDomainIfEmptyAsync(username, domain, ct))
+                _logger.LogInformation("Bootstrap admin domain set to {Domain} for {Username}", domain, username);
+            return;
+        }
 
         await _users.CreateUserAsync(new CreateAppUserRequest
         {

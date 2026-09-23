@@ -235,8 +235,14 @@ function syncBranchFromFund() {
 function formatShamsiDisplay(yyyymmdd) {
   if (!yyyymmdd) return '-';
   const d = String(yyyymmdd).replace(/\D/g, '');
-  if (d.length < 8) return String(yyyymmdd);
-  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+  if (d.length < 8) return toPersianDigits(String(yyyymmdd));
+  return toPersianDigits(`${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`);
+}
+
+function formatBillPayDisplay(value) {
+  const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
+  if (!digits) return '-';
+  return toPersianDigits(digits);
 }
 
 function clearGridSelection(selectionSet, cacheMap) {
@@ -407,6 +413,20 @@ function mapExcelHeaderIndex(headers) {
   return map;
 }
 
+function mapUnsentExcelHeaderIndex(headers) {
+  const map = {};
+  headers.forEach((h, idx) => {
+    const key = normalizeExcelHeader(h);
+    if (key === 'شناسهقبض' || key === 'billid' || key === 'billid' || key === 'شناسهقبص') {
+      map.billId = idx;
+    }
+    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
+      map.paymentId = idx;
+    }
+  });
+  return map;
+}
+
 function hasScientificNotation(text) {
   return /e[+-]?\d+/i.test(String(text ?? '').trim());
 }
@@ -415,14 +435,28 @@ function parseExcelCellValue(sheet, rowIdx, colIdx) {
   const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
   const cell = sheet[ref];
   if (!cell) return '';
-  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
-  if (cell.t === 's') return String(cell.v ?? '').trim();
   if (cell.t === 'n' && Number.isFinite(cell.v)) {
     const n = cell.v;
     if (Number.isInteger(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER) return String(Math.trunc(n));
     return String(n);
   }
+  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
+  if (cell.t === 's') return String(cell.v ?? '').trim();
   return String(cell.v ?? '').trim();
+}
+
+function normalizeDigits(value) {
+  return String(value ?? '').replace(/[\u06F0-\u06F9\u0660-\u0669]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0);
+    return String(code - 0x0660);
+  });
+}
+
+function normalizeBillOrPayIdDigits(value) {
+  const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length < 13 ? digits.padStart(13, '0') : digits;
 }
 
 function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
@@ -508,6 +542,108 @@ function parseInstallmentExcelFile(file) {
     reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+function parseUnsentExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX === 'undefined') {
+      reject(new Error('کتابخانه خواندن اکسل بارگذاری نشد'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellText: true, cellDates: false });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          reject(new Error('برگه‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        const sheet = workbook.Sheets[sheetName];
+        const range = sheet?.['!ref']
+          ? XLSX.utils.decode_range(sheet['!ref'])
+          : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+
+        const headerRow = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          headerRow.push(parseExcelCellValue(sheet, range.s.r, c));
+        }
+        if (!headerRow.length) {
+          reject(new Error('فایل اکسل خالی است'));
+          return;
+        }
+
+        const col = mapUnsentExcelHeaderIndex(headerRow);
+        if (col.billId == null || col.paymentId == null) {
+          reject(new Error('ستون‌های الزامی اکسل: شناسه قبض و شناسه پرداخت'));
+          return;
+        }
+
+        const parsed = [];
+        const seen = new Set();
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const billId = parseExcelCellValue(sheet, r, col.billId);
+          const paymentId = parseExcelCellValue(sheet, r, col.paymentId);
+          if (!billId && !paymentId) continue;
+          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)) {
+            reject(new Error(
+              `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
+            ));
+            return;
+          }
+          const item = {
+            billId: billId.trim(),
+            paymentId: paymentId.trim()
+          };
+          if (!item.billId || !item.paymentId) {
+            reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
+            return;
+          }
+          const key = `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          parsed.push(item);
+        }
+
+        if (!parsed.length) {
+          reject(new Error('هیچ ردیف داده‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        resolve(parsed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function appendUnsentItems(items) {
+  const incoming = items || [];
+  const existing = new Set(unsentItems.map((row) => row.ficheNo));
+  let added = 0;
+  let duplicate = 0;
+  const next = unsentItems.slice();
+  incoming.forEach((item) => {
+    if (!item?.ficheNo) return;
+    if (existing.has(item.ficheNo)) {
+      duplicate += 1;
+      return;
+    }
+    existing.add(item.ficheNo);
+    next.push(item);
+    selectedUnsentFicheNos.add(item.ficheNo);
+    added += 1;
+  });
+  renderUnsentTable(next, {
+    page: 1,
+    totalPages: 1,
+    totalCount: next.length,
+    pageSize: unsentSearchState.pageSize
+  });
+  return { added, duplicate };
 }
 
 function getInstallmentPayload() {
@@ -1496,11 +1632,9 @@ function updateUnsentPaginationUi() {
 
 function updateUnsentSendButton() {
   const btn = $('btnUnsentSend');
-  const planBtn = $('btnUnsentPlan');
   if (!btn) return;
   const selected = getSelectedUnsentFicheNos().length;
   btn.disabled = selected === 0;
-  if (planBtn) planBtn.disabled = selected === 0;
   btn.textContent = selected > 0
     ? `ارسال ${selected} فیش انتخاب‌شده`
     : 'ارسال انتخاب‌شده‌ها';
@@ -1542,12 +1676,12 @@ function renderUnsentTable(items, meta = {}) {
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
       <td>${formatNosaziCode(item.bnkAcntNo)}</td>
-      <td>${item.billId || '-'}</td>
-      <td>${item.paymentId || '-'}</td>
-      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${item.ficheNo}</td>
-      <td>${Number(item.payable || 0).toLocaleString()}</td>
+      <td class="num-cell">${formatBillPayDisplay(item.billId)}</td>
+      <td class="num-cell">${formatBillPayDisplay(item.paymentId)}</td>
+      <td class="num-cell">${formatShamsiDisplay(item.bankPaymentDate)}</td>
+      <td class="num-cell">${formatShamsiDisplay(item.paymentDate)}</td>
+      <td class="num-cell">${formatBillPayDisplay(item.ficheNo)}</td>
+      <td>${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
     </tr>
   `;
   }).join('');
@@ -2466,6 +2600,73 @@ function setupEventHandlers() {
     });
   }
 
+  let unsentExcelBusy = false;
+  $('unsentExcelFile')?.addEventListener('change', async () => {
+    const input = $('unsentExcelFile');
+    const status = $('unsentExcelStatus');
+    const file = input?.files?.[0];
+    if (!file) {
+      if (status) status.textContent = 'فایلی انتخاب نشده';
+      return;
+    }
+    if (unsentExcelBusy) return;
+
+    const box = $('unsentResultBox');
+    unsentExcelBusy = true;
+    if (status) status.textContent = 'در حال بررسی…';
+
+    try {
+      const pairs = await parseUnsentExcelFile(file);
+
+      const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ficheKind: $('unsentFicheKind')?.value || 'Income',
+          pairs
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+      const { added } = appendUnsentItems(data.items || []);
+      const missLines = (data.misses || [])
+        .map((m) => toPersianDigits((m.reason || '').trim()))
+        .filter(Boolean);
+
+      if (box) {
+        if (missLines.length) {
+          box.hidden = false;
+          box.className = 'result-log';
+          box.textContent = missLines.join('\n');
+        } else {
+          box.hidden = true;
+          box.textContent = '';
+        }
+      }
+
+      if (status) {
+        status.textContent = `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف`;
+      }
+      if (added > 0 && missLines.length === 0) {
+        showAppSuccess(`${added} فیش به گرید اضافه شد`);
+      } else if (added > 0 && missLines.length > 0) {
+        showAppWarning(`${added} فیش اضافه شد؛ ${missLines.length} ردیف قابل ارسال نبود`);
+      } else if (missLines.length > 0) {
+        showAppWarning('هیچ فیشی به گرید اضافه نشد');
+      } else {
+        showAppInfo('فیش‌های انتخاب‌شده قبلاً در گرید بودند');
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      if (status) status.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      unsentExcelBusy = false;
+      if (input) input.value = '';
+    }
+  });
+
   bindClick('btnUnsentSearch', async () => {
     await fetchUnsentResults(1, { clearSelection: true });
   });
@@ -2488,46 +2689,6 @@ function setupEventHandlers() {
     });
   }
 
-  bindClick('btnUnsentPlan', async () => {
-    const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
-
-    const btn = $('btnUnsentPlan');
-    btn.disabled = true;
-    const box = $('unsentResultBox');
-    box.hidden = false;
-    box.textContent = 'در حال بررسی مسیر ارسال هر فیش…';
-
-    try {
-      const res = await apiFetch('/api/unsent/plan-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind').value,
-          ficheNos: selected,
-          resetStatus: true
-        })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-
-      const lines = (data.items || []).map((p) =>
-        `${p.ficheNo} → ${p.sendPath}${p.canSend ? ' ✓' : ' ✗'} | ${p.detail || ''}${p.blockReason ? ' — ' + p.blockReason : ''}${p.tahatorPairFicheNo ? ' | جفت: ' + p.tahatorPairFicheNo : ''}`
-      );
-      box.textContent = [
-        '=== برنامه ارسال دسته‌ای (بدون ارسال واقعی) ===',
-        'برای هر فیش: Income=درآمدی | Tahator=تهاتر ۱۵۷+۱۵۸ | Duty=نوسازی/صنفی',
-        '',
-        ...lines
-      ].join('\n');
-    } catch (e) {
-      box.textContent = e.message;
-      showAppError(e.message);
-    } finally {
-      updateUnsentSendButton();
-    }
-  });
-
   bindClick('btnUnsentSend', async () => {
     const selected = getSelectedUnsentFicheNos();
     if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
@@ -2543,7 +2704,8 @@ function setupEventHandlers() {
     btn.disabled = true;
     const box = $('unsentResultBox');
     box.hidden = false;
-    box.textContent = `در حال ارسال ${selected.length} فیش…\n\nصبر کنید…`;
+    box.className = 'result-log';
+    box.textContent = `در حال ارسال ${selected.length} فیش…`;
 
     try {
       const res = await apiFetch('/api/unsent/send-batch', {
@@ -2560,12 +2722,19 @@ function setupEventHandlers() {
       const lines = (data.results || []).map((r) =>
         `${r.ficheNo} [${r.sendPath || '-'}]: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
       );
+      const epayFails = (data.results || []).filter((r) =>
+        !r.success && !r.skipped && String(r.message || '').includes('epay')
+      );
+      const epayLines = epayFails.map((r) =>
+        `شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId || '-'} | شناسه پرداخت: ${r.paymentId || '-'} | در سامانه epay یافت نشد`
+      );
       box.textContent = [
         '=== نتیجه ارسال دسته‌ای ===',
         `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
         `DryRun: ${data.dryRun}`,
         '',
-        ...lines
+        ...lines,
+        ...(epayLines.length ? ['', '--- فیش‌های یافت‌نشده در سامانه epay ---', ...epayLines] : [])
       ].join('\n');
 
       if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=40" />
+  <link rel="stylesheet" href="css/style.css?v=43" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -149,9 +149,12 @@
           <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
       </div>
+      <span id="unsentExcelStatus" hidden aria-hidden="true"></span>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
+        <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
+        <label for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
+        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
@@ -195,7 +198,7 @@
           </label>
         </div>
       </div>
-      <pre id="unsentResultBox" class="code-block" hidden></pre>
+      <pre id="unsentResultBox" class="result-log" hidden></pre>
       </div>
     </section>
 
@@ -657,7 +660,6 @@
           <label class="field field-required">
             <span class="field-label">دامین</span>
             <input id="newUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh" dir="ltr" />
-            <span class="field-hint">نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
@@ -741,7 +743,7 @@
     </div>
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=76"></script>
+  <script src="lib/xlsx/xlsx.full.min.js"></script>
+  <script src="js/app.js?v=86"></script>
 </body>
 </html>

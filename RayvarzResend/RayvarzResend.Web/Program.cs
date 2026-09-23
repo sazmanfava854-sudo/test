@@ -57,7 +57,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
         options.Events.OnRedirectToAccessDenied = ctx =>
@@ -69,7 +69,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
     });
@@ -97,6 +97,7 @@ builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
+builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
@@ -146,7 +147,7 @@ app.Use(async (context, next) =>
         if (context.User?.Identity?.IsAuthenticated != true)
         {
             var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-            context.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            context.Response.Redirect(shimas.ResolveLoginRedirectPath(context.Request));
             return;
         }
     }
@@ -165,7 +166,7 @@ app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
 
 app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
 {
-    if (!shimas.Options.PreferSsoLogin)
+    if (!shimas.Options.PreferSsoLoginForHost(http.Request.Host.Host))
         return Results.Redirect("/login.html");
 
     if (!shimas.Options.SsoReady)
@@ -210,7 +211,7 @@ app.MapGet("/auth/callback", async (
 
 app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
 {
-    if (!shimas.Options.LocalLoginAvailable)
+    if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
         return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
 
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
@@ -824,6 +825,37 @@ app.MapPost("/api/unsent/send-batch", async (
     try
     {
         return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/unsent/lookup-by-bill-pay", async (
+    UnsentBillPayLookupRequest? req,
+    UnsentFicheService unsent,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessUnsent(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    var validation = UnsentBillPayLookupHelper.ValidateRequest(req);
+    if (validation != null)
+        return Results.BadRequest(new { error = validation });
+    try
+    {
+        var result = await unsent.LookupByBillPayAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
     }
     catch (Exception ex)
     {

@@ -45,6 +45,24 @@ public sealed class InMemoryAppUserStore
         return user;
     }
 
+    public bool EnsureAdminDomainIfEmpty(string username, string domain)
+    {
+        domain = AppUserDomainNormalizer.Normalize(domain);
+        if (!AppUserDomainNormalizer.IsValid(domain))
+            return false;
+        if (_byId.Values.Any(u => u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var user = _byUsername.TryGetValue(username.Trim(), out var named) && named.IsAdmin
+            ? named
+            : _byId.Values.FirstOrDefault(u => u.IsAdmin && string.IsNullOrWhiteSpace(u.Domain));
+        if (user == null || !string.IsNullOrWhiteSpace(user.Domain))
+            return false;
+
+        user.Domain = domain;
+        return true;
+    }
+
     public AppUserRecord? FindByUsername(string username) =>
         _byUsername.TryGetValue(username.Trim(), out var user) ? user : null;
 
