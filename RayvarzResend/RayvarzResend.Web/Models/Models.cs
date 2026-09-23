@@ -329,6 +329,15 @@ public class UnsentBillPayMiss
     public string Reason { get; set; } = "";
 }
 
+public sealed class BillPayMissDiagnostic
+{
+    public bool Found { get; set; }
+    public bool SwappedColumns { get; set; }
+    public bool AlreadySent { get; set; }
+    public bool Cancelled { get; set; }
+    public string? FicheNo { get; set; }
+}
+
 public class UnsentBillPayLookupResult
 {
     public UnsentFicheKind FicheKind { get; set; }

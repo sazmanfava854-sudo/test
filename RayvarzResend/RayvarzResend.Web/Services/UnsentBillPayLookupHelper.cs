@@ -50,6 +50,42 @@ public static class UnsentBillPayLookupHelper
         return trimmed.Length == 0 ? "0" : trimmed;
     }
 
+    public static Dictionary<string, (string RawBill, string RawPay)> IndexRawPairs(
+        IEnumerable<UnsentBillPayPair>? pairs)
+    {
+        var map = new Dictionary<string, (string RawBill, string RawPay)>(StringComparer.Ordinal);
+        foreach (var pair in pairs ?? [])
+        {
+            var bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.BillId);
+            var pay = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.PaymentId);
+            if (bill.Length == 0 || pay.Length == 0)
+                continue;
+
+            var key = bill + "|" + pay;
+            if (!map.ContainsKey(key))
+                map[key] = ((pair.BillId ?? "").Trim(), (pair.PaymentId ?? "").Trim());
+        }
+
+        return map;
+    }
+
+    public static string DescribeMiss(BillPayMissDiagnostic? diagnostic)
+    {
+        if (diagnostic == null || !diagnostic.Found)
+            return "فیش ارسال‌نشده با این شناسه قبض و شناسه پرداخت یافت نشد";
+
+        if (diagnostic.SwappedColumns)
+            return "ستون‌های اکسل جابه‌جا است؛ مقدار «شناسه قبض» و «شناسه پرداخت» را در فایل با دیتابیس یکسان کنید";
+
+        if (diagnostic.AlreadySent)
+            return $"فیش {diagnostic.FicheNo} قبلاً در رایورز ثبت شده و در لیست ارسال‌نشده نیست";
+
+        if (diagnostic.Cancelled)
+            return $"فیش {diagnostic.FicheNo} لغو شده است";
+
+        return "فیش ارسال‌نشده با این شناسه قبض و شناسه پرداخت یافت نشد";
+    }
+
     public static string? ValidateRequest(UnsentBillPayLookupRequest? req)
     {
         if (req == null)

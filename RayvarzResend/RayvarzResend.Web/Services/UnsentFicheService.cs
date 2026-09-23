@@ -36,6 +36,7 @@ public class UnsentFicheService
             return new UnsentBillPayLookupResult { FicheKind = req.FicheKind, Error = validation };
 
         var pairs = UnsentBillPayLookupHelper.NormalizePairs(req.Pairs);
+        var rawByKey = UnsentBillPayLookupHelper.IndexRawPairs(req.Pairs);
         var items = await _repo.FindUnsentByBillPayAsync(req.FicheKind, pairs, ct);
         var foundKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in items)
@@ -45,15 +46,22 @@ public class UnsentFicheService
                 foundKeys.Add(key);
         }
 
-        var misses = pairs
-            .Where(p => !foundKeys.Contains(p.BillId + "|" + p.PaymentId))
-            .Select(p => new UnsentBillPayMiss
+        var misses = new List<UnsentBillPayMiss>();
+        foreach (var pair in pairs)
+        {
+            var lookupKey = pair.BillId + "|" + pair.PaymentId;
+            if (foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(pair.BillId, pair.PaymentId)))
+                continue;
+
+            rawByKey.TryGetValue(lookupKey, out var raw);
+            var diagnostic = await _repo.DiagnoseBillPayMissAsync(req.FicheKind, pair, ct);
+            misses.Add(new UnsentBillPayMiss
             {
-                BillId = p.BillId,
-                PaymentId = p.PaymentId,
-                Reason = "در دیتابیس یافت نشد"
-            })
-            .ToList();
+                BillId = string.IsNullOrEmpty(raw.RawBill) ? pair.BillId : raw.RawBill,
+                PaymentId = string.IsNullOrEmpty(raw.RawPay) ? pair.PaymentId : raw.RawPay,
+                Reason = UnsentBillPayLookupHelper.DescribeMiss(diagnostic)
+            });
+        }
 
         return new UnsentBillPayLookupResult
         {

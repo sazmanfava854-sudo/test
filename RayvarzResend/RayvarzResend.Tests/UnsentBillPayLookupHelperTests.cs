@@ -53,4 +53,39 @@ public class UnsentBillPayLookupHelperTests
             UnsentBillPayLookupHelper.MatchKey("60510574", "123"),
             UnsentBillPayLookupHelper.MatchKey("0000060510574", "0000000000123"));
     }
+
+    [Fact]
+    public void IndexRawPairs_keeps_excel_values_for_miss_display()
+    {
+        var map = UnsentBillPayLookupHelper.IndexRawPairs(
+        [
+            new UnsentBillPayPair { BillId = "3091418652060", PaymentId = "1426270355" }
+        ]);
+
+        var key = "3091418652060|0001426270355";
+        Assert.True(map.TryGetValue(key, out var raw));
+        Assert.Equal("3091418652060", raw.RawBill);
+        Assert.Equal("1426270355", raw.RawPay);
+    }
+
+    [Fact]
+    public void DescribeMiss_explains_rayvarz_and_swapped_columns()
+    {
+        Assert.Contains(
+            "رایورز",
+            UnsentBillPayLookupHelper.DescribeMiss(new BillPayMissDiagnostic
+            {
+                Found = true,
+                FicheNo = "123",
+                AlreadySent = true
+            }));
+
+        Assert.Contains(
+            "جابه‌جا",
+            UnsentBillPayLookupHelper.DescribeMiss(new BillPayMissDiagnostic
+            {
+                Found = true,
+                SwappedColumns = true
+            }));
+    }
 }

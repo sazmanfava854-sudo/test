@@ -869,6 +869,71 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             .ToList();
     }
 
+    public async Task<BillPayMissDiagnostic> DiagnoseBillPayMissAsync(
+        UnsentFicheKind kind,
+        NormalizedBillPayPair pair,
+        CancellationToken ct = default)
+    {
+        var sql = kind == UnsentFicheKind.Duty
+            ? BuildBillPayDiagnoseDutySql()
+            : BuildBillPayDiagnoseIncomeSql();
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 60 };
+        cmd.Parameters.AddWithValue("@b0", pair.BillId);
+        cmd.Parameters.AddWithValue("@p0", pair.PaymentId);
+        cmd.Parameters.AddWithValue("@bt0", pair.BillIdTrim);
+        cmd.Parameters.AddWithValue("@pt0", pair.PaymentIdTrim);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return new BillPayMissDiagnostic();
+
+        return new BillPayMissDiagnostic
+        {
+            Found = true,
+            FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
+            AlreadySent = reader.GetInt32(reader.GetOrdinal("Sent")) != 0,
+            Cancelled = reader.GetInt32(reader.GetOrdinal("Cancelled")) != 0,
+            SwappedColumns = reader.GetInt32(reader.GetOrdinal("Swapped")) != 0
+        };
+    }
+
+    private static string BuildBillPayDiagnoseIncomeSql() =>
+        $"""
+         SELECT TOP 1
+                f.FicheNo,
+                CASE WHEN EXISTS (
+                      SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                      WHERE h.NidFiche = f.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                CASE WHEN f.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
+                CASE WHEN (
+                      {BillPayIdSqlHelper.Norm13("f.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
+                      AND {BillPayIdSqlHelper.Norm13("f.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
+                     ) THEN 1 ELSE 0 END AS Swapped
+         FROM dbo.Income_Fiche f WITH (NOLOCK)
+         INNER JOIN (VALUES (@b0, @p0, @bt0, @pt0)) AS p(BillId, PaymentId, BillTrim, PayTrim)
+           ON {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
+         """;
+
+    private static string BuildBillPayDiagnoseDutySql() =>
+        $"""
+         SELECT TOP 1
+                d.FicheNo,
+                CASE WHEN EXISTS (
+                      SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                      WHERE h.NidFiche = d.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                CASE WHEN d.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
+                CASE WHEN (
+                      {BillPayIdSqlHelper.Norm13("d.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
+                      AND {BillPayIdSqlHelper.Norm13("d.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
+                     ) THEN 1 ELSE 0 END AS Swapped
+         FROM dbo.Duty_Fiche d WITH (NOLOCK)
+         INNER JOIN (VALUES (@b0, @p0, @bt0, @pt0)) AS p(BillId, PaymentId, BillTrim, PayTrim)
+           ON {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
+         """;
+
     private string BuildIncomePairSql(int pairCount)
     {
         var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
@@ -883,14 +948,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               FROM dbo.Income_Fiche f WITH (NOLOCK)
               {IncomeNosaziJoins}
               INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                ON (
-                  LTRIM(RTRIM(CAST(f.BillID AS nvarchar(40)))) IN (p.BillId, p.BillTrim)
-                  OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(f.BillID AS nvarchar(40)))), 13) = p.BillId
-                )
-                AND (
-                  LTRIM(RTRIM(CAST(f.PaymentID AS nvarchar(40)))) IN (p.PaymentId, p.PayTrim)
-                  OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(f.PaymentID AS nvarchar(40)))), 13) = p.PaymentId
-                )
+                ON {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
@@ -911,14 +969,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                ON (
-                  LTRIM(RTRIM(CAST(d.BillID AS nvarchar(40)))) IN (p.BillId, p.BillTrim)
-                  OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(d.BillID AS nvarchar(40)))), 13) = p.BillId
-                )
-                AND (
-                  LTRIM(RTRIM(CAST(d.PaymentID AS nvarchar(40)))) IN (p.PaymentId, p.PayTrim)
-                  OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(d.PaymentID AS nvarchar(40)))), 13) = p.PaymentId
-                )
+                ON {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)

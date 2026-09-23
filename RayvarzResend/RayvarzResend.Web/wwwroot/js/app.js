@@ -429,14 +429,20 @@ function parseExcelCellValue(sheet, rowIdx, colIdx) {
   const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
   const cell = sheet[ref];
   if (!cell) return '';
-  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
-  if (cell.t === 's') return String(cell.v ?? '').trim();
   if (cell.t === 'n' && Number.isFinite(cell.v)) {
     const n = cell.v;
     if (Number.isInteger(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER) return String(Math.trunc(n));
     return String(n);
   }
+  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
+  if (cell.t === 's') return String(cell.v ?? '').trim();
   return String(cell.v ?? '').trim();
+}
+
+function normalizeBillOrPayIdDigits(value) {
+  const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length < 13 ? digits.padStart(13, '0') : digits;
 }
 
 function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
@@ -572,12 +578,15 @@ function parseUnsentExcelFile(file) {
             ));
             return;
           }
-          const item = { billId: billId.trim(), paymentId: paymentId.trim() };
+          const item = {
+            billId: billId.trim(),
+            paymentId: paymentId.trim()
+          };
           if (!item.billId || !item.paymentId) {
             reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
             return;
           }
-          const key = `${item.billId}|${item.paymentId}`;
+          const key = `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`;
           if (seen.has(key)) continue;
           seen.add(key);
           parsed.push(item);
