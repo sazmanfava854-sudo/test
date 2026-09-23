@@ -4,11 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>دستیار مالی</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=40" />
+  <link rel="stylesheet" href="css/style.css?v=41" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -154,8 +151,7 @@
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
         <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
         <label for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
-        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">تمپلیت اکسل</a>
-        <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
+        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
@@ -745,6 +741,6 @@
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=81"></script>
+  <script src="js/app.js?v=82"></script>
 </body>
 </html>

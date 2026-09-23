@@ -20,7 +20,7 @@
   --shadow: 0 12px 36px rgba(19, 32, 51, 0.08);
   --radius: 16px;
   --radius-sm: 11px;
-  --font: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+  --font: "B Nazanin", "BNazanin", Tahoma, "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -957,7 +957,7 @@ tbody tr:last-child td {
 }
 
 .installment-preview-table .col-installment-nosazi {
-  font-family: ui-monospace, Consolas, 'Vazirmatn', monospace;
+  font-family: ui-monospace, Consolas, 'B Nazanin', monospace;
   letter-spacing: 0.02em;
 }
 

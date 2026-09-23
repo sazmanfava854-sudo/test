@@ -439,6 +439,14 @@ function parseExcelCellValue(sheet, rowIdx, colIdx) {
   return String(cell.v ?? '').trim();
 }
 
+function normalizeDigits(value) {
+  return String(value ?? '').replace(/[\u06F0-\u06F9\u0660-\u0669]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0);
+    return String(code - 0x0660);
+  });
+}
+
 function normalizeBillOrPayIdDigits(value) {
   const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
   if (!digits) return '';
@@ -1617,11 +1625,9 @@ function updateUnsentPaginationUi() {
 
 function updateUnsentSendButton() {
   const btn = $('btnUnsentSend');
-  const planBtn = $('btnUnsentPlan');
   if (!btn) return;
   const selected = getSelectedUnsentFicheNos().length;
   btn.disabled = selected === 0;
-  if (planBtn) planBtn.disabled = selected === 0;
   btn.textContent = selected > 0
     ? `ارسال ${selected} فیش انتخاب‌شده`
     : 'ارسال انتخاب‌شده‌ها';
@@ -2675,46 +2681,6 @@ function setupEventHandlers() {
       await fetchUnsentResults(1);
     });
   }
-
-  bindClick('btnUnsentPlan', async () => {
-    const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
-
-    const btn = $('btnUnsentPlan');
-    btn.disabled = true;
-    const box = $('unsentResultBox');
-    box.hidden = false;
-    box.textContent = 'در حال بررسی مسیر ارسال هر فیش…';
-
-    try {
-      const res = await apiFetch('/api/unsent/plan-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind').value,
-          ficheNos: selected,
-          resetStatus: true
-        })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-
-      const lines = (data.items || []).map((p) =>
-        `${p.ficheNo} → ${p.sendPath}${p.canSend ? ' ✓' : ' ✗'} | ${p.detail || ''}${p.blockReason ? ' — ' + p.blockReason : ''}${p.tahatorPairFicheNo ? ' | جفت: ' + p.tahatorPairFicheNo : ''}`
-      );
-      box.textContent = [
-        '=== برنامه ارسال دسته‌ای (بدون ارسال واقعی) ===',
-        'برای هر فیش: Income=درآمدی | Tahator=تهاتر ۱۵۷+۱۵۸ | Duty=نوسازی/صنفی',
-        '',
-        ...lines
-      ].join('\n');
-    } catch (e) {
-      box.textContent = e.message;
-      showAppError(e.message);
-    } finally {
-      updateUnsentSendButton();
-    }
-  });
 
   bindClick('btnUnsentSend', async () => {
     const selected = getSelectedUnsentFicheNos();
