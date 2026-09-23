@@ -72,18 +72,18 @@ public static class UnsentBillPayLookupHelper
     public static string DescribeMiss(BillPayMissDiagnostic? diagnostic)
     {
         if (diagnostic == null || !diagnostic.Found)
-            return "فیش ارسال‌نشده با این شناسه قبض و شناسه پرداخت یافت نشد";
+            return "قابل ارسال نیست — فیشی با این شناسه‌ها پیدا نشد";
 
         if (diagnostic.SwappedColumns)
-            return "ستون‌های اکسل جابه‌جا است؛ مقدار «شناسه قبض» و «شناسه پرداخت» را در فایل با دیتابیس یکسان کنید";
+            return "قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده";
 
         if (diagnostic.AlreadySent)
-            return $"فیش {diagnostic.FicheNo} قبلاً در رایورز ثبت شده و در لیست ارسال‌نشده نیست";
+            return $"فیش {diagnostic.FicheNo}: قبلاً ارسال شده";
 
         if (diagnostic.Cancelled)
-            return $"فیش {diagnostic.FicheNo} لغو شده است";
+            return $"فیش {diagnostic.FicheNo}: لغو شده";
 
-        return "فیش ارسال‌نشده با این شناسه قبض و شناسه پرداخت یافت نشد";
+        return "قابل ارسال نیست";
     }
 
     public static string? ValidateRequest(UnsentBillPayLookupRequest? req)

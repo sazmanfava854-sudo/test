@@ -71,8 +71,8 @@ public class UnsentBillPayLookupHelperTests
     [Fact]
     public void DescribeMiss_explains_rayvarz_and_swapped_columns()
     {
-        Assert.Contains(
-            "رایورز",
+        Assert.Equal(
+            "فیش 123: قبلاً ارسال شده",
             UnsentBillPayLookupHelper.DescribeMiss(new BillPayMissDiagnostic
             {
                 Found = true,

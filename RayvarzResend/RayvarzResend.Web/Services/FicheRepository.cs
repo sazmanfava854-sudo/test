@@ -869,70 +869,112 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             .ToList();
     }
 
-    public async Task<BillPayMissDiagnostic> DiagnoseBillPayMissAsync(
+    public async Task<Dictionary<string, BillPayMissDiagnostic>> DiagnoseBillPayMissesAsync(
         UnsentFicheKind kind,
-        NormalizedBillPayPair pair,
+        IReadOnlyList<NormalizedBillPayPair> pairs,
         CancellationToken ct = default)
     {
-        var sql = kind == UnsentFicheKind.Duty
-            ? BuildBillPayDiagnoseDutySql()
-            : BuildBillPayDiagnoseIncomeSql();
+        var result = new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal);
+        if (pairs == null || pairs.Count == 0)
+            return result;
 
+        foreach (var chunk in pairs.Chunk(80))
+        {
+            var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
+            var rows = kind == UnsentFicheKind.Duty
+                ? await ExecuteBillPayDiagnoseBatchAsync(BuildBillPayDiagnoseDutySql(chunkArray.Length), chunkArray, ct)
+                : await ExecuteBillPayDiagnoseBatchAsync(BuildBillPayDiagnoseIncomeSql(chunkArray.Length), chunkArray, ct);
+
+            foreach (var row in rows)
+            {
+                if (!result.ContainsKey(row.PairKey))
+                    result[row.PairKey] = row.Diagnostic;
+            }
+        }
+
+        return result;
+    }
+
+    private sealed record BillPayDiagnoseRow(string PairKey, BillPayMissDiagnostic Diagnostic);
+
+    private async Task<List<BillPayDiagnoseRow>> ExecuteBillPayDiagnoseBatchAsync(
+        string sql,
+        NormalizedBillPayPair[] pairs,
+        CancellationToken ct)
+    {
+        var rows = new List<BillPayDiagnoseRow>();
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 60 };
-        cmd.Parameters.AddWithValue("@b0", pair.BillId);
-        cmd.Parameters.AddWithValue("@p0", pair.PaymentId);
-        cmd.Parameters.AddWithValue("@bt0", pair.BillIdTrim);
-        cmd.Parameters.AddWithValue("@pt0", pair.PaymentIdTrim);
+        for (var i = 0; i < pairs.Length; i++)
+        {
+            cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
+            cmd.Parameters.AddWithValue($"@p{i}", pairs[i].PaymentId);
+            cmd.Parameters.AddWithValue($"@bt{i}", pairs[i].BillIdTrim);
+            cmd.Parameters.AddWithValue($"@pt{i}", pairs[i].PaymentIdTrim);
+        }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
-            return new BillPayMissDiagnostic();
-
-        return new BillPayMissDiagnostic
+        while (await reader.ReadAsync(ct))
         {
-            Found = true,
-            FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
-            AlreadySent = reader.GetInt32(reader.GetOrdinal("Sent")) != 0,
-            Cancelled = reader.GetInt32(reader.GetOrdinal("Cancelled")) != 0,
-            SwappedColumns = reader.GetInt32(reader.GetOrdinal("Swapped")) != 0
-        };
+            var pairBill = reader.GetString(reader.GetOrdinal("PairBill")).Trim();
+            var pairPay = reader.GetString(reader.GetOrdinal("PairPay")).Trim();
+            rows.Add(new BillPayDiagnoseRow(
+                pairBill + "|" + pairPay,
+                new BillPayMissDiagnostic
+                {
+                    Found = true,
+                    FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
+                    AlreadySent = reader.GetInt32(reader.GetOrdinal("Sent")) != 0,
+                    Cancelled = reader.GetInt32(reader.GetOrdinal("Cancelled")) != 0,
+                    SwappedColumns = reader.GetInt32(reader.GetOrdinal("Swapped")) != 0
+                }));
+        }
+
+        return rows;
     }
 
-    private static string BuildBillPayDiagnoseIncomeSql() =>
-        $"""
-         SELECT TOP 1
-                f.FicheNo,
-                CASE WHEN EXISTS (
-                      SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                      WHERE h.NidFiche = f.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                CASE WHEN f.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
-                CASE WHEN (
-                      {BillPayIdSqlHelper.Norm13("f.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
-                      AND {BillPayIdSqlHelper.Norm13("f.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
-                     ) THEN 1 ELSE 0 END AS Swapped
-         FROM dbo.Income_Fiche f WITH (NOLOCK)
-         INNER JOIN (VALUES (@b0, @p0, @bt0, @pt0)) AS p(BillId, PaymentId, BillTrim, PayTrim)
-           ON {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
-         """;
+    private static string BuildBillPayDiagnoseIncomeSql(int pairCount)
+    {
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        return $"""
+                SELECT p.BillId AS PairBill,
+                       p.PaymentId AS PairPay,
+                       f.FicheNo,
+                       CASE WHEN EXISTS (
+                             SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                             WHERE h.NidFiche = f.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                       CASE WHEN f.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
+                       CASE WHEN (
+                             {BillPayIdSqlHelper.Norm13("f.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
+                             AND {BillPayIdSqlHelper.Norm13("f.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
+                            ) THEN 1 ELSE 0 END AS Swapped
+                FROM dbo.Income_Fiche f WITH (NOLOCK)
+                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+                  ON {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
+                """;
+    }
 
-    private static string BuildBillPayDiagnoseDutySql() =>
-        $"""
-         SELECT TOP 1
-                d.FicheNo,
-                CASE WHEN EXISTS (
-                      SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                      WHERE h.NidFiche = d.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                CASE WHEN d.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
-                CASE WHEN (
-                      {BillPayIdSqlHelper.Norm13("d.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
-                      AND {BillPayIdSqlHelper.Norm13("d.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
-                     ) THEN 1 ELSE 0 END AS Swapped
-         FROM dbo.Duty_Fiche d WITH (NOLOCK)
-         INNER JOIN (VALUES (@b0, @p0, @bt0, @pt0)) AS p(BillId, PaymentId, BillTrim, PayTrim)
-           ON {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
-         """;
+    private static string BuildBillPayDiagnoseDutySql(int pairCount)
+    {
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        return $"""
+                SELECT p.BillId AS PairBill,
+                       p.PaymentId AS PairPay,
+                       d.FicheNo,
+                       CASE WHEN EXISTS (
+                             SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                             WHERE h.NidFiche = d.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                       CASE WHEN d.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
+                       CASE WHEN (
+                             {BillPayIdSqlHelper.Norm13("d.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
+                             AND {BillPayIdSqlHelper.Norm13("d.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
+                            ) THEN 1 ELSE 0 END AS Swapped
+                FROM dbo.Duty_Fiche d WITH (NOLOCK)
+                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+                  ON {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
+                """;
+    }
 
     private string BuildIncomePairSql(int pairCount)
     {

@@ -46,15 +46,19 @@ public class UnsentFicheService
                 foundKeys.Add(key);
         }
 
+        var missPairs = pairs
+            .Where(p => !foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(p.BillId, p.PaymentId)))
+            .ToList();
+        var diagnostics = missPairs.Count > 0
+            ? await _repo.DiagnoseBillPayMissesAsync(req.FicheKind, missPairs, ct)
+            : new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal);
+
         var misses = new List<UnsentBillPayMiss>();
-        foreach (var pair in pairs)
+        foreach (var pair in missPairs)
         {
             var lookupKey = pair.BillId + "|" + pair.PaymentId;
-            if (foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(pair.BillId, pair.PaymentId)))
-                continue;
-
             rawByKey.TryGetValue(lookupKey, out var raw);
-            var diagnostic = await _repo.DiagnoseBillPayMissAsync(req.FicheKind, pair, ct);
+            diagnostics.TryGetValue(lookupKey, out var diagnostic);
             misses.Add(new UnsentBillPayMiss
             {
                 BillId = string.IsNullOrEmpty(raw.RawBill) ? pair.BillId : raw.RawBill,

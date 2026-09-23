@@ -185,8 +185,9 @@ public class DeliveryReleaseTests
         Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
         Assert.DoesNotContain("cdn.sheetjs.com", html);
         Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
-        Assert.Contains("B Nazanin", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
-        Assert.Contains("js/app.js?v=82", html);
+        Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
+        Assert.Contains("result-log", html);
+        Assert.Contains("js/app.js?v=83", html);
         Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));

@@ -2603,16 +2603,10 @@ function setupEventHandlers() {
     }
 
     const box = $('unsentResultBox');
-    if (status) status.textContent = 'در حال خواندن فایل…';
-    if (box) {
-      box.hidden = false;
-      box.textContent = 'در حال خواندن فایل اکسل…';
-    }
-    showAppInfo('در حال خواندن فایل اکسل…');
+    if (status) status.textContent = 'در حال بررسی فایل…';
 
     try {
       const pairs = await parseUnsentExcelFile(file);
-      if (box) box.textContent = `در حال جستجوی ${pairs.length} ردیف در دیتابیس…`;
 
       const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
         method: 'POST',
@@ -2625,32 +2619,33 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      const { added, duplicate } = appendUnsentItems(data.items || []);
-      const missLines = (data.misses || []).map((m) =>
-        `شناسه قبض: ${m.billId || '-'} | شناسه پرداخت: ${m.paymentId || '-'} — ${m.reason || 'در دیتابیس یافت نشد'}`
-      );
+      const { added } = appendUnsentItems(data.items || []);
+      const missLines = (data.misses || [])
+        .map((m) => (m.reason || '').trim())
+        .filter(Boolean);
+
       if (box) {
-        box.textContent = [
-          '=== ورود از اکسل ===',
-          `ردیف خوانده‌شده: ${pairs.length}`,
-          `یافت‌شده در دیتابیس: ${data.found || 0}`,
-          `افزوده‌شده به گرید: ${added}`,
-          `تکراری در گرید: ${duplicate}`,
-          `یافت‌نشده در دیتابیس: ${data.notFound || 0}`,
-          '',
-          ...missLines
-        ].join('\n');
+        if (missLines.length) {
+          box.hidden = false;
+          box.className = 'result-log';
+          box.textContent = missLines.join('\n');
+        } else {
+          box.hidden = true;
+          box.textContent = '';
+        }
       }
 
       if (status) {
-        status.textContent = `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف خوانده شد`;
+        status.textContent = `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف`;
       }
-      if (added > 0) {
-        showAppSuccess(`${added} فیش معتبر از اکسل به گرید اضافه شد`);
-      } else if ((data.found || 0) > 0) {
-        showAppWarning('فیش‌های فایل اکسل قبلاً در گرید بودند');
+      if (added > 0 && missLines.length === 0) {
+        showAppSuccess(`${added} فیش به گرید اضافه شد`);
+      } else if (added > 0 && missLines.length > 0) {
+        showAppWarning(`${added} فیش اضافه شد؛ ${missLines.length} ردیف قابل ارسال نبود`);
+      } else if (missLines.length > 0) {
+        showAppWarning('هیچ فیشی به گرید اضافه نشد');
       } else {
-        showAppWarning('هیچ فیش معتبری در دیتابیس یافت نشد');
+        showAppInfo('فیش‌های انتخاب‌شده قبلاً در گرید بودند');
       }
     } catch (e) {
       if (box) box.textContent = e.message;
@@ -2697,7 +2692,8 @@ function setupEventHandlers() {
     btn.disabled = true;
     const box = $('unsentResultBox');
     box.hidden = false;
-    box.textContent = `در حال ارسال ${selected.length} فیش…\n\nصبر کنید…`;
+    box.className = 'result-log';
+    box.textContent = `در حال ارسال ${selected.length} فیش…`;
 
     try {
       const res = await apiFetch('/api/unsent/send-batch', {

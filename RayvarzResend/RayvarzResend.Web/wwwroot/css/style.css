@@ -20,7 +20,7 @@
   --shadow: 0 12px 36px rgba(19, 32, 51, 0.08);
   --radius: 16px;
   --radius-sm: 11px;
-  --font: "B Nazanin", "BNazanin", Tahoma, "Segoe UI", sans-serif;
+  --font: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -783,6 +783,23 @@ tbody tr:last-child td {
   font-family: ui-monospace, Consolas, monospace;
 }
 
+.result-log {
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: 420px;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 14px 0 0;
+  border: 1px solid var(--border);
+  font-family: var(--font);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
 .hero-user {
   display: flex;
   align-items: center;
@@ -957,7 +974,7 @@ tbody tr:last-child td {
 }
 
 .installment-preview-table .col-installment-nosazi {
-  font-family: ui-monospace, Consolas, 'B Nazanin', monospace;
+  font-family: ui-monospace, Consolas, 'Vazirmatn', monospace;
   letter-spacing: 0.02em;
 }
 
