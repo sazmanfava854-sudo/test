@@ -175,14 +175,15 @@ public class DeliveryReleaseTests
         Assert.Contains("id=\"unsentExcelFile\"", html);
         Assert.Contains("id=\"unsentExcelStatus\"", html);
         Assert.Contains("id=\"unsentTemplateDownload\"", html);
-        Assert.Contains("قالب فایل اکسل — ۲ ستون الزامی", html);
-        Assert.Contains("دانلود تمپلیت اکسل", html);
+        Assert.Contains("ورود از اکسل", html);
+        Assert.Contains("تمپلیت اکسل", html);
+        Assert.DoesNotContain("قالب فایل اکسل — ۲ ستون الزامی", html);
         Assert.Contains("templates/unsent-bill-pay-template.xlsx", html);
         Assert.DoesNotContain("نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh", html);
         Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
         Assert.DoesNotContain("cdn.sheetjs.com", html);
         Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
-        Assert.Contains("js/app.js?v=80", html);
+        Assert.Contains("js/app.js?v=81", html);
         Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
