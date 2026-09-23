@@ -846,66 +846,82 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         };
     }
 
-    public async Task<List<UnsentFicheListItem>> FindUnsentByBillPayAsync(
+    public sealed record BillPayBatchLookupResult(
+        List<UnsentFicheListItem> Items,
+        Dictionary<string, BillPayMissDiagnostic> Diagnostics);
+
+    /// <summary>جستجوی سریع اکسل: یک اتصال SQL، بدون join نوسازی، تشخیص miss در همان session.</summary>
+    public async Task<BillPayBatchLookupResult> LookupBillPayBatchAsync(
         UnsentFicheKind kind,
         IReadOnlyList<NormalizedBillPayPair> pairs,
         CancellationToken ct = default)
     {
         var items = new List<UnsentFicheListItem>();
+        var diagnostics = new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal);
         if (pairs == null || pairs.Count == 0)
-            return items;
+            return new BillPayBatchLookupResult(items, diagnostics);
 
-        foreach (var chunk in pairs.Chunk(80))
-        {
-            var found = kind == UnsentFicheKind.Duty
-                ? await ExecuteUnsentPairLookupAsync(BuildDutyPairSql(chunk.Length), chunk, isDuty: true, ct)
-                : await ExecuteUnsentPairLookupAsync(BuildIncomePairSql(chunk.Length), chunk, isDuty: false, ct);
-            items.AddRange(found);
-        }
-
-        return items
-            .GroupBy(i => i.FicheNo, StringComparer.Ordinal)
-            .Select(g => g.First())
-            .ToList();
-    }
-
-    public async Task<Dictionary<string, BillPayMissDiagnostic>> DiagnoseBillPayMissesAsync(
-        UnsentFicheKind kind,
-        IReadOnlyList<NormalizedBillPayPair> pairs,
-        CancellationToken ct = default)
-    {
-        var result = new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal);
-        if (pairs == null || pairs.Count == 0)
-            return result;
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
 
         foreach (var chunk in pairs.Chunk(80))
         {
             var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
-            var rows = kind == UnsentFicheKind.Duty
-                ? await ExecuteBillPayDiagnoseBatchAsync(BuildBillPayDiagnoseDutySql(chunkArray.Length), chunkArray, ct)
-                : await ExecuteBillPayDiagnoseBatchAsync(BuildBillPayDiagnoseIncomeSql(chunkArray.Length), chunkArray, ct);
+            var sql = kind == UnsentFicheKind.Duty
+                ? BuildDutyPairSqlLite(chunkArray.Length)
+                : BuildIncomePairSqlLite(chunkArray.Length);
+            var found = await ExecuteUnsentPairLookupOnConnectionAsync(
+                conn, sql, chunkArray, chunkArray.Length + 5, isDuty: kind == UnsentFicheKind.Duty, ct);
+            items.AddRange(found);
+        }
 
-            foreach (var row in rows)
+        items = items
+            .GroupBy(i => i.FicheNo, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
+
+        var foundKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            var key = UnsentBillPayLookupHelper.MatchKey(item.BillId, item.PaymentId);
+            if (key.Length > 0)
+                foundKeys.Add(key);
+        }
+
+        var missPairs = pairs
+            .Where(p => !foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(p.BillId, p.PaymentId)))
+            .ToList();
+
+        if (missPairs.Count > 0)
+        {
+            foreach (var chunk in missPairs.Chunk(80))
             {
-                if (!result.ContainsKey(row.PairKey))
-                    result[row.PairKey] = row.Diagnostic;
+                var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
+                var sql = kind == UnsentFicheKind.Duty
+                    ? BuildBillPayDiagnoseDutySql(chunkArray.Length)
+                    : BuildBillPayDiagnoseIncomeSql(chunkArray.Length);
+                var rows = await ExecuteBillPayDiagnoseOnConnectionAsync(conn, sql, chunkArray, ct);
+                foreach (var row in rows)
+                {
+                    if (!diagnostics.ContainsKey(row.PairKey))
+                        diagnostics[row.PairKey] = row.Diagnostic;
+                }
             }
         }
 
-        return result;
+        return new BillPayBatchLookupResult(items, diagnostics);
     }
 
     private sealed record BillPayDiagnoseRow(string PairKey, BillPayMissDiagnostic Diagnostic);
 
-    private async Task<List<BillPayDiagnoseRow>> ExecuteBillPayDiagnoseBatchAsync(
+    private async Task<List<BillPayDiagnoseRow>> ExecuteBillPayDiagnoseOnConnectionAsync(
+        SqlConnection conn,
         string sql,
         NormalizedBillPayPair[] pairs,
         CancellationToken ct)
     {
         var rows = new List<BillPayDiagnoseRow>();
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 60 };
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 30 };
         for (var i = 0; i < pairs.Length; i++)
         {
             cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
@@ -976,6 +992,28 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 """;
     }
 
+    private static string BuildIncomePairSqlLite(int pairCount)
+    {
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        return $"""
+              SELECT TOP (@max)
+                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     '' AS NidWorkItem,
+                     '' AS District,
+                     '' AS BnkAcntNo
+              FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+              INNER JOIN dbo.Income_Fiche f WITH (NOLOCK)
+                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("f.BillID", "f.PaymentID")}
+              WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                    WHERE h.NidFiche = f.NidFiche)
+                AND f.EumFicheStatus <> 4
+              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              """;
+    }
+
     private string BuildIncomePairSql(int pairCount)
     {
         var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
@@ -996,6 +1034,27 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     WHERE h.NidFiche = f.NidFiche)
                 AND f.EumFicheStatus <> 4
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              """;
+    }
+
+    private static string BuildDutyPairSqlLite(int pairCount)
+    {
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        return $"""
+              SELECT TOP (@max)
+                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                     '' AS NidWorkItem,
+                     '' AS District,
+                     '' AS BnkAcntNo
+              FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+              INNER JOIN dbo.Duty_Fiche d WITH (NOLOCK)
+                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("d.BillID", "d.PaymentID")}
+              WHERE NOT EXISTS (
+                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                    WHERE h.NidFiche = d.NidFiche)
+                AND d.EumDutyFicheStatus <> 2
+              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
               """;
     }
 
@@ -1020,17 +1079,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               """;
     }
 
-    private async Task<List<UnsentFicheListItem>> ExecuteUnsentPairLookupAsync(
+    private async Task<List<UnsentFicheListItem>> ExecuteUnsentPairLookupOnConnectionAsync(
+        SqlConnection conn,
         string sql,
         NormalizedBillPayPair[] pairs,
+        int maxRows,
         bool isDuty,
         CancellationToken ct)
     {
         var items = new List<UnsentFicheListItem>();
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
-        cmd.Parameters.AddWithValue("@max", 2000);
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 30 };
+        cmd.Parameters.AddWithValue("@max", Math.Clamp(maxRows, 1, 2000));
         for (var i = 0; i < pairs.Length; i++)
         {
             cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
@@ -1044,6 +1103,17 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             items.Add(ReadUnsentFicheListItem(reader, isDuty));
 
         return items;
+    }
+
+    private async Task<List<UnsentFicheListItem>> ExecuteUnsentPairLookupAsync(
+        string sql,
+        NormalizedBillPayPair[] pairs,
+        bool isDuty,
+        CancellationToken ct)
+    {
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        return await ExecuteUnsentPairLookupOnConnectionAsync(conn, sql, pairs, 2000, isDuty, ct);
     }
 
     private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(

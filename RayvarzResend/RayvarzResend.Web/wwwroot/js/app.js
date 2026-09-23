@@ -2600,6 +2600,7 @@ function setupEventHandlers() {
     });
   }
 
+  let unsentExcelBusy = false;
   $('unsentExcelFile')?.addEventListener('change', async () => {
     const input = $('unsentExcelFile');
     const status = $('unsentExcelStatus');
@@ -2608,9 +2609,11 @@ function setupEventHandlers() {
       if (status) status.textContent = 'فایلی انتخاب نشده';
       return;
     }
+    if (unsentExcelBusy) return;
 
     const box = $('unsentResultBox');
-    if (status) status.textContent = 'در حال بررسی فایل…';
+    unsentExcelBusy = true;
+    if (status) status.textContent = 'در حال بررسی…';
 
     try {
       const pairs = await parseUnsentExcelFile(file);
@@ -2657,8 +2660,10 @@ function setupEventHandlers() {
     } catch (e) {
       if (box) box.textContent = e.message;
       if (status) status.textContent = e.message;
-      if (input) input.value = '';
       showAppError(e.message);
+    } finally {
+      unsentExcelBusy = false;
+      if (input) input.value = '';
     }
   });
 
