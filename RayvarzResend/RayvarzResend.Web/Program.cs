@@ -97,6 +97,7 @@ builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
+builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 
 var app = builder.Build();
@@ -824,6 +825,37 @@ app.MapPost("/api/unsent/send-batch", async (
     try
     {
         return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/unsent/lookup-by-bill-pay", async (
+    UnsentBillPayLookupRequest? req,
+    UnsentFicheService unsent,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessUnsent(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    var validation = UnsentBillPayLookupHelper.ValidateRequest(req);
+    if (validation != null)
+        return Results.BadRequest(new { error = validation });
+    try
+    {
+        var result = await unsent.LookupByBillPayAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
     }
     catch (Exception ex)
     {

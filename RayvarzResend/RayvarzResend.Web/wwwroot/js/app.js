@@ -407,6 +407,20 @@ function mapExcelHeaderIndex(headers) {
   return map;
 }
 
+function mapUnsentExcelHeaderIndex(headers) {
+  const map = {};
+  headers.forEach((h, idx) => {
+    const key = normalizeExcelHeader(h);
+    if (key === 'شناسهقبض' || key === 'billid' || key === 'billid' || key === 'شناسهقبص') {
+      map.billId = idx;
+    }
+    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
+      map.paymentId = idx;
+    }
+  });
+  return map;
+}
+
 function hasScientificNotation(text) {
   return /e[+-]?\d+/i.test(String(text ?? '').trim());
 }
@@ -508,6 +522,104 @@ function parseInstallmentExcelFile(file) {
     reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+function parseUnsentExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX === 'undefined') {
+      reject(new Error('کتابخانه خواندن اکسل بارگذاری نشد'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellText: true, cellDates: false });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          reject(new Error('برگه‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        const sheet = workbook.Sheets[sheetName];
+        const range = sheet?.['!ref']
+          ? XLSX.utils.decode_range(sheet['!ref'])
+          : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+
+        const headerRow = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          headerRow.push(parseExcelCellValue(sheet, range.s.r, c));
+        }
+        if (!headerRow.length) {
+          reject(new Error('فایل اکسل خالی است'));
+          return;
+        }
+
+        const col = mapUnsentExcelHeaderIndex(headerRow);
+        if (col.billId == null || col.paymentId == null) {
+          reject(new Error('ستون‌های الزامی اکسل: شناسه قبض و شناسه پرداخت'));
+          return;
+        }
+
+        const parsed = [];
+        const seen = new Set();
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const billId = parseExcelCellValue(sheet, r, col.billId);
+          const paymentId = parseExcelCellValue(sheet, r, col.paymentId);
+          if (!billId && !paymentId) continue;
+          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)) {
+            reject(new Error(
+              `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
+            ));
+            return;
+          }
+          const item = { billId: billId.trim(), paymentId: paymentId.trim() };
+          if (!item.billId || !item.paymentId) {
+            reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
+            return;
+          }
+          const key = `${item.billId}|${item.paymentId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          parsed.push(item);
+        }
+
+        if (!parsed.length) {
+          reject(new Error('هیچ ردیف داده‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        resolve(parsed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function appendUnsentItems(items) {
+  const incoming = items || [];
+  const existing = new Set(unsentItems.map((row) => row.ficheNo));
+  let added = 0;
+  let duplicate = 0;
+  const next = unsentItems.slice();
+  incoming.forEach((item) => {
+    if (!item?.ficheNo) return;
+    if (existing.has(item.ficheNo)) {
+      duplicate += 1;
+      return;
+    }
+    existing.add(item.ficheNo);
+    next.push(item);
+    added += 1;
+  });
+  renderUnsentTable(next, {
+    page: 1,
+    totalPages: 1,
+    totalCount: next.length,
+    pageSize: unsentSearchState.pageSize
+  });
+  return { added, duplicate };
 }
 
 function getInstallmentPayload() {
@@ -2466,6 +2578,69 @@ function setupEventHandlers() {
     });
   }
 
+  bindClick('btnUnsentExcel', () => {
+    $('unsentExcelFile')?.click();
+  });
+
+  $('unsentExcelFile')?.addEventListener('change', async () => {
+    const input = $('unsentExcelFile');
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    const box = $('unsentResultBox');
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال خواندن فایل اکسل…';
+    }
+    showAppInfo('در حال خواندن فایل اکسل…');
+
+    try {
+      const pairs = await parseUnsentExcelFile(file);
+      if (box) box.textContent = `در حال جستجوی ${pairs.length} ردیف در دیتابیس…`;
+
+      const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ficheKind: $('unsentFicheKind')?.value || 'Income',
+          pairs
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+      const { added, duplicate } = appendUnsentItems(data.items || []);
+      const missLines = (data.misses || []).map((m) =>
+        `شناسه قبض: ${m.billId || '-'} | شناسه پرداخت: ${m.paymentId || '-'} — ${m.reason || 'در دیتابیس یافت نشد'}`
+      );
+      if (box) {
+        box.textContent = [
+          '=== ورود از اکسل ===',
+          `ردیف خوانده‌شده: ${pairs.length}`,
+          `یافت‌شده در دیتابیس: ${data.found || 0}`,
+          `افزوده‌شده به گرید: ${added}`,
+          `تکراری در گرید: ${duplicate}`,
+          `یافت‌نشده در دیتابیس: ${data.notFound || 0}`,
+          '',
+          ...missLines
+        ].join('\n');
+      }
+
+      if (added > 0) {
+        showAppSuccess(`${added} فیش معتبر از اکسل به گرید اضافه شد`);
+      } else if ((data.found || 0) > 0) {
+        showAppWarning('فیش‌های فایل اکسل قبلاً در گرید بودند');
+      } else {
+        showAppWarning('هیچ فیش معتبری در دیتابیس یافت نشد');
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      if (input) input.value = '';
+    }
+  });
+
   bindClick('btnUnsentSearch', async () => {
     await fetchUnsentResults(1, { clearSelection: true });
   });
@@ -2560,12 +2735,19 @@ function setupEventHandlers() {
       const lines = (data.results || []).map((r) =>
         `${r.ficheNo} [${r.sendPath || '-'}]: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
       );
+      const epayFails = (data.results || []).filter((r) =>
+        !r.success && !r.skipped && String(r.message || '').includes('epay')
+      );
+      const epayLines = epayFails.map((r) =>
+        `شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId || '-'} | شناسه پرداخت: ${r.paymentId || '-'} | در سامانه epay یافت نشد`
+      );
       box.textContent = [
         '=== نتیجه ارسال دسته‌ای ===',
         `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
         `DryRun: ${data.dryRun}`,
         '',
-        ...lines
+        ...lines,
+        ...(epayLines.length ? ['', '--- فیش‌های یافت‌نشده در سامانه epay ---', ...epayLines] : [])
       ].join('\n');
 
       if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
