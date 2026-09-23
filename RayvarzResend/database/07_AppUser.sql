@@ -22,6 +22,7 @@ END
 IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
     ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
         CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
+GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes

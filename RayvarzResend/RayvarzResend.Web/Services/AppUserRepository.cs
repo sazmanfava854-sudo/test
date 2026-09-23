@@ -91,7 +91,12 @@ public sealed class AppUserRepository
             IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
                 ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
                     CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
+            """;
+        await using (var cmd = new SqlCommand(sql, conn))
+            await cmd.ExecuteNonQueryAsync(ct);
 
+        // ستون جدید در همان بچ قابل ارجاع نیست؛ ایندکس و UPDATE بعد از ALTER اجرا می‌شوند.
+        const string domainSql = """
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE name = N'UQ_AppUser_Domain' AND object_id = OBJECT_ID(N'dbo.AppUser'))
@@ -109,8 +114,9 @@ public sealed class AppUserRepository
                     AND x.NationalId <> N'0925569917'
                     AND x.Username <> N'0925569917');
             """;
-        await using var cmd = new SqlCommand(sql, conn);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using (var domainCmd = new SqlCommand(domainSql, conn))
+            await domainCmd.ExecuteNonQueryAsync(ct);
+
         _schemaEnsured = true;
         _logger.LogInformation("AppUser schema ensured");
     }

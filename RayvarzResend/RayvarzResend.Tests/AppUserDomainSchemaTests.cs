@@ -16,6 +16,17 @@ public class AppUserDomainSchemaTests
             Assert.Contains("SET [Domain] = N'0925569917'", src);
             Assert.Contains("NationalId = N'0925569917' OR Username = N'0925569917'", src);
         }
+
+        var alter = sql.IndexOf("ADD [Domain] NVARCHAR(100)", StringComparison.Ordinal);
+        var batchBreak = sql.IndexOf("\nGO\n", alter, StringComparison.Ordinal);
+        var index = sql.IndexOf("CREATE UNIQUE INDEX UQ_AppUser_Domain", StringComparison.Ordinal);
+        Assert.True(alter >= 0 && batchBreak > alter && index > batchBreak);
+
+        var method = repo.Split("public async Task EnsureSchemaAsync")[1].Split("public async Task<int> CountUsersAsync")[0];
+        var firstExec = method.IndexOf("ExecuteNonQueryAsync", StringComparison.Ordinal);
+        var domainSql = method.IndexOf("const string domainSql", StringComparison.Ordinal);
+        var secondExec = method.IndexOf("ExecuteNonQueryAsync", domainSql, StringComparison.Ordinal);
+        Assert.True(firstExec >= 0 && domainSql > firstExec && secondExec > domainSql);
     }
 
     private static string RepoFile(params string[] parts)
