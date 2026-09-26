@@ -855,11 +855,14 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         if (pairs == null || pairs.Count == 0)
             return items;
 
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+
         foreach (var chunk in pairs.Chunk(80))
         {
             var found = kind == UnsentFicheKind.Duty
-                ? await ExecuteUnsentPairLookupAsync(BuildDutyPairSql(chunk.Length), chunk, isDuty: true, ct)
-                : await ExecuteUnsentPairLookupAsync(BuildIncomePairSql(chunk.Length), chunk, isDuty: false, ct);
+                ? await ExecuteUnsentPairLookupAsync(conn, BuildDutyPairSql(chunk.Length), chunk, isDuty: true, ct)
+                : await ExecuteUnsentPairLookupAsync(conn, BuildIncomePairSql(chunk.Length), chunk, isDuty: false, ct);
             items.AddRange(found);
         }
 
@@ -874,28 +877,36 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
         return $"""
               SELECT TOP (@max)
-                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
-                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
-                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                     x.FicheNo, x.NidFiche, x.BillID, x.PaymentID, x.Payable,
+                     x.PaymentDate, x.BankPaymentDate, x.EumFicheStatus,
+                     x.IncomeAccountGroup,
                      CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
                      '' AS District,
                      {IncomeBnkAcntNoSelect}
-              FROM dbo.Income_Fiche f WITH (NOLOCK)
-              {IncomeNosaziJoins}
-              INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                ON (
-                  LTRIM(RTRIM(CAST(f.BillID AS nvarchar(40)))) IN (p.BillId, p.BillTrim)
-                  OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(f.BillID AS nvarchar(40)))), 13) = p.BillId
-                )
-                AND (
-                  LTRIM(RTRIM(CAST(f.PaymentID AS nvarchar(40)))) IN (p.PaymentId, p.PayTrim)
-                  OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(f.PaymentID AS nvarchar(40)))), 13) = p.PaymentId
-                )
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = f.NidFiche)
-                AND f.EumFicheStatus <> 4
-              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              FROM (
+                     SELECT f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                            f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                            f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                            f.NidIncome
+                     FROM dbo.Income_Fiche f WITH (NOLOCK)
+                     INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+                       ON (
+                         LTRIM(RTRIM(CAST(f.BillID AS nvarchar(40)))) IN (p.BillId, p.BillTrim)
+                         OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(f.BillID AS nvarchar(40)))), 13) = p.BillId
+                       )
+                       AND (
+                         LTRIM(RTRIM(CAST(f.PaymentID AS nvarchar(40)))) IN (p.PaymentId, p.PayTrim)
+                         OR RIGHT(REPLICATE('0', 13) + LTRIM(RTRIM(CAST(f.PaymentID AS nvarchar(40)))), 13) = p.PaymentId
+                       )
+                     WHERE NOT EXISTS (
+                           SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                           WHERE h.NidFiche = f.NidFiche)
+                       AND f.EumFicheStatus <> 4
+                   ) x
+              LEFT JOIN dbo.Income i WITH (NOLOCK) ON i.NidIncome = x.NidIncome
+              LEFT JOIN dbo.Sh_RequestInfo r WITH (NOLOCK) ON r.NidProc = i.NidProc
+              LEFT JOIN dbo.Base_NosaziCode b WITH (NOLOCK) ON b.NidNosaziCode = r.NidNosaziCode
+              ORDER BY COALESCE(x.BankPaymentDate, x.PaymentDate) DESC, x.FicheNo
               """;
     }
 
@@ -928,14 +939,13 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     }
 
     private async Task<List<UnsentFicheListItem>> ExecuteUnsentPairLookupAsync(
+        SqlConnection conn,
         string sql,
         NormalizedBillPayPair[] pairs,
         bool isDuty,
         CancellationToken ct)
     {
         var items = new List<UnsentFicheListItem>();
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 180 };
         cmd.Parameters.AddWithValue("@max", 2000);
         for (var i = 0; i < pairs.Length; i++)

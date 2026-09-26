@@ -13,6 +13,15 @@ public static class UnsentBillPayLookupHelper
 {
     public const int MaxPairs = 400;
 
+    public const string IncomeDutyConflictReason =
+        "در درآمد و نوسازی/صنفی همزمان وجود دارد؛ به گرید اضافه نشد";
+
+    public static string PairKey(NormalizedBillPayPair pair) => pair.BillId + "|" + pair.PaymentId;
+
+    public static string PairKey(string billId, string paymentId) =>
+        BankInquiryConfirmHelper.NormalizeBillOrPayId(billId) + "|" +
+        BankInquiryConfirmHelper.NormalizeBillOrPayId(paymentId);
+
     public static List<NormalizedBillPayPair> NormalizePairs(IEnumerable<UnsentBillPayPair>? pairs)
     {
         var result = new List<NormalizedBillPayPair>();
@@ -63,5 +72,89 @@ public static class UnsentBillPayLookupHelper
             return $"حداکثر {MaxPairs} ردیف در هر بارگذاری مجاز است";
 
         return null;
+    }
+
+    /// <summary>ادغام نتایج جستجوی Income سپس Duty با تشخیص تعارض همزمان در هر دو جدول.</summary>
+    public static UnsentBillPayLookupResult BuildMixedLookupResult(
+        IReadOnlyList<NormalizedBillPayPair> requested,
+        IReadOnlyList<UnsentFicheListItem> incomeItems,
+        IReadOnlyList<UnsentFicheListItem> dutyMatchesForIncomePairs,
+        IReadOnlyList<UnsentFicheListItem> dutyItemsForRemaining)
+    {
+        var result = new UnsentBillPayLookupResult
+        {
+            MixedLookup = true,
+            Requested = requested.Count
+        };
+
+        var incomeByKey = new Dictionary<string, UnsentFicheListItem>(StringComparer.Ordinal);
+        foreach (var item in incomeItems)
+        {
+            var key = MatchKey(item.BillId, item.PaymentId);
+            if (key.Length == 0 || incomeByKey.ContainsKey(key))
+                continue;
+            incomeByKey[key] = item;
+        }
+
+        var conflictKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var dutyHit in dutyMatchesForIncomePairs)
+        {
+            var key = MatchKey(dutyHit.BillId, dutyHit.PaymentId);
+            if (key.Length > 0 && incomeByKey.ContainsKey(key))
+                conflictKeys.Add(key);
+        }
+
+        var acceptedKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (key, item) in incomeByKey)
+        {
+            if (conflictKeys.Contains(key))
+            {
+                result.Conflicts.Add(new UnsentBillPayConflict
+                {
+                    BillId = item.BillId,
+                    PaymentId = item.PaymentId,
+                    Reason = IncomeDutyConflictReason
+                });
+                continue;
+            }
+
+            item.SourceKind = UnsentFicheKind.Income;
+            result.Items.Add(item);
+            acceptedKeys.Add(key);
+        }
+
+        var dutyByKey = new Dictionary<string, UnsentFicheListItem>(StringComparer.Ordinal);
+        foreach (var item in dutyItemsForRemaining)
+        {
+            var key = MatchKey(item.BillId, item.PaymentId);
+            if (key.Length == 0 || dutyByKey.ContainsKey(key))
+                continue;
+            item.SourceKind = UnsentFicheKind.Duty;
+            dutyByKey[key] = item;
+        }
+
+        foreach (var (key, item) in dutyByKey)
+        {
+            result.Items.Add(item);
+            acceptedKeys.Add(key);
+        }
+
+        foreach (var pair in requested)
+        {
+            var key = PairKey(pair);
+            if (conflictKeys.Contains(key) || acceptedKeys.Contains(key))
+                continue;
+            result.Misses.Add(new UnsentBillPayMiss
+            {
+                BillId = pair.BillId,
+                PaymentId = pair.PaymentId,
+                Reason = "در دیتابیس یافت نشد"
+            });
+        }
+
+        result.Found = result.Items.Count;
+        result.NotFound = result.Misses.Count;
+        result.ConflictCount = result.Conflicts.Count;
+        return result;
     }
 }
