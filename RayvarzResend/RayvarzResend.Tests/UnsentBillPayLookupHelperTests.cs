@@ -53,4 +53,55 @@ public class UnsentBillPayLookupHelperTests
             UnsentBillPayLookupHelper.MatchKey("60510574", "123"),
             UnsentBillPayLookupHelper.MatchKey("0000060510574", "0000000000123"));
     }
+
+    [Fact]
+    public void BuildMixedLookupResult_income_then_duty_without_conflict()
+    {
+        var requested = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair { BillId = "111", PaymentId = "222" },
+            new UnsentBillPayPair { BillId = "333", PaymentId = "444" }
+        ]);
+        var income = new List<UnsentFicheListItem>
+        {
+            new() { FicheNo = "I1", BillId = "0000000000111", PaymentId = "0000000000222" }
+        };
+        var duty = new List<UnsentFicheListItem>
+        {
+            new() { FicheNo = "D1", BillId = "0000000000333", PaymentId = "0000000000444" }
+        };
+
+        var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
+            requested, income, [], duty);
+
+        Assert.Equal(2, result.Found);
+        Assert.Empty(result.Conflicts);
+        Assert.Equal(UnsentFicheKind.Income, result.Items[0].SourceKind);
+        Assert.Equal(UnsentFicheKind.Duty, result.Items[1].SourceKind);
+    }
+
+    [Fact]
+    public void BuildMixedLookupResult_flags_income_and_duty_conflict()
+    {
+        var requested = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair { BillId = "111", PaymentId = "222" }
+        ]);
+        var income = new List<UnsentFicheListItem>
+        {
+            new() { FicheNo = "I1", BillId = "0000000000111", PaymentId = "0000000000222" }
+        };
+        var dutyProbe = new List<UnsentFicheListItem>
+        {
+            new() { FicheNo = "D1", BillId = "0000000000111", PaymentId = "0000000000222" }
+        };
+
+        var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
+            requested, income, dutyProbe, []);
+
+        Assert.Empty(result.Items);
+        Assert.Single(result.Conflicts);
+        Assert.Equal(UnsentBillPayLookupHelper.IncomeDutyConflictReason, result.Conflicts[0].Reason);
+        Assert.Empty(result.Misses);
+    }
 }

@@ -262,6 +262,8 @@ public class UnsentFicheListItem
     public int? IncomeAccountGroup { get; set; }
     public bool IsTahator { get; set; }
     public string SubKindLabel { get; set; } = "";
+    /// <summary>جدول منبع: Income_Fiche یا Duty_Fiche (ورود اکسل مخلوط / ارسال دسته‌ای).</summary>
+    public UnsentFicheKind SourceKind { get; set; } = UnsentFicheKind.Income;
 }
 
 public class UnsentBatchPlanItem
@@ -290,10 +292,18 @@ public class UnsentFicheSearchResult
     public List<UnsentFicheListItem> Items { get; set; } = new();
 }
 
+public class UnsentBatchFicheTarget
+{
+    public string FicheNo { get; set; } = "";
+    public UnsentFicheKind SourceKind { get; set; } = UnsentFicheKind.Income;
+}
+
 public class UnsentBatchSendRequest
 {
+    /// <summary>فقط وقتی <see cref="Targets"/> خالی است (سازگاری عقب‌رو).</summary>
     public UnsentFicheKind FicheKind { get; set; } = UnsentFicheKind.Income;
     public List<string> FicheNos { get; set; } = new();
+    public List<UnsentBatchFicheTarget>? Targets { get; set; }
 }
 
 public class UnsentBatchSendItemResult
@@ -329,14 +339,24 @@ public class UnsentBillPayMiss
     public string Reason { get; set; } = "";
 }
 
+public class UnsentBillPayConflict
+{
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public string Reason { get; set; } = "";
+}
+
 public class UnsentBillPayLookupResult
 {
     public UnsentFicheKind FicheKind { get; set; }
     public int Requested { get; set; }
     public int Found { get; set; }
     public int NotFound { get; set; }
+    public int ConflictCount { get; set; }
+    public bool MixedLookup { get; set; }
     public List<UnsentFicheListItem> Items { get; set; } = new();
     public List<UnsentBillPayMiss> Misses { get; set; } = new();
+    public List<UnsentBillPayConflict> Conflicts { get; set; } = new();
     public string? Error { get; set; }
 }
 
