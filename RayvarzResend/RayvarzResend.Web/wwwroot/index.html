@@ -156,6 +156,9 @@
         <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
+      <div class="unsent-excel-status-row">
+        <span id="unsentExcelStatus" class="installment-excel-status" aria-live="polite">فایل اکسل انتخاب نشده</span>
+      </div>
       <div class="subsection" id="unsentResultsSection" hidden>
         <div class="unsent-toolbar">
           <label class="check-all-label">
@@ -164,20 +167,20 @@
           </label>
           <span id="unsentCountLabel" class="unsent-count"></span>
         </div>
-        <div class="table-wrap">
-          <table id="unsentTable">
+        <div class="table-wrap installment-preview-table-wrap">
+          <table id="unsentTable" class="installment-preview-table unsent-bulk-table">
             <thead>
               <tr>
                 <th class="col-check"></th>
                 <th>نوع</th>
                 <th>شماره فرآیند</th>
-                <th>کد نوسازی</th>
-                <th>شناسه قبض</th>
-                <th>شناسه پرداخت</th>
+                <th class="col-installment-nosazi">کد نوسازی</th>
+                <th class="col-unsent-bill">شناسه قبض</th>
+                <th class="col-unsent-pay">شناسه پرداخت</th>
                 <th>تاریخ پرداخت بانک</th>
                 <th>تاریخ پرداخت دستی</th>
-                <th>شماره فیش</th>
-                <th>مبلغ</th>
+                <th class="col-unsent-fiche">شماره فیش</th>
+                <th class="col-installment-cost">مبلغ</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -744,6 +747,6 @@
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=78"></script>
+  <script src="js/app.js?v=79"></script>
 </body>
 </html>

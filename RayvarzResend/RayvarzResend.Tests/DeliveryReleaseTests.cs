@@ -178,11 +178,14 @@ public class DeliveryReleaseTests
         Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
         Assert.DoesNotContain("cdn.sheetjs.com", html);
         Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
-        Assert.Contains("js/app.js?v=78", html);
+        Assert.Contains("js/app.js?v=79", html);
+        Assert.Contains("id=\"unsentExcelStatus\"", html);
+        Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         Assert.Contains("function parseUnsentExcelFile(", js);
         Assert.Contains("function mapUnsentExcelHeaderIndex(", js);
+        Assert.Contains("function setUnsentExcelStatus(", js);
         Assert.Contains("function appendUnsentItems(", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
         Assert.Contains("شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId", js.Split("bindClick('btnUnsentSend'")[1]);

@@ -1005,6 +1005,40 @@ tbody tr:last-child td {
   color: var(--text-muted);
 }
 
+.installment-excel-status.is-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+
+.installment-excel-status.is-loading::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: excel-status-spin 0.7s linear infinite;
+}
+
+@keyframes excel-status-spin {
+  to { transform: rotate(360deg); }
+}
+
+.unsent-excel-status-row {
+  margin: 10px 0 4px;
+}
+
+.unsent-bulk-table .col-unsent-bill,
+.unsent-bulk-table .col-unsent-pay,
+.unsent-bulk-table .col-unsent-fiche {
+  font-family: ui-monospace, Consolas, 'Vazirmatn', monospace;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 .installment-excel-field input[type="file"] {
   width: 100%;
   padding: 8px 0;

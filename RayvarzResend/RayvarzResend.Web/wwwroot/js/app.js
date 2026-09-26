@@ -597,7 +597,14 @@ function parseUnsentExcelFile(file) {
   });
 }
 
-function appendUnsentItems(items) {
+function setUnsentExcelStatus(message, loading = false) {
+  const el = $('unsentExcelStatus');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('is-loading', loading);
+}
+
+function appendUnsentItems(items, { autoSelect = false } = {}) {
   const incoming = items || [];
   const existing = new Set(unsentItems.map((row) => row.ficheNo));
   let added = 0;
@@ -611,6 +618,7 @@ function appendUnsentItems(items) {
     }
     existing.add(item.ficheNo);
     next.push(item);
+    if (autoSelect) selectedUnsentFicheNos.add(item.ficheNo);
     added += 1;
   });
   renderUnsentTable(next, {
@@ -1653,13 +1661,13 @@ function renderUnsentTable(items, meta = {}) {
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
-      <td>${formatNosaziCode(item.bnkAcntNo)}</td>
-      <td>${item.billId || '-'}</td>
-      <td>${item.paymentId || '-'}</td>
-      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${item.ficheNo}</td>
-      <td>${Number(item.payable || 0).toLocaleString()}</td>
+      <td class="col-installment-nosazi">${formatNosaziCode(item.bnkAcntNo)}</td>
+      <td class="col-unsent-bill">${toPersianDigits(item.billId || '-')}</td>
+      <td class="col-unsent-pay">${toPersianDigits(item.paymentId || '-')}</td>
+      <td>${formatInstallmentDate(item.bankPaymentDate)}</td>
+      <td>${formatInstallmentDate(item.paymentDate)}</td>
+      <td class="col-unsent-fiche">${toPersianDigits(item.ficheNo)}</td>
+      <td class="col-installment-cost">${formatInstallmentCost(item.payable)}</td>
     </tr>
   `;
   }).join('');
@@ -2585,18 +2593,26 @@ function setupEventHandlers() {
   $('unsentExcelFile')?.addEventListener('change', async () => {
     const input = $('unsentExcelFile');
     const file = input?.files?.[0];
-    if (!file) return;
-
+    const excelBtn = $('btnUnsentExcel');
     const box = $('unsentResultBox');
-    if (box) {
-      box.hidden = false;
-      box.textContent = 'در حال خواندن فایل اکسل…';
+
+    if (!file) {
+      setUnsentExcelStatus('فایل اکسل انتخاب نشده', false);
+      return;
     }
-    showAppInfo('در حال خواندن فایل اکسل…');
+
+    if (excelBtn) excelBtn.disabled = true;
+    setUnsentExcelStatus(`فایل «${file.name}» دریافت شد — در حال خواندن…`, true);
+    if (box) box.hidden = true;
 
     try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const pairs = await parseUnsentExcelFile(file);
-      if (box) box.textContent = `در حال جستجوی ${pairs.length} ردیف در دیتابیس…`;
+      setUnsentExcelStatus(
+        `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف خوانده شد؛ در حال جستجو در دیتابیس…`,
+        true
+      );
+      await new Promise((r) => requestAnimationFrame(r));
 
       const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
         method: 'POST',
@@ -2609,11 +2625,12 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      const { added, duplicate } = appendUnsentItems(data.items || []);
+      const { added, duplicate } = appendUnsentItems(data.items || [], { autoSelect: true });
       const missLines = (data.misses || []).map((m) =>
         `شناسه قبض: ${m.billId || '-'} | شناسه پرداخت: ${m.paymentId || '-'} — ${m.reason || 'در دیتابیس یافت نشد'}`
       );
       if (box) {
+        box.hidden = missLines.length > 0 || (data.notFound || 0) > 0;
         box.textContent = [
           '=== ورود از اکسل ===',
           `ردیف خوانده‌شده: ${pairs.length}`,
@@ -2626,6 +2643,11 @@ function setupEventHandlers() {
         ].join('\n');
       }
 
+      setUnsentExcelStatus(
+        `${file.name} — افزوده: ${added.toLocaleString('fa-IR')} | تکراری: ${duplicate.toLocaleString('fa-IR')} | یافت‌نشده: ${(data.notFound || 0).toLocaleString('fa-IR')}`,
+        false
+      );
+
       if (added > 0) {
         showAppSuccess(`${added} فیش معتبر از اکسل به گرید اضافه شد`);
       } else if ((data.found || 0) > 0) {
@@ -2634,10 +2656,15 @@ function setupEventHandlers() {
         showAppWarning('هیچ فیش معتبری در دیتابیس یافت نشد');
       }
     } catch (e) {
-      if (box) box.textContent = e.message;
+      setUnsentExcelStatus(e.message, false);
+      if (box) {
+        box.hidden = false;
+        box.textContent = e.message;
+      }
       showAppError(e.message);
     } finally {
       if (input) input.value = '';
+      if (excelBtn) excelBtn.disabled = false;
     }
   });
 
