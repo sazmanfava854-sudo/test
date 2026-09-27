@@ -150,6 +150,72 @@ app.UseExceptionHandler(handler =>
 app.UseAuthentication();
 app.UseAuthorization();
 
+async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationToken ct)
+{
+    var shimas = http.RequestServices.GetRequiredService<ShimasAuthService>();
+    var auth = http.RequestServices.GetRequiredService<AppAuthService>();
+
+    var callback = shimas.ParseCallbackQuery(http.Request.Query);
+    if (!shimas.ValidateReturnedState(http, callback.State))
+    {
+        shimas.ClearSsoFlowCookies(http);
+        var error = Uri.EscapeDataString("state بازگشت SSO معتبر نیست — دوباره وارد شوید");
+        return Results.Redirect($"/login.html?error={error}");
+    }
+
+    var validation = await shimas.ValidateAsync(
+        callback.Username,
+        callback.RefreshToken,
+        callback.Domain,
+        ct);
+    if (!validation.Success)
+    {
+        shimas.ClearSsoFlowCookies(http);
+        var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
+        return Results.Redirect($"/login.html?error={error}");
+    }
+
+    if (!string.IsNullOrWhiteSpace(callback.Domain))
+        validation.Profile.Domain = callback.Domain;
+
+    var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
+    if (user == null)
+    {
+        shimas.ClearSsoFlowCookies(http);
+        var hint = Uri.EscapeDataString(
+            "کاربر در دستیار مالی ثبت نشده یا غیرفعال است — کد ملی/دامین را در مدیریت کاربران اضافه کنید (AutoProvisionUsers=false).");
+        return Results.Redirect($"/login.html?error={hint}");
+    }
+
+    await auth.SignInAsync(http, user, ct);
+    shimas.ClearSsoFlowCookies(http);
+    return Results.Redirect(shimas.ResolvePostLoginRedirect(http));
+}
+
+// بازگشت SSO روی ریشه (https://city.mashhad.ir:5065?refresh_token=...) قبل از هدایت به /auth/login
+app.Use(async (context, next) =>
+{
+    var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+    if (shimas.IsSsoCallbackHttpRequest(context.Request))
+    {
+        try
+        {
+            var result = await TryCompleteSsoCallbackAsync(context, context.RequestAborted);
+            if (result != null)
+                await result.ExecuteAsync(context);
+        }
+        catch (SqlException ex)
+        {
+            var dbResult = AuthDatabaseError(ex);
+            await dbResult.ExecuteAsync(context);
+        }
+
+        return;
+    }
+
+    await next();
+});
+
 // index.html بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
 app.Use(async (context, next) =>
 {
@@ -203,49 +269,12 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
     }
 }).AllowAnonymous();
 
-app.MapGet("/auth/callback", async (
-    HttpContext http,
-    ShimasAuthService shimas,
-    AppAuthService auth,
-    CancellationToken ct) =>
+app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>
 {
     try
     {
-        var callback = shimas.ParseCallbackQuery(http.Request.Query);
-        if (!shimas.ValidateReturnedState(http, callback.State))
-        {
-            shimas.ClearSsoFlowCookies(http);
-            var error = Uri.EscapeDataString("state بازگشت SSO معتبر نیست — دوباره وارد شوید");
-            return Results.Redirect($"/login.html?error={error}");
-        }
-
-        var validation = await shimas.ValidateAsync(
-            callback.Username,
-            callback.RefreshToken,
-            callback.Domain,
-            ct);
-        if (!validation.Success)
-        {
-            shimas.ClearSsoFlowCookies(http);
-            var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
-            return Results.Redirect($"/login.html?error={error}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(callback.Domain))
-            validation.Profile.Domain = callback.Domain;
-
-        var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
-        if (user == null)
-        {
-            shimas.ClearSsoFlowCookies(http);
-            var hint = Uri.EscapeDataString(
-                "کاربر در دستیار مالی ثبت نشده یا غیرفعال است — کد ملی/دامین را در مدیریت کاربران اضافه کنید (AutoProvisionUsers=false).");
-            return Results.Redirect($"/login.html?error={hint}");
-        }
-
-        await auth.SignInAsync(http, user, ct);
-        shimas.ClearSsoFlowCookies(http);
-        return Results.Redirect(shimas.ResolvePostLoginRedirect(http));
+        return await TryCompleteSsoCallbackAsync(http, ct)
+            ?? Results.Redirect("/login.html?error=" + Uri.EscapeDataString("پارامترهای بازگشت SSO ناقص است"));
     }
     catch (SqlException ex)
     {

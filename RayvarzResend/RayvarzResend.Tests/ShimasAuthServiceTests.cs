@@ -389,6 +389,41 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void BuildCallbackAbsoluteUrl_uses_public_base_only_when_callback_path_is_root()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            PublicBaseUrl = "https://city.mashhad.ir:5065",
+            CallbackPath = "/"
+        });
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("city.mashhad.ir", 5065);
+
+        var callback = service.BuildCallbackAbsoluteUrl(context.Request);
+        var status = service.GetStatus(context.Request);
+
+        Assert.Equal("https://city.mashhad.ir:5065", callback);
+        Assert.Equal("https://city.mashhad.ir:5065", status.RegisteredCallbackUrl);
+        Assert.Equal("/", status.CallbackPath);
+    }
+
+    [Fact]
+    public void IsSsoCallbackHttpRequest_detects_root_return_with_token_query()
+    {
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/";
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+
+        context.Request.QueryString = QueryString.Empty;
+        Assert.False(service.IsSsoCallbackHttpRequest(context.Request));
+    }
+
+    [Fact]
     public void ParseCallbackQuery_reads_username_and_refresh_token_aliases()
     {
         var service = CreateService();

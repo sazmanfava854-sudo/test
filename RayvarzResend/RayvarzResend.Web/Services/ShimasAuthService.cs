@@ -62,7 +62,7 @@ public sealed class ShimasAuthService
         if (string.IsNullOrWhiteSpace(baseUrl))
             return null;
 
-        return $"{baseUrl}{NormalizeCallbackPath(_options.CallbackPath)}";
+        return $"{baseUrl}{CallbackPathSuffix(NormalizeCallbackPath(_options.CallbackPath))}";
     }
 
     public string ResolveLoginRedirectPath(HttpRequest? request = null)
@@ -219,12 +219,46 @@ public sealed class ShimasAuthService
 
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
     {
-        var path = NormalizeCallbackPath(_options.CallbackPath);
         var configured = NormalizePublicBaseUrl(_options.PublicBaseUrl);
+        var suffix = CallbackPathSuffix(NormalizeCallbackPath(_options.CallbackPath));
         if (!string.IsNullOrWhiteSpace(configured))
-            return $"{configured}{path}";
+            return $"{configured}{suffix}";
 
-        return $"{request.Scheme}://{request.Host}{path}";
+        return $"{request.Scheme}://{request.Host}{suffix}";
+    }
+
+    /// <summary>بازگشت SSO روی ریشه سایت (مثلاً https://city.mashhad.ir:5065) با querystring توکن.</summary>
+    public bool IsSsoCallbackHttpRequest(HttpRequest request)
+    {
+        if (!HttpMethods.IsGet(request.Method))
+            return false;
+
+        if (!MatchesCallbackRequestPath(request.Path.Value ?? ""))
+            return false;
+
+        return QueryLooksLikeSsoCallback(request.Query);
+    }
+
+    public bool QueryLooksLikeSsoCallback(IQueryCollection query)
+    {
+        var payload = ParseCallbackQuery(query);
+        if (payload.RefreshToken.Length < _options.MinRefreshTokenLength)
+            return false;
+
+        return !string.IsNullOrWhiteSpace(payload.Username)
+            || !string.IsNullOrWhiteSpace(payload.Domain);
+    }
+
+    private bool MatchesCallbackRequestPath(string path)
+    {
+        var callbackPath = NormalizeCallbackPath(_options.CallbackPath);
+        if (path.Equals(callbackPath, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (callbackPath == "/" && path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return path.Equals("/auth/callback", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>پارامترهای بازگشت از login.mashhad.ir / سامزان: username + refresh_token.</summary>
@@ -536,8 +570,15 @@ public sealed class ShimasAuthService
     private static string NormalizeCallbackPath(string? path)
     {
         var value = (path ?? "/auth/callback").Trim();
+        if (value.Length == 0 || value == "/")
+            return "/";
+
         return value.StartsWith('/') ? value : "/" + value;
     }
+
+    /// <summary>برای CallbackPath=/ فقط PublicBaseUrl — بدون /auth/callback.</summary>
+    private static string CallbackPathSuffix(string normalizedPath) =>
+        normalizedPath == "/" ? "" : normalizedPath;
 
     private static string NormalizePublicBaseUrl(string? value)
     {

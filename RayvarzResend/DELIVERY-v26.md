@@ -41,7 +41,8 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 | کلید | معنی |
 |------|------|
-| `PublicBaseUrl` | ReturnUrl ثبت‌شده — `https://city.mashhad.ir:5065/auth/callback` |
+| `PublicBaseUrl` | همان آدرس ثبت SSO — `https://city.mashhad.ir:5065` |
+| `CallbackPath` | `/` = بازگشت روی ریشه (همان ReturnUrl پورتال)؛ `/auth/callback` برای ثبت قدیمی |
 | `ApiName` | نام کاربری ثبت SSO (جدول ۱ ردیف ۲) — هدر `apiName` — **نه** ClientId |
 | `ClientId` / `ClientSecret` | ثبت SSO + هش `SHA256(Secret+requestTime)` |
 | `UseLoginKeyOnRedirect` | `true` روال رسمی؛ `false` فقط `Login.aspx?lkey` (تا رفع 403) |
