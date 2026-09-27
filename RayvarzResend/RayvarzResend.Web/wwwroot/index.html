@@ -149,7 +149,6 @@
           <input id="unsentPaymentId" type="text" placeholder="قابلیت جستجو" autocomplete="off" />
         </label>
       </div>
-      <span id="unsentExcelStatus" hidden aria-hidden="true"></span>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
         <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
@@ -172,14 +171,10 @@
           <table id="unsentTable" class="installment-preview-table unsent-bulk-table">
             <thead>
               <tr>
-                <th class="col-check"></th>
+                <th class="col-check" scope="col" aria-label="انتخاب"></th>
                 <th>نوع</th>
-                <th>شماره فرآیند</th>
-                <th class="col-installment-nosazi">کد نوسازی</th>
                 <th class="col-unsent-bill">شناسه قبض</th>
                 <th class="col-unsent-pay">شناسه پرداخت</th>
-                <th>تاریخ پرداخت بانک</th>
-                <th>تاریخ پرداخت دستی</th>
                 <th class="col-unsent-fiche">شماره فیش</th>
                 <th class="col-installment-cost">مبلغ</th>
               </tr>
@@ -747,6 +742,6 @@
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=88"></script>
+  <script src="js/app.js?v=89"></script>
 </body>
 </html>

@@ -244,7 +244,15 @@ jdp-overlay {
 }
 
 #unsentTable {
+  direction: rtl;
+}
+
+#unsentTable .num-cell,
+#unsentTable .col-unsent-bill,
+#unsentTable .col-unsent-pay,
+#unsentTable .col-unsent-fiche {
   direction: ltr;
+  unicode-bidi: plaintext;
 }
 
 #unsentTable th,

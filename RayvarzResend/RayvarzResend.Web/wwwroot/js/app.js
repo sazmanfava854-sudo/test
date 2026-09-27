@@ -623,10 +623,42 @@ function parseUnsentExcelFile(file) {
 }
 
 function setUnsentExcelStatus(message, loading = false) {
-  const el = $('unsentExcelStatus');
+  const el = document.querySelector('.unsent-excel-status-row .installment-excel-status')
+    || $('unsentExcelStatus');
   if (!el) return;
+  el.hidden = false;
+  el.removeAttribute('aria-hidden');
   el.textContent = message;
   el.classList.toggle('is-loading', loading);
+}
+
+function formatUnsentBatchSendResult(data) {
+  const lines = [];
+  const total = data.total ?? 0;
+  const ok = data.succeeded ?? 0;
+  const fail = data.failed ?? 0;
+  const skip = data.skipped ?? 0;
+  lines.push(
+    `خلاصه ارسال: ${toPersianDigits(String(total))} فیش — موفق: ${toPersianDigits(String(ok))}، ناموفق: ${toPersianDigits(String(fail))}، رد: ${toPersianDigits(String(skip))}`
+  );
+  if (data.dryRun) lines.push('حالت آزمایشی (DryRun) — ارسال واقعی به رایورز انجام نشد.');
+  lines.push('');
+
+  (data.results || []).forEach((r) => {
+    const fiche = toPersianDigits(r.ficheNo || '—');
+    const status = r.skipped ? 'رد شده' : (r.success ? 'موفق' : 'ناموفق');
+    const parts = [`فیش ${fiche} — ${status}`];
+    const msg = (r.message || '').trim();
+    if (msg) parts.push(toPersianDigits(msg));
+    const bill = formatBillPayDisplay(r.billId);
+    const pay = formatBillPayDisplay(r.paymentId);
+    if (bill && bill !== '-' && bill !== '—') parts.push(`شناسه قبض: ${bill}`);
+    if (pay && pay !== '-' && pay !== '—') parts.push(`شناسه پرداخت: ${pay}`);
+    if (r.docNotSentError) parts.push(`DocNotSent: ${toPersianDigits(r.docNotSentError)}`);
+    lines.push(parts.join('\n'));
+  });
+
+  return lines.join('\n\n');
 }
 
 function rememberUnsentSourceKind(item, fallbackKind) {
@@ -1684,7 +1716,7 @@ function renderUnsentTable(items, meta = {}) {
 
   if (!unsentItems.length) {
     section.hidden = false;
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
     if (countLabel) {
       countLabel.textContent = unsentSearchState.totalCount > 0
         ? `۰ مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
@@ -1703,12 +1735,8 @@ function renderUnsentTable(items, meta = {}) {
     <tr>
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
-      <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
-      <td class="col-installment-nosazi">${formatNosaziCode(item.bnkAcntNo)}</td>
       <td class="num-cell col-unsent-bill">${formatBillPayDisplay(item.billId)}</td>
       <td class="num-cell col-unsent-pay">${formatBillPayDisplay(item.paymentId)}</td>
-      <td class="num-cell">${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td class="num-cell">${formatShamsiDisplay(item.paymentDate)}</td>
       <td class="num-cell col-unsent-fiche">${formatBillPayDisplay(item.ficheNo)}</td>
       <td class="col-installment-cost">${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
     </tr>
@@ -2649,16 +2677,13 @@ function setupEventHandlers() {
 
     unsentExcelBusy = true;
     if (excelBtn) excelBtn.disabled = true;
-    setUnsentExcelStatus(`فایل «${file.name}» دریافت شد — در حال خواندن…`, true);
+    setUnsentExcelStatus('فایل در حال بررسی است…', true);
     if (box) box.hidden = true;
 
     try {
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const pairs = await parseUnsentExcelFile(file);
-      setUnsentExcelStatus(
-        `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف خوانده شد؛ در حال جستجو در دیتابیس…`,
-        true
-      );
+      setUnsentExcelStatus('فایل در حال بررسی است…', true);
       await new Promise((r) => requestAnimationFrame(r));
 
       const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
@@ -2768,23 +2793,7 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      const lines = (data.results || []).map((r) =>
-        `${r.ficheNo} [${r.sendPath || '-'}]: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
-      );
-      const epayFails = (data.results || []).filter((r) =>
-        !r.success && !r.skipped && String(r.message || '').includes('epay')
-      );
-      const epayLines = epayFails.map((r) =>
-        `شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId || '-'} | شناسه پرداخت: ${r.paymentId || '-'} | در سامانه epay یافت نشد`
-      );
-      box.textContent = [
-        '=== نتیجه ارسال دسته‌ای ===',
-        `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
-        `DryRun: ${data.dryRun}`,
-        '',
-        ...lines,
-        ...(epayLines.length ? ['', '--- فیش‌های یافت‌نشده در سامانه epay ---', ...epayLines] : [])
-      ].join('\n');
+      box.textContent = formatUnsentBatchSendResult(data);
 
       if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
       else if (data.failed > 0) {

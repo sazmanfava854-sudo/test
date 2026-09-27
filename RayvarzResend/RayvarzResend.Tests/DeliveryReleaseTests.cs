@@ -188,7 +188,8 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=88", html);
+        Assert.Contains("js/app.js?v=89", html);
+        Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);
         Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
@@ -199,7 +200,7 @@ public class DeliveryReleaseTests
         Assert.Contains("function appendUnsentItems(", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
         Assert.Contains("BuildMixedLookupResult", File.ReadAllText(WebFile("Services", "UnsentBillPayLookupHelper.cs")));
-        Assert.Contains("شماره فیش: ${r.ficheNo} | شناسه قبض: ${r.billId", js.Split("bindClick('btnUnsentSend'")[1]);
+        Assert.Contains("function formatUnsentBatchSendResult(", js);
         Assert.Contains("<th>شناسه قبض</th>", html);
         Assert.Contains("<th>شناسه پرداخت</th>", html);
 
