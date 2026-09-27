@@ -52,7 +52,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 ## تست
 
 ```bash
-cd RayvarzResend && dotnet test
+cd RayvarzResend && dotnet test   # 462
 ```
 
 ## نسخه قبلی
