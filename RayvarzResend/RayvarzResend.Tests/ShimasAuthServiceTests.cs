@@ -37,6 +37,18 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void BuildLoginStartUrl_uses_official_start_path()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            LoginStartUrlTemplate = "https://login.mashhad.ir/Authentication/Start/{loginKey}"
+        });
+
+        var url = service.BuildLoginStartUrl("a1b2-GUID-c3d4");
+        Assert.Equal("https://login.mashhad.ir/Authentication/Start/a1b2-GUID-c3d4", url);
+    }
+
+    [Fact]
     public async Task BuildExternalLoginUrlAsync_skips_loginKey_when_disabled()
     {
         var service = CreateService(new ShimasAuthOptions

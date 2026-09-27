@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using RayvarzResend.Web.Models;
@@ -8,6 +9,8 @@ namespace RayvarzResend.Web.Services;
 
 public sealed class ShimasAuthService
 {
+    public const string SsoStateCookieName = "RayvarzResend.SsoState";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -84,20 +87,29 @@ public sealed class ShimasAuthService
         return QueryHelpers.AddQueryString(_options.LoginUrl, query);
     }
 
-    public async Task<string> BuildExternalLoginUrlAsync(string callbackAbsoluteUrl, CancellationToken ct = default)
+    public async Task<string> BuildExternalLoginUrlAsync(
+        string callbackAbsoluteUrl,
+        HttpContext? http = null,
+        CancellationToken ct = default)
     {
         if (!_options.UseLoginKeyOnRedirect || !_options.UseMashhadAuthenticationApi)
             return BuildExternalLoginUrl(callbackAbsoluteUrl);
 
         if (string.IsNullOrWhiteSpace(_options.SigningApiName))
             throw new InvalidOperationException(
-                "Auth:Shimas:ApiName را مثل SSOUserName در RuleEngine تنظیم کنید (مثلاً FinancialAssistant).");
+                "Auth:Shimas:ApiName = نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲، همان SSOUserName در RuleEngine) — نه ClientId.");
 
-        var keyResult = await _mashhadSso.GetLoginKeyAsync(ct);
+        var state = ResolveLoginState(http);
+        RememberLoginState(http, state);
+
+        var keyResult = await _mashhadSso.GetLoginKeyAsync(callbackAbsoluteUrl, state, ct);
         var loginKey = keyResult.Data?.EffectiveLoginKey;
         if (!keyResult.IsSuccess || string.IsNullOrWhiteSpace(loginKey))
         {
             var detail = keyResult.ErrorMessage ?? "loginKey خالی است";
+            var hint = keyResult.ErrorCode == 403
+                ? " (apiName باید نام کاربری SSO باشد، ClientId و SecretKey جدا هستند)"
+                : "";
             _logger.LogWarning(
                 "Mashhad loginKey failed (apiName={ApiName}, clientId={ClientId}): {Detail} (code {Code})",
                 _options.SigningApiName,
@@ -111,18 +123,58 @@ public sealed class ShimasAuthService
                 return BuildExternalLoginUrl(callbackAbsoluteUrl);
             }
 
-            throw new InvalidOperationException($"دریافت loginKey از SSO ناموفق بود: {detail}");
+            throw new InvalidOperationException($"دریافت loginKey از SSO ناموفق بود: {detail}{hint}");
         }
 
-        var query = new Dictionary<string, string?>
-        {
-            [_options.LoginKeyParameter] = loginKey,
-            [_options.LKeyParameter] = _options.EffectiveClientId,
-            [_options.ClientIdParameter] = _options.EffectiveClientId,
-            [_options.ReturnUrlParameter] = callbackAbsoluteUrl
-        };
+        return BuildLoginStartUrl(loginKey);
+    }
 
-        return QueryHelpers.AddQueryString(_options.LoginUrl, query);
+    public string BuildLoginStartUrl(string loginKey)
+    {
+        var key = (loginKey ?? "").Trim();
+        var template = string.IsNullOrWhiteSpace(_options.LoginStartUrlTemplate)
+            ? "https://login.mashhad.ir/Authentication/Start/{loginKey}"
+            : _options.LoginStartUrlTemplate.Trim();
+
+        return template.Replace("{loginKey}", key, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public bool ValidateReturnedState(HttpContext? http, string? returnedState)
+    {
+        if (http == null)
+            return true;
+
+        var expected = http.Request.Cookies[SsoStateCookieName];
+        if (string.IsNullOrWhiteSpace(expected))
+            expected = _options.LoginState;
+
+        if (string.IsNullOrWhiteSpace(expected))
+            return true;
+
+        return string.Equals(expected, (returnedState ?? "").Trim(), StringComparison.Ordinal);
+    }
+
+    private string ResolveLoginState(HttpContext? http)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.LoginState))
+            return _options.LoginState.Trim();
+
+        return Guid.NewGuid().ToString("N");
+    }
+
+    private static void RememberLoginState(HttpContext? http, string state)
+    {
+        if (http == null || string.IsNullOrWhiteSpace(state))
+            return;
+
+        http.Response.Cookies.Append(SsoStateCookieName, state, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = http.Request.IsHttps,
+            MaxAge = TimeSpan.FromMinutes(20),
+            Path = "/"
+        });
     }
 
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
@@ -146,6 +198,7 @@ public sealed class ShimasAuthService
         var refreshToken = ReadQuery(query,
             "refresh_token", "refreshToken", "RefreshToken",
             "token", "Token", "access_token", "accessToken");
+        var state = ReadQuery(query, "state", "State");
 
         var normalizedDomain = AppUserDomainNormalizer.Normalize(domain);
         var normalizedUsername = AppUserDomainNormalizer.Normalize(username);
@@ -156,7 +209,8 @@ public sealed class ShimasAuthService
         {
             Username = normalizedUsername,
             Domain = normalizedDomain,
-            RefreshToken = refreshToken
+            RefreshToken = refreshToken,
+            State = state
         };
     }
 

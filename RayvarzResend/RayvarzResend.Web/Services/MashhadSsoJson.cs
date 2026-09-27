@@ -31,6 +31,9 @@ internal sealed class MashhadLoginKeyRequest
 
     [JsonPropertyName("DomainID")]
     public int DomainId { get; set; }
+
+    [JsonPropertyName("ReturnUrl")]
+    public string? ReturnUrl { get; set; }
 }
 
 internal sealed class MashhadAccessTokenRequest

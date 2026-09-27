@@ -41,7 +41,10 @@ public sealed class MashhadSsoApiClient
             ?? new MashhadSsoResult<string> { ErrorCode = -1, ErrorMessage = body };
     }
 
-    public async Task<MashhadSsoResult<MashhadLoginKeyData>> GetLoginKeyAsync(CancellationToken ct = default)
+    public async Task<MashhadSsoResult<MashhadLoginKeyData>> GetLoginKeyAsync(
+        string? returnUrl,
+        string? state,
+        CancellationToken ct = default)
     {
         var time = await GetCurrentTimeAsync(ct);
         if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
@@ -58,9 +61,10 @@ public sealed class MashhadSsoApiClient
             Time = requestTime,
             Hash = hash,
             ClientId = _options.EffectiveClientId,
-            State = _options.LoginState,
+            State = string.IsNullOrWhiteSpace(state) ? _options.LoginState : state.Trim(),
             UserType = _options.LoginUserType,
-            DomainId = _options.LoginDomainId
+            DomainId = _options.LoginDomainId,
+            ReturnUrl = string.IsNullOrWhiteSpace(returnUrl) ? null : returnUrl.Trim()
         };
 
         using var request = BuildSignedPost("/api/Authentication/loginKey", requestTime, hash, payload);

@@ -38,4 +38,5 @@ public sealed class ShimasCallbackPayload
     public string Username { get; set; } = "";
     public string Domain { get; set; } = "";
     public string RefreshToken { get; set; } = "";
+    public string State { get; set; } = "";
 }

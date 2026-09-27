@@ -8,9 +8,11 @@ public sealed class ShimasAuthOptions
     /// <summary>آدرس عمومی سایت — برای callback سامزان/شیماس روی سرور پشت IIS یا IP:Port.</summary>
     public string PublicBaseUrl { get; set; } = "";
     public string LoginUrl { get; set; } = "https://login.mashhad.ir/Authentication/Login.aspx";
+    /// <summary>طبق سند SSO: https://login.mashhad.ir/Authentication/Start/{loginKey}</summary>
+    public string LoginStartUrlTemplate { get; set; } = "https://login.mashhad.ir/Authentication/Start/{loginKey}";
     /// <summary>پایه API احراز هویت (همان SSOBaseUrl در RuleEngine) — مثلاً https://login.mashhad.ir</summary>
     public string ApiBaseUrl { get; set; } = "https://login.mashhad.ir";
-    /// <summary>نام API در هدر apiName (همان SSOUserName در RuleEngine).</summary>
+    /// <summary>نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲) — هدر apiName؛ **نه** ClientId/lkey.</summary>
     public string ApiName { get; set; } = "";
     public string LoginKeyParameter { get; set; } = "loginKey";
     public string LoginState { get; set; } = "test";

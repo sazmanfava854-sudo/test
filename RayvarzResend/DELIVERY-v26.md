@@ -35,20 +35,20 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 ### SSO (مثل RuleEngine / login.mashhad.ir)
 
-در `Auth:Shimas`:
+در `Auth:Shimas` (سند شناسه شهروندی):
+
+**روال:** `loginKey` → `Authentication/Start/{LoginKey}` → callback با `username` + `refresh_token` + `state` → `getAccessToken`.
 
 | کلید | معنی |
 |------|------|
-| `PublicBaseUrl` | `https://city.mashhad.ir:5065` — آدرس callback |
-| `ApiBaseUrl` | `https://login.mashhad.ir` |
-| `ApiName` | همان **SSOUserName** در RuleEngine (هدر `apiName`) — **نه** `ClientId` / lkey |
-| `HashEncoding` | `lower` (پیش‌فرض) یا `upper` اگر SSO خطای Client info داد |
-| `UseLoginKeyOnRedirect` | `false` = ورود SSO مثل قبل فقط با `lkey`+`returnUrl` (توصیه برای city.mashhad.ir) |
-| `AllowLegacyLoginUrlWithoutLoginKey` | اگر `UseLoginKeyOnRedirect=true` و loginKey خطا دهد، fallback به lkey |
-| `ClientId` / `ClientSecret` | همان سامانه |
-| `LoginUrl` | `https://login.mashhad.ir/Authentication/Login.aspx` |
+| `PublicBaseUrl` | ReturnUrl ثبت‌شده — `https://city.mashhad.ir:5065/auth/callback` |
+| `ApiName` | نام کاربری ثبت SSO (جدول ۱ ردیف ۲) — هدر `apiName` — **نه** ClientId |
+| `ClientId` / `ClientSecret` | ثبت SSO + هش `SHA256(Secret+requestTime)` |
+| `UseLoginKeyOnRedirect` | `true` روال رسمی؛ `false` فقط `Login.aspx?lkey` (تا رفع 403) |
+| `LoginStartUrlTemplate` | `https://login.mashhad.ir/Authentication/Start/{loginKey}` |
+| `LoginState` | مقدار `state` در loginKey و callback |
 
-بعد از بازگشت از SSO، سرور با API رسمی `getAccessToken` + `getUserInfo` توکن را تأیید می‌کند (نه فقط query string).
+403 **Client info missmatched** = `ApiName`/`Secret`/`ClientId` با پورتال SSO هم‌خوان نیست.
 
 ساخت Zip: `bash RayvarzResend/scripts/build-release-zip.sh`
 

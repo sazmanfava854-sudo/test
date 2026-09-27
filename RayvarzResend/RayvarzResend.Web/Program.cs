@@ -189,7 +189,7 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
     try
     {
         var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
-        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, ct);
+        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
         return Results.Redirect(loginUrl);
     }
     catch (Exception ex)
@@ -207,6 +207,12 @@ app.MapGet("/auth/callback", async (
     try
     {
         var callback = shimas.ParseCallbackQuery(http.Request.Query);
+        if (!shimas.ValidateReturnedState(http, callback.State))
+        {
+            var error = Uri.EscapeDataString("state بازگشت SSO معتبر نیست — دوباره وارد شوید");
+            return Results.Redirect($"/login.html?error={error}");
+        }
+
         var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
         if (!validation.Success)
         {
