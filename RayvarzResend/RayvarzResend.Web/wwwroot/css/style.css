@@ -243,8 +243,40 @@ jdp-overlay {
   font-family: inherit;
 }
 
-#unsentTable {
+#unsentTable.unsent-bulk-table {
+  width: 100%;
+  max-width: 100%;
   direction: rtl;
+  table-layout: auto;
+}
+
+#unsentTable.unsent-bulk-table thead th {
+  background: var(--surface-2);
+}
+
+#unsentTable.unsent-bulk-table tbody td {
+  background: var(--surface, #fff);
+}
+
+#unsentTable.unsent-bulk-table tbody tr:hover td {
+  background: #eef3f9;
+}
+
+#unsentTable.unsent-bulk-table th.col-unsent-fill,
+#unsentTable.unsent-bulk-table td.col-unsent-fill {
+  width: 100%;
+  min-width: 1rem;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+#unsentTable.unsent-bulk-table tbody td.col-unsent-fill {
+  background: var(--surface, #fff);
+}
+
+#unsentTable.unsent-bulk-table tbody tr:hover td.col-unsent-fill {
+  background: #eef3f9;
 }
 
 #unsentTable .num-cell,

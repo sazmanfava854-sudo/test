@@ -633,18 +633,18 @@ function setUnsentExcelStatus(message, loading = false) {
 }
 
 function formatUnsentBatchSendResult(data) {
-  const lines = [];
   const total = data.total ?? 0;
   const ok = data.succeeded ?? 0;
   const fail = data.failed ?? 0;
   const skip = data.skipped ?? 0;
-  lines.push(
+  const headerLines = [
     `خلاصه ارسال: ${toPersianDigits(String(total))} فیش — موفق: ${toPersianDigits(String(ok))}، ناموفق: ${toPersianDigits(String(fail))}، رد: ${toPersianDigits(String(skip))}`
-  );
-  if (data.dryRun) lines.push('حالت آزمایشی (DryRun) — ارسال واقعی به رایورز انجام نشد.');
-  lines.push('');
+  ];
+  if (data.dryRun) {
+    headerLines.push('حالت آزمایشی (DryRun) — ارسال واقعی به رایورز انجام نشد.');
+  }
 
-  (data.results || []).forEach((r) => {
+  const detailBlocks = (data.results || []).map((r) => {
     const fiche = toPersianDigits(r.ficheNo || '—');
     const status = r.skipped ? 'رد شده' : (r.success ? 'موفق' : 'ناموفق');
     const parts = [`فیش ${fiche} — ${status}`];
@@ -655,10 +655,13 @@ function formatUnsentBatchSendResult(data) {
     if (bill && bill !== '-' && bill !== '—') parts.push(`شناسه قبض: ${bill}`);
     if (pay && pay !== '-' && pay !== '—') parts.push(`شناسه پرداخت: ${pay}`);
     if (r.docNotSentError) parts.push(`DocNotSent: ${toPersianDigits(r.docNotSentError)}`);
-    lines.push(parts.join('\n'));
+    return parts.join('\n');
   });
 
-  return lines.join('\n\n');
+  const header = headerLines.join('\n');
+  if (!detailBlocks.length) return header;
+  // یک خط بین خلاصه و اولین فیش — بدون lines.push('') و بدون join('\n\n') روی header
+  return `${header}\n${detailBlocks.join('\n\n')}`;
 }
 
 function rememberUnsentSourceKind(item, fallbackKind) {
@@ -1716,7 +1719,7 @@ function renderUnsentTable(items, meta = {}) {
 
   if (!unsentItems.length) {
     section.hidden = false;
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
     if (countLabel) {
       countLabel.textContent = unsentSearchState.totalCount > 0
         ? `۰ مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
@@ -1739,6 +1742,7 @@ function renderUnsentTable(items, meta = {}) {
       <td class="num-cell col-unsent-pay">${formatBillPayDisplay(item.paymentId)}</td>
       <td class="num-cell col-unsent-fiche">${formatBillPayDisplay(item.ficheNo)}</td>
       <td class="col-installment-cost">${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
+      <td class="col-unsent-fill" aria-hidden="true"></td>
     </tr>
   `;
   }).join('');

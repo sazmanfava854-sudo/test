@@ -188,7 +188,8 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=89", html);
+        Assert.Contains("js/app.js?v=90", html);
+        Assert.Contains("col-unsent-fill", html);
         Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);
         Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
 
