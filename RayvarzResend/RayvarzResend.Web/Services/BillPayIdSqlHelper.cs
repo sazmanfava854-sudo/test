@@ -18,7 +18,9 @@ public static class BillPayIdSqlHelper
 
     /// <summary>فقط تطابق مستقیم قبض/پرداخت — برای افزودن به گرید (بدون جابه‌جایی ستون اکسل).</summary>
     public static string PairMatchStrictOnTable(string billColumn, string paymentColumn, string pairAlias = "p") =>
-        PairMatchDirect(billColumn, paymentColumn, pairAlias);
+        $"""
+        ({Norm13(billColumn)} = {Norm13($"{pairAlias}.BillId")} AND {Norm13(paymentColumn)} = {Norm13($"{pairAlias}.PaymentId")})
+        """;
 
     private static string PairMatchDirect(string billColumn, string paymentColumn, string pairAlias) =>
         $"""

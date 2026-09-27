@@ -43,7 +43,8 @@ public class UnsentFicheService
         var pairs = UnsentBillPayLookupHelper.NormalizePairs(req.Pairs);
         var rawByKey = UnsentBillPayLookupHelper.IndexRawPairs(req.Pairs);
 
-        var incomeBatch = await _repo.LookupBillPayBatchAsync(UnsentFicheKind.Income, pairs, ct);
+        var incomeBatch = await _repo.LookupBillPayBatchAsync(
+            UnsentFicheKind.Income, pairs, diagnoseMisses: false, ct);
         var incomeKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in incomeBatch.Items)
         {
@@ -56,14 +57,16 @@ public class UnsentFicheService
             .Where(p => incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
             .ToList();
         var dutyConflictBatch = incomeFoundPairs.Count > 0
-            ? await _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, incomeFoundPairs, ct)
+            ? await _repo.LookupBillPayBatchAsync(
+                UnsentFicheKind.Duty, incomeFoundPairs, diagnoseMisses: false, ct)
             : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
 
         var remainingPairs = pairs
             .Where(p => !incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
             .ToList();
         var dutyBatch = remainingPairs.Count > 0
-            ? await _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, remainingPairs, ct)
+            ? await _repo.LookupBillPayBatchAsync(
+                UnsentFicheKind.Duty, remainingPairs, diagnoseMisses: false, ct)
             : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
 
         var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
@@ -71,6 +74,19 @@ public class UnsentFicheService
             incomeBatch.Items,
             dutyConflictBatch.Items,
             dutyBatch.Items);
+
+        var missPairs = pairs
+            .Where(p =>
+            {
+                var key = UnsentBillPayLookupHelper.PairKey(p);
+                var conflict = result.Conflicts.Any(c =>
+                    UnsentBillPayLookupHelper.MatchKey(c.BillId, c.PaymentId) == key);
+                if (conflict) return false;
+                return !result.Items.Any(i =>
+                    UnsentBillPayLookupHelper.MatchKey(i.BillId, i.PaymentId) == key);
+            })
+            .ToList();
+        var missDiagnostics = await _repo.DiagnoseBillPayMissesAsync(missPairs, ct);
 
         foreach (var item in result.Items)
         {
@@ -97,9 +113,7 @@ public class UnsentFicheService
                 lookupKey = miss.BillId + "|" + miss.PaymentId;
 
             rawByKey.TryGetValue(lookupKey, out var raw);
-            dutyBatch.Diagnostics.TryGetValue(lookupKey, out var dutyDiagnostic);
-            incomeBatch.Diagnostics.TryGetValue(lookupKey, out var incomeDiagnostic);
-            var diagnostic = dutyDiagnostic?.Found == true ? dutyDiagnostic : incomeDiagnostic;
+            missDiagnostics.TryGetValue(lookupKey, out var diagnostic);
 
             var displayBill = string.IsNullOrEmpty(raw.RawBill) ? miss.BillId : raw.RawBill;
             var displayPay = string.IsNullOrEmpty(raw.RawPay) ? miss.PaymentId : raw.RawPay;

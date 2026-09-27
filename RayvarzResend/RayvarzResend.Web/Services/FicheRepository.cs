@@ -850,10 +850,15 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         List<UnsentFicheListItem> Items,
         Dictionary<string, BillPayMissDiagnostic> Diagnostics);
 
-    /// <summary>جستجوی سریع اکسل: یک اتصال SQL، بدون join نوسازی، تشخیص miss در همان session.</summary>
+    private const int BillPayLookupChunkSize = 50;
+    private const int BillPayDiagnoseChunkSize = 40;
+    private const int BillPaySqlCommandTimeoutSeconds = 120;
+
+    /// <summary>جستجوی سریع اکسل: یک اتصال SQL، بدون join نوسازی؛ diagnose اختیاری.</summary>
     public async Task<BillPayBatchLookupResult> LookupBillPayBatchAsync(
         UnsentFicheKind kind,
         IReadOnlyList<NormalizedBillPayPair> pairs,
+        bool diagnoseMisses = true,
         CancellationToken ct = default)
     {
         var items = new List<UnsentFicheListItem>();
@@ -864,7 +869,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
 
-        foreach (var chunk in pairs.Chunk(80))
+        foreach (var chunk in pairs.Chunk(BillPayLookupChunkSize))
         {
             var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
             var sql = kind == UnsentFicheKind.Duty
@@ -892,24 +897,62 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             .Where(p => !foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(p.BillId, p.PaymentId)))
             .ToList();
 
-        if (missPairs.Count > 0)
-        {
-            foreach (var chunk in missPairs.Chunk(80))
-            {
-                var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
-                var sql = kind == UnsentFicheKind.Duty
-                    ? BuildBillPayDiagnoseDutySql(chunkArray.Length)
-                    : BuildBillPayDiagnoseIncomeSql(chunkArray.Length);
-                var rows = await ExecuteBillPayDiagnoseOnConnectionAsync(conn, sql, chunkArray, ct);
-                foreach (var row in rows)
-                {
-                    if (!diagnostics.ContainsKey(row.PairKey))
-                        diagnostics[row.PairKey] = row.Diagnostic;
-                }
-            }
-        }
+        if (diagnoseMisses && missPairs.Count > 0)
+            await AppendBillPayDiagnosticsOnConnectionAsync(conn, kind, missPairs, diagnostics, ct);
 
         return new BillPayBatchLookupResult(items, diagnostics);
+    }
+
+    /// <summary>تشخیص دلیل یافت‌نشدن فقط برای ردیف‌های miss نهایی اکسل (یک بار Income و در صورت نیاز Duty).</summary>
+    public async Task<Dictionary<string, BillPayMissDiagnostic>> DiagnoseBillPayMissesAsync(
+        IReadOnlyList<NormalizedBillPayPair> missPairs,
+        CancellationToken ct = default)
+    {
+        var diagnostics = new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal);
+        if (missPairs == null || missPairs.Count == 0)
+            return diagnostics;
+
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+
+        await AppendBillPayDiagnosticsOnConnectionAsync(
+            conn, UnsentFicheKind.Income, missPairs, diagnostics, ct);
+
+        var stillUnknown = missPairs
+            .Where(p =>
+            {
+                var key = UnsentBillPayLookupHelper.PairKey(p);
+                return key.Length == 0 || !diagnostics.TryGetValue(key, out var d) || !d.Found;
+            })
+            .ToList();
+
+        if (stillUnknown.Count > 0)
+            await AppendBillPayDiagnosticsOnConnectionAsync(
+                conn, UnsentFicheKind.Duty, stillUnknown, diagnostics, ct);
+
+        return diagnostics;
+    }
+
+    private async Task AppendBillPayDiagnosticsOnConnectionAsync(
+        SqlConnection conn,
+        UnsentFicheKind kind,
+        IReadOnlyList<NormalizedBillPayPair> pairs,
+        Dictionary<string, BillPayMissDiagnostic> diagnostics,
+        CancellationToken ct)
+    {
+        foreach (var chunk in pairs.Chunk(BillPayDiagnoseChunkSize))
+        {
+            var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
+            var sql = kind == UnsentFicheKind.Duty
+                ? BuildBillPayDiagnoseDutySql(chunkArray.Length)
+                : BuildBillPayDiagnoseIncomeSql(chunkArray.Length);
+            var rows = await ExecuteBillPayDiagnoseOnConnectionAsync(conn, sql, chunkArray, ct);
+            foreach (var row in rows)
+            {
+                if (!diagnostics.ContainsKey(row.PairKey))
+                    diagnostics[row.PairKey] = row.Diagnostic;
+            }
+        }
     }
 
     private sealed record BillPayDiagnoseRow(string PairKey, BillPayMissDiagnostic Diagnostic);
@@ -921,7 +964,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         CancellationToken ct)
     {
         var rows = new List<BillPayDiagnoseRow>();
-        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 30 };
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = BillPaySqlCommandTimeoutSeconds };
         for (var i = 0; i < pairs.Length; i++)
         {
             cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
@@ -935,8 +978,11 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         {
             var pairBill = reader.GetString(reader.GetOrdinal("PairBill")).Trim();
             var pairPay = reader.GetString(reader.GetOrdinal("PairPay")).Trim();
+            var pairKey = UnsentBillPayLookupHelper.MatchKey(pairBill, pairPay);
+            if (pairKey.Length == 0)
+                pairKey = pairBill + "|" + pairPay;
             rows.Add(new BillPayDiagnoseRow(
-                pairBill + "|" + pairPay,
+                pairKey,
                 new BillPayMissDiagnostic
                 {
                     Found = true,
@@ -1044,7 +1090,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         CancellationToken ct)
     {
         var items = new List<UnsentFicheListItem>();
-        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 30 };
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = BillPaySqlCommandTimeoutSeconds };
         cmd.Parameters.AddWithValue("@max", Math.Clamp(maxRows, 1, 2000));
         for (var i = 0; i < pairs.Length; i++)
         {
