@@ -82,6 +82,10 @@ public class DeliveryReleaseTests
         var program = File.ReadAllText(path);
         Assert.Contains("AddSingleton<RayvarzPayloadBuilder>", program);
         Assert.Contains("[FromServices] RayvarzPayloadBuilder", program);
+        Assert.Contains("KnownNetworks.Clear()", program);
+        Assert.DoesNotContain(
+            "if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))\n        return Results.Json(new { error = \"ورود محلی غیرفعال است",
+            program);
     }
 
     [Fact]

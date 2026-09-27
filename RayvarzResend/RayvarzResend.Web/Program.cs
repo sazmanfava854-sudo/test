@@ -46,6 +46,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "RayvarzResend.Auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(builder.Configuration.GetValue("Auth:SessionHours", 8));
         options.Events.OnRedirectToLogin = ctx =>
@@ -100,12 +101,18 @@ builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto
+        | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-});
+app.UseForwardedHeaders();
 
 app.Services.GetRequiredService<RayvarzPayloadBuilder>();
 
@@ -187,52 +194,63 @@ app.MapGet("/auth/callback", async (
     AppAuthService auth,
     CancellationToken ct) =>
 {
-    var callback = shimas.ParseCallbackQuery(http.Request.Query);
-    var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
-    if (!validation.Success)
+    try
     {
-        var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
-        return Results.Redirect($"/login.html?error={error}");
+        var callback = shimas.ParseCallbackQuery(http.Request.Query);
+        var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
+        if (!validation.Success)
+        {
+            var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
+            return Results.Redirect($"/login.html?error={error}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(callback.Domain))
+            validation.Profile.Domain = callback.Domain;
+
+        var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
+        if (user == null)
+        {
+            var error = Uri.EscapeDataString("کاربر مجاز نیست — با مدیر سیستم تماس بگیرید");
+            return Results.Redirect($"/login.html?error={error}");
+        }
+
+        await auth.SignInAsync(http, user, ct);
+        return Results.Redirect("/");
     }
-
-    if (!string.IsNullOrWhiteSpace(callback.Domain))
-        validation.Profile.Domain = callback.Domain;
-
-    var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
-    if (user == null)
+    catch (SqlException ex)
     {
-        var error = Uri.EscapeDataString("کاربر مجاز نیست — با مدیر سیستم تماس بگیرید");
-        return Results.Redirect($"/login.html?error={error}");
+        return AuthDatabaseError(ex);
     }
-
-    await auth.SignInAsync(http, user, ct);
-    return Results.Redirect("/");
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
 {
-    if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
-        return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
-
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest(new { error = "نام کاربری و رمز عبور الزامی است" });
 
-    var user = await auth.ValidateCredentialsAsync(req.Username, req.Password, ct);
-    if (user == null)
-        return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
-
-    if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
+    try
     {
-        if (!shimas.Options.AllowAdminLocalLoginOnPublicHost || !user.IsAdmin)
-            return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
-    }
+        var user = await auth.ValidateCredentialsAsync(req.Username, req.Password, ct);
+        if (user == null)
+            return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
 
-    var principal = AppAuthService.BuildPrincipal(user);
-    await http.SignInAsync(
-        CookieAuthenticationDefaults.AuthenticationScheme,
-        principal,
-        auth.CreateAuthProperties(persistent: true));
-    return Results.Ok(await auth.ToSessionAsync(user, ct));
+        if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
+        {
+            if (!shimas.Options.AllowAdminLocalLoginOnPublicHost || !user.IsAdmin)
+                return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
+        }
+
+        var principal = AppAuthService.BuildPrincipal(user);
+        await http.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal,
+            auth.CreateAuthProperties(persistent: true));
+        return Results.Ok(await auth.ToSessionAsync(user, ct));
+    }
+    catch (SqlException ex)
+    {
+        return AuthDatabaseError(ex);
+    }
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/logout", async (HttpContext http) =>
@@ -243,10 +261,17 @@ app.MapPost("/api/auth/logout", async (HttpContext http) =>
 
 app.MapGet("/api/auth/me", async (HttpContext http, AppAuthService auth, CancellationToken ct) =>
 {
-    var session = await auth.GetSessionAsync(http.User, ct);
-    return session == null
-        ? Results.Json(new { error = "نشست منقضی شده" }, statusCode: 401)
-        : Results.Ok(session);
+    try
+    {
+        var session = await auth.GetSessionAsync(http.User, ct);
+        return session == null
+            ? Results.Json(new { error = "نشست منقضی شده" }, statusCode: 401)
+            : Results.Ok(session);
+    }
+    catch (SqlException ex)
+    {
+        return AuthDatabaseError(ex);
+    }
 }).RequireAuthorization(authenticated);
 
 app.MapGet("/api/admin/users", async (AppUserRepository users, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
@@ -1119,6 +1144,13 @@ app.MapPost("/api/bank-inquiry/diagnose", async (
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
+
+static IResult AuthDatabaseError(SqlException ex) =>
+    Results.Json(new
+    {
+        error = "خطا در اتصال به پایگاه کاربران (AppAuth). ConnectionStrings:AppAuth را بررسی کنید.",
+        detail = ex.Message
+    }, statusCode: 503);
 
 static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {
