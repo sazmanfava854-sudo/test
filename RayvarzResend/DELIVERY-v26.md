@@ -11,11 +11,13 @@
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [cursor/unified-excel-epay-release-ffcb](https://github.com/sazmanfava854-sudo/test/tree/cursor/unified-excel-epay-release-ffcb) |
 
-### لینک مستقیم Zip (پس از push/tag)
+### لینک مستقیم Zip (آخرین — شاخه v26 + SSO ریشه سایت)
 
-```
-https://github.com/sazmanfava854-sudo/test/raw/rayvarzresend-unified-excel-epay-v26/RayvarzResend-26.zip
-```
+[دانلود RayvarzResend-26.zip](https://github.com/sazmanfava854-sudo/test/raw/cursor/unified-excel-epay-release-ffcb/RayvarzResend-26.zip)
+
+Tag ثابت (ممکن است از شاخه عقب‌تر باشد):
+
+[RayvarzResend-26.zip روی tag v26](https://github.com/sazmanfava854-sudo/test/raw/rayvarzresend-unified-excel-epay-v26/RayvarzResend-26.zip)
 
 ### اجرا روی سرور ویندوز
 
