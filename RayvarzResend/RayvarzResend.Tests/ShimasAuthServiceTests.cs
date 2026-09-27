@@ -416,6 +416,40 @@ public class ShimasAuthServiceTests
         Assert.Equal("http://5.252.216.140:8070/auth/callback", status.RegisteredCallbackUrl);
     }
 
+    [Fact]
+    public void ValidateReturnedState_allows_legacy_callback_without_state_or_cookie()
+    {
+        var service = CreateService(new ShimasAuthOptions { LoginState = "test" });
+        var context = new DefaultHttpContext();
+
+        Assert.True(service.ValidateReturnedState(context, null));
+        Assert.True(service.ValidateReturnedState(context, ""));
+    }
+
+    [Fact]
+    public void ValidateReturnedState_requires_cookie_match_for_loginKey_flow()
+    {
+        var service = CreateService(new ShimasAuthOptions { LoginState = "test" });
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Cookie = $"{ShimasAuthService.SsoStateCookieName}=abc-state";
+
+        Assert.True(service.ValidateReturnedState(context, "abc-state"));
+        Assert.False(service.ValidateReturnedState(context, "other"));
+    }
+
+    [Fact]
+    public void ResolvePostLoginRedirect_uses_safe_relative_path_only()
+    {
+        var service = CreateService();
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Cookie = $"{ShimasAuthService.PostLoginReturnCookieName}=%2F";
+
+        Assert.Equal("/", service.ResolvePostLoginRedirect(context));
+
+        context.Request.Headers.Cookie = $"{ShimasAuthService.PostLoginReturnCookieName}=https%3A%2F%2Fevil";
+        Assert.Equal("/", service.ResolvePostLoginRedirect(context));
+    }
+
     private sealed class TestHttpClientFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new();

@@ -46,7 +46,8 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `ClientId` / `ClientSecret` | ثبت SSO + هش `SHA256(Secret+requestTime)` |
 | `UseLoginKeyOnRedirect` | `true` روال رسمی؛ `false` فقط `Login.aspx?lkey` (تا رفع 403) |
 | `LoginStartUrlTemplate` | `https://login.mashhad.ir/Authentication/Start/{loginKey}` |
-| `LoginState` | مقدار `state` در loginKey و callback |
+| `LoginState` | فقط برای loginKey؛ در Login.aspx قدیمی معمولاً `state` نمی‌آید — خالی بگذارید یا همان پیش‌فرض (بازگشت بدون state مجاز است) |
+| `AutoProvisionUsers` | `false` = کاربر باید از قبل در «مدیریت کاربران» با کد ملی/دامین ثبت شده باشد؛ بعد از SSO بدون رکورد → بازگشت به login با پیام خطا |
 
 403 **Client info missmatched** = `ApiName`/`Secret`/`ClientId` با پورتال SSO هم‌خوان نیست.
 

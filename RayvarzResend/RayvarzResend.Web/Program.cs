@@ -48,7 +48,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "RayvarzResend.Auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        var publicBase = builder.Configuration["Auth:Shimas:PublicBaseUrl"] ?? "";
+        options.Cookie.SecurePolicy = publicBase.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(builder.Configuration.GetValue("Auth:SessionHours", 8));
         options.Events.OnRedirectToLogin = ctx =>
@@ -188,6 +191,8 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
 
     try
     {
+        var returnPath = http.Request.Query["returnUrl"].FirstOrDefault();
+        shimas.RememberPostLoginReturn(http, returnPath);
         var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
         var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
         return Results.Redirect(loginUrl);
@@ -209,13 +214,19 @@ app.MapGet("/auth/callback", async (
         var callback = shimas.ParseCallbackQuery(http.Request.Query);
         if (!shimas.ValidateReturnedState(http, callback.State))
         {
+            shimas.ClearSsoFlowCookies(http);
             var error = Uri.EscapeDataString("state بازگشت SSO معتبر نیست — دوباره وارد شوید");
             return Results.Redirect($"/login.html?error={error}");
         }
 
-        var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
+        var validation = await shimas.ValidateAsync(
+            callback.Username,
+            callback.RefreshToken,
+            callback.Domain,
+            ct);
         if (!validation.Success)
         {
+            shimas.ClearSsoFlowCookies(http);
             var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
             return Results.Redirect($"/login.html?error={error}");
         }
@@ -226,12 +237,15 @@ app.MapGet("/auth/callback", async (
         var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
         if (user == null)
         {
-            var error = Uri.EscapeDataString("کاربر مجاز نیست — با مدیر سیستم تماس بگیرید");
-            return Results.Redirect($"/login.html?error={error}");
+            shimas.ClearSsoFlowCookies(http);
+            var hint = Uri.EscapeDataString(
+                "کاربر در دستیار مالی ثبت نشده یا غیرفعال است — کد ملی/دامین را در مدیریت کاربران اضافه کنید (AutoProvisionUsers=false).");
+            return Results.Redirect($"/login.html?error={hint}");
         }
 
         await auth.SignInAsync(http, user, ct);
-        return Results.Redirect("/");
+        shimas.ClearSsoFlowCookies(http);
+        return Results.Redirect(shimas.ResolvePostLoginRedirect(http));
     }
     catch (SqlException ex)
     {

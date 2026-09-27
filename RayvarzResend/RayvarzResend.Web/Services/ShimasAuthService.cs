@@ -10,6 +10,7 @@ namespace RayvarzResend.Web.Services;
 public sealed class ShimasAuthService
 {
     public const string SsoStateCookieName = "RayvarzResend.SsoState";
+    public const string PostLoginReturnCookieName = "RayvarzResend.PostLoginReturn";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -144,14 +145,22 @@ public sealed class ShimasAuthService
         if (http == null)
             return true;
 
-        var expected = http.Request.Cookies[SsoStateCookieName];
-        if (string.IsNullOrWhiteSpace(expected))
-            expected = _options.LoginState;
+        var returned = (returnedState ?? "").Trim();
+        var cookieState = (http.Request.Cookies[SsoStateCookieName] ?? "").Trim();
 
-        if (string.IsNullOrWhiteSpace(expected))
+        // loginKey flow: state cookie set on /auth/login
+        if (!string.IsNullOrWhiteSpace(cookieState))
+            return string.Equals(cookieState, returned, StringComparison.Ordinal);
+
+        // Legacy Login.aspx often omits state — do not require LoginState default ("test")
+        if (string.IsNullOrWhiteSpace(returned))
             return true;
 
-        return string.Equals(expected, (returnedState ?? "").Trim(), StringComparison.Ordinal);
+        var configured = (_options.LoginState ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(configured))
+            return true;
+
+        return string.Equals(configured, returned, StringComparison.Ordinal);
     }
 
     private string ResolveLoginState(HttpContext? http)
@@ -175,6 +184,37 @@ public sealed class ShimasAuthService
             MaxAge = TimeSpan.FromMinutes(20),
             Path = "/"
         });
+    }
+
+    public void RememberPostLoginReturn(HttpContext http, string? returnPath = null)
+    {
+        var path = (returnPath ?? "/").Trim();
+        if (path.Length == 0 || !path.StartsWith('/') || path.StartsWith("//", StringComparison.Ordinal))
+            path = "/";
+
+        http.Response.Cookies.Append(PostLoginReturnCookieName, path, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = http.Request.IsHttps,
+            MaxAge = TimeSpan.FromMinutes(30),
+            Path = "/"
+        });
+    }
+
+    public string ResolvePostLoginRedirect(HttpContext http)
+    {
+        var raw = (http.Request.Cookies[PostLoginReturnCookieName] ?? "").Trim();
+        if (raw.Length == 0 || !raw.StartsWith('/') || raw.StartsWith("//", StringComparison.Ordinal))
+            return "/";
+
+        return raw;
+    }
+
+    public void ClearSsoFlowCookies(HttpContext http)
+    {
+        http.Response.Cookies.Delete(SsoStateCookieName, new CookieOptions { Path = "/" });
+        http.Response.Cookies.Delete(PostLoginReturnCookieName, new CookieOptions { Path = "/" });
     }
 
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
@@ -217,9 +257,18 @@ public sealed class ShimasAuthService
     public async Task<ShimasValidationResult> ValidateAsync(
         string username,
         string refreshToken,
+        CancellationToken ct = default) =>
+        await ValidateAsync(username, refreshToken, alternateIdentity: null, ct);
+
+    public async Task<ShimasValidationResult> ValidateAsync(
+        string username,
+        string refreshToken,
+        string? alternateIdentity,
         CancellationToken ct = default)
     {
         var normalizedUsername = (username ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(normalizedUsername))
+            normalizedUsername = AppUserDomainNormalizer.Normalize(alternateIdentity ?? "");
         var normalizedToken = (refreshToken ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(normalizedUsername))
@@ -229,7 +278,7 @@ public sealed class ShimasAuthService
             return Fail("refresh_token نامعتبر است");
 
         if (_options.UseMashhadAuthenticationApi)
-            return await ValidateViaMashhadApiAsync(normalizedUsername, normalizedToken, ct);
+            return await ValidateViaMashhadApiAsync(normalizedUsername, normalizedToken, alternateIdentity, ct);
 
         if (!string.IsNullOrWhiteSpace(_options.ValidateTokenUrl))
             return await ValidateRemoteAsync(normalizedUsername, normalizedToken, ct);
@@ -249,24 +298,39 @@ public sealed class ShimasAuthService
     private async Task<ShimasValidationResult> ValidateViaMashhadApiAsync(
         string username,
         string refreshToken,
+        string? alternateIdentity,
         CancellationToken ct)
     {
         try
         {
-            var tokenResult = await _mashhadSso.GetAccessTokenAsync(refreshToken, username, ct);
-            var accessToken = tokenResult.Data?.AccessToken?.Trim();
-            if (!tokenResult.IsSuccess || string.IsNullOrWhiteSpace(accessToken))
+            var tokenUsernames = BuildAccessTokenUsernameCandidates(username, alternateIdentity);
+            MashhadSsoResult<MashhadAccessTokenData>? tokenResult = null;
+            string? tokenUsernameUsed = null;
+            foreach (var candidate in tokenUsernames)
             {
-                var detail = tokenResult.ErrorMessage ?? "AccessToken خالی است";
+                tokenResult = await _mashhadSso.GetAccessTokenAsync(refreshToken, candidate, ct);
+                var accessToken = tokenResult.Data?.AccessToken?.Trim();
+                if (tokenResult.IsSuccess && !string.IsNullOrWhiteSpace(accessToken))
+                {
+                    tokenUsernameUsed = candidate;
+                    break;
+                }
+            }
+
+            var accessTokenFinal = tokenResult?.Data?.AccessToken?.Trim();
+            if (tokenResult == null || !tokenResult.IsSuccess || string.IsNullOrWhiteSpace(accessTokenFinal))
+            {
+                var detail = tokenResult?.ErrorMessage ?? "AccessToken خالی است";
                 _logger.LogWarning(
-                    "Mashhad getAccessToken failed for {Username}: {Detail} (code {Code})",
+                    "Mashhad getAccessToken failed for {Username} (tried {Count} identities): {Detail} (code {Code})",
                     MaskUsername(username),
+                    tokenUsernames.Count,
                     detail,
-                    tokenResult.ErrorCode);
+                    tokenResult?.ErrorCode ?? -1);
                 return Fail($"اعتبارسنجی SSO ناموفق بود: {detail}");
             }
 
-            var infoResult = await _mashhadSso.GetUserInfoAsync(accessToken, ct);
+            var infoResult = await _mashhadSso.GetUserInfoAsync(accessTokenFinal, ct);
             if (!infoResult.IsSuccess || infoResult.Data == null)
             {
                 var detail = infoResult.ErrorMessage ?? "پاسخ getUserInfo خالی است";
@@ -274,7 +338,7 @@ public sealed class ShimasAuthService
                 return Fail($"دریافت اطلاعات کاربر از SSO ناموفق بود: {detail}");
             }
 
-            var profile = MapMashhadUserInfo(infoResult.Data, username);
+            var profile = MapMashhadUserInfo(infoResult.Data, tokenUsernameUsed ?? username);
             return new ShimasValidationResult
             {
                 Success = true,
@@ -287,6 +351,26 @@ public sealed class ShimasAuthService
             _logger.LogError(ex, "Mashhad SSO validation error for {Username}", MaskUsername(username));
             return Fail("خطا در ارتباط با API احراز هویت سازمان");
         }
+    }
+
+    private static List<string> BuildAccessTokenUsernameCandidates(string username, string? alternateIdentity)
+    {
+        var list = new List<string>();
+        void Add(string? value)
+        {
+            var text = (value ?? "").Trim();
+            if (text.Length == 0)
+                return;
+            if (list.Any(s => s.Equals(text, StringComparison.OrdinalIgnoreCase)))
+                return;
+            list.Add(text);
+        }
+
+        Add(username);
+        Add(alternateIdentity);
+        Add(AppUserDomainNormalizer.Normalize(username));
+        Add(AppUserDomainNormalizer.Normalize(alternateIdentity));
+        return list;
     }
 
     private static ShimasUserProfile MapMashhadUserInfo(MashhadUserInfoData data, string fallbackUsername)
