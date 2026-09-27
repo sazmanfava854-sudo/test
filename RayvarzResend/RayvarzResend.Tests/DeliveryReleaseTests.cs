@@ -66,6 +66,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"Tahator\"", json);
         Assert.Contains("FinancialAssistant", json);
         Assert.Contains("https://city.mashhad.ir:5065", json);
+        Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.True(doc.RootElement.TryGetProperty("ConnectionStrings", out _));
         Assert.True(doc.RootElement.TryGetProperty("Auth", out _));
@@ -81,6 +82,18 @@ public class DeliveryReleaseTests
         var program = File.ReadAllText(path);
         Assert.Contains("AddSingleton<RayvarzPayloadBuilder>", program);
         Assert.Contains("[FromServices] RayvarzPayloadBuilder", program);
+    }
+
+    [Fact]
+    public void Login_page_supports_admin_local_and_sso_link()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
+        Assert.Contains("loginSsoBlock", html);
+        Assert.Contains("ورود سازمانی (SSO)", html);
+        Assert.Contains("login.js?v=4", html);
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
+        Assert.Contains("allowAdminLocalLoginOnPublicHost", js);
+        Assert.DoesNotContain("if (mode.preferSsoLogin) {\n        window.location.href = mode.loginPath", js);
     }
 
     [Fact]
@@ -189,7 +202,8 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=90", html);
+        Assert.Contains("js/app.js?v=91", html);
+        Assert.Contains("perm-rayvarz", html);
         Assert.Contains("col-unsent-fill", html);
         Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);
         Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
@@ -202,6 +216,8 @@ public class DeliveryReleaseTests
         Assert.Contains("function appendUnsentItems(", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
         Assert.Contains("BuildMixedLookupResult", File.ReadAllText(WebFile("Services", "UnsentBillPayLookupHelper.cs")));
+        Assert.Contains("function canAccessRayvarzModule(", js);
+        Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);
         Assert.Contains("function formatUnsentBatchSendResult(", js);
         Assert.Contains("<th>شناسه قبض</th>", html);
         Assert.Contains("<th>شناسه پرداخت</th>", html);

@@ -1918,6 +1918,32 @@ function canAccessUnsent() {
   return isAdminUser() || !!currentUser?.canAccessUnsentFiches;
 }
 
+function hasAnyModulePermission() {
+  if (isAdminUser()) return true;
+  return !!(
+    currentUser?.canAccessUnsentFiches
+    || currentUser?.canAccessInstallment
+    || currentUser?.canAccessFicheDateChange
+    || currentUser?.canAccessBankInquiryConfirm
+    || currentUser?.canManageUsers
+  );
+}
+
+/** تب رایورز: ارسال جمعی، یا ارسال تکی وقتی هیچ ماژول دیگری تعریف نشده */
+function canAccessRayvarzModule() {
+  if (isAdminUser()) return true;
+  if (canAccessUnsent()) return true;
+  return !hasAnyModulePermission();
+}
+
+const MAIN_TAB_ACCESS_ORDER = [
+  { key: 'unsent', can: () => canAccessRayvarzModule() },
+  { key: 'installment', can: () => canAccessInstallment() },
+  { key: 'ficheDate', can: () => canAccessFicheDateChange() },
+  { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
+  { key: 'users', can: () => canManageUsers() }
+];
+
 function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
 }
@@ -1939,6 +1965,9 @@ function isCenterUser() {
 }
 
 function applyPermissionUi() {
+  document.querySelectorAll('.perm-rayvarz').forEach((el) => {
+    el.hidden = !canAccessRayvarzModule();
+  });
   document.querySelectorAll('.perm-unsent').forEach((el) => {
     el.hidden = !canAccessUnsent();
   });
@@ -1960,7 +1989,8 @@ function applyPermissionUi() {
 }
 
 function defaultMainTabKey() {
-  return 'unsent';
+  const first = MAIN_TAB_ACCESS_ORDER.find((t) => t.can());
+  return first?.key ?? 'unsent';
 }
 
 function defaultRayvarzSendMode() {

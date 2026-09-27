@@ -21,6 +21,8 @@ public sealed class ShimasAuthOptions
     public string UserProfileUrl { get; set; } = "";
     public bool AutoProvisionUsers { get; set; } = true;
     public bool AllowLocalLoginFallback { get; set; } = true;
+    /// <summary>روی آدرس عمومی (مثلاً city.mashhad.ir) ورود محلی فقط برای کاربران IsAdmin.</summary>
+    public bool AllowAdminLocalLoginOnPublicHost { get; set; } = true;
     public int MinRefreshTokenLength { get; set; } = 3;
 
     public string EffectiveClientId

@@ -122,6 +122,19 @@ public class ShimasAuthServiceTests
         server.Request.Host = new HostString("city.mashhad.ir", 5065);
         Assert.Equal("/auth/login", service.ResolveLoginRedirectPath(server.Request));
         Assert.True(service.GetStatus(server.Request).PreferSsoLogin);
+        Assert.True(service.GetStatus(server.Request).AllowAdminLocalLoginOnPublicHost);
+    }
+
+    [Fact]
+    public void GetStatus_exposes_admin_local_login_flag()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "id",
+            AllowAdminLocalLoginOnPublicHost = true
+        });
+        Assert.True(service.GetStatus().AllowAdminLocalLoginOnPublicHost);
     }
 
     [Fact]

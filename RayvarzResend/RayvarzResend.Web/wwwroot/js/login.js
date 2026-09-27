@@ -23,18 +23,29 @@ async function checkExistingSession() {
   return false;
 }
 
+function showSsoBlock(mode) {
+  const block = $('loginSsoBlock');
+  if (!block) return;
+  const show = !!mode?.preferSsoLogin && !!mode?.allowAdminLocalLoginOnPublicHost;
+  block.hidden = !show;
+  const link = $('btnSsoLogin');
+  if (link && mode?.loginPath) link.setAttribute('href', mode.loginPath);
+}
+
 async function initLoginPage() {
   if (await checkExistingSession()) return;
 
+  let mode = null;
   try {
     const res = await fetch('/api/auth/mode');
     if (res.ok) {
-      const mode = await res.json();
-      if (mode.preferSsoLogin) {
+      mode = await res.json();
+      showSsoBlock(mode);
+      if (mode.preferSsoLogin && !mode.allowAdminLocalLoginOnPublicHost) {
         window.location.href = mode.loginPath || '/auth/login';
         return;
       }
-      if (!mode.localLoginAvailable) {
+      if (!mode.localLoginAvailable && !mode.allowAdminLocalLoginOnPublicHost) {
         const errEl = $('loginError');
         errEl.textContent = 'ورود محلی غیرفعال است';
         errEl.hidden = false;

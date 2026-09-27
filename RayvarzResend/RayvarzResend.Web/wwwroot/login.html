@@ -29,10 +29,14 @@
         <div class="actions">
           <button id="btnLogin" class="btn primary" type="submit">ورود</button>
         </div>
+        <div id="loginSsoBlock" class="login-sso-block" hidden>
+          <p class="login-sso-hint">کاربران سازمانی از ورود یکپارچه استفاده کنند.</p>
+          <a id="btnSsoLogin" class="btn secondary" href="/auth/login">ورود سازمانی (SSO)</a>
+        </div>
         <p id="loginError" class="login-error" hidden></p>
       </form>
     </section>
   </div>
-  <script src="js/login.js?v=3"></script>
+  <script src="js/login.js?v=4"></script>
 </body>
 </html>
