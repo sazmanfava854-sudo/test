@@ -33,6 +33,20 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 پس از اجرا: `GET /api/config` → `releaseVersion: 26` ، `accountingDoc.dryRun: false`.
 
+### SSO (مثل RuleEngine / login.mashhad.ir)
+
+در `Auth:Shimas`:
+
+| کلید | معنی |
+|------|------|
+| `PublicBaseUrl` | `https://city.mashhad.ir:5065` — آدرس callback |
+| `ApiBaseUrl` | `https://login.mashhad.ir` |
+| `ApiName` | همان **SSOUserName** در RuleEngine (هدر `apiName`) |
+| `ClientId` / `ClientSecret` | همان سامانه |
+| `LoginUrl` | `https://login.mashhad.ir/Authentication/Login.aspx` |
+
+بعد از بازگشت از SSO، سرور با API رسمی `getAccessToken` + `getUserInfo` توکن را تأیید می‌کند (نه فقط query string).
+
 ساخت Zip: `bash RayvarzResend/scripts/build-release-zip.sh`
 
 `GET /api/config` → `releaseVersion: 26` ، `releaseLabel: نسخه آخر`

@@ -31,6 +31,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(MashhadSsoApiClient.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseProxy = false });
 builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
@@ -84,6 +86,7 @@ builder.Services.AddSingleton<InMemoryAppUserStore>();
 builder.Services.AddSingleton<AppUserRepository>();
 builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
+builder.Services.AddSingleton<MashhadSsoApiClient>();
 builder.Services.AddSingleton<ShimasAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<AccountingDocWriter>();
@@ -171,7 +174,7 @@ var adminOnly = AuthPolicies.AdminOnly;
 app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
     Results.Ok(shimas.GetStatus(http.Request))).AllowAnonymous();
 
-app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
+app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
 {
     if (!shimas.Options.PreferSsoLoginForHost(http.Request.Host.Host))
         return Results.Redirect("/login.html");
@@ -183,9 +186,16 @@ app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
         return Results.Content("SSO پیکربندی نشده — ClientId و ClientSecret را در Auth:Shimas تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
     }
 
-    var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
-    var loginUrl = shimas.BuildExternalLoginUrl(callbackUrl);
-    return Results.Redirect(loginUrl);
+    try
+    {
+        var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
+        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, ct);
+        return Results.Redirect(loginUrl);
+    }
+    catch (Exception ex)
+    {
+        return Results.Content($"خطا در آماده‌سازی ورود SSO: {ex.Message}", "text/plain; charset=utf-8", statusCode: 503);
+    }
 }).AllowAnonymous();
 
 app.MapGet("/auth/callback", async (

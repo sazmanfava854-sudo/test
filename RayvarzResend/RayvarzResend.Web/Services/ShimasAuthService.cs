@@ -15,17 +15,20 @@ public sealed class ShimasAuthService
 
     private readonly ShimasAuthOptions _options;
     private readonly AppUserRepository _users;
+    private readonly MashhadSsoApiClient _mashhadSso;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ShimasAuthService> _logger;
 
     public ShimasAuthService(
         IOptions<ShimasAuthOptions> options,
         AppUserRepository users,
+        MashhadSsoApiClient mashhadSso,
         IHttpClientFactory httpClientFactory,
         ILogger<ShimasAuthService> logger)
     {
         _options = options.Value;
         _users = users;
+        _mashhadSso = mashhadSso;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
@@ -81,6 +84,31 @@ public sealed class ShimasAuthService
         return QueryHelpers.AddQueryString(_options.LoginUrl, query);
     }
 
+    public async Task<string> BuildExternalLoginUrlAsync(string callbackAbsoluteUrl, CancellationToken ct = default)
+    {
+        if (!_options.UseMashhadAuthenticationApi)
+            return BuildExternalLoginUrl(callbackAbsoluteUrl);
+
+        var keyResult = await _mashhadSso.GetLoginKeyAsync(ct);
+        var loginKey = keyResult.Data?.EffectiveLoginKey;
+        if (!keyResult.IsSuccess || string.IsNullOrWhiteSpace(loginKey))
+        {
+            var detail = keyResult.ErrorMessage ?? "loginKey خالی است";
+            _logger.LogWarning("Mashhad loginKey failed: {Detail} (code {Code})", detail, keyResult.ErrorCode);
+            throw new InvalidOperationException($"دریافت loginKey از SSO ناموفق بود: {detail}");
+        }
+
+        var query = new Dictionary<string, string?>
+        {
+            [_options.LoginKeyParameter] = loginKey,
+            [_options.LKeyParameter] = _options.EffectiveClientId,
+            [_options.ClientIdParameter] = _options.EffectiveClientId,
+            [_options.ReturnUrlParameter] = callbackAbsoluteUrl
+        };
+
+        return QueryHelpers.AddQueryString(_options.LoginUrl, query);
+    }
+
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
     {
         var path = NormalizeCallbackPath(_options.CallbackPath);
@@ -130,6 +158,9 @@ public sealed class ShimasAuthService
         if (normalizedToken.Length < _options.MinRefreshTokenLength)
             return Fail("refresh_token نامعتبر است");
 
+        if (_options.UseMashhadAuthenticationApi)
+            return await ValidateViaMashhadApiAsync(normalizedUsername, normalizedToken, ct);
+
         if (!string.IsNullOrWhiteSpace(_options.ValidateTokenUrl))
             return await ValidateRemoteAsync(normalizedUsername, normalizedToken, ct);
 
@@ -142,6 +173,72 @@ public sealed class ShimasAuthService
             Success = true,
             UsedRemoteApi = false,
             Profile = BuildProfileFromUsername(normalizedUsername)
+        };
+    }
+
+    private async Task<ShimasValidationResult> ValidateViaMashhadApiAsync(
+        string username,
+        string refreshToken,
+        CancellationToken ct)
+    {
+        try
+        {
+            var tokenResult = await _mashhadSso.GetAccessTokenAsync(refreshToken, username, ct);
+            var accessToken = tokenResult.Data?.AccessToken?.Trim();
+            if (!tokenResult.IsSuccess || string.IsNullOrWhiteSpace(accessToken))
+            {
+                var detail = tokenResult.ErrorMessage ?? "AccessToken خالی است";
+                _logger.LogWarning(
+                    "Mashhad getAccessToken failed for {Username}: {Detail} (code {Code})",
+                    MaskUsername(username),
+                    detail,
+                    tokenResult.ErrorCode);
+                return Fail($"اعتبارسنجی SSO ناموفق بود: {detail}");
+            }
+
+            var infoResult = await _mashhadSso.GetUserInfoAsync(accessToken, ct);
+            if (!infoResult.IsSuccess || infoResult.Data == null)
+            {
+                var detail = infoResult.ErrorMessage ?? "پاسخ getUserInfo خالی است";
+                _logger.LogWarning("Mashhad getUserInfo failed: {Detail}", detail);
+                return Fail($"دریافت اطلاعات کاربر از SSO ناموفق بود: {detail}");
+            }
+
+            var profile = MapMashhadUserInfo(infoResult.Data, username);
+            return new ShimasValidationResult
+            {
+                Success = true,
+                UsedRemoteApi = true,
+                Profile = profile
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Mashhad SSO validation error for {Username}", MaskUsername(username));
+            return Fail("خطا در ارتباط با API احراز هویت سازمان");
+        }
+    }
+
+    private static ShimasUserProfile MapMashhadUserInfo(MashhadUserInfoData data, string fallbackUsername)
+    {
+        var basic = data.OldSSO_UserInfo?.basicInfo;
+        var domainAccount = AppUserDomainNormalizer.Normalize(
+            basic?.username ?? data.UserName ?? fallbackUsername);
+        var nationalId = (data.NationalCode ?? basic?.nationalCode ?? "").Trim();
+        var loginUsername = AppUserInputNormalizer.IsValidNationalId(nationalId)
+            ? nationalId
+            : AppUserDomainNormalizer.Normalize(data.UserName ?? fallbackUsername);
+
+        if (string.IsNullOrEmpty(loginUsername))
+            loginUsername = domainAccount;
+
+        return new ShimasUserProfile
+        {
+            Username = loginUsername,
+            Domain = domainAccount,
+            NationalId = nationalId,
+            FirstName = (data.FName ?? basic?.firstname ?? "").Trim(),
+            LastName = (data.LName ?? basic?.surname ?? "").Trim()
         };
     }
 

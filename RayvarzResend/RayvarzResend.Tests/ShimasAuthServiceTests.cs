@@ -21,10 +21,18 @@ public class ShimasAuthServiceTests
             memory,
             NullLogger<AppUserRepository>.Instance);
 
+        var opts = Options.Create(options ?? new ShimasAuthOptions());
+        var httpFactory = new TestHttpClientFactory();
+        var mashhad = new MashhadSsoApiClient(
+            opts,
+            httpFactory,
+            NullLogger<MashhadSsoApiClient>.Instance);
+
         return new ShimasAuthService(
-            Options.Create(options ?? new ShimasAuthOptions()),
+            opts,
             repo,
-            new TestHttpClientFactory(),
+            mashhad,
+            httpFactory,
             NullLogger<ShimasAuthService>.Instance);
     }
 

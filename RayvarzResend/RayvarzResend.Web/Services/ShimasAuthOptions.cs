@@ -8,6 +8,14 @@ public sealed class ShimasAuthOptions
     /// <summary>آدرس عمومی سایت — برای callback سامزان/شیماس روی سرور پشت IIS یا IP:Port.</summary>
     public string PublicBaseUrl { get; set; } = "";
     public string LoginUrl { get; set; } = "https://login.mashhad.ir/Authentication/Login.aspx";
+    /// <summary>پایه API احراز هویت (همان SSOBaseUrl در RuleEngine) — مثلاً https://login.mashhad.ir</summary>
+    public string ApiBaseUrl { get; set; } = "https://login.mashhad.ir";
+    /// <summary>نام API در هدر apiName (همان SSOUserName در RuleEngine).</summary>
+    public string ApiName { get; set; } = "";
+    public string LoginKeyParameter { get; set; } = "loginKey";
+    public string LoginState { get; set; } = "RayvarzResend";
+    public int LoginUserType { get; set; }
+    public int LoginDomainId { get; set; }
     /// <summary>شناسه سامانه در لاگین یکپارچه (همان lkey در login.mashhad.ir).</summary>
     public string ClientId { get; set; } = "";
     /// <summary>رمز سامانه — فقط سمت سرور برای اعتبارسنجی توکن؛ در URL مرورگر نمی‌رود.</summary>
@@ -35,9 +43,17 @@ public sealed class ShimasAuthOptions
         }
     }
 
+    public string EffectiveApiName =>
+        string.IsNullOrWhiteSpace(ApiName) ? EffectiveClientId : ApiName.Trim();
+
     public bool HasLKey => !string.IsNullOrWhiteSpace(EffectiveClientId);
     public bool HasClientSecret => !string.IsNullOrWhiteSpace(ClientSecret);
-    public bool SsoReady => Enabled && HasLKey;
+    public bool UseMashhadAuthenticationApi =>
+        !string.IsNullOrWhiteSpace(ApiBaseUrl)
+        && !string.IsNullOrWhiteSpace(EffectiveApiName)
+        && HasClientSecret;
+
+    public bool SsoReady => Enabled && HasLKey && (!UseMashhadAuthenticationApi || HasClientSecret);
     public bool LocalLoginAvailable => !Enabled || (!SsoReady && AllowLocalLoginFallback);
     public bool PreferSsoLogin => Enabled && (SsoReady || !AllowLocalLoginFallback);
 
