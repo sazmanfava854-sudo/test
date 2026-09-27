@@ -51,7 +51,7 @@ public class AppSettingsConfigurationTests
         Assert.True(shimas.GetProperty("Enabled").GetBoolean());
         Assert.Equal("19cf3C33", shimas.GetProperty("ClientId").GetString());
         Assert.Equal("D2fbf", shimas.GetProperty("ClientSecret").GetString());
-        Assert.Equal("19cf3C33", shimas.GetProperty("LKey").GetString());
+        Assert.Equal("", shimas.GetProperty("LKey").GetString());
     }
 
     [Fact]

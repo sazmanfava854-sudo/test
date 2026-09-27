@@ -47,7 +47,9 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `CallbackPath` | `/` = بازگشت روی ریشه (همان ReturnUrl پورتال)؛ `/auth/callback` برای ثبت قدیمی |
 | `ApiName` | نام کاربری ثبت SSO (جدول ۱ ردیف ۲) — هدر `apiName` — **نه** ClientId |
 | `ClientId` / `ClientSecret` | ثبت SSO + هش `SHA256(Secret+requestTime)` |
-| `UseLoginKeyOnRedirect` | `true` روال رسمی؛ `false` فقط `Login.aspx?lkey` (تا رفع 403) |
+| `UseLoginKeyOnRedirect` | **`true`** — `loginKey` سپس `Authentication/Start/{loginKey}` (سند SSO ص ۲۶) |
+| گیر روی `Profile.aspx` | ورود **بدون** `ReturnUrl` (لینک مستقیم با `lkey` یا ClientId ناهماهنگ). همیشه از `https://city.mashhad.ir:5065` → `/auth/login` شروع کنید؛ در پورتال SSO **برگشت آدرس** = همان `PublicBaseUrl` |
+| `ClientId` / `ClientSecret` / `ApiName` | باید با ثبت SSO (جدول ۱) یکی باشد — `lkey` در URL باید همان `ClientId` باشد |
 | `LoginStartUrlTemplate` | `https://login.mashhad.ir/Authentication/Start/{loginKey}` |
 | `LoginState` | فقط برای loginKey؛ در Login.aspx قدیمی معمولاً `state` نمی‌آید — خالی بگذارید یا همان پیش‌فرض (بازگشت بدون state مجاز است) |
 | `AutoProvisionUsers` | `false` = کاربر باید از قبل در «مدیریت کاربران» با کد ملی/دامین ثبت شده باشد؛ بعد از SSO بدون رکورد → بازگشت به login با پیام خطا |

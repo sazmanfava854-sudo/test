@@ -15,12 +15,13 @@ public sealed class ShimasAuthOptions
     /// <summary>نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲) — هدر apiName؛ **نه** ClientId/lkey.</summary>
     public string ApiName { get; set; } = "";
     public string LoginKeyParameter { get; set; } = "loginKey";
-    public string LoginState { get; set; } = "test";
+    /// <summary>خالی = state تصادفی هر ورود (توصیه loginKey). مقدار ثابت فقط برای تست.</summary>
+    public string LoginState { get; set; } = "";
     /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>
     public string HashEncoding { get; set; } = "lower";
     public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
-    /// <summary>قبل از Login.aspx از API loginKey استفاده شود — پیش‌فرض خاموش (همان lkey+returnUrl که روی login.mashhad.ir جواب می‌دهد).</summary>
-    public bool UseLoginKeyOnRedirect { get; set; }
+    /// <summary>روال رسمی SSO: loginKey + Start/{loginKey} با ReturnUrl ثبت‌شده در پورتال.</summary>
+    public bool UseLoginKeyOnRedirect { get; set; } = true;
     public int LoginUserType { get; set; }
     public int LoginDomainId { get; set; }
     /// <summary>شناسه سامانه در لاگین یکپارچه (همان lkey در login.mashhad.ir).</summary>

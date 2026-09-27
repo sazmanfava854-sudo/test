@@ -82,7 +82,8 @@ public sealed class ShimasAuthService
         {
             [_options.LKeyParameter] = clientId,
             [_options.ClientIdParameter] = clientId,
-            [_options.ReturnUrlParameter] = callbackAbsoluteUrl
+            [_options.ReturnUrlParameter] = callbackAbsoluteUrl,
+            ["ReturnUrl"] = callbackAbsoluteUrl
         };
 
         return QueryHelpers.AddQueryString(_options.LoginUrl, query);
@@ -101,7 +102,6 @@ public sealed class ShimasAuthService
                 "Auth:Shimas:ApiName = نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲، همان SSOUserName در RuleEngine) — نه ClientId.");
 
         var state = ResolveLoginState(http);
-        RememberLoginState(http, state);
 
         var keyResult = await _mashhadSso.GetLoginKeyAsync(callbackAbsoluteUrl, state, ct);
         var loginKey = keyResult.Data?.EffectiveLoginKey;
@@ -112,14 +112,17 @@ public sealed class ShimasAuthService
                 ? " (apiName باید نام کاربری SSO باشد، ClientId و SecretKey جدا هستند)"
                 : "";
             _logger.LogWarning(
-                "Mashhad loginKey failed (apiName={ApiName}, clientId={ClientId}): {Detail} (code {Code})",
+                "Mashhad loginKey failed (apiName={ApiName}, clientId={ClientId}, returnUrl={ReturnUrl}): {Detail} (code {Code})",
                 _options.SigningApiName,
                 _options.EffectiveClientId,
+                callbackAbsoluteUrl,
                 detail,
                 keyResult.ErrorCode);
 
             if (_options.AllowLegacyLoginUrlWithoutLoginKey)
             {
+                if (http != null)
+                    ClearSsoFlowCookies(http);
                 _logger.LogWarning("Falling back to legacy Login.aspx (lkey + returnUrl) without loginKey");
                 return BuildExternalLoginUrl(callbackAbsoluteUrl);
             }
@@ -127,6 +130,11 @@ public sealed class ShimasAuthService
             throw new InvalidOperationException($"دریافت loginKey از SSO ناموفق بود: {detail}{hint}");
         }
 
+        RememberLoginState(http, state);
+        _logger.LogInformation(
+            "SSO loginKey OK — redirect to Start/{{loginKey}}, returnUrl={ReturnUrl}, state length={StateLen}",
+            callbackAbsoluteUrl,
+            state.Length);
         return BuildLoginStartUrl(loginKey);
     }
 

@@ -65,6 +65,7 @@ public class ShimasAuthServiceTests
         var url = await service.BuildExternalLoginUrlAsync("https://city.mashhad.ir:5065/auth/callback");
         Assert.Contains("lkey=19cf3C33", url);
         Assert.Contains("returnUrl=", url);
+        Assert.Contains("ReturnUrl=", url);
         Assert.DoesNotContain("loginKey=", url);
     }
 
