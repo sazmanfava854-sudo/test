@@ -13,7 +13,7 @@ public class MashhadSsoApiClientTests
     [Fact]
     public void Sha256Hex_matches_secret_plus_time_pattern()
     {
-        var hash = SsoApiSecretHash.Sha256Hex("secret" + "12345");
+        var hash = SsoApiSecretHash.ComputeApiSecret("secret", "12345", "lower");
         Assert.Equal(64, hash.Length);
         Assert.DoesNotContain("-", hash);
     }

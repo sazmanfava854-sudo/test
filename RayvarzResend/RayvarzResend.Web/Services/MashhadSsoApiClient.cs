@@ -8,7 +8,7 @@ public sealed class MashhadSsoApiClient
 {
     public const string HttpClientName = "MashhadSsoApi";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions DeserializeOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
@@ -29,7 +29,7 @@ public sealed class MashhadSsoApiClient
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_options.ApiBaseUrl)
-        && !string.IsNullOrWhiteSpace(_options.EffectiveApiName)
+        && !string.IsNullOrWhiteSpace(_options.SigningApiName)
         && _options.HasClientSecret;
 
     public async Task<MashhadSsoResult<string>> GetCurrentTimeAsync(CancellationToken ct = default)
@@ -52,15 +52,15 @@ public sealed class MashhadSsoApiClient
             };
 
         var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.Sha256Hex(_options.ClientSecret + requestTime);
-        var payload = new
+        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
+        var payload = new MashhadLoginKeyRequest
         {
             Time = requestTime,
             Hash = hash,
             ClientId = _options.EffectiveClientId,
             State = _options.LoginState,
             UserType = _options.LoginUserType,
-            DomainID = _options.LoginDomainId
+            DomainId = _options.LoginDomainId
         };
 
         using var request = BuildSignedPost("/api/Authentication/loginKey", requestTime, hash, payload);
@@ -85,12 +85,12 @@ public sealed class MashhadSsoApiClient
             };
 
         var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.Sha256Hex(_options.ClientSecret + requestTime);
-        var payload = new
+        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
+        var payload = new MashhadAccessTokenRequest
         {
             RefreshToken = refreshToken,
             UserName = username,
-            ClientID = _options.EffectiveClientId
+            ClientId = _options.EffectiveClientId
         };
 
         using var request = BuildSignedPost("/api/Authentication/getAccessToken", requestTime, hash, payload);
@@ -113,8 +113,8 @@ public sealed class MashhadSsoApiClient
             };
 
         var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.Sha256Hex(_options.ClientSecret + requestTime);
-        var payload = new { Token = accessToken };
+        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
+        var payload = new MashhadUserInfoRequest { Token = accessToken };
 
         using var request = BuildSignedPost("/api/Authentication/getUserInfo", requestTime, hash, payload);
         var client = CreateClient();
@@ -124,17 +124,22 @@ public sealed class MashhadSsoApiClient
             ?? new MashhadSsoResult<MashhadUserInfoData> { ErrorCode = -1, ErrorMessage = body };
     }
 
-    private HttpRequestMessage BuildSignedPost(
+    private HttpRequestMessage BuildSignedPost<TPayload>(
         string relativePath,
         string requestTime,
         string apiSecret,
-        object payload)
+        TPayload payload)
     {
+        var apiName = _options.SigningApiName;
+        if (string.IsNullOrWhiteSpace(apiName))
+            throw new InvalidOperationException(
+                "Auth:Shimas:ApiName (همان SSOUserName در RuleEngine) تنظیم نشده است.");
+
         var request = new HttpRequestMessage(HttpMethod.Post, Combine(relativePath));
-        request.Headers.TryAddWithoutValidation("apiName", _options.EffectiveApiName);
+        request.Headers.TryAddWithoutValidation("apiName", apiName);
         request.Headers.TryAddWithoutValidation("requestTime", requestTime);
         request.Headers.TryAddWithoutValidation("apiSecret", apiSecret);
-        request.Content = JsonContent.Create(payload, options: JsonOptions);
+        request.Content = JsonContent.Create(payload, options: MashhadSsoJson.SerializerOptions);
         return request;
     }
 
@@ -152,7 +157,7 @@ public sealed class MashhadSsoApiClient
             return default;
         try
         {
-            return JsonSerializer.Deserialize<T>(json, JsonOptions);
+            return JsonSerializer.Deserialize<T>(json, DeserializeOptions);
         }
         catch
         {

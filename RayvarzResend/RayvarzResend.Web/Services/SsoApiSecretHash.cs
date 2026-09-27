@@ -5,9 +5,17 @@ namespace RayvarzResend.Web.Services;
 
 public static class SsoApiSecretHash
 {
-    public static string Sha256Hex(string input)
+    public static string Sha256HexLower(string input) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input ?? ""))).ToLowerInvariant();
+
+    public static string Sha256HexUpper(string input) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input ?? "")));
+
+    public static string ComputeApiSecret(string secret, string requestTime, string? encoding)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input ?? ""));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
+        var raw = (secret ?? "") + (requestTime ?? "");
+        return string.Equals(encoding, "upper", StringComparison.OrdinalIgnoreCase)
+            ? Sha256HexUpper(raw)
+            : Sha256HexLower(raw);
     }
 }

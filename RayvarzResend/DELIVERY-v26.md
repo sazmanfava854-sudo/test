@@ -41,7 +41,9 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 |------|------|
 | `PublicBaseUrl` | `https://city.mashhad.ir:5065` — آدرس callback |
 | `ApiBaseUrl` | `https://login.mashhad.ir` |
-| `ApiName` | همان **SSOUserName** در RuleEngine (هدر `apiName`) |
+| `ApiName` | همان **SSOUserName** در RuleEngine (هدر `apiName`) — **نه** `ClientId` / lkey |
+| `HashEncoding` | `lower` (پیش‌فرض) یا `upper` اگر SSO خطای Client info داد |
+| `AllowLegacyLoginUrlWithoutLoginKey` | اگر `loginKey` خطا دهد، ورود با `lkey`+`returnUrl` (پیش‌فرض `true`) |
 | `ClientId` / `ClientSecret` | همان سامانه |
 | `LoginUrl` | `https://login.mashhad.ir/Authentication/Login.aspx` |
 

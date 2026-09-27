@@ -89,12 +89,28 @@ public sealed class ShimasAuthService
         if (!_options.UseMashhadAuthenticationApi)
             return BuildExternalLoginUrl(callbackAbsoluteUrl);
 
+        if (string.IsNullOrWhiteSpace(_options.SigningApiName))
+            throw new InvalidOperationException(
+                "Auth:Shimas:ApiName را مثل SSOUserName در RuleEngine تنظیم کنید (مثلاً FinancialAssistant).");
+
         var keyResult = await _mashhadSso.GetLoginKeyAsync(ct);
         var loginKey = keyResult.Data?.EffectiveLoginKey;
         if (!keyResult.IsSuccess || string.IsNullOrWhiteSpace(loginKey))
         {
             var detail = keyResult.ErrorMessage ?? "loginKey خالی است";
-            _logger.LogWarning("Mashhad loginKey failed: {Detail} (code {Code})", detail, keyResult.ErrorCode);
+            _logger.LogWarning(
+                "Mashhad loginKey failed (apiName={ApiName}, clientId={ClientId}): {Detail} (code {Code})",
+                _options.SigningApiName,
+                _options.EffectiveClientId,
+                detail,
+                keyResult.ErrorCode);
+
+            if (_options.AllowLegacyLoginUrlWithoutLoginKey)
+            {
+                _logger.LogWarning("Falling back to legacy Login.aspx (lkey + returnUrl) without loginKey");
+                return BuildExternalLoginUrl(callbackAbsoluteUrl);
+            }
+
             throw new InvalidOperationException($"دریافت loginKey از SSO ناموفق بود: {detail}");
         }
 

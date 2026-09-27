@@ -13,7 +13,10 @@ public sealed class ShimasAuthOptions
     /// <summary>نام API در هدر apiName (همان SSOUserName در RuleEngine).</summary>
     public string ApiName { get; set; } = "";
     public string LoginKeyParameter { get; set; } = "loginKey";
-    public string LoginState { get; set; } = "RayvarzResend";
+    public string LoginState { get; set; } = "test";
+    /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>
+    public string HashEncoding { get; set; } = "lower";
+    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
     public int LoginUserType { get; set; }
     public int LoginDomainId { get; set; }
     /// <summary>شناسه سامانه در لاگین یکپارچه (همان lkey در login.mashhad.ir).</summary>
@@ -43,14 +46,17 @@ public sealed class ShimasAuthOptions
         }
     }
 
+    /// <summary>هدر apiName — باید SSOUserName باشد، نه lkey.</summary>
+    public string SigningApiName => (ApiName ?? "").Trim();
+
     public string EffectiveApiName =>
-        string.IsNullOrWhiteSpace(ApiName) ? EffectiveClientId : ApiName.Trim();
+        string.IsNullOrWhiteSpace(SigningApiName) ? EffectiveClientId : SigningApiName;
 
     public bool HasLKey => !string.IsNullOrWhiteSpace(EffectiveClientId);
     public bool HasClientSecret => !string.IsNullOrWhiteSpace(ClientSecret);
     public bool UseMashhadAuthenticationApi =>
         !string.IsNullOrWhiteSpace(ApiBaseUrl)
-        && !string.IsNullOrWhiteSpace(EffectiveApiName)
+        && !string.IsNullOrWhiteSpace(SigningApiName)
         && HasClientSecret;
 
     public bool SsoReady => Enabled && HasLKey && (!UseMashhadAuthenticationApi || HasClientSecret);

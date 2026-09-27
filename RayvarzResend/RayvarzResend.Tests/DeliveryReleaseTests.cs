@@ -68,6 +68,7 @@ public class DeliveryReleaseTests
         Assert.Contains("https://city.mashhad.ir:5065", json);
         Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
         Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
+        Assert.Contains("\"ApiName\": \"FinancialAssistant\"", json);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.True(doc.RootElement.TryGetProperty("ConnectionStrings", out _));
         Assert.True(doc.RootElement.TryGetProperty("Auth", out _));
