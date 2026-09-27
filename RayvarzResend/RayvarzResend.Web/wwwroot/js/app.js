@@ -4,6 +4,8 @@ let currentUser = null;
 let authMode = null;
 let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
+/** @type {Map<string, string>} ficheNo → Income | Duty */
+const unsentSourceKindByFicheNo = new Map();
 const unsentSearchState = {
   page: 1,
   pageSize: 25,
@@ -620,7 +622,33 @@ function parseUnsentExcelFile(file) {
   });
 }
 
-function appendUnsentItems(items) {
+function setUnsentExcelStatus(message, loading = false) {
+  const el = $('unsentExcelStatus');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle('is-loading', loading);
+}
+
+function rememberUnsentSourceKind(item, fallbackKind) {
+  if (!item?.ficheNo) return;
+  const kind = item.sourceKind || fallbackKind;
+  if (kind) unsentSourceKindByFicheNo.set(item.ficheNo, kind);
+}
+
+function syncUnsentSourceKindsFromItems(items, fallbackKind) {
+  (items || []).forEach((item) => rememberUnsentSourceKind(item, fallbackKind));
+}
+
+function getSelectedUnsentBatchTargets() {
+  return getSelectedUnsentFicheNos().map((ficheNo) => ({
+    ficheNo,
+    sourceKind: unsentSourceKindByFicheNo.get(ficheNo)
+      || $('unsentFicheKind')?.value
+      || 'Income'
+  }));
+}
+
+function appendUnsentItems(items, { autoSelect = false } = {}) {
   const incoming = items || [];
   const existing = new Set(unsentItems.map((row) => row.ficheNo));
   let added = 0;
@@ -633,8 +661,9 @@ function appendUnsentItems(items) {
       return;
     }
     existing.add(item.ficheNo);
+    rememberUnsentSourceKind(item, null);
     next.push(item);
-    selectedUnsentFicheNos.add(item.ficheNo);
+    if (autoSelect) selectedUnsentFicheNos.add(item.ficheNo);
     added += 1;
   });
   renderUnsentTable(next, {
@@ -1675,13 +1704,13 @@ function renderUnsentTable(items, meta = {}) {
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
       <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
-      <td>${formatNosaziCode(item.bnkAcntNo)}</td>
-      <td class="num-cell">${formatBillPayDisplay(item.billId)}</td>
-      <td class="num-cell">${formatBillPayDisplay(item.paymentId)}</td>
+      <td class="col-installment-nosazi">${formatNosaziCode(item.bnkAcntNo)}</td>
+      <td class="num-cell col-unsent-bill">${formatBillPayDisplay(item.billId)}</td>
+      <td class="num-cell col-unsent-pay">${formatBillPayDisplay(item.paymentId)}</td>
       <td class="num-cell">${formatShamsiDisplay(item.bankPaymentDate)}</td>
       <td class="num-cell">${formatShamsiDisplay(item.paymentDate)}</td>
-      <td class="num-cell">${formatBillPayDisplay(item.ficheNo)}</td>
-      <td>${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
+      <td class="num-cell col-unsent-fiche">${formatBillPayDisplay(item.ficheNo)}</td>
+      <td class="col-installment-cost">${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
     </tr>
   `;
   }).join('');
@@ -1734,7 +1763,10 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
   const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
   unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
-  if (clearSelection) selectedUnsentFicheNos.clear();
+  if (clearSelection) {
+    selectedUnsentFicheNos.clear();
+    unsentSourceKindByFicheNo.clear();
+  }
 
   const btn = $('btnUnsentSearch');
   const prevBtn = $('btnUnsentPrevPage');
@@ -1761,7 +1793,9 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
 
     const totalCount = data.totalCount ?? data.count ?? 0;
     const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
-    renderUnsentTable(data.items || [], {
+    const items = data.items || [];
+    syncUnsentSourceKindsFromItems(items, filters.ficheKind);
+    renderUnsentTable(items, {
       page: data.page ?? page,
       pageSize: data.pageSize ?? pageSize,
       totalCount,
@@ -2603,67 +2637,87 @@ function setupEventHandlers() {
   let unsentExcelBusy = false;
   $('unsentExcelFile')?.addEventListener('change', async () => {
     const input = $('unsentExcelFile');
-    const status = $('unsentExcelStatus');
+    const excelBtn = $('btnUnsentExcel');
+    const box = $('unsentResultBox');
     const file = input?.files?.[0];
+
     if (!file) {
-      if (status) status.textContent = 'فایلی انتخاب نشده';
+      setUnsentExcelStatus('فایل اکسل انتخاب نشده', false);
       return;
     }
     if (unsentExcelBusy) return;
 
-    const box = $('unsentResultBox');
     unsentExcelBusy = true;
-    if (status) status.textContent = 'در حال بررسی…';
+    if (excelBtn) excelBtn.disabled = true;
+    setUnsentExcelStatus(`فایل «${file.name}» دریافت شد — در حال خواندن…`, true);
+    if (box) box.hidden = true;
 
     try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const pairs = await parseUnsentExcelFile(file);
+      setUnsentExcelStatus(
+        `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف خوانده شد؛ در حال جستجو در دیتابیس…`,
+        true
+      );
+      await new Promise((r) => requestAnimationFrame(r));
 
       const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind')?.value || 'Income',
-          pairs
-        })
+        body: JSON.stringify({ pairs })
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      const { added } = appendUnsentItems(data.items || []);
+      const { added, duplicate } = appendUnsentItems(data.items || [], { autoSelect: true });
+      const conflictLines = (data.conflicts || []).map((c) =>
+        toPersianDigits(`شناسه قبض: ${c.billId || '-'} | شناسه پرداخت: ${c.paymentId || '-'} — ${c.reason || ''}`)
+      );
       const missLines = (data.misses || [])
         .map((m) => toPersianDigits((m.reason || '').trim()))
         .filter(Boolean);
+      const conflictCount = data.conflictCount ?? conflictLines.length;
 
       if (box) {
-        if (missLines.length) {
-          box.hidden = false;
+        const showLog = conflictLines.length > 0 || missLines.length > 0;
+        box.hidden = !showLog;
+        if (showLog) {
           box.className = 'result-log';
-          box.textContent = missLines.join('\n');
+          box.textContent = [
+            ...(conflictLines.length ? ['--- تعارض درآمد و نوسازی (به گرید اضافه نشد) ---', ...conflictLines, ''] : []),
+            ...missLines
+          ].join('\n');
         } else {
-          box.hidden = true;
           box.textContent = '';
         }
       }
 
-      if (status) {
-        status.textContent = `${file.name} — ${pairs.length.toLocaleString('fa-IR')} ردیف`;
-      }
-      if (added > 0 && missLines.length === 0) {
+      setUnsentExcelStatus(
+        `${file.name} — افزوده: ${added.toLocaleString('fa-IR')} | تکراری: ${duplicate.toLocaleString('fa-IR')} | تعارض: ${conflictCount.toLocaleString('fa-IR')} | یافت‌نشده: ${(data.notFound || 0).toLocaleString('fa-IR')}`,
+        false
+      );
+
+      if (added > 0 && missLines.length === 0 && conflictCount === 0) {
         showAppSuccess(`${added} فیش به گرید اضافه شد`);
-      } else if (added > 0 && missLines.length > 0) {
-        showAppWarning(`${added} فیش اضافه شد؛ ${missLines.length} ردیف قابل ارسال نبود`);
-      } else if (missLines.length > 0) {
+      } else if (added > 0) {
+        showAppWarning(`${added} فیش اضافه شد؛ ${missLines.length + conflictCount} ردیف قابل افزودن نبود`);
+      } else if (conflictCount > 0 || missLines.length > 0) {
         showAppWarning('هیچ فیشی به گرید اضافه نشد');
       } else {
         showAppInfo('فیش‌های انتخاب‌شده قبلاً در گرید بودند');
       }
     } catch (e) {
-      if (box) box.textContent = e.message;
-      if (status) status.textContent = e.message;
+      setUnsentExcelStatus(e.message, false);
+      if (box) {
+        box.hidden = false;
+        box.className = 'result-log';
+        box.textContent = e.message;
+      }
       showAppError(e.message);
     } finally {
       unsentExcelBusy = false;
       if (input) input.value = '';
+      if (excelBtn) excelBtn.disabled = false;
     }
   });
 
@@ -2690,31 +2744,26 @@ function setupEventHandlers() {
   }
 
   bindClick('btnUnsentSend', async () => {
-    const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
+    const targets = getSelectedUnsentBatchTargets();
+    if (!targets.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const dry = config?.dryRun;
-    const kind = $('unsentFicheKind').value;
-    const kindLabel = kind === 'Duty' ? 'نوسازی/صنفی' : 'شهرسازی';
     showAppInfo(dry
-      ? `در حال ارسال آزمایشی ${selected.length} فیش ${kindLabel}…`
-      : `در حال ارسال ${selected.length} فیش ${kindLabel} به رایورز…`);
+      ? `در حال ارسال آزمایشی ${targets.length} فیش انتخاب‌شده…`
+      : `در حال ارسال ${targets.length} فیش انتخاب‌شده به رایورز…`);
 
     const btn = $('btnUnsentSend');
     btn.disabled = true;
     const box = $('unsentResultBox');
     box.hidden = false;
     box.className = 'result-log';
-    box.textContent = `در حال ارسال ${selected.length} فیش…`;
+    box.textContent = `در حال ارسال ${targets.length} فیش…`;
 
     try {
       const res = await apiFetch('/api/unsent/send-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: kind,
-          ficheNos: selected
-        })
+        body: JSON.stringify({ targets })
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);

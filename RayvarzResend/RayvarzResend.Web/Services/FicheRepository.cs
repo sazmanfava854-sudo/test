@@ -1014,29 +1014,6 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               """;
     }
 
-    private string BuildIncomePairSql(int pairCount)
-    {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
-        return $"""
-              SELECT TOP (@max)
-                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
-                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
-                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
-                     CAST(r.NidWorkItem AS nvarchar(50)) AS NidWorkItem,
-                     '' AS District,
-                     {IncomeBnkAcntNoSelect}
-              FROM dbo.Income_Fiche f WITH (NOLOCK)
-              {IncomeNosaziJoins}
-              INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("f.BillID", "f.PaymentID")}
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = f.NidFiche)
-                AND f.EumFicheStatus <> 4
-              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
-              """;
-    }
-
     private static string BuildDutyPairSqlLite(int pairCount)
     {
         var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
@@ -1049,27 +1026,6 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      '' AS BnkAcntNo
               FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
               INNER JOIN dbo.Duty_Fiche d WITH (NOLOCK)
-                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("d.BillID", "d.PaymentID")}
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = d.NidFiche)
-                AND d.EumDutyFicheStatus <> 2
-              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
-              """;
-    }
-
-    private string BuildDutyPairSql(int pairCount)
-    {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
-        return $"""
-              SELECT TOP (@max)
-                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
-                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
-                     '' AS NidWorkItem,
-                     '' AS District,
-                     {DutyBnkAcntNoSelect}
-              FROM dbo.Duty_Fiche d WITH (NOLOCK)
-              INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
                 ON {BillPayIdSqlHelper.PairMatchStrictOnTable("d.BillID", "d.PaymentID")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)

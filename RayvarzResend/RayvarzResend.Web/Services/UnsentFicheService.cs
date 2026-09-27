@@ -22,10 +22,15 @@ public class UnsentFicheService
         _config = config;
     }
 
-    public Task<UnsentFicheSearchResult> SearchAsync(UnsentFicheSearchRequest req, CancellationToken ct = default) =>
-        req.FicheKind == UnsentFicheKind.Duty
-            ? _repo.SearchUnsentDutyAsync(req, ct)
-            : _repo.SearchUnsentIncomeAsync(req, ct);
+    public async Task<UnsentFicheSearchResult> SearchAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    {
+        var result = req.FicheKind == UnsentFicheKind.Duty
+            ? await _repo.SearchUnsentDutyAsync(req, ct)
+            : await _repo.SearchUnsentIncomeAsync(req, ct);
+        foreach (var item in result.Items)
+            item.SourceKind = req.FicheKind;
+        return result;
+    }
 
     public async Task<UnsentBillPayLookupResult> LookupByBillPayAsync(
         UnsentBillPayLookupRequest req,
@@ -33,58 +38,104 @@ public class UnsentFicheService
     {
         var validation = UnsentBillPayLookupHelper.ValidateRequest(req);
         if (validation != null)
-            return new UnsentBillPayLookupResult { FicheKind = req.FicheKind, Error = validation };
+            return new UnsentBillPayLookupResult { Error = validation };
 
         var pairs = UnsentBillPayLookupHelper.NormalizePairs(req.Pairs);
         var rawByKey = UnsentBillPayLookupHelper.IndexRawPairs(req.Pairs);
-        var batch = await _repo.LookupBillPayBatchAsync(req.FicheKind, pairs, ct);
-        var items = batch.Items;
-        var diagnostics = batch.Diagnostics;
 
-        foreach (var item in items)
+        var incomeBatch = await _repo.LookupBillPayBatchAsync(UnsentFicheKind.Income, pairs, ct);
+        var incomeKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in incomeBatch.Items)
+        {
+            var key = UnsentBillPayLookupHelper.MatchKey(item.BillId, item.PaymentId);
+            if (key.Length > 0)
+                incomeKeys.Add(key);
+        }
+
+        var incomeFoundPairs = pairs
+            .Where(p => incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
+            .ToList();
+        var dutyConflictBatch = incomeFoundPairs.Count > 0
+            ? await _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, incomeFoundPairs, ct)
+            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+
+        var remainingPairs = pairs
+            .Where(p => !incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
+            .ToList();
+        var dutyBatch = remainingPairs.Count > 0
+            ? await _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, remainingPairs, ct)
+            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+
+        var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
+            pairs,
+            incomeBatch.Items,
+            dutyConflictBatch.Items,
+            dutyBatch.Items);
+
+        foreach (var item in result.Items)
         {
             var key = UnsentBillPayLookupHelper.MatchKey(item.BillId, item.PaymentId);
             if (key.Length > 0 && rawByKey.TryGetValue(key, out var raw))
                 ApplyExcelDisplayIds(item, raw.RawBill, raw.RawPay);
         }
 
-        var foundKeys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in items)
+        foreach (var conflict in result.Conflicts)
         {
-            var key = UnsentBillPayLookupHelper.MatchKey(item.BillId, item.PaymentId);
-            if (key.Length > 0)
-                foundKeys.Add(key);
+            var key = UnsentBillPayLookupHelper.MatchKey(conflict.BillId, conflict.PaymentId);
+            if (key.Length > 0 && rawByKey.TryGetValue(key, out var raw))
+            {
+                if (!string.IsNullOrWhiteSpace(raw.RawBill)) conflict.BillId = raw.RawBill;
+                if (!string.IsNullOrWhiteSpace(raw.RawPay)) conflict.PaymentId = raw.RawPay;
+            }
         }
 
-        var missPairs = pairs
-            .Where(p => !foundKeys.Contains(UnsentBillPayLookupHelper.MatchKey(p.BillId, p.PaymentId)))
-            .ToList();
-
-        var misses = new List<UnsentBillPayMiss>();
-        foreach (var pair in missPairs)
+        for (var i = 0; i < result.Misses.Count; i++)
         {
-            var lookupKey = pair.BillId + "|" + pair.PaymentId;
+            var miss = result.Misses[i];
+            var lookupKey = UnsentBillPayLookupHelper.MatchKey(miss.BillId, miss.PaymentId);
+            if (lookupKey.Length == 0)
+                lookupKey = miss.BillId + "|" + miss.PaymentId;
+
             rawByKey.TryGetValue(lookupKey, out var raw);
-            diagnostics.TryGetValue(lookupKey, out var diagnostic);
-            var displayBill = string.IsNullOrEmpty(raw.RawBill) ? pair.BillId : raw.RawBill;
-            var displayPay = string.IsNullOrEmpty(raw.RawPay) ? pair.PaymentId : raw.RawPay;
-            misses.Add(new UnsentBillPayMiss
+            dutyBatch.Diagnostics.TryGetValue(lookupKey, out var dutyDiagnostic);
+            incomeBatch.Diagnostics.TryGetValue(lookupKey, out var incomeDiagnostic);
+            var diagnostic = dutyDiagnostic?.Found == true ? dutyDiagnostic : incomeDiagnostic;
+
+            var displayBill = string.IsNullOrEmpty(raw.RawBill) ? miss.BillId : raw.RawBill;
+            var displayPay = string.IsNullOrEmpty(raw.RawPay) ? miss.PaymentId : raw.RawPay;
+            result.Misses[i] = new UnsentBillPayMiss
             {
                 BillId = displayBill,
                 PaymentId = displayPay,
                 Reason = UnsentBillPayLookupHelper.DescribeMiss(diagnostic, displayBill, displayPay)
-            });
+            };
         }
 
-        return new UnsentBillPayLookupResult
+        return result;
+    }
+
+    private static List<UnsentBatchFicheTarget> ResolveBatchTargets(UnsentBatchSendRequest req)
+    {
+        if (req.Targets is { Count: > 0 })
         {
-            FicheKind = req.FicheKind,
-            Requested = pairs.Count,
-            Found = items.Count,
-            NotFound = misses.Count,
-            Items = items,
-            Misses = misses
-        };
+            return req.Targets
+                .Where(t => !string.IsNullOrWhiteSpace(t.FicheNo))
+                .Select(t => new UnsentBatchFicheTarget
+                {
+                    FicheNo = t.FicheNo.Trim(),
+                    SourceKind = t.SourceKind
+                })
+                .ToList();
+        }
+
+        return (req.FicheNos ?? [])
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => new UnsentBatchFicheTarget
+            {
+                FicheNo = n.Trim(),
+                SourceKind = req.FicheKind
+            })
+            .ToList();
     }
 
     public Task<UnsentBatchPlanResult> PlanBatchAsync(
@@ -100,20 +151,21 @@ public class UnsentFicheService
     {
         var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
         var delayMs = _config.GetValue("Rayvarz:SendDelayMs", 2000);
+        var targets = ResolveBatchTargets(req);
         var result = new UnsentBatchSendResult
         {
             DryRun = dryRun,
-            Total = req.FicheNos?.Count ?? 0
+            Total = targets.Count
         };
 
-        if (req.FicheNos == null || req.FicheNos.Count == 0)
+        if (targets.Count == 0)
             return result;
 
         var index = 0;
 
-        foreach (var rawNo in req.FicheNos.Distinct(StringComparer.Ordinal))
+        foreach (var target in targets.GroupBy(t => t.FicheNo, StringComparer.Ordinal).Select(g => g.First()))
         {
-            var ficheNo = rawNo.Trim();
+            var ficheNo = target.FicheNo;
             if (string.IsNullOrWhiteSpace(ficheNo))
                 continue;
 
@@ -126,7 +178,7 @@ public class UnsentFicheService
 
             try
             {
-                var outcome = await ProcessOneAsync(req, ficheNo, user, ct);
+                var outcome = await ProcessOneAsync(req, target, user, ct);
                 item.SendPath = outcome.SendPath;
                 item.Success = outcome.Success;
                 item.Skipped = outcome.Skipped;
@@ -159,17 +211,17 @@ public class UnsentFicheService
         ClaimsPrincipal user,
         CancellationToken ct)
     {
-        var plan = new UnsentBatchPlanResult { Total = req.FicheNos?.Count ?? 0 };
-        if (req.FicheNos == null || req.FicheNos.Count == 0)
+        var targets = ResolveBatchTargets(req);
+        var plan = new UnsentBatchPlanResult { Total = targets.Count };
+        if (targets.Count == 0)
             return plan;
 
-        foreach (var rawNo in req.FicheNos.Distinct(StringComparer.Ordinal))
+        foreach (var target in targets.GroupBy(t => t.FicheNo, StringComparer.Ordinal).Select(g => g.First()))
         {
-            var ficheNo = rawNo.Trim();
-            if (string.IsNullOrWhiteSpace(ficheNo))
+            if (string.IsNullOrWhiteSpace(target.FicheNo))
                 continue;
 
-            plan.Items.Add(await PlanOneAsync(req, ficheNo, user, ct));
+            plan.Items.Add(await PlanOneAsync(req, target, user, ct));
         }
 
         return plan;
@@ -177,10 +229,12 @@ public class UnsentFicheService
 
     private async Task<UnsentBatchPlanItem> PlanOneAsync(
         UnsentBatchSendRequest req,
-        string ficheNo,
+        UnsentBatchFicheTarget target,
         ClaimsPrincipal user,
         CancellationToken ct)
     {
+        var ficheNo = target.FicheNo;
+        var sourceKind = target.SourceKind;
         var item = new UnsentBatchPlanItem { FicheNo = ficheNo };
 
         if (await _repo.ExistsInAccountingDocHeaderAsync(ficheNo, ct))
@@ -214,14 +268,14 @@ public class UnsentFicheService
         if (string.IsNullOrWhiteSpace(item.PaymentId))
             item.PaymentId = fiche.PaymentId;
 
-        if (req.FicheKind == UnsentFicheKind.Income && fiche.Category != FicheCategory.Income)
+        if (sourceKind == UnsentFicheKind.Income && fiche.Category != FicheCategory.Income)
         {
             item.SendPath = "Skip";
-            item.BlockReason = "نوع فیش با شهرسازی مطابقت ندارد";
+            item.BlockReason = "نوع فیش با درآمد (شهرسازی/تهاتر) مطابقت ندارد";
             return item;
         }
 
-        if (req.FicheKind == UnsentFicheKind.Duty
+        if (sourceKind == UnsentFicheKind.Duty
             && fiche.Category is not (FicheCategory.DutyNosazi or FicheCategory.DutySenfi))
         {
             item.SendPath = "Skip";
@@ -242,20 +296,20 @@ public class UnsentFicheService
         var validation = FicheSendService.ValidateSendable(fiche);
         if (validation != null)
         {
-            item.SendPath = req.FicheKind == UnsentFicheKind.Duty ? "Duty" : "Income";
+            item.SendPath = sourceKind == UnsentFicheKind.Duty ? "Duty" : "Income";
             item.BlockReason = validation;
             return item;
         }
 
         if (!FicheBranchResolver.TryResolve(fiche, out _, out _, out var branchError))
         {
-            item.SendPath = req.FicheKind == UnsentFicheKind.Duty ? "Duty" : "Income";
+            item.SendPath = sourceKind == UnsentFicheKind.Duty ? "Duty" : "Income";
             item.BlockReason = branchError;
             return item;
         }
 
-        item.SendPath = req.FicheKind == UnsentFicheKind.Duty ? "Duty" : "Income";
-        item.Detail = req.FicheKind == UnsentFicheKind.Duty ? "ارسال نوسازی/صنفی" : "ارسال درآمدی شهرسازی";
+        item.SendPath = sourceKind == UnsentFicheKind.Duty ? "Duty" : "Income";
+        item.Detail = sourceKind == UnsentFicheKind.Duty ? "ارسال نوسازی/صنفی" : "ارسال درآمدی شهرسازی";
         item.CanSend = true;
         return item;
     }
@@ -273,11 +327,12 @@ public class UnsentFicheService
 
     private async Task<ProcessOutcome> ProcessOneAsync(
         UnsentBatchSendRequest req,
-        string ficheNo,
+        UnsentBatchFicheTarget target,
         ClaimsPrincipal user,
         CancellationToken ct)
     {
-        var plan = await PlanOneAsync(req, ficheNo, user, ct);
+        var plan = await PlanOneAsync(req, target, user, ct);
+        var ficheNo = target.FicheNo;
         if (!plan.CanSend)
         {
             return new ProcessOutcome(

@@ -799,7 +799,7 @@ app.MapPost("/api/unsent/plan-batch", async (
 {
     var denied = await DenyUnlessUnsent(http, perms, ct);
     if (denied != null) return denied;
-    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+    if (req == null || ((req.Targets == null || req.Targets.Count == 0) && (req.FicheNos == null || req.FicheNos.Count == 0)))
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
@@ -820,7 +820,7 @@ app.MapPost("/api/unsent/send-batch", async (
 {
     var denied = await DenyUnlessUnsent(http, perms, ct);
     if (denied != null) return denied;
-    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+    if (req == null || ((req.Targets == null || req.Targets.Count == 0) && (req.FicheNos == null || req.FicheNos.Count == 0)))
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
