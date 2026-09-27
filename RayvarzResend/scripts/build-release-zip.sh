@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-25.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-26.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -21,14 +21,14 @@ cp "$ROOT/RayvarzResend.Web/appsettings.json" "$STAGE/RayvarzResend/appsettings.
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v25 — نسخه آخر
+echo RayvarzResend v26 — نسخه آخر
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v25 — نسخه آخر (تهاتر + Accounting_Doc)
+RayvarzResend v26 — نسخه آخر (اکسل دسته‌ای + epay + تهاتر + Accounting_Doc)
 
 نصب روی سرور ویندوز
 --------------------
@@ -41,7 +41,7 @@ RayvarzResend v25 — نسخه آخر (تهاتر + Accounting_Doc)
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 25
+     releaseVersion = 26
      accountingDoc.dryRun = false
      dryRun = false
 
@@ -49,7 +49,7 @@ Accounting_DocHeader / Accounting_DocDetails بعد از ارسال موفق ب�
 در همین نسخه ثبت می‌شود (اگر DryRun=false باشد).
 
 سورس روی GitHub است — داخل Zip نیست:
-https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-accounting-doc-ffcb
+https://github.com/sazmanfava854-sudo/test/tree/cursor/unified-excel-epay-release-ffcb
 EOF
 
 # Zip با root = RayvarzResend (یک پوشه)
