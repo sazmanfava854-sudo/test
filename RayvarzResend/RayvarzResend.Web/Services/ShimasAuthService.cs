@@ -86,7 +86,7 @@ public sealed class ShimasAuthService
 
     public async Task<string> BuildExternalLoginUrlAsync(string callbackAbsoluteUrl, CancellationToken ct = default)
     {
-        if (!_options.UseMashhadAuthenticationApi)
+        if (!_options.UseLoginKeyOnRedirect || !_options.UseMashhadAuthenticationApi)
             return BuildExternalLoginUrl(callbackAbsoluteUrl);
 
         if (string.IsNullOrWhiteSpace(_options.SigningApiName))

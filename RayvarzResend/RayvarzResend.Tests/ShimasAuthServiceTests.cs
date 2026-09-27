@@ -37,6 +37,26 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public async Task BuildExternalLoginUrlAsync_skips_loginKey_when_disabled()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "19cf3C33",
+            ClientSecret = "secret",
+            ApiBaseUrl = "https://login.mashhad.ir",
+            ApiName = "FinancialAssistant",
+            UseLoginKeyOnRedirect = false,
+            LoginUrl = "https://login.mashhad.ir/Authentication/Login.aspx"
+        });
+
+        var url = await service.BuildExternalLoginUrlAsync("https://city.mashhad.ir:5065/auth/callback");
+        Assert.Contains("lkey=19cf3C33", url);
+        Assert.Contains("returnUrl=", url);
+        Assert.DoesNotContain("loginKey=", url);
+    }
+
+    [Fact]
     public void BuildExternalLoginUrl_includes_lkey_and_returnUrl()
     {
         var service = CreateService(new ShimasAuthOptions

@@ -17,6 +17,8 @@ public sealed class ShimasAuthOptions
     /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>
     public string HashEncoding { get; set; } = "lower";
     public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
+    /// <summary>قبل از Login.aspx از API loginKey استفاده شود — پیش‌فرض خاموش (همان lkey+returnUrl که روی login.mashhad.ir جواب می‌دهد).</summary>
+    public bool UseLoginKeyOnRedirect { get; set; }
     public int LoginUserType { get; set; }
     public int LoginDomainId { get; set; }
     /// <summary>شناسه سامانه در لاگین یکپارچه (همان lkey در login.mashhad.ir).</summary>
