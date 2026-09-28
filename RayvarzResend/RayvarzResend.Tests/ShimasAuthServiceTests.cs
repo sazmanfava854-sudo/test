@@ -438,6 +438,30 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void BuildCallbackAbsoluteUrl_uses_management_return_url_when_registered()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            SsoRegisteredReturnUrl = "https://city.mashhad.ir:5065/MANAGMENT",
+            CallbackPath = "/MANAGMENT"
+        });
+        var context = new DefaultHttpContext();
+        Assert.Equal("https://city.mashhad.ir:5065/MANAGMENT", service.BuildCallbackAbsoluteUrl(context.Request));
+    }
+
+    [Fact]
+    public void IsSsoCallbackHttpRequest_detects_management_path_with_token_query()
+    {
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/MANAGMENT" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/MANAGMENT";
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+    }
+
+    [Fact]
     public void ParseCallbackQuery_reads_username_and_refresh_token_aliases()
     {
         var service = CreateService();

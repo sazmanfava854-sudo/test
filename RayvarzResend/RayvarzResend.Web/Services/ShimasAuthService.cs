@@ -238,7 +238,7 @@ public sealed class ShimasAuthService
     {
         var raw = (http.Request.Cookies[PostLoginReturnCookieName] ?? "").Trim();
         if (raw.Length == 0 || !raw.StartsWith('/') || raw.StartsWith("//", StringComparison.Ordinal))
-            return "/";
+            return NormalizePostLoginPath(_options.PostLoginDefaultPath);
 
         return raw;
     }
@@ -320,10 +320,27 @@ public sealed class ShimasAuthService
         if (path.Equals(callbackPath, StringComparison.OrdinalIgnoreCase))
             return true;
 
+        if (IsManagementCallbackPath(callbackPath)
+            && (path.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/MANAGMENT/", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/MANAGMENT/index.html", StringComparison.OrdinalIgnoreCase)))
+            return true;
+
         if (callbackPath == "/" && path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
             return true;
 
         return path.Equals("/auth/callback", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsManagementCallbackPath(string callbackPath) =>
+        callbackPath.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizePostLoginPath(string? path)
+    {
+        var value = (path ?? "/").Trim();
+        if (value.Length == 0 || !value.StartsWith('/') || value.StartsWith("//", StringComparison.Ordinal))
+            return "/";
+        return value;
     }
 
     /// <summary>پارامترهای بازگشت از login.mashhad.ir / سامزان: username + refresh_token.</summary>

@@ -218,19 +218,36 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// index.html بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
+static bool RequiresAuthenticatedShell(string path) =>
+    path.Equals("/", StringComparison.OrdinalIgnoreCase)
+    || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase)
+    || path.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase)
+    || path.Equals("/MANAGMENT/", StringComparison.OrdinalIgnoreCase)
+    || path.Equals("/MANAGMENT/index.html", StringComparison.OrdinalIgnoreCase);
+
+// index.html و صفحهٔ مدیریت بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value ?? "";
-    if (path.Equals("/", StringComparison.OrdinalIgnoreCase)
-        || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
+    if (path.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase))
     {
         if (context.User?.Identity?.IsAuthenticated != true)
         {
             var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-            context.Response.Redirect(shimas.ResolveLoginRedirectPath(context.Request));
+            var login = shimas.ResolveLoginRedirectPath(context.Request);
+            context.Response.Redirect($"{login}?returnUrl={Uri.EscapeDataString("/MANAGMENT")}");
             return;
         }
+
+        context.Response.Redirect("/MANAGMENT/");
+        return;
+    }
+
+    if (RequiresAuthenticatedShell(path) && context.User?.Identity?.IsAuthenticated != true)
+    {
+        var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+        context.Response.Redirect(shimas.ResolveLoginRedirectPath(context.Request));
+        return;
     }
 
     await next();
@@ -255,11 +272,9 @@ app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shim
         postLoginAppPath = shimas.Options.PostLoginDefaultPath,
         sampleLoginUrl = shimas.DescribeLoginStartForPortal(http.Request),
         clientIdLength = shimas.Options.EffectiveClientId.Length,
-        clientIdHint = shimas.Options.EffectiveClientId.Length <= 6
-            ? "خطر: lkey در Profile.aspx ممکن است فقط چند رقم باشد — ClientId کامل را در appsettings بگذارید"
-            : "ok",
+        clientIdConfigured = shimas.Options.EffectiveClientId.Length >= 4,
         debugLoginCheckUrl = $"{http.Request.Scheme}://{http.Request.Host}/auth/login?debug=1",
-        noteFa = "ثبت https://city.mashhad.ir:5065 در SSO درست است؛ اگر هنوز Profile.aspx می‌بینید، ورود را فقط از city.mashhad.ir:5065 شروع کنید و در آدرس Login.aspx پارامتر returnUrl را ببینید."
+        noteFa = "برگشت آدرس SSO باید https://city.mashhad.ir:5065/MANAGMENT باشد؛ اگر هنوز Profile.aspx می‌بینید، ورود را از city.mashhad.ir:5065 شروع کنید و در Login.aspx پارامتر returnUrl را ببینید."
     });
 }).AllowAnonymous();
 
@@ -303,7 +318,7 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 آدرس کامل ورود (کپی در مرورگر و قبل از لاگین چک کنید returnUrl هست):
                 {loginUrl}
 
-                ClientId/lkey طول: {clientId.Length} (اگر کوتاه است مثل «53» در Profile.aspx می‌بینید — appsettings را اصلاح کنید)
+                ClientId/lkey تنظیم شده: بله (طول {clientId.Length} کاراکتر)
                 ApiName: {shimas.Options.SigningApiName}
                 """;
             return Results.Content(body, "text/plain; charset=utf-8");

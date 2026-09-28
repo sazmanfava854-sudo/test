@@ -1993,6 +1993,13 @@ function defaultMainTabKey() {
   return first?.key ?? 'unsent';
 }
 
+function readInitialMainTabKey() {
+  const tab = (new URLSearchParams(window.location.search).get('tab') || '').trim();
+  if (!tab) return defaultMainTabKey();
+  const match = MAIN_TAB_ACCESS_ORDER.find((t) => t.key === tab && t.can());
+  return match?.key ?? defaultMainTabKey();
+}
+
 function defaultRayvarzSendMode() {
   return canAccessUnsent() ? 'bulk' : 'single';
 }
@@ -2013,7 +2020,7 @@ function applyAuthUi() {
     $('userRoleBadge').className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
   }
 
-  activateMainTab(defaultMainTabKey());
+  activateMainTab(readInitialMainTabKey());
   setRayvarzSendMode(defaultRayvarzSendMode());
 }
 

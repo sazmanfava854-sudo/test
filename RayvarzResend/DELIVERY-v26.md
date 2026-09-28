@@ -43,12 +43,12 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 | کلید | معنی |
 |------|------|
-| `SsoRegisteredReturnUrl` | **همان «برگشت آدرس»** که به برنامه‌نویس SSO می‌دهید — `https://city.mashhad.ir:5065` |
-| `PublicBaseUrl` | معمولاً همان مقدار بالا |
-| `PostLoginDefaultPath` | `/` — بعد از SSO کاربر به **صفحهٔ اصلی** می‌رود؛ تب‌ها از دسترسی کاربر (`/api/auth/me`) |
+| `SsoRegisteredReturnUrl` | **همان «برگشت آدرس»** که به برنامه‌نویس SSO می‌دهید — `https://city.mashhad.ir:5065/MANAGMENT` |
+| `PublicBaseUrl` | `https://city.mashhad.ir:5065` (بدون مسیر) |
+| `PostLoginDefaultPath` | `/MANAGMENT` — بعد از SSO کاربر به **صفحهٔ مدیریت** می‌رود؛ فقط فرم‌های مجاز (`/api/auth/me`) |
 | `ApplicationPath` | اگر IIS زیرمسیر دارد مثل `/RayvarzResend` — برگشت آدرس = `https://city.mashhad.ir:5065/RayvarzResend` |
 | چک | `GET /api/auth/sso-return-url` → فیلد `registerInSsoPortal` |
-| `CallbackPath` | `/` = بازگشت روی ریشه (همان ReturnUrl پورتال)؛ `/auth/callback` برای ثبت قدیمی |
+| `CallbackPath` | `/MANAGMENT` = بازگشت SSO روی صفحهٔ مدیریت (همان ReturnUrl پورتال) |
 | `ApiName` | همان **SSOUserName** در RuleEngine (مثلاً `zavabetapp`) — هدر `apiName` |
 | `ClientId` / `ClientSecret` | همان **SSOClientId** / **SSOSecret** |
 | `ApiBaseUrl` | همان **SSOBaseUrl** (`https://login.mashhad.ir`) |
