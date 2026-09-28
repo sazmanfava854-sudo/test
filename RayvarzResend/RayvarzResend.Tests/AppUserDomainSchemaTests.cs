@@ -15,6 +15,8 @@ public class AppUserDomainSchemaTests
             Assert.Contains("ADD [Domain] NVARCHAR(100)", src);
             Assert.Contains("SET [Domain] = N'0925569917'", src);
             Assert.Contains("NationalId = N'0925569917' OR Username = N'0925569917'", src);
+            Assert.Contains("CREATE TABLE dbo.AppUserDomainAlias", src);
+            Assert.Contains("SELECT TOP 1 N'sadathoseini-sh', u.Id", src);
         }
 
         var alter = sql.IndexOf("ADD [Domain] NVARCHAR(100)", StringComparison.Ordinal);

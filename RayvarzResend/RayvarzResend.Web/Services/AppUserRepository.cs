@@ -91,6 +91,17 @@ public sealed class AppUserRepository
             IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
                 ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
                     CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
+
+            IF OBJECT_ID(N'dbo.AppUserDomainAlias', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.AppUserDomainAlias (
+                    [Domain]     NVARCHAR(100)    NOT NULL CONSTRAINT PK_AppUserDomainAlias PRIMARY KEY,
+                    UserId       UNIQUEIDENTIFIER NOT NULL,
+                    CreatedAtUtc DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserDomainAlias_Created DEFAULT (SYSUTCDATETIME()),
+                    CONSTRAINT FK_AppUserDomainAlias_User FOREIGN KEY (UserId) REFERENCES dbo.AppUser (Id)
+                );
+                CREATE INDEX IX_AppUserDomainAlias_User ON dbo.AppUserDomainAlias (UserId);
+            END
             """;
         await using (var cmd = new SqlCommand(sql, conn))
             await cmd.ExecuteNonQueryAsync(ct);
@@ -113,6 +124,15 @@ public sealed class AppUserRepository
                   WHERE x.[Domain] = N'0925569917'
                     AND x.NationalId <> N'0925569917'
                     AND x.Username <> N'0925569917');
+
+            -- دامین دوم برای کاربر 0925569917 (hoseine-sh + sadathoseini-sh)
+            INSERT INTO dbo.AppUserDomainAlias ([Domain], UserId)
+            SELECT TOP 1 N'sadathoseini-sh', u.Id
+            FROM dbo.AppUser u
+            WHERE (u.NationalId = N'0925569917' OR u.Username = N'0925569917')
+              AND NOT EXISTS (SELECT 1 FROM dbo.AppUserDomainAlias a WHERE a.[Domain] = N'sadathoseini-sh')
+              AND NOT EXISTS (SELECT 1 FROM dbo.AppUser x WHERE x.[Domain] = N'sadathoseini-sh' AND x.Id <> u.Id)
+            ORDER BY CASE WHEN u.Username = N'0925569917' THEN 0 ELSE 1 END;
             """;
         await using (var domainCmd = new SqlCommand(domainSql, conn))
             await domainCmd.ExecuteNonQueryAsync(ct);
@@ -204,19 +224,22 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
-                   IsAdmin, IsActive, CreatedAtUtc
-            FROM dbo.AppUser
-            WHERE (@d <> N'' AND [Domain] = @d)
-               OR (@d <> N'' AND Username = @d)
-               OR (@raw <> N'' AND Username = @raw)
-               OR (@raw <> N'' AND NationalId = @raw)
-               OR (@d <> N'' AND NationalId = @d)
+            SELECT TOP 1 u.Id, u.Username, u.PasswordHash, u.FirstName, u.LastName, u.NationalId, u.Position,
+                   u.District, u.[Domain], u.IsAdmin, u.IsActive, u.CreatedAtUtc
+            FROM dbo.AppUser u
+            LEFT JOIN dbo.AppUserDomainAlias a ON a.UserId = u.Id AND @d <> N'' AND a.[Domain] = @d
+            WHERE (@d <> N'' AND u.[Domain] = @d)
+               OR a.UserId IS NOT NULL
+               OR (@d <> N'' AND u.Username = @d)
+               OR (@raw <> N'' AND u.Username = @raw)
+               OR (@raw <> N'' AND u.NationalId = @raw)
+               OR (@d <> N'' AND u.NationalId = @d)
             ORDER BY CASE
-                WHEN @d <> N'' AND [Domain] = @d THEN 0
-                WHEN @d <> N'' AND Username = @d THEN 1
-                WHEN @raw <> N'' AND Username = @raw THEN 2
-                ELSE 3 END
+                WHEN @d <> N'' AND u.[Domain] = @d THEN 0
+                WHEN a.UserId IS NOT NULL THEN 1
+                WHEN @d <> N'' AND u.Username = @d THEN 2
+                WHEN @raw <> N'' AND u.Username = @raw THEN 3
+                ELSE 4 END
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -225,6 +248,62 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@raw", raw);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? ReadUser(reader) : null;
+    }
+
+    /// <summary>دامین اضافه برای همان کاربر — هر دو دامین در ورود SSO به همین کاربر می‌رسند.</summary>
+    public async Task AddDomainAliasAsync(Guid userId, string domain, CancellationToken ct = default)
+    {
+        domain = AppUserDomainNormalizer.Normalize(domain);
+        if (!AppUserDomainNormalizer.IsValid(domain))
+            throw new ArgumentException("دامین نامعتبر است (مثلاً sadathoseini-sh)");
+
+        if (_useInMemory)
+        {
+            _memory.AddDomainAlias(userId, domain);
+            return;
+        }
+
+        await EnsureSchemaAsync(ct);
+        const string sql = """
+            IF EXISTS (SELECT 1 FROM dbo.AppUser WHERE [Domain] = @d AND Id <> @id)
+            BEGIN
+                ;THROW 50001, N'این دامین دامین اصلی کاربر دیگری است', 1;
+            END
+            IF EXISTS (SELECT 1 FROM dbo.AppUserDomainAlias WHERE [Domain] = @d AND UserId <> @id)
+            BEGIN
+                ;THROW 50001, N'این دامین برای کاربر دیگری ثبت شده است', 1;
+            END
+            IF NOT EXISTS (SELECT 1 FROM dbo.AppUserDomainAlias WHERE [Domain] = @d)
+                INSERT INTO dbo.AppUserDomainAlias ([Domain], UserId) VALUES (@d, @id);
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@d", domain);
+        cmd.Parameters.AddWithValue("@id", userId);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex) when (ex.Number == 50001)
+        {
+            throw new InvalidOperationException(ex.Message);
+        }
+    }
+
+    private async Task EnsureDomainNotAliasedByOtherAsync(string domain, Guid userId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(domain))
+            return;
+
+        const string sql = "SELECT COUNT(*) FROM dbo.AppUserDomainAlias WHERE [Domain] = @d AND UserId <> @id";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@d", domain);
+        cmd.Parameters.AddWithValue("@id", userId);
+        if (Convert.ToInt32(await cmd.ExecuteScalarAsync(ct)) > 0)
+            throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
     }
 
     public async Task<AppUserRecord?> FindByIdAsync(Guid id, CancellationToken ct = default)
@@ -454,6 +533,8 @@ public sealed class AppUserRepository
             user.Domain = domain;
         }
 
+        await EnsureDomainNotAliasedByOtherAsync(user.Domain ?? "", id, ct);
+
         const string sql = """
             UPDATE dbo.AppUser
             SET IsAdmin = @admin, IsActive = @active, [Domain] = @domain
@@ -587,6 +668,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         AppUserInputNormalizer.ValidateAndApply(req);
+        await EnsureDomainNotAliasedByOtherAsync(req.Domain ?? "", Guid.Empty, ct);
         var username = req.Username!;
 
         var user = new AppUserRecord

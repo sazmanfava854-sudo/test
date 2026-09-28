@@ -22,6 +22,18 @@ END
 IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
     ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
         CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
+
+-- دامین‌های اضافه برای یک کاربر (مثلاً دو حساب ویندوز برای یک نفر)
+IF OBJECT_ID(N'dbo.AppUserDomainAlias', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.AppUserDomainAlias (
+        [Domain]     NVARCHAR(100)    NOT NULL CONSTRAINT PK_AppUserDomainAlias PRIMARY KEY,
+        UserId       UNIQUEIDENTIFIER NOT NULL,
+        CreatedAtUtc DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserDomainAlias_Created DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT FK_AppUserDomainAlias_User FOREIGN KEY (UserId) REFERENCES dbo.AppUser (Id)
+    );
+    CREATE INDEX IX_AppUserDomainAlias_User ON dbo.AppUserDomainAlias (UserId);
+END
 GO
 
 IF NOT EXISTS (
@@ -41,3 +53,12 @@ WHERE (NationalId = N'0925569917' OR Username = N'0925569917')
       WHERE x.[Domain] = N'0925569917'
         AND x.NationalId <> N'0925569917'
         AND x.Username <> N'0925569917');
+
+-- دامین دوم برای کاربر 0925569917 (hoseine-sh + sadathoseini-sh)
+INSERT INTO dbo.AppUserDomainAlias ([Domain], UserId)
+SELECT TOP 1 N'sadathoseini-sh', u.Id
+FROM dbo.AppUser u
+WHERE (u.NationalId = N'0925569917' OR u.Username = N'0925569917')
+  AND NOT EXISTS (SELECT 1 FROM dbo.AppUserDomainAlias a WHERE a.[Domain] = N'sadathoseini-sh')
+  AND NOT EXISTS (SELECT 1 FROM dbo.AppUser x WHERE x.[Domain] = N'sadathoseini-sh' AND x.Id <> u.Id)
+ORDER BY CASE WHEN u.Username = N'0925569917' THEN 0 ELSE 1 END;
