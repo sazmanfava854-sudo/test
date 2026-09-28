@@ -19,12 +19,12 @@ public sealed class ShimasAuthOptions
     public string LoginState { get; set; } = "test";
     /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>
     public string HashEncoding { get; set; } = "lower";
-    /// <summary>اگر loginKey خطا بدهد به Login.aspx برود — معمولاً Profile.aspx بدون ReturnUrl. پیش‌فرض خاموش (مثل RuleEngine).</summary>
-    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; }
+    /// <summary>اگر loginKey خطا بدهد به Login.aspx برود (همان روال قبلی FinancialAssistant روی IIS).</summary>
+    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
     /// <summary>RuleEngine در loginKey فیلد ReturnUrl نمی‌فرستد؛ برگشت از «برگشت آدرس» ثبت SSO است.</summary>
     public bool IncludeReturnUrlInLoginKey { get; set; }
-    /// <summary>روال رسمی SSO: loginKey + Start/{loginKey} با ReturnUrl ثبت‌شده در پورتال.</summary>
-    public bool UseLoginKeyOnRedirect { get; set; } = true;
+    /// <summary>true = loginKey API؛ false = Login.aspx?lkey+returnUrl (پیش‌فرض — همان نسخهٔ پایدار قبلی).</summary>
+    public bool UseLoginKeyOnRedirect { get; set; }
     public int LoginUserType { get; set; }
     public int LoginDomainId { get; set; }
     /// <summary>شناسه سامانه در لاگین یکپارچه (همان lkey در login.mashhad.ir).</summary>

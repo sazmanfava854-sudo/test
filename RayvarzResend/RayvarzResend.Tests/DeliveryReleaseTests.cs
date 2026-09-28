@@ -68,9 +68,11 @@ public class DeliveryReleaseTests
         Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
         Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
         Assert.Contains("\"SSOUserName\"", json);
-        Assert.Contains("\"UseLoginKeyOnRedirect\": true", json);
+        Assert.Contains("\"UseLoginKeyOnRedirect\": false", json);
         Assert.Contains("\"IncludeReturnUrlInLoginKey\": false", json);
-        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": false", json);
+        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": true", json);
+        Assert.Contains("FinancialAssistant", json);
+        Assert.Contains("19cf3C33", json);
         Assert.Contains("\"LoginState\": \"test\"", json);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.True(doc.RootElement.TryGetProperty("ConnectionStrings", out _));
