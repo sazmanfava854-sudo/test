@@ -282,13 +282,11 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
         shimas.RememberPostLoginReturn(http, returnPath);
         var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
         var clientId = shimas.Options.EffectiveClientId;
-        if (clientId.Length < 8)
+        if (clientId.Length < 4)
         {
             var logger = http.RequestServices.GetRequiredService<ILoggerFactory>()
                 .CreateLogger("ShimasAuth");
-            logger.LogWarning(
-                "ClientId/lkey کوتاه است ({Length} کاراکتر) — در Profile.aspx ممکن است lkey=53 دیده شود؛ ClientId کامل FinancialAssistant را در appsettings بگذارید",
-                clientId.Length);
+            logger.LogWarning("ClientId/lkey در appsettings خالی یا خیلی کوتاه است ({Length} کاراکتر)", clientId.Length);
         }
 
         var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
