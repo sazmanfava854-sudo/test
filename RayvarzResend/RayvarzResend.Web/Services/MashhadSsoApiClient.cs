@@ -56,15 +56,20 @@ public sealed class MashhadSsoApiClient
 
         var requestTime = time.Data.Trim();
         var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
+        var loginState = string.IsNullOrWhiteSpace(state)
+            ? (string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim())
+            : state.Trim();
         var payload = new MashhadLoginKeyRequest
         {
             Time = requestTime,
             Hash = hash,
             ClientId = _options.EffectiveClientId,
-            State = string.IsNullOrWhiteSpace(state) ? _options.LoginState : state.Trim(),
+            State = loginState,
             UserType = _options.LoginUserType,
             DomainId = _options.LoginDomainId,
-            ReturnUrl = string.IsNullOrWhiteSpace(returnUrl) ? null : returnUrl.Trim()
+            ReturnUrl = _options.IncludeReturnUrlInLoginKey && !string.IsNullOrWhiteSpace(returnUrl)
+                ? returnUrl.Trim()
+                : null
         };
 
         using var request = BuildSignedPost("/api/Authentication/loginKey", requestTime, hash, payload);

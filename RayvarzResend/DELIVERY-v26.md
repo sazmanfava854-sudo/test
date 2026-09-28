@@ -45,7 +45,11 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 |------|------|
 | `PublicBaseUrl` | همان آدرس ثبت SSO — `https://city.mashhad.ir:5065` |
 | `CallbackPath` | `/` = بازگشت روی ریشه (همان ReturnUrl پورتال)؛ `/auth/callback` برای ثبت قدیمی |
-| `ApiName` | نام کاربری ثبت SSO (جدول ۱ ردیف ۲) — هدر `apiName` — **نه** ClientId |
+| `ApiName` | همان **SSOUserName** در RuleEngine (مثلاً `zavabetapp`) — هدر `apiName` |
+| `ClientId` / `ClientSecret` | همان **SSOClientId** / **SSOSecret** |
+| `ApiBaseUrl` | همان **SSOBaseUrl** (`https://login.mashhad.ir`) |
+| `IncludeReturnUrlInLoginKey` | **`false`** مثل RuleEngine — برگشت فقط از آدرس ثبت‌شده در پورتال |
+| `AllowLegacyLoginUrlWithoutLoginKey` | **`false`** — fallback به Login.aspx معمولاً → `Profile.aspx` |
 | `ClientId` / `ClientSecret` | ثبت SSO + هش `SHA256(Secret+requestTime)` |
 | `UseLoginKeyOnRedirect` | **`true`** — `loginKey` سپس `Authentication/Start/{loginKey}` (سند SSO ص ۲۶) |
 | گیر روی `Profile.aspx` | ورود **بدون** `ReturnUrl` (لینک مستقیم با `lkey` یا ClientId ناهماهنگ). همیشه از `https://city.mashhad.ir:5065` → `/auth/login` شروع کنید؛ در پورتال SSO **برگشت آدرس** = همان `PublicBaseUrl` |

@@ -15,11 +15,14 @@ public sealed class ShimasAuthOptions
     /// <summary>نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲) — هدر apiName؛ **نه** ClientId/lkey.</summary>
     public string ApiName { get; set; } = "";
     public string LoginKeyParameter { get; set; } = "loginKey";
-    /// <summary>خالی = state تصادفی هر ورود (توصیه loginKey). مقدار ثابت فقط برای تست.</summary>
-    public string LoginState { get; set; } = "";
+    /// <summary>همان State در RuleEngine (معمولاً test). SSO همان مقدار را در callback برمی‌گرداند.</summary>
+    public string LoginState { get; set; } = "test";
     /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>
     public string HashEncoding { get; set; } = "lower";
-    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
+    /// <summary>اگر loginKey خطا بدهد به Login.aspx برود — معمولاً Profile.aspx بدون ReturnUrl. پیش‌فرض خاموش (مثل RuleEngine).</summary>
+    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; }
+    /// <summary>RuleEngine در loginKey فیلد ReturnUrl نمی‌فرستد؛ برگشت از «برگشت آدرس» ثبت SSO است.</summary>
+    public bool IncludeReturnUrlInLoginKey { get; set; }
     /// <summary>روال رسمی SSO: loginKey + Start/{loginKey} با ReturnUrl ثبت‌شده در پورتال.</summary>
     public bool UseLoginKeyOnRedirect { get; set; } = true;
     public int LoginUserType { get; set; }

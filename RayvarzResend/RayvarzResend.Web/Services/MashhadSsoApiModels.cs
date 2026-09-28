@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace RayvarzResend.Web.Services;
 
 public sealed class MashhadSsoResult<T>
@@ -11,12 +13,13 @@ public sealed class MashhadSsoResult<T>
 
 public sealed class MashhadLoginKeyData
 {
-    public string? loginKey { get; set; }
+    [JsonPropertyName("loginKey")]
     public string? LoginKey { get; set; }
+
     public string? ExpireTime { get; set; }
 
-    public string? EffectiveLoginKey =>
-        string.IsNullOrWhiteSpace(loginKey) ? LoginKey?.Trim() : loginKey.Trim();
+    [JsonIgnore]
+    public string? EffectiveLoginKey => (LoginKey ?? "").Trim();
 }
 
 public sealed class MashhadAccessTokenData

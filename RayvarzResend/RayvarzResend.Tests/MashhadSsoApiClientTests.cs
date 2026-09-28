@@ -11,6 +11,30 @@ namespace RayvarzResend.Tests;
 public class MashhadSsoApiClientTests
 {
     [Fact]
+    public async Task GetLoginKey_omits_ReturnUrl_when_RuleEngine_style()
+    {
+        string? loginKeyBody = null;
+        var handler = new MashhadSsoFakeHandler(b => loginKeyBody = b);
+        var httpFactory = new NamedHttpClientFactory(handler);
+        var options = Options.Create(new ShimasAuthOptions
+        {
+            ApiBaseUrl = "https://login.mashhad.ir",
+            ApiName = "zavabetapp",
+            ClientId = "4d7475D499c02B3",
+            ClientSecret = "51377AC",
+            IncludeReturnUrlInLoginKey = false,
+            LoginState = "test"
+        });
+        var api = new MashhadSsoApiClient(options, httpFactory, NullLogger<MashhadSsoApiClient>.Instance);
+
+        var result = await api.GetLoginKeyAsync("https://city.mashhad.ir:5065", "test");
+        Assert.True(result.IsSuccess, $"ErrorCode={result.ErrorCode} msg={result.ErrorMessage}");
+        Assert.NotNull(loginKeyBody);
+        Assert.Contains("\"State\":\"test\"", loginKeyBody.Replace(" ", ""));
+        Assert.DoesNotContain("ReturnUrl", loginKeyBody, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Sha256Hex_matches_secret_plus_time_pattern()
     {
         var hash = SsoApiSecretHash.ComputeApiSecret("secret", "12345", "lower");
@@ -85,8 +109,18 @@ public class MashhadSsoApiClientTests
 
     private sealed class MashhadSsoFakeHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        private readonly Action<string?>? _onBody;
+
+        public MashhadSsoFakeHandler(Action<string?>? onBody = null) => _onBody = onBody;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (request.Content != null)
+            {
+                var body = await request.Content.ReadAsStringAsync(cancellationToken);
+                _onBody?.Invoke(body);
+            }
+
             var path = request.RequestUri?.AbsolutePath ?? "";
             string json;
             if (path.EndsWith("/getCurrentTime", StringComparison.OrdinalIgnoreCase))
@@ -124,10 +158,10 @@ public class MashhadSsoApiClientTests
                 json = """{"ErrorCode":-1,"ErrorMessage":"unknown path"}""";
             }
 
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
-            });
+            };
         }
     }
 }

@@ -23,4 +23,17 @@ public class MashhadSsoJsonTests
         Assert.Contains("\"DomainID\":0", json.Replace(" ", ""));
         Assert.Contains("\"UserType\":0", json.Replace(" ", ""));
     }
+
+    [Fact]
+    public void LoginKey_response_deserializes_loginKey_field()
+    {
+        var json = """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk-123"}}""";
+        var r = JsonSerializer.Deserialize<MashhadSsoResult<MashhadLoginKeyData>>(json, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+        Assert.NotNull(r);
+        Assert.Equal(0, r!.ErrorCode);
+        Assert.Equal("lk-123", r.Data?.EffectiveLoginKey);
+    }
 }
