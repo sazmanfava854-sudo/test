@@ -97,6 +97,8 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | UI گرید دسته‌ای، وضعیت «فایل در حال بررسی است…»، لاگ نتیجه ارسال |
 | ورود: کاربران سازمانی SSO از `https://city.mashhad.ir:5065` → `/MANAGMENT` |
 | ورود ادمین **بدون SSO**: `https://city.mashhad.ir:5065/login.html` یا داخلی `http://5.252.216.140:8070/login.html` (`AllowAdminLocalLoginOnPublicHost` + `PreferLocalLoginHosts`) |
+| ورود HTTP داخلی | کوکی نشست `SameAsRequest` است (بدون Secure اجباری) — وگرنه بعد از POST ورود، `/api/auth/me` 401 می‌شود |
+| bootstrap اول | نام کاربری `admin` یا کد ملی ثبت‌شده در `BootstrapAdmin` — رمز از `Auth:BootstrapAdmin:Password` |
 | پس از ورود: اولین تب مطابق دسترسی (رایورز، چک خزانه، …) |
 
 ## تست

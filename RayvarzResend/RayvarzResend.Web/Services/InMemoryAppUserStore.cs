@@ -63,8 +63,14 @@ public sealed class InMemoryAppUserStore
         return true;
     }
 
-    public AppUserRecord? FindByUsername(string username) =>
-        _byUsername.TryGetValue(username.Trim(), out var user) ? user : null;
+    public AppUserRecord? FindByUsername(string username)
+    {
+        var key = username.Trim();
+        if (_byUsername.TryGetValue(key, out var user))
+            return user;
+        return _byId.Values.FirstOrDefault(u =>
+            u.NationalId.Equals(key, StringComparison.OrdinalIgnoreCase));
+    }
 
     public AppUserRecord? FindBySsoIdentity(string identity)
     {

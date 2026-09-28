@@ -181,7 +181,7 @@ public sealed class AppUserRepository
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
-            WHERE Username = @u
+            WHERE Username = @u OR NationalId = @u
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);

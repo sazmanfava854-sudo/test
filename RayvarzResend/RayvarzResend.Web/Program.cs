@@ -50,10 +50,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "RayvarzResend.Auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        var publicBase = builder.Configuration["Auth:Shimas:PublicBaseUrl"] ?? "";
-        options.Cookie.SecurePolicy = publicBase.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            ? CookieSecurePolicy.Always
-            : CookieSecurePolicy.SameAsRequest;
+        // HTTP داخلی (مثلاً 5.252.216.140:8070/login.html) — کوکی Secure فقط وقتی درخواست HTTPS است
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(builder.Configuration.GetValue("Auth:SessionHours", 8));
         options.Events.OnRedirectToLogin = ctx =>
