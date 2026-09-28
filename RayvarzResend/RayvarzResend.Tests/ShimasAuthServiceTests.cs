@@ -248,6 +248,51 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public async Task User_with_two_comma_separated_domains_resolves_from_either()
+    {
+        var memory = new InMemoryAppUserStore();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
+        config["Auth:UseInMemoryStore"] = "true";
+        var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
+        var user = await repo.CreateUserAsync(new CreateAppUserRequest
+        {
+            Username = "0925569917",
+            Password = "Pass@1234",
+            FirstName = "شقایق",
+            LastName = "حسینی",
+            NationalId = "0925569917",
+            Position = "کارشناس",
+            District = "7",
+            Domain = "hoseine-sh, sadathoseini-sh"
+        });
+        Assert.Equal("hoseine-sh,sadathoseini-sh", user.Domain);
+
+        Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync("hoseine-sh"))?.Id);
+        Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync("sadathoseini-sh"))?.Id);
+        Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync(@"MASHHAD\sadathoseini-sh"))?.Id);
+        Assert.Null(await repo.FindBySsoIdentityAsync("hoseine"));
+
+        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = false }, memory);
+        foreach (var domain in new[] { "hoseine-sh", "sadathoseini-sh" })
+        {
+            var resolved = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = domain, Domain = domain });
+            Assert.Equal(user.Id, resolved?.Id);
+        }
+    }
+
+    [Theory]
+    [InlineData("hoseine-sh,sadathoseini-sh", "hoseine-sh,sadathoseini-sh", true)]
+    [InlineData(" hoseine-sh ; MASHHAD\\sadathoseini-sh ", "hoseine-sh,sadathoseini-sh", true)]
+    [InlineData("hoseine-sh", "hoseine-sh", true)]
+    [InlineData("hoseine-sh,bad name", "hoseine-sh,bad name", false)]
+    [InlineData(",", "", false)]
+    public void Domain_list_normalizes_and_validates(string input, string normalized, bool valid)
+    {
+        Assert.Equal(normalized, AppUserDomainNormalizer.NormalizeList(input));
+        Assert.Equal(valid, AppUserDomainNormalizer.IsValidList(input));
+    }
+
+    [Fact]
     public void ResolveLoginRedirectPath_uses_local_when_sso_disabled()
     {
         var service = CreateService(new ShimasAuthOptions { Enabled = false });

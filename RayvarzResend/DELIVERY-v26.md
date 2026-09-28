@@ -101,6 +101,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | bootstrap اول | نام کاربری `admin` یا کد ملی ثبت‌شده در `BootstrapAdmin` — رمز از `Auth:BootstrapAdmin:Password` |
 | ادمین حذف/ناشناخته | اگر کاربر `BootstrapAdmin:Username` در جدول نباشد، در راه‌اندازی دوباره ساخته می‌شود (حتی اگر کاربران دیگر باشند) |
 | رمز ادمین فراموش شد | `"ResetPasswordOnStartup": true` در `BootstrapAdmin` → ری‌استارت → ورود با رمز appsettings → دوباره **`false`** کنید |
+| چند دامین برای یک کاربر | در همان ستون `AppUser.Domain` با کاما: `hoseine-sh,sadathoseini-sh` — ورود SSO با هر کدام به همان کاربر می‌رسد (بدون جدول جدید) |
 | خروج | به `/login.html` می‌رود (نه `/auth/login`) تا نشست SSO کاربر را فوراً دوباره وارد نکند |
 | پس از ورود: صفحهٔ مدیریت `/management/` با کارت فرم‌های مجاز؛ لینک هر کارت → تب مربوط |
 

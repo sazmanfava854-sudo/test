@@ -85,7 +85,7 @@ public sealed class InMemoryAppUserStore
         AppUserRecord? Match(Func<AppUserRecord, bool> pred) =>
             _byId.Values.FirstOrDefault(pred);
 
-        return Match(u => !string.IsNullOrEmpty(account) && u.Domain.Equals(account, StringComparison.OrdinalIgnoreCase))
+        return Match(u => !string.IsNullOrEmpty(account) && AppUserDomainNormalizer.ListContains(u.Domain, account))
             ?? Match(u => !string.IsNullOrEmpty(account) && u.Username.Equals(account, StringComparison.OrdinalIgnoreCase))
             ?? Match(u => !string.IsNullOrEmpty(raw) && u.Username.Equals(raw, StringComparison.OrdinalIgnoreCase))
             ?? Match(u => !string.IsNullOrEmpty(raw) && u.NationalId.Equals(raw, StringComparison.OrdinalIgnoreCase))
@@ -217,9 +217,9 @@ public sealed class InMemoryAppUserStore
             user.IsActive = req.IsActive.Value;
         if (req.Domain != null)
         {
-            var domain = AppUserDomainNormalizer.Normalize(req.Domain);
-            if (!AppUserDomainNormalizer.IsValid(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
+            var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
+            if (!AppUserDomainNormalizer.IsValidList(domain))
+                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
             if (_byId.Values.Any(u => u.Id != id && u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
             user.Domain = domain;

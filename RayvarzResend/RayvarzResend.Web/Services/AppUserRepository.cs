@@ -208,12 +208,14 @@ public sealed class AppUserRepository
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
             WHERE (@d <> N'' AND [Domain] = @d)
+               OR (@d <> N'' AND CHARINDEX(N',' + @d + N',', N',' + REPLACE([Domain], N' ', N'') + N',') > 0)
                OR (@d <> N'' AND Username = @d)
                OR (@raw <> N'' AND Username = @raw)
                OR (@raw <> N'' AND NationalId = @raw)
                OR (@d <> N'' AND NationalId = @d)
             ORDER BY CASE
                 WHEN @d <> N'' AND [Domain] = @d THEN 0
+                WHEN @d <> N'' AND CHARINDEX(N',' + @d + N',', N',' + REPLACE([Domain], N' ', N'') + N',') > 0 THEN 0
                 WHEN @d <> N'' AND Username = @d THEN 1
                 WHEN @raw <> N'' AND Username = @raw THEN 2
                 ELSE 3 END
@@ -448,9 +450,9 @@ public sealed class AppUserRepository
             user.IsActive = req.IsActive.Value;
         if (req.Domain != null)
         {
-            var domain = AppUserDomainNormalizer.Normalize(req.Domain);
-            if (!AppUserDomainNormalizer.IsValid(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
+            var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
+            if (!AppUserDomainNormalizer.IsValidList(domain))
+                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
             user.Domain = domain;
         }
 
