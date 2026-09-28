@@ -65,8 +65,25 @@ public class ShimasAuthServiceTests
         var url = await service.BuildExternalLoginUrlAsync("https://city.mashhad.ir:5065/auth/callback");
         Assert.Contains("lkey=19cf3C33", url);
         Assert.Contains("returnUrl=", url);
-        Assert.Contains("ReturnUrl=", url);
         Assert.DoesNotContain("loginKey=", url);
+    }
+
+    [Fact]
+    public void BuildExternalLoginUrl_sends_return_url_only_once_case_insensitively()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "19cf3C33",
+            LoginUrl = "https://login.mashhad.ir/Authentication/Login.aspx"
+        });
+
+        var url = service.BuildExternalLoginUrl("https://city.mashhad.ir:5065/management");
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(url).Query);
+        var returnKeys = query.Keys.Where(k => k.Equals("returnUrl", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        Assert.Single(returnKeys);
+        Assert.Equal("https://city.mashhad.ir:5065/management", query[returnKeys[0]].ToString());
     }
 
     [Fact]

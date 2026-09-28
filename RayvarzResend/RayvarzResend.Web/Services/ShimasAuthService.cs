@@ -102,13 +102,14 @@ public sealed class ShimasAuthService
         if (string.IsNullOrWhiteSpace(clientId))
             throw new InvalidOperationException("ClientId / lkey هنوز تنظیم نشده است");
 
-        var query = new Dictionary<string, string?>
+        // Login.aspx (ASP.NET) کلیدهای querystring را بدون حساسیت به حروف می‌خواند؛ returnUrl+ReturnUrl+returnurl
+        // به «url,url,url» تبدیل می‌شود، با برگشت آدرس ثبت‌شده تطبیق نمی‌کند و SSO روی Profile.aspx می‌ماند.
+        var returnUrlKey = string.IsNullOrWhiteSpace(_options.ReturnUrlParameter) ? "ReturnUrl" : _options.ReturnUrlParameter.Trim();
+        var query = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
             [_options.LKeyParameter] = clientId,
             [_options.ClientIdParameter] = clientId,
-            [_options.ReturnUrlParameter] = callbackAbsoluteUrl,
-            ["ReturnUrl"] = callbackAbsoluteUrl,
-            ["returnurl"] = callbackAbsoluteUrl
+            [returnUrlKey] = callbackAbsoluteUrl
         };
 
         return QueryHelpers.AddQueryString(_options.LoginUrl, query);
