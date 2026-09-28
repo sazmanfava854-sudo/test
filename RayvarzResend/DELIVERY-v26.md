@@ -39,7 +39,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 **قبل از تنظیم `appsettings`:** اعتبار را **خارج از برنامه** با اسکریپت سند (صفحه ۲۰–۲۶) تست کنید:
 
-- ویندوز (کنار Zip): `RayvarzResend\test-mashhad-sso-loginkey.ps1 -ApiName "<نام کاربری کاربردی>" -ClientId "<ClientId>" -SecretKey "<SecretKey>"`
+- ویندوز (کنار Zip، PowerShell): بدون `<>` — مثال: `.\test-mashhad-sso-loginkey.ps1 -ApiName "myApiUser" -ClientId "53db..." -SecretKey "fullSecret"` (یک خط یا با backtick انتهای هر خط)
 - لینوکس: `bash scripts/test-mashhad-sso-loginkey.sh "<apiName>" "<ClientId>" "<SecretKey>"`
 
 هدرها: `apiName` = **نام کاربری کاربردی برنامه** (از مدیر SSO)، `requestTime` از `getCurrentTime`، `apiSecret` = `SHA256(SecretKey + requestTime)` hex. بدنه: `Time`, `Hash` (همان مقدار), `ClientId`, `State`, `UserType`, `DomainID`. نام نمایشی برنامه (مثلاً FinancialAssistant) **apiName نیست** مگر همان را در پورتال ثبت کرده باشند.

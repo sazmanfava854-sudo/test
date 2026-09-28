@@ -1,16 +1,16 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  تست مستقل loginKey مطابق سند SSO مشهد (بدون RayvarzResend).
+  Standalone Mashhad SSO loginKey test (no RayvarzResend app). See SSO doc pages 20-26.
 
 .PARAMETER ApiName
-  نام کاربری کاربردی برنامه (هدر apiName) — از پورتال شناسه شهروندی، نه نام نمایشی برنامه.
+  Application API username (header apiName) from SSO portal - not the display title.
 
 .PARAMETER ClientId
-  شناسه کاربردی برنامه (ClientId در بدنه).
+  Registered ClientId for this application.
 
 .PARAMETER SecretKey
-  SecretKey همان کاربردی برنامه.
+  SecretKey for this application (do not paste in chat).
 #>
 param(
     [Parameter(Mandatory)][string]$ApiName,
@@ -39,7 +39,8 @@ $hashBytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($raw))
 $hash = [BitConverter]::ToString($hashBytes).Replace("-", "")
 if ($HashUpper) { $hash = $hash.ToUpperInvariant() } else { $hash = $hash.ToLowerInvariant() }
 
-Write-Host "apiSecret/Hash = SHA256(SecretKey+requestTime) hex $(if ($HashUpper) { 'upper' } else { 'lower' })"
+$enc = if ($HashUpper) { "upper" } else { "lower" }
+Write-Host "apiSecret/Hash = SHA256(SecretKey+requestTime) hex $enc"
 
 $body = @{
     Time     = $requestTime
@@ -52,7 +53,7 @@ $body = @{
 
 Write-Host ""
 Write-Host "== 2) POST loginKey =="
-Write-Host "Headers: apiName=$ApiName, requestTime=$requestTime, apiSecret=<hash>"
+Write-Host "Headers: apiName=$ApiName, requestTime=$requestTime, apiSecret=(hash)"
 
 $headers = @{
     apiName     = $ApiName
@@ -71,9 +72,9 @@ $resp | ConvertTo-Json -Depth 5
 
 if ($resp.ErrorCode -eq 0 -and $resp.Data.loginKey) {
     Write-Host ""
-    Write-Host "OK — loginKey: $($resp.Data.loginKey)"
+    Write-Host "OK - loginKey: $($resp.Data.loginKey)"
     Write-Host "Next: $BaseUrl/Authentication/Start/$($resp.Data.loginKey)"
 } elseif ($resp.ErrorCode -eq 403) {
     Write-Host ""
-    Write-Host "403 → apiName / ClientId / SecretKey با ثبت پورتال برای این کاربردی برنامه مطابقت ندارد."
+    Write-Host "403 - apiName, ClientId, or SecretKey does not match SSO portal registration for this application."
 }
