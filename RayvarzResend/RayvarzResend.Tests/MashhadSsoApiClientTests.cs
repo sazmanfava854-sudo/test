@@ -195,12 +195,60 @@ public class MashhadSsoApiClientTests
 
         var results = await service.ProbeLoginKeyVariantsAsync("FinancialAssistant", "bad", "bad");
 
-        Assert.Equal(SsoApiSecretHash.ProbeVariants.Count, results.Count);
+        // ۹ فرمول هش + ۳ شکل درخواست (apiName=ClientId، بدون UserType/DomainId، کلید ClientID)
+        Assert.Equal(SsoApiSecretHash.ProbeVariants.Count + 3, results.Count);
         Assert.All(results, r =>
         {
             Assert.False(r.Ok);
             Assert.Equal(403, r.ErrorCode);
         });
+        Assert.Contains(results, r => r.Variant.StartsWith("apiName = ClientId", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProbeLoginKeyVariants_phase2_finds_apiName_equals_clientId_and_omits_userType_when_asked()
+    {
+        var expected = SsoApiSecretHash.ComputeApiSecret("s3cret", "1700000000", "lower");
+        string? acceptedBody = null;
+        var handler = new MashhadSsoFakeHandler(loginKeyResponder: req =>
+        {
+            var apiName = req.Headers.TryGetValues("apiName", out var n) ? n.FirstOrDefault() : null;
+            var sent = req.Headers.TryGetValues("apiSecret", out var v) ? v.FirstOrDefault() : null;
+            if (apiName == "client-123" && sent == expected)
+            {
+                acceptedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk-shape"}}""";
+            }
+            return """{"ErrorCode":403,"ErrorMessage":"Client info missmatched","Data":null}""";
+        });
+        var service = CreateServiceWithSso(handler, useLoginKey: true);
+
+        var results = await service.ProbeLoginKeyVariantsAsync("FinancialAssistant", "client-123", "s3cret");
+
+        Assert.Equal(SsoApiSecretHash.ProbeVariants.Count + 1, results.Count);
+        var winner = results.Last();
+        Assert.True(winner.Ok);
+        Assert.StartsWith("apiName = ClientId", winner.Variant);
+        Assert.NotNull(acceptedBody);
+        Assert.Contains("\"ClientId\":\"client-123\"", acceptedBody);
+        Assert.Contains("\"UserType\":0", acceptedBody);
+    }
+
+    [Fact]
+    public async Task SendLoginKeyProbe_can_omit_userType_domainId_and_use_ClientID_key()
+    {
+        string? body = null;
+        var handler = new MashhadSsoFakeHandler(b => body = b);
+        var opts = Options.Create(new ShimasAuthOptions { ApiBaseUrl = "https://login.mashhad.ir", LoginState = "test" });
+        var client = new MashhadSsoApiClient(opts, new NamedHttpClientFactory(handler), NullLogger<MashhadSsoApiClient>.Instance);
+
+        await client.SendLoginKeyProbeAsync("api", "cid", "sec", "1700000000", (s, t) => "hash", default, omitUserTypeAndDomain: true, clientIdKey: "ClientID");
+
+        Assert.NotNull(body);
+        Assert.Contains("\"ClientID\":\"cid\"", body);
+        Assert.Contains("\"Hash\":\"hash\"", body);
+        Assert.DoesNotContain("UserType", body);
+        Assert.DoesNotContain("DomainId", body);
     }
 
     private static ShimasAuthService CreateServiceWithSso(HttpMessageHandler handler, bool useLoginKey)

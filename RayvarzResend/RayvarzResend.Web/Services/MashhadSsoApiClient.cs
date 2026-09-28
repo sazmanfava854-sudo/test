@@ -112,19 +112,24 @@ public sealed class MashhadSsoApiClient
         string secret,
         string requestTime,
         Func<string, string, string> computeApiSecret,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool omitUserTypeAndDomain = false,
+        string clientIdKey = "ClientId")
     {
         requestTime = (requestTime ?? "").Trim();
         var hash = computeApiSecret(secret, requestTime);
-        var payload = new MashhadLoginKeyRequest
+        var payload = new Dictionary<string, object?>
         {
-            Time = requestTime,
-            Hash = hash,
-            ClientId = clientId,
-            State = string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim(),
-            UserType = _options.LoginUserType,
-            DomainId = _options.LoginDomainId
+            ["Time"] = requestTime,
+            ["Hash"] = hash,
+            [string.IsNullOrWhiteSpace(clientIdKey) ? "ClientId" : clientIdKey] = clientId,
+            ["State"] = string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim()
         };
+        if (!omitUserTypeAndDomain)
+        {
+            payload["UserType"] = _options.LoginUserType;
+            payload["DomainId"] = _options.LoginDomainId;
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Combine("/api/Authentication/loginKey"));
         request.Headers.TryAddWithoutValidation("apiName", apiName);

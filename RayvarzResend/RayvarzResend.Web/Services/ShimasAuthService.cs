@@ -251,26 +251,57 @@ public sealed class ShimasAuthService
         var requestTime = time.Data.Trim();
         foreach (var (name, compute) in SsoApiSecretHash.ProbeVariants)
         {
-            var item = new SsoLoginKeyProbeResult { Variant = name };
-            try
-            {
-                var r = await _mashhadSso.SendLoginKeyProbeAsync(apiName, clientId, secret, requestTime, compute, ct);
-                item.ErrorCode = r.ErrorCode;
-                item.ErrorMessage = r.ErrorMessage;
-                item.Ok = r.IsSuccess && !string.IsNullOrWhiteSpace(r.Data?.EffectiveLoginKey);
-            }
-            catch (Exception ex)
-            {
-                item.ErrorCode = -1;
-                item.ErrorMessage = ex.Message;
-            }
+            var item = await RunProbeAsync(name, apiName, clientId, secret, requestTime, compute, ct);
+            results.Add(item);
+            if (item.Ok)
+                return results;
+        }
 
+        // فاز ۲: هش درست ولی شکل درخواست/apiName فرق دارد؟ (فقط با فرمول اصلی)
+        var primary = SsoApiSecretHash.ProbeVariants[0].Compute;
+        var shapeVariants = new (string Name, string ApiName, bool OmitUserTypeDomain, string ClientIdKey)[]
+        {
+            ("apiName = ClientId (sha256 lower)", clientId, false, "ClientId"),
+            ("بدون UserType/DomainId (sha256 lower)", apiName, true, "ClientId"),
+            ("کلید ClientID با حروف بزرگ (sha256 lower)", apiName, false, "ClientID")
+        };
+        foreach (var v in shapeVariants)
+        {
+            var item = await RunProbeAsync(v.Name, v.ApiName, clientId, secret, requestTime, primary, ct, v.OmitUserTypeDomain, v.ClientIdKey);
             results.Add(item);
             if (item.Ok)
                 break;
         }
 
         return results;
+    }
+
+    private async Task<SsoLoginKeyProbeResult> RunProbeAsync(
+        string name,
+        string apiName,
+        string clientId,
+        string secret,
+        string requestTime,
+        Func<string, string, string> compute,
+        CancellationToken ct,
+        bool omitUserTypeDomain = false,
+        string clientIdKey = "ClientId")
+    {
+        var item = new SsoLoginKeyProbeResult { Variant = name };
+        try
+        {
+            var r = await _mashhadSso.SendLoginKeyProbeAsync(apiName, clientId, secret, requestTime, compute, ct, omitUserTypeDomain, clientIdKey);
+            item.ErrorCode = r.ErrorCode;
+            item.ErrorMessage = r.ErrorMessage;
+            item.Ok = r.IsSuccess && !string.IsNullOrWhiteSpace(r.Data?.EffectiveLoginKey);
+        }
+        catch (Exception ex)
+        {
+            item.ErrorCode = -1;
+            item.ErrorMessage = ex.Message;
+        }
+
+        return item;
     }
 
     public string BuildLoginStartUrl(string loginKey)

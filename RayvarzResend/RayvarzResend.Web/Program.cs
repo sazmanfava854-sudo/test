@@ -367,9 +367,11 @@ app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthSe
 // تشخیص 403 Client info missmatched:
 //   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Shimas) با همهٔ فرمول‌های هش
 //   /api/auth/sso-loginkey-probe?profile=settings → اعتبار RuleEngine از بلوک Settings (SSOUserName/SSOClientId/SSOSecret)
+//   &apiName=<نام>                                → همان تست با apiName دیگر (بدون تغییر appsettings) — Secret هرگز از URL گرفته نمی‌شود
 app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthService shimas, IConfiguration config, CancellationToken ct) =>
 {
     var profile = (http.Request.Query["profile"].FirstOrDefault() ?? "").Trim().ToLowerInvariant();
+    var apiNameOverride = (http.Request.Query["apiName"].FirstOrDefault() ?? "").Trim();
     string apiName, clientId, secret, source;
     if (profile == "settings")
     {
@@ -392,13 +394,21 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
         secret = (shimas.Options.ClientSecret ?? "").Trim();
     }
 
+    var configuredApiName = apiName;
+    if (apiNameOverride.Length > 0)
+        apiName = apiNameOverride;
+
     var results = await shimas.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct);
     var winner = results.FirstOrDefault(r => r.Ok);
     var ssoUnreachable = winner == null && results.Count == 1 && results[0].Variant == "getCurrentTime";
+    var allClientInfoMismatch = winner == null && !ssoUnreachable
+        && results.All(r => r.ErrorCode == 403 && (r.ErrorMessage ?? "").Contains("missmatch", StringComparison.OrdinalIgnoreCase));
     return Results.Ok(new
     {
         source,
         apiName,
+        apiNameFromQuery = apiNameOverride.Length > 0 ? apiNameOverride : null,
+        configuredApiName,
         clientIdMasked = SsoCredentialMask.MaskId(clientId),
         clientIdLength = clientId.Length,
         secretLength = secret.Length,
@@ -408,11 +418,17 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
         workingFormula = winner?.Variant,
         verdictFa = winner != null
             ? (winner.Variant.StartsWith("sha256(secret+time) hex", StringComparison.Ordinal)
-                ? "فرمول فعلی درست است — پس مشکل از اعتبار (ClientId/Secret/apiName) است، نه کد."
-                : $"SSO با فرمول «{winner.Variant}» جواب داد — HashEncoding/فرمول در کد باید عوض شود.")
+                ? (apiNameOverride.Length > 0
+                    ? $"با apiName «{apiName}» OK شد — همین را در Auth:Shimas:ApiName (SSOUserName) بگذارید."
+                    : "فرمول فعلی درست است — پس مشکل از اعتبار (ClientId/Secret/apiName) است، نه کد.")
+                : winner.Variant.StartsWith("apiName = ClientId", StringComparison.Ordinal)
+                    ? "SSO وقتی apiName = ClientId بود OK شد — Auth:Shimas:ApiName را همان ClientId بگذارید."
+                    : $"SSO با «{winner.Variant}» جواب داد — شکل درخواست/فرمول در کد باید همین شود.")
             : ssoUnreachable
                 ? "getCurrentTime جواب نداد — SSO از این سرور در دسترس نیست (شبکه/فایروال)؛ هیچ فرمولی آزموده نشد."
-                : "هیچ فرمولی قبول نشد — یا apiName/ClientId/Secret با ثبت پورتال یکی نیست، یا SSO چیزی غیر از این فرمول‌ها می‌خواهد. با profile=settings و اعتبار RuleEngine دوباره بزنید.",
+                : allClientInfoMismatch
+                    ? "همهٔ فرمول‌ها و شکل‌های درخواست (حتی Secret خام و apiName = ClientId) عیناً همان «Client info missmatched» را گرفتند؛ یعنی SSO قبل از بررسی هش، جفت apiName/ClientId را در ثبت خود پیدا نمی‌کند. علت: نام کاربری API (apiName) این سامانه چیز دیگری است یا برای این ClientId دسترسی API loginKey در پورتال فعال نشده. از مدیر SSO «apiName/SSOUserName» و «ClientId/Secret API» سامانهٔ FinancialAssistant را بگیرید و با &apiName=<نام> تست کنید؛ برای اطمینان از کد، profile=settings را با اعتبار RuleEngine بزنید."
+                    : "هیچ فرمولی قبول نشد — یا apiName/ClientId/Secret با ثبت پورتال یکی نیست، یا SSO چیزی غیر از این فرمول‌ها می‌خواهد. با profile=settings و اعتبار RuleEngine دوباره بزنید.",
         results
     });
 }).AllowAnonymous();
