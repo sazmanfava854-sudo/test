@@ -106,7 +106,8 @@ public sealed class ShimasAuthService
             [_options.LKeyParameter] = clientId,
             [_options.ClientIdParameter] = clientId,
             [_options.ReturnUrlParameter] = callbackAbsoluteUrl,
-            ["ReturnUrl"] = callbackAbsoluteUrl
+            ["ReturnUrl"] = callbackAbsoluteUrl,
+            ["returnurl"] = callbackAbsoluteUrl
         };
 
         return QueryHelpers.AddQueryString(_options.LoginUrl, query);

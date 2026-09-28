@@ -254,7 +254,12 @@ app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shim
         descriptionFa = "این آدرس را در پورتال SSO برای FinancialAssistant در فیلد «برگشت آدرس» ثبت کنید. بعد از لاگین، SSO کاربر را به این URL با ?username&refresh_token&state برمی‌گرداند.",
         postLoginAppPath = shimas.Options.PostLoginDefaultPath,
         sampleLoginUrl = shimas.DescribeLoginStartForPortal(http.Request),
-        clientIdLength = shimas.Options.EffectiveClientId.Length
+        clientIdLength = shimas.Options.EffectiveClientId.Length,
+        clientIdHint = shimas.Options.EffectiveClientId.Length <= 6
+            ? "خطر: lkey در Profile.aspx ممکن است فقط چند رقم باشد — ClientId کامل را در appsettings بگذارید"
+            : "ok",
+        debugLoginCheckUrl = $"{http.Request.Scheme}://{http.Request.Host}/auth/login?debug=1",
+        noteFa = "ثبت https://city.mashhad.ir:5065 در SSO درست است؛ اگر هنوز Profile.aspx می‌بینید، ورود را فقط از city.mashhad.ir:5065 شروع کنید و در آدرس Login.aspx پارامتر returnUrl را ببینید."
     });
 }).AllowAnonymous();
 
@@ -287,6 +292,25 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
         }
 
         var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
+        if (http.Request.Query.ContainsKey("debug"))
+        {
+            var encoded = Uri.EscapeDataString(callbackUrl);
+            var body = $"""
+                برگشت آدرس (ثبت SSO) = همان آدرسی که به پورتال دادید:
+                {callbackUrl}
+
+                این مقدار باید داخل آدرس ورود به login.mashhad.ir باشد (پارامتر returnUrl):
+                returnUrl={encoded}
+
+                آدرس کامل ورود (کپی در مرورگر و قبل از لاگین چک کنید returnUrl هست):
+                {loginUrl}
+
+                ClientId/lkey طول: {clientId.Length} (اگر کوتاه است مثل «53» در Profile.aspx می‌بینید — appsettings را اصلاح کنید)
+                ApiName: {shimas.Options.SigningApiName}
+                """;
+            return Results.Content(body, "text/plain; charset=utf-8");
+        }
+
         return Results.Redirect(loginUrl);
     }
     catch (Exception ex)
