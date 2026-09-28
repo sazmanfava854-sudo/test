@@ -31,6 +31,10 @@ public sealed class ShimasAuthStatusDto
     public string CallbackPath { get; set; } = "/auth/callback";
     /// <summary>آدرس callback ثبت‌شده در سامزان — برای بررسی پیکربندی.</summary>
     public string? RegisteredCallbackUrl { get; set; }
+    /// <summary>برای خطای 403 — همان SSOUserName (apiName).</summary>
+    public string? SigningApiName { get; set; }
+    public string? ClientIdHint { get; set; }
+    public bool ClientSecretLooksShort { get; set; }
 }
 
 public sealed class ShimasCallbackPayload

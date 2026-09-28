@@ -49,9 +49,9 @@ public class AppSettingsConfigurationTests
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         var shimas = doc.RootElement.GetProperty("Auth").GetProperty("Shimas");
         Assert.True(shimas.GetProperty("Enabled").GetBoolean());
-        Assert.Equal("19cf3C33", shimas.GetProperty("ClientId").GetString());
-        Assert.Equal("D2fbf", shimas.GetProperty("ClientSecret").GetString());
-        Assert.Equal("", shimas.GetProperty("LKey").GetString());
+        Assert.Equal("", shimas.GetProperty("ClientId").GetString());
+        Assert.Equal("", shimas.GetProperty("ClientSecret").GetString());
+        Assert.True(shimas.TryGetProperty("SSOUserName", out _));
     }
 
     [Fact]

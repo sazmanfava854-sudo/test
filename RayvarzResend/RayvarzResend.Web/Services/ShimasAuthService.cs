@@ -52,7 +52,10 @@ public sealed class ShimasAuthService
             AllowAdminLocalLoginOnPublicHost = _options.AllowAdminLocalLoginOnPublicHost,
             LoginPath = preferSso ? "/auth/login" : "/login.html",
             CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
-            RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl()
+            RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl(),
+            SigningApiName = string.IsNullOrWhiteSpace(_options.SigningApiName) ? null : _options.SigningApiName,
+            ClientIdHint = SsoCredentialMask.MaskId(_options.EffectiveClientId),
+            ClientSecretLooksShort = SsoCredentialMask.SecretLooksTooShort(_options.ClientSecret)
         };
     }
 
@@ -127,7 +130,7 @@ public sealed class ShimasAuthService
                 return BuildExternalLoginUrl(callbackAbsoluteUrl);
             }
 
-            throw new InvalidOperationException($"دریافت loginKey از SSO ناموفق بود: {detail}{hint}");
+            throw new InvalidOperationException(BuildLoginKeyFailureMessage(detail, hint));
         }
 
         RememberLoginState(http, state);
@@ -631,5 +634,17 @@ public sealed class ShimasAuthService
     {
         if (username.Length <= 4) return "***";
         return username[..2] + "***" + username[^2..];
+    }
+
+    private string BuildLoginKeyFailureMessage(string detail, string hint)
+    {
+        var secretHint = SsoCredentialMask.SecretLooksTooShort(_options.ClientSecret)
+            ? " ClientSecret/SSOSecret در appsettings خیلی کوتاه است — مقدار کامل SecretKey پورتال SSO را بگذارید (نه چند حرف اول)."
+            : "";
+
+        return
+            $"دریافت loginKey از SSO ناموفق بود: {detail}{hint}.{secretHint} " +
+            $"ارسال‌شده: apiName='{_options.SigningApiName}', clientId='{SsoCredentialMask.MaskId(_options.EffectiveClientId)}'. " +
+            "مثل RuleEngine: Settings.SSOUserName→ApiName، SSOClientId→ClientId، SSOSecret→ClientSecret (ثبت همان سامانه دستیار مالی، نه ضوابط).";
     }
 }

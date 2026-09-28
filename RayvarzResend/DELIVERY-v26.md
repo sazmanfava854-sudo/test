@@ -58,7 +58,25 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `LoginState` | فقط برای loginKey؛ در Login.aspx قدیمی معمولاً `state` نمی‌آید — خالی بگذارید یا همان پیش‌فرض (بازگشت بدون state مجاز است) |
 | `AutoProvisionUsers` | `false` = کاربر باید از قبل در «مدیریت کاربران» با کد ملی/دامین ثبت شده باشد؛ بعد از SSO بدون رکورد → بازگشت به login با پیام خطا |
 
-403 **Client info missmatched** = `ApiName`/`Secret`/`ClientId` با پورتال SSO هم‌خوان نیست.
+403 **Client info missmatched** = یکی از این‌ها با پورتال SSO (جدول ۱) یکی نیست:
+- `SSOUserName` / `ApiName` (هدر **apiName** — مثل `zavabetapp` فقط برای همان سامانه)
+- `SSOClientId` / `ClientId`
+- `SSOSecret` / `ClientSecret` — **کل SecretKey** (نه `D2fbf` کوتاه)
+
+می‌توانید همان بلوک RuleEngine را در ریشه `appsettings.json` بگذارید:
+
+```json
+"Settings": {
+  "SSOBaseUrl": "https://login.mashhad.ir",
+  "SSOClientId": "<ClientId ثبت دستیار مالی>",
+  "SSOSecret": "<Secret کامل>",
+  "SSOUserName": "<نام کاربری ثبت سامانه>"
+}
+```
+
+یا داخل `Auth:Shimas` با کلیدهای `SSOUserName` / `SSOClientId` / `SSOSecret`.
+
+بررسی: `GET /api/auth/mode` → `signingApiName`, `clientIdHint`, `clientSecretLooksShort`.
 
 ساخت Zip: `bash RayvarzResend/scripts/build-release-zip.sh`
 

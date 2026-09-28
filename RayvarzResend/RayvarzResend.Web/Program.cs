@@ -34,6 +34,8 @@ builder.Services.AddHttpClient();
 builder.Services.AddHttpClient(MashhadSsoApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseProxy = false });
 builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
+builder.Services.PostConfigure<ShimasAuthOptions>(o =>
+    ShimasAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>

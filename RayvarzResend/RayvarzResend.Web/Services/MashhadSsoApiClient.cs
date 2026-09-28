@@ -46,6 +46,29 @@ public sealed class MashhadSsoApiClient
         string? state,
         CancellationToken ct = default)
     {
+        var primary = NormalizeHashEncoding(_options.HashEncoding);
+        var result = await SendLoginKeyAsync(returnUrl, state, primary, ct);
+        if (ShouldRetryLoginKeyWithAlternateHash(result, primary))
+        {
+            var alternate = primary == "upper" ? "lower" : "upper";
+            _logger.LogWarning(
+                "Mashhad loginKey returned {Code} ({Message}) with HashEncoding={Primary}; retrying with {Alternate}",
+                result.ErrorCode,
+                result.ErrorMessage,
+                primary,
+                alternate);
+            result = await SendLoginKeyAsync(returnUrl, state, alternate, ct);
+        }
+
+        return result;
+    }
+
+    private async Task<MashhadSsoResult<MashhadLoginKeyData>> SendLoginKeyAsync(
+        string? returnUrl,
+        string? state,
+        string hashEncoding,
+        CancellationToken ct)
+    {
         var time = await GetCurrentTimeAsync(ct);
         if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
             return new MashhadSsoResult<MashhadLoginKeyData>
@@ -55,7 +78,7 @@ public sealed class MashhadSsoApiClient
             };
 
         var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
+        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, hashEncoding);
         var loginState = string.IsNullOrWhiteSpace(state)
             ? (string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim())
             : state.Trim();
@@ -79,6 +102,26 @@ public sealed class MashhadSsoApiClient
         return Deserialize<MashhadSsoResult<MashhadLoginKeyData>>(body)
             ?? new MashhadSsoResult<MashhadLoginKeyData> { ErrorCode = -1, ErrorMessage = body };
     }
+
+    private static bool ShouldRetryLoginKeyWithAlternateHash(MashhadSsoResult<MashhadLoginKeyData> result, string primaryEncoding)
+    {
+        if (result.IsSuccess)
+            return false;
+
+        if (result.ErrorCode != 403)
+            return false;
+
+        var message = (result.ErrorMessage ?? "").Trim();
+        if (message.Length == 0)
+            return true;
+
+        return message.Contains("missmatch", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("mismatch", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Client info", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeHashEncoding(string? encoding) =>
+        string.Equals(encoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower";
 
     public async Task<MashhadSsoResult<MashhadAccessTokenData>> GetAccessTokenAsync(
         string refreshToken,

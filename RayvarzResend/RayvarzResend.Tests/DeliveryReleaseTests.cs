@@ -64,11 +64,10 @@ public class DeliveryReleaseTests
         Assert.Contains("\"DryRun\": false", json);
         Assert.Contains("\"AccountingDoc\"", json);
         Assert.Contains("\"Tahator\"", json);
-        Assert.Contains("FinancialAssistant", json);
         Assert.Contains("https://city.mashhad.ir:5065", json);
         Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
         Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
-        Assert.Contains("\"ApiName\": \"FinancialAssistant\"", json);
+        Assert.Contains("\"SSOUserName\"", json);
         Assert.Contains("\"UseLoginKeyOnRedirect\": true", json);
         Assert.Contains("\"IncludeReturnUrlInLoginKey\": false", json);
         Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": false", json);
