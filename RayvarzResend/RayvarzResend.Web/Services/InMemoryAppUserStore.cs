@@ -10,20 +10,8 @@ public sealed class InMemoryAppUserStore
     private readonly ConcurrentDictionary<Guid, AppUserRecord> _byId = new();
     private readonly ConcurrentDictionary<Guid, AppUserGroupRecord> _groups = new();
     private readonly ConcurrentDictionary<Guid, HashSet<Guid>> _userGroups = new();
-    private readonly ConcurrentDictionary<string, Guid> _domainAliases = new(StringComparer.OrdinalIgnoreCase);
 
     public int Count => _byUsername.Count;
-
-    public void AddDomainAlias(Guid userId, string domain)
-    {
-        if (!_byId.ContainsKey(userId))
-            throw new InvalidOperationException("کاربر یافت نشد");
-        if (_byId.Values.Any(u => u.Id != userId && u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException("این دامین دامین اصلی کاربر دیگری است");
-        if (_domainAliases.TryGetValue(domain, out var owner) && owner != userId)
-            throw new InvalidOperationException("این دامین برای کاربر دیگری ثبت شده است");
-        _domainAliases[domain] = userId;
-    }
 
     public AppUserRecord Add(CreateAppUserRequest req)
     {
@@ -98,9 +86,6 @@ public sealed class InMemoryAppUserStore
             _byId.Values.FirstOrDefault(pred);
 
         return Match(u => !string.IsNullOrEmpty(account) && u.Domain.Equals(account, StringComparison.OrdinalIgnoreCase))
-            ?? (!string.IsNullOrEmpty(account) && _domainAliases.TryGetValue(account, out var aliasUserId)
-                ? FindById(aliasUserId)
-                : null)
             ?? Match(u => !string.IsNullOrEmpty(account) && u.Username.Equals(account, StringComparison.OrdinalIgnoreCase))
             ?? Match(u => !string.IsNullOrEmpty(raw) && u.Username.Equals(raw, StringComparison.OrdinalIgnoreCase))
             ?? Match(u => !string.IsNullOrEmpty(raw) && u.NationalId.Equals(raw, StringComparison.OrdinalIgnoreCase))

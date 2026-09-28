@@ -248,54 +248,6 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
-    public async Task User_with_two_domains_resolves_from_either_sso_identity()
-    {
-        var memory = new InMemoryAppUserStore();
-        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
-        config["Auth:UseInMemoryStore"] = "true";
-        var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
-        var user = await repo.CreateUserAsync(new CreateAppUserRequest
-        {
-            Username = "0925569917",
-            Password = "Pass@1234",
-            FirstName = "شقایق",
-            LastName = "حسینی",
-            NationalId = "0925569917",
-            Position = "کارشناس",
-            District = "7",
-            Domain = "hoseine-sh"
-        });
-        await repo.AddDomainAliasAsync(user.Id, "sadathoseini-sh");
-
-        Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync("hoseine-sh"))?.Id);
-        Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync("sadathoseini-sh"))?.Id);
-        Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync(@"MASHHAD\sadathoseini-sh"))?.Id);
-
-        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = false }, memory);
-        foreach (var domain in new[] { "hoseine-sh", "sadathoseini-sh" })
-        {
-            var resolved = await service.ResolveOrCreateUserAsync(new ShimasUserProfile
-            {
-                Username = domain,
-                Domain = domain
-            });
-            Assert.Equal(user.Id, resolved?.Id);
-        }
-
-        var other = await repo.CreateUserAsync(new CreateAppUserRequest
-        {
-            Username = "1111111111",
-            Password = "Pass@1234",
-            FirstName = "دیگر",
-            LastName = "کاربر",
-            NationalId = "1111111111",
-            District = "1",
-            Domain = "other-user"
-        });
-        await Assert.ThrowsAsync<InvalidOperationException>(() => repo.AddDomainAliasAsync(other.Id, "sadathoseini-sh"));
-    }
-
-    [Fact]
     public void ResolveLoginRedirectPath_uses_local_when_sso_disabled()
     {
         var service = CreateService(new ShimasAuthOptions { Enabled = false });
