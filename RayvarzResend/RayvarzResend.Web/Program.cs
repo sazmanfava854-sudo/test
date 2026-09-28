@@ -383,7 +383,7 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
             return Results.Json(new
             {
                 error = "بلوک Settings کامل نیست — SSOUserName / SSOClientId / SSOSecret همان RuleEngine را در ریشهٔ appsettings.json بگذارید.",
-                sample = new { Settings = new { SSOUserName = "zavabetapp", SSOClientId = "<ClientId RuleEngine>", SSOSecret = "<Secret RuleEngine>" } }
+                sample = new { Settings = new { SSOUserName = "<apiName از پورتال>", SSOClientId = "<ClientId>", SSOSecret = "<SecretKey>" } }
             }, statusCode: 400);
     }
     else
@@ -427,8 +427,8 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
             : ssoUnreachable
                 ? "getCurrentTime جواب نداد — SSO از این سرور در دسترس نیست (شبکه/فایروال)؛ هیچ فرمولی آزموده نشد."
                 : allClientInfoMismatch
-                    ? "همهٔ فرمول‌ها و شکل‌های درخواست (حتی Secret خام و apiName = ClientId) عیناً همان «Client info missmatched» را گرفتند؛ یعنی SSO قبل از بررسی هش، جفت apiName/ClientId را در ثبت خود پیدا نمی‌کند. علت: نام کاربری API (apiName) این سامانه چیز دیگری است یا برای این ClientId دسترسی API loginKey در پورتال فعال نشده. از مدیر SSO «apiName/SSOUserName» و «ClientId/Secret API» سامانهٔ FinancialAssistant را بگیرید و با &apiName=<نام> تست کنید؛ برای اطمینان از کد، profile=settings را با اعتبار RuleEngine بزنید."
-                    : "هیچ فرمولی قبول نشد — یا apiName/ClientId/Secret با ثبت پورتال یکی نیست، یا SSO چیزی غیر از این فرمول‌ها می‌خواهد. با profile=settings و اعتبار RuleEngine دوباره بزنید.",
+                    ? "همهٔ فرمول‌ها عیناً «Client info missmatched» — طبق سند SSO (صفحه ۲۰) یعنی apiName (نام کاربری کاربردی برنامه) یا ClientId/SecretKey با ثبت پورتال یکی نیست؛ نام نمایشی برنامه (مثل FinancialAssistant) apiName نیست. اول خارج از برنامه تست کنید: scripts/test-mashhad-sso-loginkey.ps1 روی سرور؛ بعد &apiName=<نام کاربری پورتال> در همین URL."
+                    : "هیچ فرمولی قبول نشد — apiName/ClientId/SecretKey را با پورتال تطبیق دهید یا scripts/test-mashhad-sso-loginkey.ps1 را روی سروری که به login.mashhad.ir دسترسی دارد اجرا کنید.",
         results
     });
 }).AllowAnonymous();

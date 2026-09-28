@@ -17,6 +17,7 @@ dotnet publish "$ROOT/RayvarzResend.Web/RayvarzResend.Web.csproj" \
 find "$STAGE/RayvarzResend" -maxdepth 1 -type f -name 'appsettings.*.json' -delete 2>/dev/null || true
 
 cp "$ROOT/RayvarzResend.Web/appsettings.json" "$STAGE/RayvarzResend/appsettings.json"
+cp "$ROOT/scripts/test-mashhad-sso-loginkey.ps1" "$STAGE/RayvarzResend/test-mashhad-sso-loginkey.ps1"
 
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off

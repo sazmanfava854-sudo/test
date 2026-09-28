@@ -35,9 +35,16 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 پس از اجرا: `GET /api/config` → `releaseVersion: 26` ، `accountingDoc.dryRun: false`.
 
-### SSO (مثل RuleEngine / login.mashhad.ir)
+### SSO (سند شناسه شهروندی — login.mashhad.ir)
 
-در `Auth:Shimas` (سند شناسه شهروندی):
+**قبل از تنظیم `appsettings`:** اعتبار را **خارج از برنامه** با اسکریپت سند (صفحه ۲۰–۲۶) تست کنید:
+
+- ویندوز (کنار Zip): `RayvarzResend\test-mashhad-sso-loginkey.ps1 -ApiName "<نام کاربری کاربردی>" -ClientId "<ClientId>" -SecretKey "<SecretKey>"`
+- لینوکس: `bash scripts/test-mashhad-sso-loginkey.sh "<apiName>" "<ClientId>" "<SecretKey>"`
+
+هدرها: `apiName` = **نام کاربری کاربردی برنامه** (از مدیر SSO)، `requestTime` از `getCurrentTime`، `apiSecret` = `SHA256(SecretKey + requestTime)` hex. بدنه: `Time`, `Hash` (همان مقدار), `ClientId`, `State`, `UserType`, `DomainID`. نام نمایشی برنامه (مثلاً FinancialAssistant) **apiName نیست** مگر همان را در پورتال ثبت کرده باشند.
+
+در `Auth:Shimas`:
 
 **روال:** `loginKey` → `Authentication/Start/{LoginKey}` → callback با `username` + `refresh_token` + `state` → `getAccessToken`.
 
@@ -48,12 +55,12 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `PostLoginDefaultPath` | `/management/` — بعد از SSO کاربر به **صفحهٔ مدیریت** می‌رود؛ فقط فرم‌های مجاز (`/api/auth/me`) |
 | `ApplicationPath` | اگر IIS زیرمسیر دارد مثل `/RayvarzResend` — برگشت آدرس = `https://city.mashhad.ir:5065/RayvarzResend` |
 | چک | `GET /api/auth/sso-return-url` → فیلد `registerInSsoPortal`؛ `GET /api/auth/sso-loginkey-check` یا `/auth/login?debug=1` → آیا SSO برای این ClientId/Secret `loginKey` می‌دهد (403 = Client info mismatch) |
-| 403 `Client info missmatched` | `GET /api/auth/sso-loginkey-probe` → همهٔ فرمول‌های هش (`sha256(secret+time)` lower/upper، `time+secret`، base64، md5، …) با اعتبار FinancialAssistant آزموده می‌شود؛ اگر همه 403 شد، فاز ۲ شکل درخواست را هم می‌آزماید (`apiName = ClientId`، بدون `UserType/DomainId`، کلید `ClientID`). `?profile=settings` همان کار را با اعتبار RuleEngine از بلوک `Settings` (`SSOUserName/SSOClientId/SSOSecret`) می‌کند؛ `&apiName=<نام>` همان تست را با apiName دیگر (بدون تغییر appsettings) انجام می‌دهد. اگر با RuleEngine OK و با FinancialAssistant 403 → ثبت پورتال (apiName/ClientId/Secret) مشکل دارد، نه کد. وقتی **همهٔ** حالت‌ها (حتی Secret خام) عیناً `Client info missmatched` بگیرند، SSO جفت apiName/ClientId را در ثبت خود پیدا نمی‌کند: apiName این سامانه چیز دیگری است یا دسترسی API loginKey برای این ClientId فعال نشده |
+| 403 `Client info missmatched` | اول `test-mashhad-sso-loginkey.ps1`؛ بعد `GET /api/auth/sso-loginkey-probe` و `&apiName=<نام کاربری پورتال>` بدون تغییر appsettings |
 | `CallbackPath` | `/management` = بازگشت SSO روی صفحهٔ مدیریت (همان ReturnUrl پورتال) |
-| `ApiName` | همان **SSOUserName** در RuleEngine (مثلاً `zavabetapp`) — هدر `apiName` |
-| `ClientId` / `ClientSecret` | همان **SSOClientId** / **SSOSecret** |
-| `ApiBaseUrl` | همان **SSOBaseUrl** (`https://login.mashhad.ir`) |
-| `IncludeReturnUrlInLoginKey` | **`false`** مثل RuleEngine — برگشت فقط از آدرس ثبت‌شده در پورتال |
+| `ApiName` / `SSOUserName` | **نام کاربری کاربردی برنامه** — هدر `apiName` (سند ص ۲۰) |
+| `ClientId` / `ClientSecret` | **شناسه** و **SecretKey** همان کاربردی در پورتال |
+| `ApiBaseUrl` | `https://login.mashhad.ir` |
+| `IncludeReturnUrlInLoginKey` | **`false`** — برگشت فقط از آدرس ثبت‌شده در پورتال |
 | `AllowLegacyLoginUrlWithoutLoginKey` | **`false`** — fallback به Login.aspx معمولاً → `Profile.aspx` |
 | `ClientId` / `ClientSecret` | ثبت SSO + هش `SHA256(Secret+requestTime)` |
 | `UseLoginKeyOnRedirect` | **`true`** — `loginKey` سپس `Authentication/Start/{loginKey}` (سند SSO ص ۲۶) |
@@ -63,23 +70,9 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `LoginState` | فقط برای loginKey؛ در Login.aspx قدیمی معمولاً `state` نمی‌آید — خالی بگذارید یا همان پیش‌فرض (بازگشت بدون state مجاز است) |
 | `AutoProvisionUsers` | `false` = کاربر باید از قبل در «مدیریت کاربران» با کد ملی/دامین ثبت شده باشد؛ بعد از SSO بدون رکورد → بازگشت به login با پیام خطا |
 
-403 **Client info missmatched** = یکی از این‌ها با پورتال SSO (جدول ۱) یکی نیست:
-- `SSOUserName` / `ApiName` (هدر **apiName** — مثل `zavabetapp` فقط برای همان سامانه)
-- `SSOClientId` / `ClientId`
-- `SSOSecret` / `ClientSecret` — **کل SecretKey** (نه `D2fbf` کوتاه)
+403 **Client info missmatched** = طبق سند (صفحه ۲۱): هدر `apiName` / `ClientId` / `apiSecret` با ثبت کاربردی برنامه یکی نیست.
 
-می‌توانید همان بلوک RuleEngine را در ریشه `appsettings.json` بگذارید:
-
-```json
-"Settings": {
-  "SSOBaseUrl": "https://login.mashhad.ir",
-  "SSOClientId": "<ClientId ثبت دستیار مالی>",
-  "SSOSecret": "<Secret کامل>",
-  "SSOUserName": "<نام کاربری ثبت سامانه>"
-}
-```
-
-یا داخل `Auth:Shimas` با کلیدهای `SSOUserName` / `SSOClientId` / `SSOSecret`.
+بعد از OK شدن اسکریپت، در `Auth:Shimas` بگذارید: `ApiName`/`SSOUserName` = همان apiName، `ClientId`، `ClientSecret` = SecretKey کامل.
 
 بررسی: `GET /api/auth/mode` → `signingApiName`, `clientIdHint`, `clientSecretLooksShort`.
 

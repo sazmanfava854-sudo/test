@@ -232,6 +232,22 @@ public class MashhadSsoApiClientTests
         Assert.NotNull(acceptedBody);
         Assert.Contains("\"ClientId\":\"client-123\"", acceptedBody);
         Assert.Contains("\"UserType\":0", acceptedBody);
+        Assert.Contains("\"DomainID\":0", acceptedBody);
+    }
+
+    [Fact]
+    public async Task SendLoginKeyProbe_serializes_DomainID_per_sso_doc()
+    {
+        string? body = null;
+        var handler = new MashhadSsoFakeHandler(b => body = b);
+        var opts = Options.Create(new ShimasAuthOptions { ApiBaseUrl = "https://login.mashhad.ir", LoginState = "test", LoginDomainId = 0 });
+        var client = new MashhadSsoApiClient(opts, new NamedHttpClientFactory(handler), NullLogger<MashhadSsoApiClient>.Instance);
+
+        await client.SendLoginKeyProbeAsync("api", "cid", "sec", "1700000000", (s, t) => "hash", default);
+
+        Assert.NotNull(body);
+        Assert.Contains("\"DomainID\":0", body);
+        Assert.DoesNotContain("DomainId", body);
     }
 
     [Fact]

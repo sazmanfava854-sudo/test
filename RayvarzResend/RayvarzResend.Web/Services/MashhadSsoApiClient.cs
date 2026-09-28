@@ -128,7 +128,7 @@ public sealed class MashhadSsoApiClient
         if (!omitUserTypeAndDomain)
         {
             payload["UserType"] = _options.LoginUserType;
-            payload["DomainId"] = _options.LoginDomainId;
+            payload["DomainID"] = _options.LoginDomainId;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Combine("/api/Authentication/loginKey"));
