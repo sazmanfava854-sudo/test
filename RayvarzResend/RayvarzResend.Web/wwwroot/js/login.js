@@ -10,11 +10,19 @@ async function parseJsonResponse(res) {
   }
 }
 
-async function checkExistingSession() {
+function resolvePostLoginTarget(mode) {
+  const params = new URLSearchParams(window.location.search);
+  const returnUrl = (params.get('returnUrl') || '').trim();
+  if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return returnUrl;
+  const fallback = (mode?.postLoginDefaultPath || '/MANAGMENT').trim();
+  return fallback.startsWith('/') ? fallback : '/MANAGMENT';
+}
+
+async function checkExistingSession(mode) {
   try {
     const res = await fetch('/api/auth/me', { credentials: 'include' });
     if (res.ok) {
-      window.location.href = '/';
+      window.location.href = resolvePostLoginTarget(mode);
       return true;
     }
   } catch {
@@ -33,13 +41,18 @@ function showSsoBlock(mode) {
 }
 
 async function initLoginPage() {
-  if (await checkExistingSession()) return;
-
   let mode = null;
   try {
     const res = await fetch('/api/auth/mode');
-    if (res.ok) {
-      mode = await res.json();
+    if (res.ok) mode = await res.json();
+  } catch {
+    // ignore
+  }
+
+  if (await checkExistingSession(mode)) return;
+
+  try {
+    if (mode) {
       showSsoBlock(mode);
       if (mode.preferSsoLogin && !mode.allowAdminLocalLoginOnPublicHost) {
         window.location.href = mode.loginPath || '/auth/login';
@@ -85,7 +98,14 @@ $('loginForm').addEventListener('submit', async (e) => {
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-    window.location.href = '/';
+    let mode = null;
+    try {
+      const modeRes = await fetch('/api/auth/mode');
+      if (modeRes.ok) mode = await modeRes.json();
+    } catch {
+      // ignore
+    }
+    window.location.href = resolvePostLoginTarget(mode);
   } catch (ex) {
     errEl.textContent = ex.message || 'ورود ناموفق';
     errEl.hidden = false;

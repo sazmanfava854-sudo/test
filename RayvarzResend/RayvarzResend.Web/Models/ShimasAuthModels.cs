@@ -28,6 +28,7 @@ public sealed class ShimasAuthStatusDto
     /// <summary>صفحه login.html روی host عمومی برای ادمین (بدون ریدایرکت اجباری به SSO).</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; }
     public string LoginPath { get; set; } = "/auth/login";
+    public string PostLoginDefaultPath { get; set; } = "/";
     public string CallbackPath { get; set; } = "/auth/callback";
     /// <summary>آدرس callback ثبت‌شده در سامزان — برای بررسی پیکربندی.</summary>
     public string? RegisteredCallbackUrl { get; set; }

@@ -167,6 +167,34 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void Internal_server_host_uses_login_html_without_sso_redirect()
+    {
+        var options = new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "19cf3C33",
+            ClientSecret = "D2fbf",
+            AllowLocalLoginFallback = true,
+            PreferLocalLoginHosts = ["5.252.216.140"],
+            PublicBaseUrl = "https://city.mashhad.ir:5065",
+            PostLoginDefaultPath = "/MANAGMENT"
+        };
+
+        Assert.True(options.IsPreferLocalLoginHost("5.252.216.140"));
+        Assert.True(options.IsPreferLocalLoginHost("5.252.216.140:8070"));
+        Assert.False(options.PreferSsoLoginForHost("5.252.216.140:8070"));
+        Assert.True(options.LocalLoginAvailableForHost("5.252.216.140:8070"));
+
+        var service = CreateService(options);
+        var internalReq = new DefaultHttpContext();
+        internalReq.Request.Host = new HostString("5.252.216.140", 8070);
+        Assert.Equal("/login.html", service.ResolveLoginRedirectPath(internalReq.Request));
+        Assert.False(service.GetStatus(internalReq.Request).PreferSsoLogin);
+        Assert.True(service.GetStatus(internalReq.Request).LocalLoginAvailable);
+        Assert.Equal("/MANAGMENT", service.GetStatus(internalReq.Request).PostLoginDefaultPath);
+    }
+
+    [Fact]
     public void GetStatus_exposes_admin_local_login_flag()
     {
         var service = CreateService(new ShimasAuthOptions

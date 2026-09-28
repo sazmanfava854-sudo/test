@@ -66,6 +66,8 @@ public class DeliveryReleaseTests
         Assert.Contains("\"Tahator\"", json);
         Assert.Contains("https://city.mashhad.ir:5065", json);
         Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
+        Assert.Contains("\"PreferLocalLoginHosts\"", json);
+        Assert.Contains("5.252.216.140", json);
         Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
         Assert.Contains("\"SSOUserName\"", json);
         Assert.Contains("\"UseLoginKeyOnRedirect\": false", json);

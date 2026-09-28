@@ -48,6 +48,8 @@ public sealed class ShimasAuthOptions
     public bool AllowLocalLoginFallback { get; set; } = true;
     /// <summary>روی آدرس عمومی (مثلاً city.mashhad.ir) ورود محلی فقط برای کاربران IsAdmin.</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; } = true;
+    /// <summary>روی این hostها (مثلاً IP داخلی سرور) به‌جای SSO به login.html هدایت می‌شود — ورود محلی برای ادمین/عملیات.</summary>
+    public string[] PreferLocalLoginHosts { get; set; } = [];
     public int MinRefreshTokenLength { get; set; } = 3;
 
     public string EffectiveClientId
@@ -78,10 +80,15 @@ public sealed class ShimasAuthOptions
     public bool PreferSsoLogin => Enabled && (SsoReady || !AllowLocalLoginFallback);
 
     /// <summary>localhost برای تست نسخه غیرپابلیش — SSO فقط روی آدرس عمومی سرور.</summary>
-    public static bool IsLoopbackHost(string? host)
+    public static bool IsLoopbackHost(string? host) =>
+        string.Equals(NormalizeHostName(host), "localhost", StringComparison.OrdinalIgnoreCase)
+        || NormalizeHostName(host) == "127.0.0.1"
+        || NormalizeHostName(host) == "::1";
+
+    public static string NormalizeHostName(string? host)
     {
         if (string.IsNullOrWhiteSpace(host))
-            return false;
+            return "";
 
         var name = host.Trim();
         if (name.StartsWith('['))
@@ -96,14 +103,27 @@ public sealed class ShimasAuthOptions
                 name = name[..colon];
         }
 
-        return name.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || name == "127.0.0.1"
-            || name == "::1";
+        return name;
+    }
+
+    public bool IsPreferLocalLoginHost(string? host)
+    {
+        var name = NormalizeHostName(host);
+        if (name.Length == 0)
+            return false;
+
+        foreach (var entry in PreferLocalLoginHosts)
+        {
+            if (string.Equals(NormalizeHostName(entry), name, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     public bool PreferSsoLoginForHost(string? host) =>
-        PreferSsoLogin && !IsLoopbackHost(host);
+        PreferSsoLogin && !IsLoopbackHost(host) && !IsPreferLocalLoginHost(host);
 
     public bool LocalLoginAvailableForHost(string? host) =>
-        LocalLoginAvailable || IsLoopbackHost(host);
+        LocalLoginAvailable || IsLoopbackHost(host) || IsPreferLocalLoginHost(host);
 }

@@ -51,6 +51,7 @@ public sealed class ShimasAuthService
             LocalLoginAvailable = _options.LocalLoginAvailableForHost(host),
             AllowAdminLocalLoginOnPublicHost = _options.AllowAdminLocalLoginOnPublicHost,
             LoginPath = preferSso ? "/auth/login" : "/login.html",
+            PostLoginDefaultPath = NormalizePostLoginPath(_options.PostLoginDefaultPath),
             CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
             RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl(),
             SsoReturnUrlForPortal = ResolveSsoReturnUrlForPortal(request),
