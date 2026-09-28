@@ -53,6 +53,7 @@ public sealed class ShimasAuthService
             LoginPath = preferSso ? "/auth/login" : "/login.html",
             CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
             RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl(),
+            SsoReturnUrlForPortal = ResolveSsoReturnUrlForPortal(request),
             SigningApiName = string.IsNullOrWhiteSpace(_options.SigningApiName) ? null : _options.SigningApiName,
             ClientIdHint = SsoCredentialMask.MaskId(_options.EffectiveClientId),
             ClientSecretLooksShort = SsoCredentialMask.SecretLooksTooShort(_options.ClientSecret)
@@ -65,7 +66,26 @@ public sealed class ShimasAuthService
         if (string.IsNullOrWhiteSpace(baseUrl))
             return null;
 
-        return $"{baseUrl}{CallbackPathSuffix(NormalizeCallbackPath(_options.CallbackPath))}";
+        return BuildCallbackAbsoluteUrlFromParts(baseUrl, "", NormalizeCallbackPath(_options.CallbackPath));
+    }
+
+    /// <summary>آدرسی که به برنامه‌نویس SSO برای «برگشت آدرس» می‌دهید.</summary>
+    public string ResolveSsoReturnUrlForPortal(HttpRequest? request = null)
+    {
+        if (request != null)
+            return BuildCallbackAbsoluteUrl(request);
+
+        var registered = NormalizePublicBaseUrl(_options.SsoRegisteredReturnUrl);
+        if (!string.IsNullOrWhiteSpace(registered))
+            return registered;
+
+        return ResolvePublicCallbackUrl() ?? "";
+    }
+
+    public string DescribeLoginStartForPortal(HttpRequest? request = null)
+    {
+        var callback = ResolveSsoReturnUrlForPortal(request);
+        return BuildExternalLoginUrl(callback);
     }
 
     public string ResolveLoginRedirectPath(HttpRequest? request = null)
@@ -199,7 +219,7 @@ public sealed class ShimasAuthService
 
     public void RememberPostLoginReturn(HttpContext http, string? returnPath = null)
     {
-        var path = (returnPath ?? "/").Trim();
+        var path = (returnPath ?? _options.PostLoginDefaultPath ?? "/").Trim();
         if (path.Length == 0 || !path.StartsWith('/') || path.StartsWith("//", StringComparison.Ordinal))
             path = "/";
 
@@ -230,12 +250,45 @@ public sealed class ShimasAuthService
 
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
     {
-        var configured = NormalizePublicBaseUrl(_options.PublicBaseUrl);
-        var suffix = CallbackPathSuffix(NormalizeCallbackPath(_options.CallbackPath));
-        if (!string.IsNullOrWhiteSpace(configured))
-            return $"{configured}{suffix}";
+        var registered = NormalizePublicBaseUrl(_options.SsoRegisteredReturnUrl);
+        if (!string.IsNullOrWhiteSpace(registered))
+            return registered;
 
-        return $"{request.Scheme}://{request.Host}{suffix}";
+        var configured = NormalizePublicBaseUrl(_options.PublicBaseUrl);
+        var appPath = ResolveApplicationPath(request);
+        var callbackPath = NormalizeCallbackPath(_options.CallbackPath);
+
+        if (!string.IsNullOrWhiteSpace(configured))
+            return BuildCallbackAbsoluteUrlFromParts(configured, appPath, callbackPath);
+
+        var hostBase = $"{request.Scheme}://{request.Host}";
+        return BuildCallbackAbsoluteUrlFromParts(hostBase, appPath, callbackPath);
+    }
+
+    private string ResolveApplicationPath(HttpRequest request)
+    {
+        var configured = NormalizeApplicationPath(_options.ApplicationPath);
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured;
+
+        var pathBase = (request.PathBase.Value ?? "").Trim();
+        return NormalizeApplicationPath(pathBase);
+    }
+
+    private static string BuildCallbackAbsoluteUrlFromParts(string hostOrBase, string appPath, string callbackPath)
+    {
+        var baseUrl = NormalizePublicBaseUrl(hostOrBase);
+        var suffix = CallbackPathSuffix(callbackPath);
+        return $"{baseUrl}{appPath}{suffix}";
+    }
+
+    private static string NormalizeApplicationPath(string? path)
+    {
+        var value = (path ?? "").Trim();
+        if (value.Length == 0 || value == "/")
+            return "";
+
+        return value.StartsWith('/') ? value.TrimEnd('/') : "/" + value.TrimEnd('/');
     }
 
     /// <summary>بازگشت SSO روی ریشه سایت (مثلاً https://city.mashhad.ir:5065) با querystring توکن.</summary>

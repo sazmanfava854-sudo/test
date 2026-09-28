@@ -7,6 +7,12 @@ public sealed class ShimasAuthOptions
     public bool Enabled { get; set; }
     /// <summary>آدرس عمومی سایت — برای callback سامزان/شیماس روی سرور پشت IIS یا IP:Port.</summary>
     public string PublicBaseUrl { get; set; } = "";
+    /// <summary>همان «برگشت آدرس» جدول ۱ SSO — اگر پر باشد عیناً در returnUrl/loginKey استفاده می‌شود.</summary>
+    public string SsoRegisteredReturnUrl { get; set; } = "";
+    /// <summary>مسیر IIS مثل /RayvarzResend — اگر خالی، از PathBase درخواست گرفته می‌شود.</summary>
+    public string ApplicationPath { get; set; } = "";
+    /// <summary>بعد از ورود موفق SSO به کدام مسیر داخلی برود (صفحهٔ اصلی با تب‌ها).</summary>
+    public string PostLoginDefaultPath { get; set; } = "/";
     public string LoginUrl { get; set; } = "https://login.mashhad.ir/Authentication/Login.aspx";
     /// <summary>طبق سند SSO: https://login.mashhad.ir/Authentication/Start/{loginKey}</summary>
     public string LoginStartUrlTemplate { get; set; } = "https://login.mashhad.ir/Authentication/Start/{loginKey}";

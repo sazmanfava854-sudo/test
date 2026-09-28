@@ -390,6 +390,19 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void BuildCallbackAbsoluteUrl_uses_sso_registered_return_url_when_set()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            SsoRegisteredReturnUrl = "https://city.mashhad.ir:5065",
+            PublicBaseUrl = "https://wrong.example.com",
+            CallbackPath = "/"
+        });
+        var context = new DefaultHttpContext();
+        Assert.Equal("https://city.mashhad.ir:5065", service.BuildCallbackAbsoluteUrl(context.Request));
+    }
+
+    [Fact]
     public void BuildCallbackAbsoluteUrl_uses_public_base_only_when_callback_path_is_root()
     {
         var service = CreateService(new ShimasAuthOptions
