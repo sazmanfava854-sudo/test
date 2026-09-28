@@ -19,6 +19,28 @@ public sealed class ShimasValidationResult
     public ShimasUserProfile Profile { get; set; } = new();
 }
 
+public sealed class SsoLoginKeyDiagnostics
+{
+    public string ApiBaseUrl { get; set; } = "";
+    public string ApiName { get; set; } = "";
+    public string ClientIdMasked { get; set; } = "";
+    public int ClientIdLength { get; set; }
+    public int ClientSecretLength { get; set; }
+    public bool UseLoginKeyOnRedirect { get; set; }
+    public string ReturnUrlRegisteredInPortal { get; set; } = "";
+    public bool GetCurrentTimeOk { get; set; }
+    public bool LoginKeyOk { get; set; }
+    public int? LoginKeyErrorCode { get; set; }
+    public string? LoginKeyErrorMessage { get; set; }
+    public string? StartUrlSample { get; set; }
+    public string? Error { get; set; }
+
+    public string Verdict =>
+        LoginKeyOk
+            ? "OK — SSO loginKey می‌دهد؛ با UseLoginKeyOnRedirect=true کاربر به Start/{loginKey} می‌رود و به «برگشت آدرس» ثبت‌شده برمی‌گردد."
+            : Error ?? "نامشخص";
+}
+
 public sealed class ShimasAuthStatusDto
 {
     public bool Enabled { get; set; }

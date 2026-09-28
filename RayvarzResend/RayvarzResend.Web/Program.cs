@@ -304,6 +304,10 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
         if (http.Request.Query.ContainsKey("debug"))
         {
             var encoded = Uri.EscapeDataString(callbackUrl);
+            var diag = await shimas.DiagnoseLoginKeyAsync(callbackUrl, ct);
+            var flow = loginUrl.Contains("/Authentication/Start/", StringComparison.OrdinalIgnoreCase)
+                ? "loginKey → Authentication/Start/{loginKey} (روش سند SSO؛ برگشت به آدرس ثبت‌شده در پورتال)"
+                : "Login.aspx?lkey&returnUrl (روش قدیمی؛ اگر SSO روی Profile.aspx بماند، این روش را قبول نمی‌کند)";
             var body = $"""
                 برگشت آدرس (ثبت SSO) = همان آدرسی که به پورتال دادید:
                 {callbackUrl}
@@ -311,11 +315,21 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 این مقدار باید داخل آدرس ورود به login.mashhad.ir باشد (پارامتر returnUrl):
                 returnUrl={encoded}
 
+                روش ورود فعلی: {flow}
+
                 آدرس کامل ورود (کپی در مرورگر و قبل از لاگین چک کنید returnUrl هست):
                 {loginUrl}
 
                 ClientId/lkey تنظیم شده: بله (طول {clientId.Length} کاراکتر)
                 ApiName: {shimas.Options.SigningApiName}
+                UseLoginKeyOnRedirect: {shimas.Options.UseLoginKeyOnRedirect}
+
+                ---- تست loginKey با SSO ({diag.ApiBaseUrl}) ----
+                getCurrentTime: {(diag.GetCurrentTimeOk ? "OK" : "ناموفق")}
+                loginKey: {(diag.LoginKeyOk ? "OK" : $"ناموفق (code {diag.LoginKeyErrorCode}: {diag.LoginKeyErrorMessage})")}
+                ClientSecret طول: {diag.ClientSecretLength} کاراکتر
+                نتیجه: {diag.Verdict}
+                {(diag.StartUrlSample != null ? "نمونه Start URL: " + diag.StartUrlSample : "")}
                 """;
             return Results.Content(body, "text/plain; charset=utf-8");
         }
@@ -326,6 +340,28 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
     {
         return Results.Content($"خطا در آماده‌سازی ورود SSO: {ex.Message}", "text/plain; charset=utf-8", statusCode: 503);
     }
+}).AllowAnonymous();
+
+app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
+{
+    var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
+    var diag = await shimas.DiagnoseLoginKeyAsync(callback, ct);
+    return Results.Ok(new
+    {
+        diag.ApiBaseUrl,
+        diag.ApiName,
+        diag.ClientIdMasked,
+        diag.ClientIdLength,
+        diag.ClientSecretLength,
+        diag.UseLoginKeyOnRedirect,
+        diag.ReturnUrlRegisteredInPortal,
+        diag.GetCurrentTimeOk,
+        diag.LoginKeyOk,
+        diag.LoginKeyErrorCode,
+        diag.LoginKeyErrorMessage,
+        diag.StartUrlSample,
+        verdictFa = diag.Verdict
+    });
 }).AllowAnonymous();
 
 app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>

@@ -164,6 +164,56 @@ public sealed class ShimasAuthService
         return BuildLoginStartUrl(loginKey);
     }
 
+    /// <summary>تشخیص: آیا SSO برای این ClientId/Secret/apiName یک loginKey می‌دهد؟ (بدون هدایت کاربر)</summary>
+    public async Task<SsoLoginKeyDiagnostics> DiagnoseLoginKeyAsync(string callbackAbsoluteUrl, CancellationToken ct = default)
+    {
+        var diag = new SsoLoginKeyDiagnostics
+        {
+            ApiBaseUrl = _options.ApiBaseUrl,
+            ApiName = _options.SigningApiName,
+            ClientIdMasked = SsoCredentialMask.MaskId(_options.EffectiveClientId),
+            ClientIdLength = _options.EffectiveClientId.Length,
+            ClientSecretLength = (_options.ClientSecret ?? "").Trim().Length,
+            UseLoginKeyOnRedirect = _options.UseLoginKeyOnRedirect,
+            ReturnUrlRegisteredInPortal = callbackAbsoluteUrl
+        };
+
+        if (!_options.UseMashhadAuthenticationApi)
+        {
+            diag.Error = "ApiBaseUrl / ApiName / ClientSecret کامل نیست — روش loginKey فعال نمی‌شود و فقط Login.aspx استفاده می‌شود.";
+            return diag;
+        }
+
+        try
+        {
+            var time = await _mashhadSso.GetCurrentTimeAsync(ct);
+            diag.GetCurrentTimeOk = time.IsSuccess && !string.IsNullOrWhiteSpace(time.Data);
+            if (!diag.GetCurrentTimeOk)
+            {
+                diag.Error = $"getCurrentTime ناموفق: {time.ErrorMessage} (code {time.ErrorCode})";
+                return diag;
+            }
+
+            var key = await _mashhadSso.GetLoginKeyAsync(callbackAbsoluteUrl, ResolveLoginState(null), ct);
+            diag.LoginKeyErrorCode = key.ErrorCode;
+            diag.LoginKeyErrorMessage = key.ErrorMessage;
+            var loginKey = key.Data?.EffectiveLoginKey;
+            diag.LoginKeyOk = key.IsSuccess && !string.IsNullOrWhiteSpace(loginKey);
+            if (diag.LoginKeyOk)
+                diag.StartUrlSample = BuildLoginStartUrl(SsoCredentialMask.MaskId(loginKey));
+            else if (key.ErrorCode == 403)
+                diag.Error = "SSO می‌گوید Client info mismatch — ClientId/ClientSecret/apiName با ثبت پورتال یکی نیست (Secret کامل؟ apiName = نام کاربری SSO؟).";
+            else
+                diag.Error = $"loginKey ناموفق: {key.ErrorMessage} (code {key.ErrorCode})";
+        }
+        catch (Exception ex)
+        {
+            diag.Error = $"خطا در ارتباط با {_options.ApiBaseUrl}: {ex.Message}";
+        }
+
+        return diag;
+    }
+
     public string BuildLoginStartUrl(string loginKey)
     {
         var key = (loginKey ?? "").Trim();

@@ -47,7 +47,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `PublicBaseUrl` | `https://city.mashhad.ir:5065` (بدون مسیر) |
 | `PostLoginDefaultPath` | `/management/` — بعد از SSO کاربر به **صفحهٔ مدیریت** می‌رود؛ فقط فرم‌های مجاز (`/api/auth/me`) |
 | `ApplicationPath` | اگر IIS زیرمسیر دارد مثل `/RayvarzResend` — برگشت آدرس = `https://city.mashhad.ir:5065/RayvarzResend` |
-| چک | `GET /api/auth/sso-return-url` → فیلد `registerInSsoPortal` |
+| چک | `GET /api/auth/sso-return-url` → فیلد `registerInSsoPortal`؛ `GET /api/auth/sso-loginkey-check` یا `/auth/login?debug=1` → آیا SSO برای این ClientId/Secret `loginKey` می‌دهد (403 = Client info mismatch) |
 | `CallbackPath` | `/management` = بازگشت SSO روی صفحهٔ مدیریت (همان ReturnUrl پورتال) |
 | `ApiName` | همان **SSOUserName** در RuleEngine (مثلاً `zavabetapp`) — هدر `apiName` |
 | `ClientId` / `ClientSecret` | همان **SSOClientId** / **SSOSecret** |

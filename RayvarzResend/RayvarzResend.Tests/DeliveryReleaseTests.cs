@@ -70,7 +70,7 @@ public class DeliveryReleaseTests
         Assert.Contains("5.252.216.140", json);
         Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
         Assert.Contains("\"SSOUserName\"", json);
-        Assert.Contains("\"UseLoginKeyOnRedirect\": false", json);
+        Assert.Contains("\"UseLoginKeyOnRedirect\": true", json);
         Assert.Contains("\"IncludeReturnUrlInLoginKey\": false", json);
         Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": true", json);
         Assert.Contains("FinancialAssistant", json);
