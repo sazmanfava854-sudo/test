@@ -83,7 +83,7 @@ async function loadAuthMode() {
 async function redirectToLogin() {
   const mode = await loadAuthMode();
   const base = mode?.preferSsoLogin ? (mode.loginPath || '/auth/login') : '/login.html';
-  const returnUrl = encodeURIComponent('/MANAGMENT');
+  const returnUrl = encodeURIComponent('/management/');
   window.location.href = base.includes('?')
     ? `${base}&returnUrl=${returnUrl}`
     : `${base}?returnUrl=${returnUrl}`;
@@ -142,8 +142,13 @@ function renderModuleCards(user) {
 }
 
 async function logout() {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  await redirectToLogin();
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch {
+    // ignore
+  }
+  // نه /auth/login — نشست SSO فعال کاربر را بلافاصله دوباره وارد می‌کند
+  window.location.href = '/login.html';
 }
 
 async function ensureAuthenticated() {
@@ -160,7 +165,7 @@ async function ensureAuthenticated() {
 }
 
 document.getElementById('btnLogout')?.addEventListener('click', () => {
-  logout().catch(() => redirectToLogin());
+  logout();
 });
 
 ensureAuthenticated();

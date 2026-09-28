@@ -182,6 +182,7 @@ public sealed class AppUserRepository
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
             WHERE Username = @u OR NationalId = @u
+            ORDER BY CASE WHEN Username = @u THEN 0 ELSE 1 END, IsActive DESC, CreatedAtUtc
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -502,6 +503,23 @@ public sealed class AppUserRepository
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
             throw new InvalidOperationException("کاربر یافت نشد");
+    }
+
+    public async Task EnsureActiveAdminAsync(Guid id, CancellationToken ct = default)
+    {
+        if (_useInMemory)
+        {
+            _memory.EnsureActiveAdmin(id);
+            return;
+        }
+
+        await EnsureSchemaAsync(ct);
+        const string sql = "UPDATE dbo.AppUser SET IsAdmin = 1, IsActive = 1 WHERE Id = @id";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", id);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     private async Task<List<(Guid UserId, Guid GroupId)>> ListAllGroupMembershipsAsync(CancellationToken ct)

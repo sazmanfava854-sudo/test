@@ -3102,7 +3102,8 @@ function setupAuthAndAdminHandlers() {
     } catch {
       // ignore
     }
-    redirectToLogin();
+    // نه /auth/login — نشست SSO فعال کاربر را بلافاصله دوباره وارد می‌کند
+    window.location.href = '/login.html';
   });
 
   bindClick('btnCreateUser', createUserFromForm);

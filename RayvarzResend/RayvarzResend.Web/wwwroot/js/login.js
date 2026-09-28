@@ -14,8 +14,8 @@ function resolvePostLoginTarget(mode) {
   const params = new URLSearchParams(window.location.search);
   const returnUrl = (params.get('returnUrl') || '').trim();
   if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return returnUrl;
-  const fallback = (mode?.postLoginDefaultPath || '/MANAGMENT').trim();
-  return fallback.startsWith('/') ? fallback : '/MANAGMENT';
+  const fallback = (mode?.postLoginDefaultPath || '/management/').trim();
+  return fallback.startsWith('/') ? fallback : '/management/';
 }
 
 async function checkExistingSession(mode) {

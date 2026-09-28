@@ -104,7 +104,7 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
-        Assert.Contains("login.js?v=4", html);
+        Assert.Contains("login.js?v=5", html);
         var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
         Assert.Contains("allowAdminLocalLoginOnPublicHost", js);
         Assert.DoesNotContain("if (mode.preferSsoLogin) {\n        window.location.href = mode.loginPath", js);
@@ -216,7 +216,7 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=91", html);
+        Assert.Contains("js/app.js?v=92", html);
         Assert.Contains("perm-rayvarz", html);
         Assert.Contains("col-unsent-fill", html);
         Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);

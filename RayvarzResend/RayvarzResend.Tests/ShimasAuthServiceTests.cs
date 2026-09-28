@@ -177,7 +177,7 @@ public class ShimasAuthServiceTests
             AllowLocalLoginFallback = true,
             PreferLocalLoginHosts = ["5.252.216.140"],
             PublicBaseUrl = "https://city.mashhad.ir:5065",
-            PostLoginDefaultPath = "/MANAGMENT"
+            PostLoginDefaultPath = "/management/"
         };
 
         Assert.True(options.IsPreferLocalLoginHost("5.252.216.140"));
@@ -191,7 +191,7 @@ public class ShimasAuthServiceTests
         Assert.Equal("/login.html", service.ResolveLoginRedirectPath(internalReq.Request));
         Assert.False(service.GetStatus(internalReq.Request).PreferSsoLogin);
         Assert.True(service.GetStatus(internalReq.Request).LocalLoginAvailable);
-        Assert.Equal("/MANAGMENT", service.GetStatus(internalReq.Request).PostLoginDefaultPath);
+        Assert.Equal("/management/", service.GetStatus(internalReq.Request).PostLoginDefaultPath);
     }
 
     [Fact]
@@ -470,23 +470,48 @@ public class ShimasAuthServiceTests
     {
         var service = CreateService(new ShimasAuthOptions
         {
-            SsoRegisteredReturnUrl = "https://city.mashhad.ir:5065/MANAGMENT",
-            CallbackPath = "/MANAGMENT"
+            SsoRegisteredReturnUrl = "https://city.mashhad.ir:5065/management",
+            CallbackPath = "/management"
         });
         var context = new DefaultHttpContext();
-        Assert.Equal("https://city.mashhad.ir:5065/MANAGMENT", service.BuildCallbackAbsoluteUrl(context.Request));
+        Assert.Equal("https://city.mashhad.ir:5065/management", service.BuildCallbackAbsoluteUrl(context.Request));
     }
 
-    [Fact]
-    public void IsSsoCallbackHttpRequest_detects_management_path_with_token_query()
+    [Theory]
+    [InlineData("/management")]
+    [InlineData("/management/")]
+    [InlineData("/MANAGEMENT")]
+    [InlineData("/MANAGMENT")]
+    [InlineData("/MANAGMENT/index.html")]
+    public void IsSsoCallbackHttpRequest_detects_management_path_with_token_query(string path)
     {
-        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/MANAGMENT" });
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });
         var context = new DefaultHttpContext();
         context.Request.Method = "GET";
-        context.Request.Path = "/MANAGMENT";
+        context.Request.Path = path;
         context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
 
         Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+    }
+
+    [Fact]
+    public void ResolvePostLoginRedirect_falls_back_to_management_hub_without_cookie()
+    {
+        var service = CreateService(new ShimasAuthOptions { PostLoginDefaultPath = "/management/" });
+        var context = new DefaultHttpContext();
+        Assert.Equal("/management/", service.ResolvePostLoginRedirect(context));
+    }
+
+    [Theory]
+    [InlineData("/management", true)]
+    [InlineData("/MANAGMENT", true)]
+    [InlineData("/MANAGMENT/management.js", true)]
+    [InlineData("/management/", false)]
+    [InlineData("/management/management.js", false)]
+    [InlineData("/index.html", false)]
+    public void ManagementHubPaths_redirects_non_canonical_paths(string path, bool expected)
+    {
+        Assert.Equal(expected, ManagementHubPaths.NeedsCanonicalRedirect(path));
     }
 
     [Fact]

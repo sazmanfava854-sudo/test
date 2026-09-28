@@ -219,32 +219,30 @@ app.Use(async (context, next) =>
 static bool RequiresAuthenticatedShell(string path) =>
     path.Equals("/", StringComparison.OrdinalIgnoreCase)
     || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase)
-    || path.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase)
-    || path.Equals("/MANAGMENT/", StringComparison.OrdinalIgnoreCase)
-    || path.Equals("/MANAGMENT/index.html", StringComparison.OrdinalIgnoreCase);
+    || ManagementHubPaths.IsHubPage(path);
 
 // index.html و صفحهٔ مدیریت بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value ?? "";
-    if (path.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase))
-    {
-        if (context.User?.Identity?.IsAuthenticated != true)
-        {
-            var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-            var login = shimas.ResolveLoginRedirectPath(context.Request);
-            context.Response.Redirect($"{login}?returnUrl={Uri.EscapeDataString("/MANAGMENT")}");
-            return;
-        }
+    var authenticated = context.User?.Identity?.IsAuthenticated == true;
 
-        context.Response.Redirect("/MANAGMENT/");
+    if (RequiresAuthenticatedShell(path) && !authenticated)
+    {
+        var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+        var login = shimas.ResolveLoginRedirectPath(context.Request);
+        var target = ManagementHubPaths.IsHubPage(path)
+            ? $"{login}?returnUrl={Uri.EscapeDataString(ManagementHubPaths.CanonicalWithSlash)}"
+            : login;
+        context.Response.Redirect(target);
         return;
     }
 
-    if (RequiresAuthenticatedShell(path) && context.User?.Identity?.IsAuthenticated != true)
+    // /management ، /MANAGMENT و ... → /management/ (فایل‌های استاتیک با حروف کوچک)
+    if (ManagementHubPaths.NeedsCanonicalRedirect(path))
     {
-        var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-        context.Response.Redirect(shimas.ResolveLoginRedirectPath(context.Request));
+        var rest = ManagementHubPaths.IsRoot(path) ? "" : path[(path.IndexOf('/', 1) + 1)..];
+        context.Response.Redirect(ManagementHubPaths.CanonicalWithSlash + rest + context.Request.QueryString);
         return;
     }
 
@@ -272,7 +270,7 @@ app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shim
         clientIdLength = shimas.Options.EffectiveClientId.Length,
         clientIdConfigured = shimas.Options.EffectiveClientId.Length >= 4,
         debugLoginCheckUrl = $"{http.Request.Scheme}://{http.Request.Host}/auth/login?debug=1",
-        noteFa = "برگشت آدرس SSO باید https://city.mashhad.ir:5065/MANAGMENT باشد؛ اگر هنوز Profile.aspx می‌بینید، ورود را از city.mashhad.ir:5065 شروع کنید و در Login.aspx پارامتر returnUrl را ببینید."
+        noteFa = "برگشت آدرس SSO باید https://city.mashhad.ir:5065/management باشد؛ اگر هنوز Profile.aspx می‌بینید، ورود را از city.mashhad.ir:5065 شروع کنید و در Login.aspx پارامتر returnUrl را ببینید."
     });
 }).AllowAnonymous();
 

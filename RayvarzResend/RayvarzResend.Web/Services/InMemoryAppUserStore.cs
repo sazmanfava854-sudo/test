@@ -68,8 +68,11 @@ public sealed class InMemoryAppUserStore
         var key = username.Trim();
         if (_byUsername.TryGetValue(key, out var user))
             return user;
-        return _byId.Values.FirstOrDefault(u =>
-            u.NationalId.Equals(key, StringComparison.OrdinalIgnoreCase));
+        return _byId.Values
+            .Where(u => u.NationalId.Equals(key, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(u => u.IsActive)
+            .ThenBy(u => u.CreatedAtUtc)
+            .FirstOrDefault();
     }
 
     public AppUserRecord? FindBySsoIdentity(string identity)
@@ -232,6 +235,14 @@ public sealed class InMemoryAppUserStore
         if (!_byId.TryGetValue(id, out var user))
             throw new InvalidOperationException("کاربر یافت نشد");
         user.PasswordHash = PasswordHasherUtil.Hash(password);
+    }
+
+    public void EnsureActiveAdmin(Guid id)
+    {
+        if (!_byId.TryGetValue(id, out var user))
+            return;
+        user.IsAdmin = true;
+        user.IsActive = true;
     }
 
     public AppUserRecord CreateSsoUser(

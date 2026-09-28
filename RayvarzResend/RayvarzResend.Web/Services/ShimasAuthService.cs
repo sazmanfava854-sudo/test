@@ -321,10 +321,8 @@ public sealed class ShimasAuthService
         if (path.Equals(callbackPath, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (IsManagementCallbackPath(callbackPath)
-            && (path.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase)
-                || path.Equals("/MANAGMENT/", StringComparison.OrdinalIgnoreCase)
-                || path.Equals("/MANAGMENT/index.html", StringComparison.OrdinalIgnoreCase)))
+        // SSO ممکن است با /management یا املای قدیمی /MANAGMENT ثبت شده باشد
+        if (ManagementHubPaths.IsHubPage(callbackPath.TrimEnd('/')) && ManagementHubPaths.IsHubPage(path))
             return true;
 
         if (callbackPath == "/" && path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
@@ -332,9 +330,6 @@ public sealed class ShimasAuthService
 
         return path.Equals("/auth/callback", StringComparison.OrdinalIgnoreCase);
     }
-
-    private static bool IsManagementCallbackPath(string callbackPath) =>
-        callbackPath.Equals("/MANAGMENT", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizePostLoginPath(string? path)
     {

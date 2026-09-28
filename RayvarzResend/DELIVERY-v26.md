@@ -43,12 +43,12 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 | کلید | معنی |
 |------|------|
-| `SsoRegisteredReturnUrl` | **همان «برگشت آدرس»** که به برنامه‌نویس SSO می‌دهید — `https://city.mashhad.ir:5065/MANAGMENT` |
+| `SsoRegisteredReturnUrl` | **همان «برگشت آدرس»** که به برنامه‌نویس SSO می‌دهید — `https://city.mashhad.ir:5065/management` |
 | `PublicBaseUrl` | `https://city.mashhad.ir:5065` (بدون مسیر) |
-| `PostLoginDefaultPath` | `/MANAGMENT` — بعد از SSO کاربر به **صفحهٔ مدیریت** می‌رود؛ فقط فرم‌های مجاز (`/api/auth/me`) |
+| `PostLoginDefaultPath` | `/management/` — بعد از SSO کاربر به **صفحهٔ مدیریت** می‌رود؛ فقط فرم‌های مجاز (`/api/auth/me`) |
 | `ApplicationPath` | اگر IIS زیرمسیر دارد مثل `/RayvarzResend` — برگشت آدرس = `https://city.mashhad.ir:5065/RayvarzResend` |
 | چک | `GET /api/auth/sso-return-url` → فیلد `registerInSsoPortal` |
-| `CallbackPath` | `/MANAGMENT` = بازگشت SSO روی صفحهٔ مدیریت (همان ReturnUrl پورتال) |
+| `CallbackPath` | `/management` = بازگشت SSO روی صفحهٔ مدیریت (همان ReturnUrl پورتال) |
 | `ApiName` | همان **SSOUserName** در RuleEngine (مثلاً `zavabetapp`) — هدر `apiName` |
 | `ClientId` / `ClientSecret` | همان **SSOClientId** / **SSOSecret** |
 | `ApiBaseUrl` | همان **SSOBaseUrl** (`https://login.mashhad.ir`) |
@@ -95,11 +95,14 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | قبل از ارسال تک/دسته‌ای: بررسی حضور فیش در epay (`EpayFichePresenceChecker`) |
 | بهینه‌سازی SQL batch lookup (کاهش timeout اکسل) |
 | UI گرید دسته‌ای، وضعیت «فایل در حال بررسی است…»، لاگ نتیجه ارسال |
-| ورود: کاربران سازمانی SSO از `https://city.mashhad.ir:5065` → `/MANAGMENT` |
+| ورود: کاربران سازمانی SSO از `https://city.mashhad.ir:5065` → `/management/` |
 | ورود ادمین **بدون SSO**: `https://city.mashhad.ir:5065/login.html` یا داخلی `http://5.252.216.140:8070/login.html` (`AllowAdminLocalLoginOnPublicHost` + `PreferLocalLoginHosts`) |
 | ورود HTTP داخلی | کوکی نشست `SameAsRequest` است (بدون Secure اجباری) — وگرنه بعد از POST ورود، `/api/auth/me` 401 می‌شود |
 | bootstrap اول | نام کاربری `admin` یا کد ملی ثبت‌شده در `BootstrapAdmin` — رمز از `Auth:BootstrapAdmin:Password` |
-| پس از ورود: اولین تب مطابق دسترسی (رایورز، چک خزانه، …) |
+| ادمین حذف/ناشناخته | اگر کاربر `BootstrapAdmin:Username` در جدول نباشد، در راه‌اندازی دوباره ساخته می‌شود (حتی اگر کاربران دیگر باشند) |
+| رمز ادمین فراموش شد | `"ResetPasswordOnStartup": true` در `BootstrapAdmin` → ری‌استارت → ورود با رمز appsettings → دوباره **`false`** کنید |
+| خروج | به `/login.html` می‌رود (نه `/auth/login`) تا نشست SSO کاربر را فوراً دوباره وارد نکند |
+| پس از ورود: صفحهٔ مدیریت `/management/` با کارت فرم‌های مجاز؛ لینک هر کارت → تب مربوط |
 
 ## تست
 
