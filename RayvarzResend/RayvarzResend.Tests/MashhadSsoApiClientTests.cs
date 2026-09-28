@@ -131,6 +131,78 @@ public class MashhadSsoApiClientTests
         Assert.Contains("returnUrl=https%3A%2F%2Fcity.mashhad.ir%3A5065%2Fmanagement", url);
     }
 
+    [Fact]
+    public async Task ProbeLoginKeyVariants_stops_at_first_accepted_formula()
+    {
+        var handler = new MashhadSsoFakeHandler();
+        var service = CreateServiceWithSso(handler, useLoginKey: true);
+
+        var results = await service.ProbeLoginKeyVariantsAsync("FinancialAssistant", "53db42619cf3C333b13a18D34fbd9111", "full-secret-from-portal");
+
+        Assert.Single(results);
+        Assert.True(results[0].Ok);
+        Assert.Equal("sha256(secret+time) hex lower", results[0].Variant);
+    }
+
+    [Fact]
+    public async Task ProbeLoginKeyVariants_finds_formula_when_sso_only_accepts_upper_hex()
+    {
+        var expectedUpper = SsoApiSecretHash.ComputeApiSecret("other-secret", "1700000000", "upper");
+        var handler = new MashhadSsoFakeHandler(loginKeyResponder: req =>
+        {
+            var sent = req.Headers.TryGetValues("apiSecret", out var v) ? v.FirstOrDefault() : null;
+            var apiName = req.Headers.TryGetValues("apiName", out var n) ? n.FirstOrDefault() : null;
+            return apiName == "zavabetapp" && sent == expectedUpper
+                ? """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk-upper"}}"""
+                : """{"ErrorCode":403,"ErrorMessage":"Client info missmatched","Data":null}""";
+        });
+        var service = CreateServiceWithSso(handler, useLoginKey: true);
+
+        var results = await service.ProbeLoginKeyVariantsAsync("zavabetapp", "other-client", "other-secret");
+
+        Assert.Equal(2, results.Count);
+        Assert.False(results[0].Ok);
+        Assert.Equal(403, results[0].ErrorCode);
+        Assert.True(results[1].Ok);
+        Assert.Equal("sha256(secret+time) hex upper", results[1].Variant);
+    }
+
+    [Fact]
+    public async Task ProbeLoginKeyVariants_returns_single_getCurrentTime_failure_when_sso_unreachable()
+    {
+        var handler = new ThrowingHandler();
+        var service = CreateServiceWithSso(handler, useLoginKey: true);
+
+        var results = await service.ProbeLoginKeyVariantsAsync("FinancialAssistant", "id", "secret");
+
+        Assert.Single(results);
+        Assert.Equal("getCurrentTime", results[0].Variant);
+        Assert.False(results[0].Ok);
+        Assert.Equal(-1, results[0].ErrorCode);
+    }
+
+    private sealed class ThrowingHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("No such host is known");
+    }
+
+    [Fact]
+    public async Task ProbeLoginKeyVariants_reports_all_403_when_credentials_are_wrong()
+    {
+        var handler = new MashhadSsoFakeHandler(loginKeyJson: """{"ErrorCode":403,"ErrorMessage":"Client info missmatched","Data":null}""");
+        var service = CreateServiceWithSso(handler, useLoginKey: true);
+
+        var results = await service.ProbeLoginKeyVariantsAsync("FinancialAssistant", "bad", "bad");
+
+        Assert.Equal(SsoApiSecretHash.ProbeVariants.Count, results.Count);
+        Assert.All(results, r =>
+        {
+            Assert.False(r.Ok);
+            Assert.Equal(403, r.ErrorCode);
+        });
+    }
+
     private static ShimasAuthService CreateServiceWithSso(HttpMessageHandler handler, bool useLoginKey)
     {
         var httpFactory = new NamedHttpClientFactory(handler);
@@ -167,11 +239,16 @@ public class MashhadSsoApiClientTests
     {
         private readonly Action<string?>? _onBody;
         private readonly string _loginKeyJson;
+        private readonly Func<HttpRequestMessage, string>? _loginKeyResponder;
 
-        public MashhadSsoFakeHandler(Action<string?>? onBody = null, string? loginKeyJson = null)
+        public MashhadSsoFakeHandler(
+            Action<string?>? onBody = null,
+            string? loginKeyJson = null,
+            Func<HttpRequestMessage, string>? loginKeyResponder = null)
         {
             _onBody = onBody;
             _loginKeyJson = loginKeyJson ?? """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk-123"}}""";
+            _loginKeyResponder = loginKeyResponder;
         }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -212,7 +289,7 @@ public class MashhadSsoApiClientTests
             }
             else if (path.EndsWith("/loginKey", StringComparison.OrdinalIgnoreCase))
             {
-                json = _loginKeyJson;
+                json = _loginKeyResponder?.Invoke(request) ?? _loginKeyJson;
             }
             else
             {

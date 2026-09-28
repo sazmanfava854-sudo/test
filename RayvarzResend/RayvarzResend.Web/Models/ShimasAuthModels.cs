@@ -19,6 +19,14 @@ public sealed class ShimasValidationResult
     public ShimasUserProfile Profile { get; set; } = new();
 }
 
+public sealed class SsoLoginKeyProbeResult
+{
+    public string Variant { get; set; } = "";
+    public bool Ok { get; set; }
+    public int ErrorCode { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
 public sealed class SsoLoginKeyDiagnostics
 {
     public string ApiBaseUrl { get; set; } = "";

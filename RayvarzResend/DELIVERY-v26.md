@@ -48,6 +48,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | `PostLoginDefaultPath` | `/management/` — بعد از SSO کاربر به **صفحهٔ مدیریت** می‌رود؛ فقط فرم‌های مجاز (`/api/auth/me`) |
 | `ApplicationPath` | اگر IIS زیرمسیر دارد مثل `/RayvarzResend` — برگشت آدرس = `https://city.mashhad.ir:5065/RayvarzResend` |
 | چک | `GET /api/auth/sso-return-url` → فیلد `registerInSsoPortal`؛ `GET /api/auth/sso-loginkey-check` یا `/auth/login?debug=1` → آیا SSO برای این ClientId/Secret `loginKey` می‌دهد (403 = Client info mismatch) |
+| 403 `Client info missmatched` | `GET /api/auth/sso-loginkey-probe` → همهٔ فرمول‌های هش (`sha256(secret+time)` lower/upper، `time+secret`، base64، md5، …) با اعتبار FinancialAssistant آزموده می‌شود؛ `?profile=settings` همان کار را با اعتبار RuleEngine از بلوک `Settings` (`SSOUserName/SSOClientId/SSOSecret`) می‌کند. اگر با RuleEngine OK و با FinancialAssistant 403 → ثبت پورتال (apiName/ClientId/Secret) مشکل دارد، نه کد |
 | `CallbackPath` | `/management` = بازگشت SSO روی صفحهٔ مدیریت (همان ReturnUrl پورتال) |
 | `ApiName` | همان **SSOUserName** در RuleEngine (مثلاً `zavabetapp`) — هدر `apiName` |
 | `ClientId` / `ClientSecret` | همان **SSOClientId** / **SSOSecret** |

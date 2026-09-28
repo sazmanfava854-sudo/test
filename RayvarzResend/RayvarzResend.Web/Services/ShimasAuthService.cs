@@ -214,6 +214,65 @@ public sealed class ShimasAuthService
         return diag;
     }
 
+    /// <summary>
+    /// همهٔ فرمول‌های هش را با اعتبار داده‌شده می‌آزماید. اگر با اعتبار RuleEngine هم همه 403 بدهند،
+    /// فرمول ما با SSO فرق دارد؛ اگر با RuleEngine یکی OK شد و با FinancialAssistant نه، ثبت پورتال مشکل دارد.
+    /// </summary>
+    public async Task<List<SsoLoginKeyProbeResult>> ProbeLoginKeyVariantsAsync(
+        string apiName,
+        string clientId,
+        string secret,
+        CancellationToken ct = default)
+    {
+        var results = new List<SsoLoginKeyProbeResult>();
+
+        MashhadSsoResult<string> time;
+        try
+        {
+            time = await _mashhadSso.GetCurrentTimeAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            time = new MashhadSsoResult<string> { ErrorCode = -1, ErrorMessage = ex.Message };
+        }
+
+        if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
+        {
+            results.Add(new SsoLoginKeyProbeResult
+            {
+                Variant = "getCurrentTime",
+                Ok = false,
+                ErrorCode = time.ErrorCode,
+                ErrorMessage = time.ErrorMessage ?? "getCurrentTime ناموفق بود — SSO از این سرور در دسترس نیست"
+            });
+            return results;
+        }
+
+        var requestTime = time.Data.Trim();
+        foreach (var (name, compute) in SsoApiSecretHash.ProbeVariants)
+        {
+            var item = new SsoLoginKeyProbeResult { Variant = name };
+            try
+            {
+                var r = await _mashhadSso.SendLoginKeyProbeAsync(apiName, clientId, secret, requestTime, compute, ct);
+                item.ErrorCode = r.ErrorCode;
+                item.ErrorMessage = r.ErrorMessage;
+                item.Ok = r.IsSuccess && !string.IsNullOrWhiteSpace(r.Data?.EffectiveLoginKey);
+            }
+            catch (Exception ex)
+            {
+                item.ErrorCode = -1;
+                item.ErrorMessage = ex.Message;
+            }
+
+            results.Add(item);
+            if (item.Ok)
+                break;
+        }
+
+        return results;
+    }
+
     public string BuildLoginStartUrl(string loginKey)
     {
         var key = (loginKey ?? "").Trim();

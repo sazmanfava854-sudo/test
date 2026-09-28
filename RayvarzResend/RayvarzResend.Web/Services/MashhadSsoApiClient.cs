@@ -103,6 +103,42 @@ public sealed class MashhadSsoApiClient
             ?? new MashhadSsoResult<MashhadLoginKeyData> { ErrorCode = -1, ErrorMessage = body };
     }
 
+    /// <summary>
+    /// تشخیص 403: همان درخواست loginKey با اعتبار و فرمول هش دلخواه (برای مقایسه با RuleEngine یا آزمودن فرمول‌های دیگر).
+    /// </summary>
+    public async Task<MashhadSsoResult<MashhadLoginKeyData>> SendLoginKeyProbeAsync(
+        string apiName,
+        string clientId,
+        string secret,
+        string requestTime,
+        Func<string, string, string> computeApiSecret,
+        CancellationToken ct = default)
+    {
+        requestTime = (requestTime ?? "").Trim();
+        var hash = computeApiSecret(secret, requestTime);
+        var payload = new MashhadLoginKeyRequest
+        {
+            Time = requestTime,
+            Hash = hash,
+            ClientId = clientId,
+            State = string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim(),
+            UserType = _options.LoginUserType,
+            DomainId = _options.LoginDomainId
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, Combine("/api/Authentication/loginKey"));
+        request.Headers.TryAddWithoutValidation("apiName", apiName);
+        request.Headers.TryAddWithoutValidation("requestTime", requestTime);
+        request.Headers.TryAddWithoutValidation("apiSecret", hash);
+        request.Content = JsonContent.Create(payload, options: MashhadSsoJson.SerializerOptions);
+
+        var client = CreateClient();
+        using var response = await client.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        return Deserialize<MashhadSsoResult<MashhadLoginKeyData>>(body)
+            ?? new MashhadSsoResult<MashhadLoginKeyData> { ErrorCode = (int)response.StatusCode, ErrorMessage = body };
+    }
+
     private static bool ShouldRetryLoginKeyWithAlternateHash(MashhadSsoResult<MashhadLoginKeyData> result, string primaryEncoding)
     {
         if (result.IsSuccess)

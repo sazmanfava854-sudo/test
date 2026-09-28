@@ -364,6 +364,59 @@ app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthSe
     });
 }).AllowAnonymous();
 
+// تشخیص 403 Client info missmatched:
+//   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Shimas) با همهٔ فرمول‌های هش
+//   /api/auth/sso-loginkey-probe?profile=settings → اعتبار RuleEngine از بلوک Settings (SSOUserName/SSOClientId/SSOSecret)
+app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthService shimas, IConfiguration config, CancellationToken ct) =>
+{
+    var profile = (http.Request.Query["profile"].FirstOrDefault() ?? "").Trim().ToLowerInvariant();
+    string apiName, clientId, secret, source;
+    if (profile == "settings")
+    {
+        source = "Settings (RuleEngine)";
+        apiName = (config["Settings:SSOUserName"] ?? "").Trim();
+        clientId = (config["Settings:SSOClientId"] ?? "").Trim();
+        secret = (config["Settings:SSOSecret"] ?? "").Trim();
+        if (apiName.Length == 0 || clientId.Length == 0 || secret.Length == 0)
+            return Results.Json(new
+            {
+                error = "بلوک Settings کامل نیست — SSOUserName / SSOClientId / SSOSecret همان RuleEngine را در ریشهٔ appsettings.json بگذارید.",
+                sample = new { Settings = new { SSOUserName = "zavabetapp", SSOClientId = "<ClientId RuleEngine>", SSOSecret = "<Secret RuleEngine>" } }
+            }, statusCode: 400);
+    }
+    else
+    {
+        source = "Auth:Shimas (FinancialAssistant)";
+        apiName = shimas.Options.SigningApiName;
+        clientId = shimas.Options.EffectiveClientId;
+        secret = (shimas.Options.ClientSecret ?? "").Trim();
+    }
+
+    var results = await shimas.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct);
+    var winner = results.FirstOrDefault(r => r.Ok);
+    var ssoUnreachable = winner == null && results.Count == 1 && results[0].Variant == "getCurrentTime";
+    return Results.Ok(new
+    {
+        source,
+        apiName,
+        clientIdMasked = SsoCredentialMask.MaskId(clientId),
+        clientIdLength = clientId.Length,
+        secretLength = secret.Length,
+        currentFormula = $"sha256(secret+time) hex {(string.Equals(shimas.Options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower")}",
+        anyOk = winner != null,
+        ssoReachable = !ssoUnreachable,
+        workingFormula = winner?.Variant,
+        verdictFa = winner != null
+            ? (winner.Variant.StartsWith("sha256(secret+time) hex", StringComparison.Ordinal)
+                ? "فرمول فعلی درست است — پس مشکل از اعتبار (ClientId/Secret/apiName) است، نه کد."
+                : $"SSO با فرمول «{winner.Variant}» جواب داد — HashEncoding/فرمول در کد باید عوض شود.")
+            : ssoUnreachable
+                ? "getCurrentTime جواب نداد — SSO از این سرور در دسترس نیست (شبکه/فایروال)؛ هیچ فرمولی آزموده نشد."
+                : "هیچ فرمولی قبول نشد — یا apiName/ClientId/Secret با ثبت پورتال یکی نیست، یا SSO چیزی غیر از این فرمول‌ها می‌خواهد. با profile=settings و اعتبار RuleEngine دوباره بزنید.",
+        results
+    });
+}).AllowAnonymous();
+
 app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>
 {
     try
