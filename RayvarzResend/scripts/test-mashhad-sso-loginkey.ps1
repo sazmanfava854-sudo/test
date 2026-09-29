@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Standalone Mashhad SSO loginKey test (SSO doc 1.0.2 sections 1.3.2 and 3.3.3).
+  SSO loginKey test: prints exact apiName / requestTime / apiSecret (headers) then POSTs.
 #>
 param(
     [Parameter(Mandatory)][string]$ApiName,
@@ -13,7 +13,9 @@ param(
     [string]$BaseUrl = "https://login.mashhad.ir",
     [switch]$HashUpper,
     [switch]$UseLegacyLkeyClientId,
-    [int]$RequestTimeoutSec = 60
+    [int]$RequestTimeoutSec = 60,
+    [switch]$PrintOnly,
+    [switch]$PauseBeforeSend
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,13 +28,11 @@ if ([string]::IsNullOrWhiteSpace($SecretKey)) {
     throw 'SecretKey is empty after trim (check copy/paste; no trailing spaces).'
 }
 
-# Windows curl.exe often fails with CRYPT_E_REVOCATION_OFFLINE when CRL/OCSP is unreachable.
-# This script uses Invoke-WebRequest only; disable revocation check for this diagnostic run.
 if ($env:OS -like '*Windows*') {
     try {
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
         [System.Net.ServicePointManager]::CheckCertificateRevocationList = $false
-        Write-Host 'TLS: revocation check off for this session (isolated server / no CRL access).'
+        Write-Host 'TLS: revocation check off for this session.'
     }
     catch {
         Write-Host ('TLS note: ' + $_.Exception.Message)
@@ -43,10 +43,7 @@ if ([string]::IsNullOrWhiteSpace($ClientId) -and -not [string]::IsNullOrWhiteSpa
     $ClientId = $env:MASHHAD_SSO_CLIENT_ID.Trim()
 }
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
-    throw 'ClientId is required: registered ClientID in loginKey body (e.g. 53db42619cf3C333b13a18D34fbd9111). Header apiName stays -ApiName.'
-}
-if ($ClientId -ne $ApiName) {
-    Write-Host ('Using apiName (header)=' + $ApiName + ' and ClientId (body)=' + $ClientId)
+    throw 'ClientId required for body (e.g. 53db42619cf3C333b13a18D34fbd9111). Header apiName = -ApiName.'
 }
 
 function Get-Sha256Hex([string]$Text, [bool]$Upper) {
@@ -55,6 +52,37 @@ function Get-Sha256Hex([string]$Text, [bool]$Upper) {
     $hex = [BitConverter]::ToString($bytes).Replace("-", "")
     if ($Upper) { return $hex.ToUpperInvariant() }
     return $hex.ToLowerInvariant()
+}
+
+function Write-SsoOutboundPreview(
+    [string]$Api,
+    [string]$Cid,
+    [string]$Secret,
+    [string]$ReqTime,
+    [bool]$Upper,
+    [string]$BodyJson
+) {
+    $raw = $Secret + $ReqTime
+    $hash = Get-Sha256Hex $raw $Upper
+    $enc = if ($Upper) { 'upper' } else { 'lower' }
+
+    Write-Host ''
+    Write-Host '========== BEFORE SEND (exact values) =========='
+    Write-Host '--- Request.Headers (SSO reads these) ---'
+    Write-Host ('apiName     = ' + $Api)
+    Write-Host ('requestTime = ' + $ReqTime)
+    Write-Host ('apiSecret   = ' + $hash)
+    Write-Host '--- Hash formula (SecretKey is NOT sent in header) ---'
+    Write-Host ('SHA256(SecretKey + requestTime) hex ' + $enc)
+    Write-Host ('SecretKey length = ' + $Secret.Length + ' chars')
+    Write-Host ('Concat preview     = [SecretKey] + "' + $ReqTime + '"')
+    Write-Host '--- Body JSON (loginKey) ---'
+    Write-Host ('Time     = ' + $ReqTime + '  (must equal header requestTime)')
+    Write-Host ('Hash     = ' + $hash + '  (must equal header apiSecret)')
+    Write-Host ('ClientId = ' + $Cid + '  (body only; NOT header apiName)')
+    Write-Host $BodyJson
+    Write-Host '=============================================='
+    Write-Host ''
 }
 
 function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$ReqTime, [bool]$Upper) {
@@ -69,16 +97,19 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
         DomainID = $DomainID
     }
     $body = $bodyObj | ConvertTo-Json -Compress
-    $secretLen = $Secret.Length
 
-    Write-Host ""
-    Write-Host "POST loginKey"
-    Write-Host ('  apiName=' + $Api)
-    Write-Host ('  requestTime=' + $ReqTime)
-    Write-Host ('  apiSecret=' + $hash)
-    Write-Host ('  body ClientId=' + $Cid)
-    Write-Host ('  hash input: SecretKey(' + $secretLen + ' chars) + requestTime')
-    Write-Host ('  Waiting for SSO POST loginKey (timeout ' + $RequestTimeoutSec + 's)...')
+    Write-SsoOutboundPreview -Api $Api -Cid $Cid -Secret $Secret -ReqTime $ReqTime -Upper $Upper -BodyJson $body
+
+    if ($PrintOnly) {
+        Write-Host 'PrintOnly: request NOT sent.'
+        return $null
+    }
+
+    if ($PauseBeforeSend) {
+        Read-Host 'Press Enter to POST loginKey to SSO'
+    }
+
+    Write-Host ('Sending POST ' + $BaseUrl + '/api/Authentication/loginKey (timeout ' + $RequestTimeoutSec + 's)...')
 
     $uri = $BaseUrl + '/api/Authentication/loginKey'
     $headers = @{
@@ -93,7 +124,8 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
             -ContentType 'application/json; charset=utf-8' `
             -TimeoutSec $RequestTimeoutSec -UseBasicParsing
         $sw.Stop()
-        Write-Host ('  Done: HTTP ' + [int]$response.StatusCode + ' in ' + $sw.ElapsedMilliseconds + ' ms')
+        Write-Host ('HTTP ' + [int]$response.StatusCode + ' in ' + $sw.ElapsedMilliseconds + ' ms')
+        Write-Host '--- Response ---'
         return ($response.Content | ConvertFrom-Json)
     }
     catch [System.Net.WebException] {
@@ -103,17 +135,13 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
             $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
             $text = $reader.ReadToEnd()
             $reader.Close()
-            Write-Host ('  Done: HTTP ' + [int]$resp.StatusCode + ' in ' + $sw.ElapsedMilliseconds + ' ms')
+            Write-Host ('HTTP ' + [int]$resp.StatusCode + ' in ' + $sw.ElapsedMilliseconds + ' ms')
+            Write-Host '--- Response ---'
             if (-not [string]::IsNullOrWhiteSpace($text)) {
                 return ($text | ConvertFrom-Json)
             }
         }
-        Write-Host ('  Failed after ' + $sw.ElapsedMilliseconds + ' ms: ' + $_.Exception.Message)
-        throw
-    }
-    catch {
-        $sw.Stop()
-        Write-Host ('  Failed after ' + $sw.ElapsedMilliseconds + ' ms: ' + $_.Exception.Message)
+        Write-Host ('Failed: ' + $_.Exception.Message)
         throw
     }
 }
@@ -122,20 +150,13 @@ Write-Host '== 1) GET getCurrentTime =='
 $timeResp = Invoke-RestMethod -Uri ($BaseUrl + '/api/Authentication/getCurrentTime') -Method Get -TimeoutSec 60
 $requestTime = [string]$timeResp.Data
 if ([string]::IsNullOrWhiteSpace($requestTime)) { throw 'getCurrentTime returned no Data' }
-Write-Host ('requestTime: ' + $requestTime + ' (use exact string in SHA256; doc sample: 1643714953)')
-Write-Host ('SecretKey length after trim: ' + $SecretKey.Length + ' characters')
-if ($SecretKey.Length -ne 32) {
-    Write-Host 'NOTE: Many SSO SecretKeys are 32 chars. Extra/missing chars often cause 403.'
-}
+Write-Host ('Data (will become header requestTime and body Time): ' + $requestTime)
 
 $attempts = @(
     @{ Label = 'configured'; Api = $ApiName; Cid = $ClientId; Upper = [bool]$HashUpper }
 )
-if ($UseLegacyLkeyClientId -and $ClientId -ne $ApiName) {
-    $attempts += @{ Label = 'ClientId=ApiName'; Api = $ApiName; Cid = $ApiName; Upper = [bool]$HashUpper }
-}
-if (-not $HashUpper) {
-    $attempts += @{ Label = 'hex upper'; Api = $ApiName; Cid = $ApiName; Upper = $true }
+if (-not $HashUpper -and -not $PrintOnly) {
+    $attempts += @{ Label = 'hex upper retry'; Api = $ApiName; Cid = $ClientId; Upper = $true }
 }
 
 $last = $null
@@ -143,18 +164,21 @@ foreach ($a in $attempts) {
     Write-Host ''
     Write-Host ('== Attempt: ' + $a.Label + ' ==')
     $last = Invoke-LoginKey -Api $a.Api -Cid $a.Cid -Secret $SecretKey -ReqTime $requestTime -Upper $a.Upper
-    $last | ConvertTo-Json -Depth 5
-    if ($last.ErrorCode -eq 0 -and $last.Data.loginKey) {
-        Write-Host ''
+    if ($PrintOnly) { continue }
+    if ($null -ne $last) {
+        $last | ConvertTo-Json -Depth 5
+    }
+    if ($null -ne $last -and $last.ErrorCode -eq 0 -and $last.Data.loginKey) {
         Write-Host ('OK - loginKey: ' + $last.Data.loginKey)
-        Write-Host ('Next: ' + $BaseUrl + '/Authentication/Start/' + $last.Data.loginKey)
         exit 0
     }
+    if ($null -ne $last -and $last.ErrorCode -eq 403) { break }
 }
+
+if ($PrintOnly) { exit 0 }
 
 Write-Host ''
 if ($null -ne $last -and $last.ErrorCode -eq 403) {
-    Write-Host '403 - Check apiName and SecretKey with SSO admin (Client info missmatched).'
-    Write-Host '    ClientId in body must be application username, not lkey GUID.'
+    Write-Host '403 Client info missmatched - check apiName, ClientId body, SecretKey with SSO portal.'
 }
 exit 3
