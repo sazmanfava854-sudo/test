@@ -1,3 +1,5 @@
+using RayvarzResend.Web.Models;
+
 namespace RayvarzResend.Web.Services;
 
 /// <summary>نقشهٔ ارسال loginKey — جلوگیری از جابه‌جایی apiName و ClientId در appsettings.</summary>
@@ -64,19 +66,4 @@ public static class SsoOutboundFieldMap
         var t = (value ?? "").Trim();
         return t.Length == 0 ? "" : SsoCredentialMask.MaskId(t);
     }
-}
-
-public sealed class SsoLoginKeyOutboundMap
-{
-    public string HeaderApiNameSource { get; set; } = "";
-    public string? HeaderApiName { get; set; }
-    public string? HeaderApiNameMasked { get; set; }
-    public string HeaderRequestTimeSource { get; set; } = "";
-    public string HeaderApiSecretSource { get; set; } = "";
-    public string BodyClientIdSource { get; set; } = "";
-    public string? BodyClientId { get; set; }
-    public string? BodyClientIdMasked { get; set; }
-    public bool LoginKeyBodyClientIdIsApiName { get; set; }
-    public bool LikelyApiNameClientIdSwappedInConfig { get; set; }
-    public string VerdictFa { get; set; } = "";
 }
