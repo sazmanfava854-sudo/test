@@ -1,28 +1,28 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Standalone Mashhad SSO loginKey test. SSO doc pages 20-26.
+  Mashhad SSO loginKey test per doc v1.0.2 (pages 19-26).
 
-.PARAMETER ApiName
-  Application name from SSO portal.
+.NOTES
+  Doc rules:
+    Header apiName     = portal Username (table 1 row 2), e.g. FinancialAssistant
+    Header requestTime = string from getCurrentTime Data (same value in body Time)
+    Header apiSecret   = SHA256(SecretKey + requestTime) hex
+    Body ClientId      = portal ClientId (may differ from apiName)
+    Body Hash          = same as header apiSecret
 
-.PARAMETER ClientId
-  Body ClientId. Default: HeaderApiName or ApiName.
+  Pass Secret without broken quotes (no >> prompt). Use splatting:
 
-.PARAMETER HeaderApiName
-  HTTP header apiName. Default: ApiName.
-
-.PARAMETER SecretKey
-  SecretKey (omit if using -SecretKeyFile).
-
-.PARAMETER SecretKeyFile
-  File with one line: full SecretKey only.
-
-.PARAMETER Probe
-  Try several header/body ClientId combinations.
+    $sso = @{
+      ApiName        = 'FinancialAssistant'
+      PortalClientId = '53db42619cf3C333b13a18D34fbd9111'
+      SecretKey      = 'FULL_SECRET_FROM_PORTAL'
+    }
+    .\Test-SsoLoginKey.ps1 @sso -Probe
 #>
 param(
     [Parameter(Mandatory)][string]$ApiName,
+    [string]$PortalClientId,
     [string]$ClientId,
     [string]$HeaderApiName,
     [string]$SecretKey,
@@ -45,17 +45,23 @@ if (-not [string]::IsNullOrWhiteSpace($SecretKeyFile)) {
     $SecretKey = (Get-Content -LiteralPath $SecretKeyFile -Raw -Encoding UTF8).Trim()
     if ($SecretKey.Length -gt 0 -and [int][char]$SecretKey[0] -eq 0xFEFF) {
         $SecretKey = $SecretKey.Substring(1).Trim()
-        Write-Warning 'Removed UTF-8 BOM from secret file. Save file as UTF-8 without BOM (Notepad: Save As -> Encoding UTF-8).'
+        Write-Warning 'Removed UTF-8 BOM from secret file.'
     }
 }
 
 if ([string]::IsNullOrWhiteSpace($SecretKey)) {
-    throw 'SecretKey is empty. Use -SecretKeyFile path\to\sso-secret.txt or splatting with full key.'
+    throw 'SecretKey is empty. Use splatting with full SecretKey from SSO portal.'
 }
 
 Write-Host ('SecretKey length: ' + $SecretKey.Length + ' characters')
-if ($SecretKey.Length -lt 16) {
-    Write-Warning 'SecretKey looks too short. Copy the full key from SSO portal into sso-secret.txt'
+
+function Get-Sha256Hex {
+    param([string]$Text, [bool]$Upper)
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $hashBytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    $hex = [BitConverter]::ToString($hashBytes).Replace('-', '')
+    if ($Upper) { return $hex.ToUpperInvariant() }
+    return $hex.ToLowerInvariant()
 }
 
 function Invoke-MashhadLoginKeyTest {
@@ -67,11 +73,11 @@ function Invoke-MashhadLoginKeyTest {
         [string]$StateVal,
         [int]$UserTypeVal,
         [int]$DomainIdVal,
-        [bool]$UpperHash
+        [string]$HashMode
     )
 
     Write-Host ''
-    Write-Host ('--- try: header apiName=[' + $HeaderApi + '] body ClientId=[' + $BodyClientId + '] ---')
+    Write-Host ('--- apiName=[' + $HeaderApi + '] body ClientId=[' + $BodyClientId + '] hashMode=' + $HashMode + ' ---')
 
     $timeResp = Invoke-RestMethod -Uri ($Base + '/api/Authentication/getCurrentTime') -Method Get -TimeoutSec 60
     $requestTime = [string]$timeResp.Data
@@ -79,83 +85,117 @@ function Invoke-MashhadLoginKeyTest {
         throw 'getCurrentTime returned no Data'
     }
 
-    $raw = $Secret + $requestTime
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    $hashBytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($raw))
-    $hash = [BitConverter]::ToString($hashBytes).Replace('-', '')
-    if ($UpperHash) { $hash = $hash.ToUpperInvariant() } else { $hash = $hash.ToLowerInvariant() }
+    switch ($HashMode) {
+        'Secret+Time'       { $raw = $Secret + $requestTime; $upper = [bool]$HashUpper }
+        'Secret+TimeUpper'  { $raw = $Secret + $requestTime; $upper = $true }
+        'Time+Secret'       { $raw = $requestTime + $Secret; $upper = [bool]$HashUpper }
+        'Secret+TimeMs'     { $raw = $Secret + ([string]([int64]$requestTime * 1000)); $upper = [bool]$HashUpper }
+        default             { $raw = $Secret + $requestTime; $upper = [bool]$HashUpper }
+    }
 
-    $bodyObj = @{
+    $hash = Get-Sha256Hex -Text $raw -Upper $upper
+
+    $bodyJson = (@{
         Time     = $requestTime
         Hash     = $hash
         ClientId = $BodyClientId
         State    = $StateVal
         UserType = $UserTypeVal
         DomainID = $DomainIdVal
-    }
-    $body = $bodyObj | ConvertTo-Json -Compress
+    } | ConvertTo-Json -Compress)
 
-    $headers = @{
-        apiName     = $HeaderApi
-        requestTime = $requestTime
-        apiSecret   = $hash
-    }
+    Write-Host ('requestTime=' + $requestTime + ' apiSecret[0..7]=' + $hash.Substring(0, [Math]::Min(8, $hash.Length)) + '...')
 
     $uri = $Base + '/api/Authentication/loginKey'
-    $resp = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $body -ContentType 'application/json' -TimeoutSec 60
-    $resp | ConvertTo-Json -Depth 5
+    $req = [System.Net.HttpWebRequest]::Create($uri)
+    $req.Method = 'POST'
+    $req.ContentType = 'application/json; charset=utf-8'
+    $req.Headers.Add('apiName', $HeaderApi)
+    $req.Headers.Add('requestTime', $requestTime)
+    $req.Headers.Add('apiSecret', $hash)
+
+    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyJson)
+    $req.ContentLength = $bodyBytes.Length
+    $stream = $req.GetRequestStream()
+    $stream.Write($bodyBytes, 0, $bodyBytes.Length)
+    $stream.Close()
+
+    try {
+        $response = $req.GetResponse()
+        $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+        $json = $reader.ReadToEnd()
+        $reader.Close()
+        $response.Close()
+        $resp = $json | ConvertFrom-Json
+    }
+    catch [System.Net.WebException] {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $json = $reader.ReadToEnd()
+        $reader.Close()
+        if ($json) { $resp = $json | ConvertFrom-Json } else { throw $_ }
+    }
+
+    Write-Host ('ErrorCode=' + $resp.ErrorCode + ' Message=' + $resp.ErrorMessage)
     return $resp
 }
 
-if ($Probe) {
-    $guid = '53db42619cf3C333b13a18D34fbd9111'
-    $scenarios = @(
-        @{ H = $ApiName; C = $ApiName },
-        @{ H = $ApiName; C = $guid },
-        @{ H = $guid; C = $guid }
-    )
-    if (-not [string]::IsNullOrWhiteSpace($ClientId)) {
-        $scenarios += @{ H = $ApiName; C = $ClientId }
-        $scenarios += @{ H = $ClientId; C = $ClientId }
-    }
-
-    Write-Host '== PROBE mode =='
-    foreach ($s in $scenarios) {
-        $r = Invoke-MashhadLoginKeyTest -HeaderApi $s.H -BodyClientId $s.C -Secret $SecretKey -Base $BaseUrl -StateVal $State -UserTypeVal $UserType -DomainIdVal $DomainID -UpperHash ([bool]$HashUpper)
-        if ($r.ErrorCode -eq 0 -and $r.Data.loginKey) {
-            Write-Host ('OK - header apiName=[' + $s.H + '] body ClientId=[' + $s.C + ']')
-            Write-Host ('loginKey: ' + $r.Data.loginKey)
-            Write-Host ($BaseUrl + '/Authentication/Start/' + $r.Data.loginKey)
-            return
-        }
-    }
-    Write-Host 'All probe scenarios failed. Check SecretKey and SSO portal registration.'
-    return
+$defaultGuid = '53db42619cf3C333b13a18D34fbd9111'
+if ([string]::IsNullOrWhiteSpace($PortalClientId)) {
+    $PortalClientId = $defaultGuid
 }
-
 if ([string]::IsNullOrWhiteSpace($HeaderApiName)) {
     $HeaderApiName = $ApiName
 }
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
-    $ClientId = $HeaderApiName
+    $ClientId = $PortalClientId
 }
 
-Write-Host ('Using header apiName=' + $HeaderApiName + ' body ClientId=' + $ClientId)
-Write-Host ''
-Write-Host 'Step 1: getCurrentTime. Step 2: loginKey'
+$hashModes = @('Secret+Time', 'Secret+TimeUpper', 'Time+Secret', 'Secret+TimeMs')
 
-$enc = if ($HashUpper) { 'upper' } else { 'lower' }
-Write-Host ('apiSecret/Hash = SHA256(SecretKey+requestTime) hex ' + $enc)
+if ($Probe) {
+    Write-Host '== PROBE (doc + common portal layouts) =='
+    Write-Host ('Doc: header apiName=Username [' + $ApiName + '], body ClientId=[' + $PortalClientId + ']')
 
-$resp = Invoke-MashhadLoginKeyTest -HeaderApi $HeaderApiName -BodyClientId $ClientId -Secret $SecretKey -Base $BaseUrl -StateVal $State -UserTypeVal $UserType -DomainIdVal $DomainID -UpperHash ([bool]$HashUpper)
+    $scenarios = @(
+        @{ H = $ApiName; C = $PortalClientId; N = 'DOC: header Username, body ClientId GUID' },
+        @{ H = $ApiName; C = $ApiName; N = 'header Username, body same Username' },
+        @{ H = $PortalClientId; C = $PortalClientId; N = 'header GUID, body GUID' },
+        @{ H = $ApiName; C = $ClientId; N = 'header Username, body -ClientId' }
+    )
+
+    foreach ($s in $scenarios) {
+        Write-Host ('Scenario: ' + $s.N)
+        foreach ($hm in $hashModes) {
+            $upperFlag = $false
+            $mode = $hm
+            if ($hm -eq 'Secret+TimeUpper') {
+                $mode = 'Secret+Time'
+                $upperFlag = $true
+            }
+            $saved = $HashUpper
+            $HashUpper = $upperFlag
+            $r = Invoke-MashhadLoginKeyTest -HeaderApi $s.H -BodyClientId $s.C -Secret $SecretKey -Base $BaseUrl -StateVal $State -UserTypeVal $UserType -DomainIdVal $DomainID -HashMode $mode
+            $HashUpper = $saved
+            if ($r.ErrorCode -eq 0 -and $r.Data.loginKey) {
+                Write-Host ('OK - ' + $s.N + ' hash=' + $hm)
+                Write-Host ('loginKey: ' + $r.Data.loginKey)
+                Write-Host ($BaseUrl + '/Authentication/Start/' + $r.Data.loginKey)
+                return
+            }
+        }
+    }
+    Write-Host 'All scenarios failed: fix SecretKey with SSO admin OR confirm Username/ClientId on portal.'
+    return
+}
+
+Write-Host ('DOC layout: header apiName=' + $HeaderApiName + ' body ClientId=' + $ClientId)
+$resp = Invoke-MashhadLoginKeyTest -HeaderApi $HeaderApiName -BodyClientId $ClientId -Secret $SecretKey -Base $BaseUrl -StateVal $State -UserTypeVal $UserType -DomainIdVal $DomainID -HashMode 'Secret+Time'
 
 if ($resp.ErrorCode -eq 0 -and $resp.Data.loginKey) {
-    Write-Host ''
     Write-Host ('OK - loginKey: ' + $resp.Data.loginKey)
     Write-Host ($BaseUrl + '/Authentication/Start/' + $resp.Data.loginKey)
 }
 elseif ($resp.ErrorCode -eq 403) {
-    Write-Host ''
-    Write-Host '403 Client info missmatched.'
-    Write-Host 'Check SecretKey file length, then run with -Probe switch.'
+    Write-Host '403 per doc: header apiSecret/apiName/requestTime OR body ClientId/Hash/Time do not match portal registration.'
+    Write-Host 'Use -Probe and splatting for SecretKey (avoid "e* and >> broken quotes).'
 }
