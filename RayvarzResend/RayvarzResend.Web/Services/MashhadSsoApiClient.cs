@@ -81,7 +81,7 @@ public sealed class MashhadSsoApiClient
             {
                 Time = material.RequestTime,
                 Hash = material.ApiSecret,
-                ClientId = _options.EffectiveClientId,
+                ClientId = _options.EffectiveLoginKeyBodyClientId,
                 State = loginState,
                 UserType = _options.LoginUserType,
                 DomainId = _options.LoginDomainId,
@@ -165,7 +165,7 @@ public sealed class MashhadSsoApiClient
             {
                 RefreshToken = refreshToken,
                 UserName = username,
-                ClientId = _options.EffectiveClientId
+                ClientId = _options.EffectiveLoginKeyBodyClientId
             },
             ct);
         _logger.LogDebug("Mashhad getAccessToken ErrorCode={Code}", result.ErrorCode);

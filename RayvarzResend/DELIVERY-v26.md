@@ -42,7 +42,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 - ویندوز (کنار Zip، PowerShell): بدون `<>` — مثال: `.\test-mashhad-sso-loginkey.ps1 -ApiName "myApiUser" -ClientId "53db..." -SecretKey "fullSecret"` (یک خط یا با backtick انتهای هر خط)
 - لینوکس: `bash scripts/test-mashhad-sso-loginkey.sh "<apiName>" "<ClientId>" "<SecretKey>"`
 
-هدرها: `apiName` = **نام کاربری کاربردی برنامه** (از مدیر SSO)، `requestTime` از `getCurrentTime`، `apiSecret` = `SHA256(SecretKey + requestTime)` hex. بدنه: `Time`, `Hash` (همان مقدار), `ClientId`, `State`, `UserType`, `DomainID`. نام نمایشی برنامه (مثلاً FinancialAssistant) **apiName نیست** مگر همان را در پورتال ثبت کرده باشند.
+هدرها: `apiName` = **نام کاربری کاربردی برنامه** (جدول ۱ ردیف ۲)، `requestTime` از `getCurrentTime` (نمونه سند: ثانیه مثل `1643714953`)، `apiSecret` = `SHA256(SecretKey + requestTime)` hex. بدنه: `Time`, `Hash` (همان مقدار), `ClientId`, `State`, `UserType`, `DomainID`. **سند SSO 1.0.2:** `ClientId` در loginKey همان نام کاربری است (مثل apiName) — **نه** lkey/شناسه ۳۲کاراکتری `Login.aspx`. در اپ: `LoginKeyBodyClientIdIsApiName: true` (پیش‌فرض). اسکریپت تست: اگر `-ClientId` ندهید، خودش `ApiName` می‌گذارد و در صورت 403 با lkey دوباره با `ClientId=ApiName` امتحان می‌کند.
 
 **در کد (بند ۳ سند):** کلاس `MashhadSsoSigning` + `MashhadSsoApiClient.SendSignedJsonAsync` — همهٔ `loginKey` / `getAccessToken` / `getUserInfo` ابتدا `getCurrentTime` می‌گیرند، سپس هدرهای `apiName` + `requestTime` + `apiSecret`؛ اگر SSO خطای انقضای `requestTime` بدهد یک بار با زمان جدید تکرار می‌شود. تنها `getCurrentTime` بدون این هدرهاست.
 

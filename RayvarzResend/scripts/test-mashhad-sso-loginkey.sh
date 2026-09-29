@@ -21,6 +21,11 @@ BASE="${MASHHAD_SSO_BASE_URL:-https://login.mashhad.ir}"
 API_NAME="${1:-${MASHHAD_SSO_API_NAME:-}}"
 CLIENT_ID="${2:-${MASHHAD_SSO_CLIENT_ID:-}}"
 SECRET="${3:-${MASHHAD_SSO_SECRET:-}}"
+# SSO 1.0.2: ClientId in loginKey body = apiName (username); omit ClientId arg to use apiName
+if [[ -z "$CLIENT_ID" ]]; then
+  CLIENT_ID="$API_NAME"
+  echo "ClientId not set — using ApiName per SSO doc 1.3.2."
+fi
 STATE="${4:-test}"
 USER_TYPE="${MASHHAD_SSO_USER_TYPE:-0}"
 DOMAIN_ID="${MASHHAD_SSO_DOMAIN_ID:-0}"
