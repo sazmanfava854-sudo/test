@@ -12,7 +12,8 @@ param(
     [int]$DomainID = 0,
     [string]$BaseUrl = "https://login.mashhad.ir",
     [switch]$HashUpper,
-    [switch]$UseLegacyLkeyClientId
+    [switch]$UseLegacyLkeyClientId,
+    [int]$RequestTimeoutSec = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,20 +60,44 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
     Write-Host ('  apiSecret=' + $hash)
     Write-Host ('  body ClientId=' + $Cid)
     Write-Host ('  hash input: SecretKey(' + $secretLen + ' chars) + requestTime')
+    Write-Host ('  Waiting for SSO POST loginKey (timeout ' + $RequestTimeoutSec + 's)...')
 
-    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-    if ($curl) {
-        $respText = & curl.exe -sS --max-time 60 -X POST ($BaseUrl + '/api/Authentication/loginKey') `
-            -H ('apiName: ' + $Api) `
-            -H ('requestTime: ' + $ReqTime) `
-            -H ('apiSecret: ' + $hash) `
-            -H 'Content-Type: application/json' `
-            -d $body
-        return ($respText | ConvertFrom-Json)
+    $uri = $BaseUrl + '/api/Authentication/loginKey'
+    $headers = @{
+        apiName     = $Api
+        requestTime = $ReqTime
+        apiSecret   = $hash
     }
-
-    $headers = @{ apiName = $Api; requestTime = $ReqTime; apiSecret = $hash }
-    return Invoke-RestMethod -Uri ($BaseUrl + '/api/Authentication/loginKey') -Method Post -Headers $headers -Body $body -ContentType 'application/json' -TimeoutSec 60
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        $response = Invoke-WebRequest -Uri $uri -Method Post -Headers $headers `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
+            -ContentType 'application/json; charset=utf-8' `
+            -TimeoutSec $RequestTimeoutSec -UseBasicParsing
+        $sw.Stop()
+        Write-Host ('  Done: HTTP ' + [int]$response.StatusCode + ' in ' + $sw.ElapsedMilliseconds + ' ms')
+        return ($response.Content | ConvertFrom-Json)
+    }
+    catch [System.Net.WebException] {
+        $sw.Stop()
+        $resp = $_.Exception.Response
+        if ($null -ne $resp) {
+            $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+            $text = $reader.ReadToEnd()
+            $reader.Close()
+            Write-Host ('  Done: HTTP ' + [int]$resp.StatusCode + ' in ' + $sw.ElapsedMilliseconds + ' ms')
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                return ($text | ConvertFrom-Json)
+            }
+        }
+        Write-Host ('  Failed after ' + $sw.ElapsedMilliseconds + ' ms: ' + $_.Exception.Message)
+        throw
+    }
+    catch {
+        $sw.Stop()
+        Write-Host ('  Failed after ' + $sw.ElapsedMilliseconds + ' ms: ' + $_.Exception.Message)
+        throw
+    }
 }
 
 Write-Host '== 1) GET getCurrentTime =='
