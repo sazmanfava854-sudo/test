@@ -88,7 +88,7 @@ public class MashhadSsoApiClientTests
         Assert.True(result.IsSuccess, $"ErrorCode={result.ErrorCode} msg={result.ErrorMessage}");
         Assert.NotNull(loginKeyBody);
         Assert.Contains("\"State\":\"test\"", loginKeyBody.Replace(" ", ""));
-        Assert.Contains("\"ClientId\":\"zavabetapp\"", loginKeyBody.Replace(" ", ""));
+        Assert.Contains("\"ClientId\":\"4d7475D499c02B3\"", loginKeyBody.Replace(" ", ""));
         Assert.DoesNotContain("ReturnUrl", loginKeyBody, StringComparison.OrdinalIgnoreCase);
     }
 

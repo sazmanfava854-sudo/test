@@ -39,9 +39,14 @@ if ($env:OS -like '*Windows*') {
     }
 }
 
+if ([string]::IsNullOrWhiteSpace($ClientId) -and -not [string]::IsNullOrWhiteSpace($env:MASHHAD_SSO_CLIENT_ID)) {
+    $ClientId = $env:MASHHAD_SSO_CLIENT_ID.Trim()
+}
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
-    $ClientId = $ApiName
-    Write-Host "ClientId not set - using ApiName per SSO doc 1.3.2."
+    throw 'ClientId is required: registered ClientID in loginKey body (e.g. 53db42619cf3C333b13a18D34fbd9111). Header apiName stays -ApiName.'
+}
+if ($ClientId -ne $ApiName) {
+    Write-Host ('Using apiName (header)=' + $ApiName + ' and ClientId (body)=' + $ClientId)
 }
 
 function Get-Sha256Hex([string]$Text, [bool]$Upper) {
@@ -123,17 +128,11 @@ if ($SecretKey.Length -ne 32) {
     Write-Host 'NOTE: Many SSO SecretKeys are 32 chars. Extra/missing chars often cause 403.'
 }
 
-if ($ClientId -ne $ApiName -and -not $UseLegacyLkeyClientId) {
-    Write-Host ''
-    Write-Host 'WARNING: ClientId differs from ApiName. SSO doc: ClientID = application username (apiName).'
-    Write-Host '         lkey GUID is for Login.aspx only. Will retry with ClientId=ApiName on 403.'
-}
-
 $attempts = @(
     @{ Label = 'configured'; Api = $ApiName; Cid = $ClientId; Upper = [bool]$HashUpper }
 )
-if ($ClientId -ne $ApiName -and -not $UseLegacyLkeyClientId) {
-    $attempts += @{ Label = 'doc ClientId=ApiName'; Api = $ApiName; Cid = $ApiName; Upper = [bool]$HashUpper }
+if ($UseLegacyLkeyClientId -and $ClientId -ne $ApiName) {
+    $attempts += @{ Label = 'ClientId=ApiName'; Api = $ApiName; Cid = $ApiName; Upper = [bool]$HashUpper }
 }
 if (-not $HashUpper) {
     $attempts += @{ Label = 'hex upper'; Api = $ApiName; Cid = $ApiName; Upper = $true }

@@ -63,10 +63,10 @@ public sealed class ShimasAuthOptions
     }
 
     /// <summary>
-    /// سند SSO 1.0.2 (جدول ۱ + بند ۱.۳.۲): ClientId در بدنه loginKey همان «نام کاربری» (apiName) است؛
-    /// lkey/شناسه ۳۲کاراکتری فقط برای Login.aspx قدیمی است.
+    /// true = ClientId بدنه loginKey همان apiName (برخی ثبت‌های SSO).
+    /// false = ClientId بدنه همان شناسه ثبت‌شده (مثلاً lkey ۳۲کاراکتری) — هدر apiName جدا می‌ماند.
     /// </summary>
-    public bool LoginKeyBodyClientIdIsApiName { get; set; } = true;
+    public bool LoginKeyBodyClientIdIsApiName { get; set; }
 
     public string EffectiveLoginKeyBodyClientId =>
         LoginKeyBodyClientIdIsApiName && !string.IsNullOrWhiteSpace(SigningApiName)
