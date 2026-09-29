@@ -17,6 +17,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $BaseUrl = $BaseUrl.TrimEnd('/')
+$ApiName = $ApiName.Trim()
+$SecretKey = $SecretKey.Trim()
+$ClientId = $ClientId.Trim()
+
+if ([string]::IsNullOrWhiteSpace($SecretKey)) {
+    throw 'SecretKey is empty after trim (check copy/paste; no trailing spaces).'
+}
 
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
     $ClientId = $ApiName
@@ -73,6 +80,10 @@ $timeResp = Invoke-RestMethod -Uri ($BaseUrl + '/api/Authentication/getCurrentTi
 $requestTime = [string]$timeResp.Data
 if ([string]::IsNullOrWhiteSpace($requestTime)) { throw 'getCurrentTime returned no Data' }
 Write-Host ('requestTime: ' + $requestTime + ' (use exact string in SHA256; doc sample: 1643714953)')
+Write-Host ('SecretKey length after trim: ' + $SecretKey.Length + ' characters')
+if ($SecretKey.Length -ne 32) {
+    Write-Host 'NOTE: Many SSO SecretKeys are 32 chars. Extra/missing chars often cause 403.'
+}
 
 if ($ClientId -ne $ApiName -and -not $UseLegacyLkeyClientId) {
     Write-Host ''
