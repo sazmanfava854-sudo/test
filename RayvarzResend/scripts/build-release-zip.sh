@@ -18,6 +18,7 @@ find "$STAGE/RayvarzResend" -maxdepth 1 -type f -name 'appsettings.*.json' -dele
 
 cp "$ROOT/RayvarzResend.Web/appsettings.json" "$STAGE/RayvarzResend/appsettings.json"
 cp "$ROOT/scripts/test-mashhad-sso-loginkey.ps1" "$STAGE/RayvarzResend/test-mashhad-sso-loginkey.ps1"
+cp "$ROOT/scripts/sso-loginkey-print-and-send.ps1" "$STAGE/RayvarzResend/sso-loginkey-print-and-send.ps1"
 
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off

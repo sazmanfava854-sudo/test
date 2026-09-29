@@ -111,6 +111,7 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
     }
 
     Write-Host ('Sending POST ' + $BaseUrl + '/api/Authentication/loginKey (timeout ' + $RequestTimeoutSec + 's)...')
+    Write-Host ('Started at ' + (Get-Date -Format 'HH:mm:ss') + ' - if nothing prints for ' + $RequestTimeoutSec + 's, network/firewall may block POST.')
 
     $uri = $BaseUrl + '/api/Authentication/loginKey'
     $headers = @{
@@ -118,10 +119,11 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
         requestTime = $ReqTime
         apiSecret   = $hash
     }
+    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         $response = Invoke-WebRequest -Uri $uri -Method Post -Headers $headers `
-            -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
+            -Body $bodyBytes `
             -ContentType 'application/json; charset=utf-8' `
             -TimeoutSec $RequestTimeoutSec -UseBasicParsing
         $sw.Stop()

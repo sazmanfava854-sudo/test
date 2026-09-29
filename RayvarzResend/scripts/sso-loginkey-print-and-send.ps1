@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory)][string]$SecretKey,
     [string]$BaseUrl = "https://login.mashhad.ir",
     [int]$TimeoutSec = 45,
-    [switch]$SkipPost
+    [switch]$SkipPost,
+    [switch]$UseCurl
 )
 
 $ErrorActionPreference = "Continue"
@@ -23,6 +24,81 @@ function Get-ApiSecretAscii([string]$Secret, [string]$Time) {
     ($bytes | ForEach-Object { $_.ToString("x2") }) -join ''
 }
 
+function Post-LoginKeyWithHttpClient([string]$Url, [hashtable]$Headers, [byte[]]$BodyBytes, [int]$MaxSec) {
+    Write-Host "Using .NET HttpClient (Timeout=${MaxSec}s)..."
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue | Out-Null
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        $client = New-Object System.Net.Http.HttpClient($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds($MaxSec)
+        $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Post, $Url)
+        foreach ($k in $Headers.Keys) {
+            $req.Headers.TryAddWithoutValidation([string]$k, [string]$Headers[$k]) | Out-Null
+        }
+        $content = New-Object System.Net.Http.ByteArrayContent(,$BodyBytes)
+        $content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/json; charset=utf-8")
+        $req.Content = $content
+        Write-Host ("POST started at " + (Get-Date -Format "HH:mm:ss") + " (wait up to ${MaxSec}s)...")
+        $task = $client.SendAsync($req)
+        if (-not $task.Wait([TimeSpan]::FromSeconds($MaxSec + 5))) {
+            $sw.Stop()
+            Write-Host ("TIMEOUT after " + $sw.ElapsedMilliseconds + " ms (no response body).")
+            $client.Dispose()
+            return $null
+        }
+        $resp = $task.Result
+        $bodyTask = $resp.Content.ReadAsStringAsync()
+        $bodyTask.Wait([TimeSpan]::FromSeconds(30)) | Out-Null
+        $text = $bodyTask.Result
+        $sw.Stop()
+        Write-Host ("HTTP " + [int]$resp.StatusCode + " in " + $sw.ElapsedMilliseconds + " ms")
+        if ($text) { Write-Host $text }
+        $client.Dispose()
+        return $text
+    }
+    catch {
+        $sw.Stop()
+        Write-Host ("HttpClient error after " + $sw.ElapsedMilliseconds + " ms: " + $_.Exception.Message)
+        if ($_.Exception.InnerException) {
+            Write-Host ("  Inner: " + $_.Exception.InnerException.Message)
+        }
+        return $null
+    }
+}
+
+function Post-LoginKeyWithIwr([string]$Url, [hashtable]$Headers, [byte[]]$BodyBytes, [int]$MaxSec) {
+    Write-Host "Using Invoke-WebRequest (TimeoutSec=$MaxSec)..."
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    Write-Host ("POST started at " + (Get-Date -Format "HH:mm:ss") + "...")
+    try {
+        $r = Invoke-WebRequest -Uri $Url -Method Post -Headers $Headers `
+            -Body $BodyBytes -ContentType "application/json; charset=utf-8" `
+            -TimeoutSec $MaxSec -UseBasicParsing
+        $sw.Stop()
+        Write-Host ("HTTP " + [int]$r.StatusCode + " in " + $sw.ElapsedMilliseconds + " ms")
+        Write-Host $r.Content
+        return $r.Content
+    }
+    catch [System.Net.WebException] {
+        $sw.Stop()
+        Write-Host ("WebException after " + $sw.ElapsedMilliseconds + " ms: " + $_.Exception.Message)
+        if ($_.Exception.Response) {
+            $sr = New-Object IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $t = $sr.ReadToEnd()
+            $sr.Close()
+            Write-Host ("HTTP " + [int]$_.Exception.Response.StatusCode)
+            if ($t) { Write-Host $t; return $t }
+        }
+        return $null
+    }
+    catch {
+        $sw.Stop()
+        Write-Host ("Error after " + $sw.ElapsedMilliseconds + " ms: " + $_.Exception.Message)
+        return $null
+    }
+}
+
 function Post-LoginKeyWithCurl([string]$Url, [string]$Api, [string]$ReqTime, [string]$SecretHash, [string]$BodyJson, [int]$MaxSec) {
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if (-not $curl) {
@@ -33,7 +109,7 @@ function Post-LoginKeyWithCurl([string]$Url, [string]$Api, [string]$ReqTime, [st
     [IO.File]::WriteAllText($tmp, $BodyJson, (New-Object Text.UTF8Encoding $false))
     Write-Host "Using curl.exe --ssl-no-revoke (max ${MaxSec}s)..."
     try {
-        $out = & curl.exe --ssl-no-revoke -sS --max-time $MaxSec -w "`nHTTP_CODE:%{http_code}" -X POST $Url `
+        $out = & curl.exe --ssl-no-revoke -sS --connect-timeout 15 --max-time $MaxSec -w "`nHTTP_CODE:%{http_code}" -X POST $Url `
             -H "apiName: $Api" `
             -H "requestTime: $ReqTime" `
             -H "apiSecret: $SecretHash" `
@@ -48,33 +124,7 @@ function Post-LoginKeyWithCurl([string]$Url, [string]$Api, [string]$ReqTime, [st
     }
 }
 
-function Post-LoginKeyWithIwr([string]$Url, [hashtable]$Headers, [byte[]]$BodyBytes, [int]$MaxSec) {
-    Write-Host "Using Invoke-WebRequest (TimeoutSec=$MaxSec)..."
-    try {
-        $r = Invoke-WebRequest -Uri $Url -Method Post -Headers $Headers `
-            -Body $BodyBytes -ContentType "application/json; charset=utf-8" `
-            -TimeoutSec $MaxSec -UseBasicParsing
-        Write-Host ("HTTP " + [int]$r.StatusCode)
-        Write-Host $r.Content
-        return $r.Content
-    }
-    catch [System.Net.WebException] {
-        Write-Host ("WebException: " + $_.Exception.Message)
-        if ($_.Exception.Response) {
-            $sr = New-Object IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $t = $sr.ReadToEnd()
-            $sr.Close()
-            if ($t) { Write-Host $t; return $t }
-        }
-        return $null
-    }
-    catch {
-        Write-Host ("Error: " + $_.Exception.Message)
-        return $null
-    }
-}
-
-Write-Host "========== 1) getCurrentTime =========="
+Write-Host "========== 0) Quick reachability (GET getCurrentTime) =========="
 try {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $requestTime = [string](Invoke-RestMethod -Uri ($BaseUrl + "/api/Authentication/getCurrentTime") -Method Get -TimeoutSec 30).Data
@@ -83,18 +133,19 @@ try {
 }
 catch {
     Write-Host ("getCurrentTime FAILED: " + $_.Exception.Message)
+    Write-Host "If GET fails, POST will not work from this network."
     exit 1
 }
 Write-Host "requestTime = $requestTime"
 
 Write-Host ""
-Write-Host "========== 2) BEFORE HASH =========="
+Write-Host "========== 1) BEFORE HASH =========="
 Write-Host "apiName (header)   = $ApiName"
 Write-Host "ClientId (body)    = $ClientId"
 Write-Host "SecretKey length   = $($SecretKey.Length)"
 
 Write-Host ""
-Write-Host "========== 3) AFTER HASH =========="
+Write-Host "========== 2) AFTER HASH =========="
 $apiSecret = Get-ApiSecretAscii $SecretKey $requestTime
 Write-Host "apiSecret / Hash   = $apiSecret"
 
@@ -104,7 +155,7 @@ $bodyJson = (@{
 } | ConvertTo-Json -Compress)
 
 Write-Host ""
-Write-Host "========== 4) BODY JSON =========="
+Write-Host "========== 3) BODY JSON =========="
 Write-Host $bodyJson
 
 if ($SkipPost) {
@@ -115,23 +166,39 @@ if ($SkipPost) {
 
 $url = $BaseUrl + "/api/Authentication/loginKey"
 Write-Host ""
-Write-Host "========== 5) POST loginKey =========="
+Write-Host "========== 4) POST loginKey =========="
 Write-Host $url
 
 $headers = @{ apiName = $ApiName; requestTime = $requestTime; apiSecret = $apiSecret }
 $bodyBytes = [Text.Encoding]::UTF8.GetBytes($bodyJson)
 
-$content = Post-LoginKeyWithCurl -Url $url -Api $ApiName -ReqTime $requestTime -SecretHash $apiSecret -BodyJson $bodyJson -MaxSec $TimeoutSec
+$content = $null
+if ($UseCurl) {
+    $content = Post-LoginKeyWithCurl -Url $url -Api $ApiName -ReqTime $requestTime -SecretHash $apiSecret -BodyJson $bodyJson -MaxSec $TimeoutSec
+}
+
 if (-not $content) {
-    Write-Host ""
-    Write-Host "curl failed or empty - trying Invoke-WebRequest..."
-    $content = Post-LoginKeyWithIwr -Url $url -Headers $headers -BodyBytes $bodyBytes -MaxSec $TimeoutSec
+    $content = Post-LoginKeyWithHttpClient -Url $url -Headers $headers -BodyBytes $bodyBytes -MaxSec $TimeoutSec
 }
 
 if (-not $content) {
     Write-Host ""
-    Write-Host "NO RESPONSE - firewall/proxy may block POST to login.mashhad.ir from this machine."
-    Write-Host "Try from another PC with internet, or ask IT to allow HTTPS POST outbound."
+    Write-Host "HttpClient had no usable response - trying Invoke-WebRequest..."
+    $content = Post-LoginKeyWithIwr -Url $url -Headers $headers -BodyBytes $bodyBytes -MaxSec $TimeoutSec
+}
+
+if (-not $content -and -not $UseCurl) {
+    Write-Host ""
+    Write-Host "Still no response - trying curl as last resort (or use -UseCurl)..."
+    $content = Post-LoginKeyWithCurl -Url $url -Api $ApiName -ReqTime $requestTime -SecretHash $apiSecret -BodyJson $bodyJson -MaxSec $TimeoutSec
+}
+
+if (-not $content) {
+    Write-Host ""
+    Write-Host "NO RESPONSE within ${TimeoutSec}s."
+    Write-Host "- GET getCurrentTime worked; only POST may be blocked (firewall/proxy)."
+    Write-Host "- Run the same script on a PC with normal internet (not locked-down server)."
+    Write-Host "- Optional: Test-NetConnection login.mashhad.ir -Port 443"
     exit 2
 }
 
