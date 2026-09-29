@@ -42,7 +42,11 @@ if (-not [string]::IsNullOrWhiteSpace($SecretKeyFile)) {
     if (-not (Test-Path -LiteralPath $SecretKeyFile)) {
         throw ('SecretKeyFile not found: ' + $SecretKeyFile)
     }
-    $SecretKey = (Get-Content -LiteralPath $SecretKeyFile -Raw).Trim()
+    $SecretKey = (Get-Content -LiteralPath $SecretKeyFile -Raw -Encoding UTF8).Trim()
+    if ($SecretKey.Length -gt 0 -and [int][char]$SecretKey[0] -eq 0xFEFF) {
+        $SecretKey = $SecretKey.Substring(1).Trim()
+        Write-Warning 'Removed UTF-8 BOM from secret file. Save file as UTF-8 without BOM (Notepad: Save As -> Encoding UTF-8).'
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($SecretKey)) {
