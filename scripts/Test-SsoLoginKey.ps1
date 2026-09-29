@@ -166,16 +166,7 @@ if ($Probe) {
     foreach ($s in $scenarios) {
         Write-Host ('Scenario: ' + $s.N)
         foreach ($hm in $hashModes) {
-            $upperFlag = $false
-            $mode = $hm
-            if ($hm -eq 'Secret+TimeUpper') {
-                $mode = 'Secret+Time'
-                $upperFlag = $true
-            }
-            $saved = $HashUpper
-            $HashUpper = $upperFlag
-            $r = Invoke-MashhadLoginKeyTest -HeaderApi $s.H -BodyClientId $s.C -Secret $SecretKey -Base $BaseUrl -StateVal $State -UserTypeVal $UserType -DomainIdVal $DomainID -HashMode $mode
-            $HashUpper = $saved
+            $r = Invoke-MashhadLoginKeyTest -HeaderApi $s.H -BodyClientId $s.C -Secret $SecretKey -Base $BaseUrl -StateVal $State -UserTypeVal $UserType -DomainIdVal $DomainID -HashMode $hm
             if ($r.ErrorCode -eq 0 -and $r.Data.loginKey) {
                 Write-Host ('OK - ' + $s.N + ' hash=' + $hm)
                 Write-Host ('loginKey: ' + $r.Data.loginKey)
