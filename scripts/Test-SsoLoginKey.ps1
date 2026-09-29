@@ -12,11 +12,24 @@
 .PARAMETER SecretKey
   SecretKey for this application (do not paste in chat).
 
-.EXAMPLE
-  .\Test-SsoLoginKey.ps1 -ApiName "FinancialAssistant" -SecretKey "your-secret"
+.NOTES
+  Run from the folder that contains this script. Use straight ASCII quotes (' or "), not curly quotes from chat.
+
+  One line (recommended):
+    cd D:\Khoshdel\RayvarzResend
+    .\Test-SsoLoginKey.ps1 -ApiName 'FinancialAssistant' -SecretKey 'PASTE_FULL_SECRET_HERE'
+
+  With splatting (easier to edit, no line-continuation backtick):
+    $sso = @{ ApiName = 'FinancialAssistant'; SecretKey = 'PASTE_FULL_SECRET_HERE' }
+    .\Test-SsoLoginKey.ps1 @sso
+
+  Do not use -SecretKey '' (empty). Hash and SSO will fail.
 
 .EXAMPLE
-  .\Test-SsoLoginKey.ps1 -ApiName "FinancialAssistant" -ClientId "53db42619cf3C333b13a18D34fbd9111" -SecretKey "your-secret"
+  PS D:\Khoshdel\RayvarzResend> .\Test-SsoLoginKey.ps1 -ApiName 'FinancialAssistant' -SecretKey 'your-secret'
+
+.EXAMPLE
+  PS D:\Khoshdel\RayvarzResend> .\Test-SsoLoginKey.ps1 -ApiName 'FinancialAssistant' -ClientId '53db42619cf3C333b13a18D34fbd9111' -SecretKey 'your-secret'
 #>
 param(
     [Parameter(Mandatory)][string]$ApiName,
@@ -31,6 +44,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $BaseUrl = $BaseUrl.TrimEnd('/')
+
+if ([string]::IsNullOrWhiteSpace($SecretKey)) {
+    throw "SecretKey is empty. Pass the full key from SSO portal, e.g. -SecretKey 'your-secret'"
+}
 
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
     $ClientId = $ApiName
