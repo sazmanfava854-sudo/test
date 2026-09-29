@@ -26,6 +26,19 @@ if ([string]::IsNullOrWhiteSpace($SecretKey)) {
     throw 'SecretKey is empty after trim (check copy/paste; no trailing spaces).'
 }
 
+# Windows curl.exe often fails with CRYPT_E_REVOCATION_OFFLINE when CRL/OCSP is unreachable.
+# This script uses Invoke-WebRequest only; disable revocation check for this diagnostic run.
+if ($env:OS -like '*Windows*') {
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+        [System.Net.ServicePointManager]::CheckCertificateRevocationList = $false
+        Write-Host 'TLS: revocation check off for this session (isolated server / no CRL access).'
+    }
+    catch {
+        Write-Host ('TLS note: ' + $_.Exception.Message)
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
     $ClientId = $ApiName
     Write-Host "ClientId not set - using ApiName per SSO doc 1.3.2."
