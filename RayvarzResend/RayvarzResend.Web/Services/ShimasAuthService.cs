@@ -57,7 +57,8 @@ public sealed class ShimasAuthService
             SsoReturnUrlForPortal = ResolveSsoReturnUrlForPortal(request),
             SigningApiName = string.IsNullOrWhiteSpace(_options.SigningApiName) ? null : _options.SigningApiName,
             ClientIdHint = SsoCredentialMask.MaskId(_options.EffectiveClientId),
-            ClientSecretLooksShort = SsoCredentialMask.SecretLooksTooShort(_options.ClientSecret)
+            ClientSecretLooksShort = SsoCredentialMask.SecretLooksTooShort(_options.ClientSecret),
+            SsoOutboundMap = SsoOutboundFieldMap.Describe(_options)
         };
     }
 

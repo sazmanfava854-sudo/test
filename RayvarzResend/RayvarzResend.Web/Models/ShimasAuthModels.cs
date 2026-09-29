@@ -68,6 +68,7 @@ public sealed class ShimasAuthStatusDto
     public string? SigningApiName { get; set; }
     public string? ClientIdHint { get; set; }
     public bool ClientSecretLooksShort { get; set; }
+    public SsoLoginKeyOutboundMap? SsoOutboundMap { get; set; }
 }
 
 public sealed class ShimasCallbackPayload

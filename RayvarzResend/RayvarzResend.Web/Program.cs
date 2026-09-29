@@ -258,6 +258,27 @@ var adminOnly = AuthPolicies.AdminOnly;
 app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
     Results.Ok(shimas.GetStatus(http.Request))).AllowAnonymous();
 
+app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
+{
+    var map = SsoOutboundFieldMap.Describe(shimas.Options);
+    return Results.Ok(new
+    {
+        map,
+        correctExampleFa = new
+        {
+            header_apiName = "FinancialAssistant",
+            body_ClientId = "53db42619cf3C333b13a18D34fbd9111",
+            appsettings = new
+            {
+                ApiName_or_SSOUserName = "FinancialAssistant",
+                ClientId_or_LKey = "53db42619cf3C333b13a18D34fbd9111",
+                ClientSecret = "(SecretKey کامل)",
+                LoginKeyBodyClientIdIsApiName = false
+            }
+        }
+    });
+}).AllowAnonymous();
+
 app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shimas) =>
 {
     var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
@@ -321,7 +342,11 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 {loginUrl}
 
                 ClientId/lkey تنظیم شده: بله (طول {clientId.Length} کاراکتر)
-                ApiName: {shimas.Options.SigningApiName}
+                ApiName (هدر apiName): {shimas.Options.SigningApiName}
+                ClientId بدنه loginKey: {shimas.Options.EffectiveLoginKeyBodyClientId}
+                LoginKeyBodyClientIdIsApiName: {shimas.Options.LoginKeyBodyClientIdIsApiName}
+                جابه‌جایی احتمالی در appsettings: {SsoOutboundFieldMap.LikelyApiNameAndClientIdSwapped(shimas.Options)}
+                نقشه کامل: /api/auth/sso-outbound-map
                 UseLoginKeyOnRedirect: {shimas.Options.UseLoginKeyOnRedirect}
 
                 ---- تست loginKey با SSO ({diag.ApiBaseUrl}) ----
