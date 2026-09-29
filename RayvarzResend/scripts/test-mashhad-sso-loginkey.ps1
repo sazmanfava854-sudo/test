@@ -48,7 +48,8 @@ if ([string]::IsNullOrWhiteSpace($ClientId)) {
 
 function Get-Sha256Hex([string]$Text, [bool]$Upper) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
-    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Text))
+    # Same as RuleEngine / RayvarzResend: Encoding.ASCII + x2 hex
+    $bytes = $sha.ComputeHash([System.Text.Encoding]::ASCII.GetBytes($Text))
     $hex = [BitConverter]::ToString($bytes).Replace("-", "")
     if ($Upper) { return $hex.ToUpperInvariant() }
     return $hex.ToLowerInvariant()

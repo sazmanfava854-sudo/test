@@ -215,6 +215,49 @@ public sealed class ShimasAuthService
         return diag;
     }
 
+    /// <summary>مقادیر دقیق هدر/بدنه loginKey همان لحظه (برای دیباگ؛ SecretKey برگردانده نمی‌شود).</summary>
+    public async Task<SsoSigningPreviewDto> PreviewLoginKeySigningAsync(CancellationToken ct = default)
+    {
+        var encoding = string.Equals(_options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower";
+        var preview = new SsoSigningPreviewDto
+        {
+            HashEncoding = encoding,
+            ClientSecretLength = (_options.ClientSecret ?? "").Trim().Length,
+            NoteFa = "apiSecret و Hash یکی هستند. requestTime و Time یکی هستند. ClientSecret در خروجی نیست."
+        };
+
+        var time = await _mashhadSso.GetCurrentTimeAsync(ct);
+        if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
+        {
+            preview.NoteFa = $"getCurrentTime ناموفق: {time.ErrorMessage} (code {time.ErrorCode})";
+            return preview;
+        }
+
+        var material = MashhadSsoSigning.CreateMaterial(
+            _options.SigningApiName,
+            _options.ClientSecret,
+            time.Data,
+            encoding);
+
+        preview.Headers = new SsoSigningHeaderPreview
+        {
+            ApiName = material.ApiName,
+            RequestTime = material.RequestTime,
+            ApiSecret = material.ApiSecret
+        };
+        preview.Body = new SsoSigningBodyPreview
+        {
+            Time = material.RequestTime,
+            Hash = material.ApiSecret,
+            ClientId = _options.EffectiveLoginKeyBodyClientId,
+            State = string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim(),
+            UserType = _options.LoginUserType,
+            DomainId = _options.LoginDomainId
+        };
+
+        return preview;
+    }
+
     /// <summary>
     /// همهٔ فرمول‌های هش را با اعتبار داده‌شده می‌آزماید. اگر با اعتبار RuleEngine هم همه 403 بدهند،
     /// فرمول ما با SSO فرق دارد؛ اگر با RuleEngine یکی OK شد و با FinancialAssistant نه، ثبت پورتال مشکل دارد.

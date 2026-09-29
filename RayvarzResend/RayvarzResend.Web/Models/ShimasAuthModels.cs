@@ -49,6 +49,33 @@ public sealed class SsoLoginKeyDiagnostics
             : Error ?? "نامشخص";
 }
 
+public sealed class SsoSigningPreviewDto
+{
+    public string HashFormula { get; set; } = "SHA256(ClientSecret + requestTime) hex";
+    public string HashEncoding { get; set; } = "lower";
+    public int ClientSecretLength { get; set; }
+    public SsoSigningHeaderPreview Headers { get; set; } = new();
+    public SsoSigningBodyPreview Body { get; set; } = new();
+    public string NoteFa { get; set; } = "";
+}
+
+public sealed class SsoSigningHeaderPreview
+{
+    public string ApiName { get; set; } = "";
+    public string RequestTime { get; set; } = "";
+    public string ApiSecret { get; set; } = "";
+}
+
+public sealed class SsoSigningBodyPreview
+{
+    public string Time { get; set; } = "";
+    public string Hash { get; set; } = "";
+    public string ClientId { get; set; } = "";
+    public string State { get; set; } = "";
+    public int UserType { get; set; }
+    public int DomainId { get; set; }
+}
+
 public sealed class SsoLoginKeyOutboundMap
 {
     public string HeaderApiNameSource { get; set; } = "";

@@ -211,6 +211,16 @@ public sealed class MashhadSsoApiClient
                 time.Data,
                 encoding);
 
+            if (_options.DebugSigning)
+            {
+                _logger.LogInformation(
+                    "SSO signing (DebugSigning): apiName={ApiName} requestTime={RequestTime} apiSecret={ApiSecret} bodyClientId={BodyClientId}",
+                    material.ApiName,
+                    material.RequestTime,
+                    material.ApiSecret,
+                    _options.EffectiveLoginKeyBodyClientId);
+            }
+
             var payload = buildPayload(material);
             using var request = BuildSignedPost(relativePath, material, payload);
             var client = CreateClient();

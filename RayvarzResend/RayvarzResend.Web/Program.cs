@@ -279,6 +279,13 @@ app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
     });
 }).AllowAnonymous();
 
+// دیباگ hash: همان apiName / requestTime / apiSecret و بدنه Time/Hash/ClientId که اپ می‌فرستد (بدون ClientSecret)
+app.MapGet("/api/auth/sso-signing-preview", async (ShimasAuthService shimas, CancellationToken ct) =>
+{
+    var preview = await shimas.PreviewLoginKeySigningAsync(ct);
+    return Results.Ok(preview);
+}).AllowAnonymous();
+
 app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shimas) =>
 {
     var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
@@ -347,6 +354,8 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 LoginKeyBodyClientIdIsApiName: {shimas.Options.LoginKeyBodyClientIdIsApiName}
                 جابه‌جایی احتمالی در appsettings: {SsoOutboundFieldMap.LikelyApiNameAndClientIdSwapped(shimas.Options)}
                 نقشه کامل: /api/auth/sso-outbound-map
+                hash دقیق (هدر+بدنه): /api/auth/sso-signing-preview
+                لاگ hash روی هر درخواست SSO: Auth:Shimas:DebugSigning = true
                 UseLoginKeyOnRedirect: {shimas.Options.UseLoginKeyOnRedirect}
 
                 ---- تست loginKey با SSO ({diag.ApiBaseUrl}) ----
