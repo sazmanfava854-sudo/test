@@ -11,6 +11,63 @@ namespace RayvarzResend.Tests;
 public class MashhadSsoApiClientTests
 {
     [Fact]
+    public async Task GetLoginKey_retries_once_when_requestTime_expired()
+    {
+        var loginKeyCalls = 0;
+        var handler = new MashhadSsoFakeHandler(loginKeyResponder: _ =>
+        {
+            loginKeyCalls++;
+            return loginKeyCalls == 1
+                ? """{"ErrorCode":401,"ErrorMessage":"requestTime expired","Data":null}"""
+                : """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk-retry"}}""";
+        });
+        var api = new MashhadSsoApiClient(
+            Options.Create(new ShimasAuthOptions
+            {
+                ApiBaseUrl = "https://login.mashhad.ir",
+                ApiName = "api",
+                ClientId = "cid",
+                ClientSecret = "sec"
+            }),
+            new NamedHttpClientFactory(handler),
+            NullLogger<MashhadSsoApiClient>.Instance);
+
+        var result = await api.GetLoginKeyAsync(null, "test");
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, loginKeyCalls);
+    }
+
+    [Fact]
+    public async Task GetLoginKey_body_Hash_matches_header_apiSecret()
+    {
+        string? body = null;
+        string? apiSecret = null;
+        var handler = new MashhadSsoFakeHandler(
+            onBody: b => body = b,
+            loginKeyResponder: req =>
+            {
+                apiSecret = req.Headers.TryGetValues("apiSecret", out var v) ? v.FirstOrDefault() : null;
+                return """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk"}}""";
+            });
+        var api = new MashhadSsoApiClient(
+            Options.Create(new ShimasAuthOptions
+            {
+                ApiBaseUrl = "https://login.mashhad.ir",
+                ApiName = "api",
+                ClientId = "cid",
+                ClientSecret = "full-secret-from-portal"
+            }),
+            new NamedHttpClientFactory(handler),
+            NullLogger<MashhadSsoApiClient>.Instance);
+
+        await api.GetLoginKeyAsync(null, "test");
+        Assert.NotNull(body);
+        Assert.NotNull(apiSecret);
+        Assert.Contains($"\"Hash\":\"{apiSecret}\"", body.Replace(" ", ""));
+        Assert.Contains("\"Time\":\"1700000000\"", body.Replace(" ", ""));
+    }
+
+    [Fact]
     public async Task GetLoginKey_omits_ReturnUrl_when_RuleEngine_style()
     {
         string? loginKeyBody = null;

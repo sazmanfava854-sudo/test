@@ -44,6 +44,8 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 هدرها: `apiName` = **نام کاربری کاربردی برنامه** (از مدیر SSO)، `requestTime` از `getCurrentTime`، `apiSecret` = `SHA256(SecretKey + requestTime)` hex. بدنه: `Time`, `Hash` (همان مقدار), `ClientId`, `State`, `UserType`, `DomainID`. نام نمایشی برنامه (مثلاً FinancialAssistant) **apiName نیست** مگر همان را در پورتال ثبت کرده باشند.
 
+**در کد (بند ۳ سند):** کلاس `MashhadSsoSigning` + `MashhadSsoApiClient.SendSignedJsonAsync` — همهٔ `loginKey` / `getAccessToken` / `getUserInfo` ابتدا `getCurrentTime` می‌گیرند، سپس هدرهای `apiName` + `requestTime` + `apiSecret`؛ اگر SSO خطای انقضای `requestTime` بدهد یک بار با زمان جدید تکرار می‌شود. تنها `getCurrentTime` بدون این هدرهاست.
+
 در `Auth:Shimas`:
 
 **روال:** `loginKey` → `Authentication/Start/{LoginKey}` → callback با `username` + `refresh_token` + `state` → `getAccessToken`.

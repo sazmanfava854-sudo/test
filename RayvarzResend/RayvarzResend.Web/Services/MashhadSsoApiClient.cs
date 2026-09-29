@@ -32,6 +32,7 @@ public sealed class MashhadSsoApiClient
         && !string.IsNullOrWhiteSpace(_options.SigningApiName)
         && _options.HasClientSecret;
 
+    /// <summary>تنها فراخوانی SSO بدون هدر apiName / requestTime / apiSecret (بند ۳ سند).</summary>
     public async Task<MashhadSsoResult<string>> GetCurrentTimeAsync(CancellationToken ct = default)
     {
         var client = CreateClient();
@@ -69,38 +70,26 @@ public sealed class MashhadSsoApiClient
         string hashEncoding,
         CancellationToken ct)
     {
-        var time = await GetCurrentTimeAsync(ct);
-        if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
-            return new MashhadSsoResult<MashhadLoginKeyData>
-            {
-                ErrorCode = time.ErrorCode,
-                ErrorMessage = time.ErrorMessage ?? "getCurrentTime ناموفق بود"
-            };
-
-        var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, hashEncoding);
         var loginState = string.IsNullOrWhiteSpace(state)
             ? (string.IsNullOrWhiteSpace(_options.LoginState) ? "test" : _options.LoginState.Trim())
             : state.Trim();
-        var payload = new MashhadLoginKeyRequest
-        {
-            Time = requestTime,
-            Hash = hash,
-            ClientId = _options.EffectiveClientId,
-            State = loginState,
-            UserType = _options.LoginUserType,
-            DomainId = _options.LoginDomainId,
-            ReturnUrl = _options.IncludeReturnUrlInLoginKey && !string.IsNullOrWhiteSpace(returnUrl)
-                ? returnUrl.Trim()
-                : null
-        };
 
-        using var request = BuildSignedPost("/api/Authentication/loginKey", requestTime, hash, payload);
-        var client = CreateClient();
-        using var response = await client.SendAsync(request, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        return Deserialize<MashhadSsoResult<MashhadLoginKeyData>>(body)
-            ?? new MashhadSsoResult<MashhadLoginKeyData> { ErrorCode = -1, ErrorMessage = body };
+        return await SendSignedJsonAsync<MashhadLoginKeyData>(
+            "/api/Authentication/loginKey",
+            hashEncoding,
+            material => new MashhadLoginKeyRequest
+            {
+                Time = material.RequestTime,
+                Hash = material.ApiSecret,
+                ClientId = _options.EffectiveClientId,
+                State = loginState,
+                UserType = _options.LoginUserType,
+                DomainId = _options.LoginDomainId,
+                ReturnUrl = _options.IncludeReturnUrlInLoginKey && !string.IsNullOrWhiteSpace(returnUrl)
+                    ? returnUrl.Trim()
+                    : null
+            },
+            ct);
     }
 
     /// <summary>
@@ -169,69 +158,96 @@ public sealed class MashhadSsoApiClient
         string username,
         CancellationToken ct = default)
     {
-        var time = await GetCurrentTimeAsync(ct);
-        if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
-            return new MashhadSsoResult<MashhadAccessTokenData>
+        var result = await SendSignedJsonAsync<MashhadAccessTokenData>(
+            "/api/Authentication/getAccessToken",
+            _options.HashEncoding,
+            _ => new MashhadAccessTokenRequest
             {
-                ErrorCode = time.ErrorCode,
-                ErrorMessage = time.ErrorMessage ?? "getCurrentTime ناموفق بود"
-            };
-
-        var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
-        var payload = new MashhadAccessTokenRequest
-        {
-            RefreshToken = refreshToken,
-            UserName = username,
-            ClientId = _options.EffectiveClientId
-        };
-
-        using var request = BuildSignedPost("/api/Authentication/getAccessToken", requestTime, hash, payload);
-        var client = CreateClient();
-        using var response = await client.SendAsync(request, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        _logger.LogDebug("Mashhad getAccessToken HTTP {Status}", (int)response.StatusCode);
-        return Deserialize<MashhadSsoResult<MashhadAccessTokenData>>(body)
-            ?? new MashhadSsoResult<MashhadAccessTokenData> { ErrorCode = -1, ErrorMessage = body };
+                RefreshToken = refreshToken,
+                UserName = username,
+                ClientId = _options.EffectiveClientId
+            },
+            ct);
+        _logger.LogDebug("Mashhad getAccessToken ErrorCode={Code}", result.ErrorCode);
+        return result;
     }
 
     public async Task<MashhadSsoResult<MashhadUserInfoData>> GetUserInfoAsync(string accessToken, CancellationToken ct = default)
     {
-        var time = await GetCurrentTimeAsync(ct);
-        if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
-            return new MashhadSsoResult<MashhadUserInfoData>
-            {
-                ErrorCode = time.ErrorCode,
-                ErrorMessage = time.ErrorMessage ?? "getCurrentTime ناموفق بود"
-            };
-
-        var requestTime = time.Data.Trim();
-        var hash = SsoApiSecretHash.ComputeApiSecret(_options.ClientSecret, requestTime, _options.HashEncoding);
-        var payload = new MashhadUserInfoRequest { Token = accessToken };
-
-        using var request = BuildSignedPost("/api/Authentication/getUserInfo", requestTime, hash, payload);
-        var client = CreateClient();
-        using var response = await client.SendAsync(request, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        return Deserialize<MashhadSsoResult<MashhadUserInfoData>>(body)
-            ?? new MashhadSsoResult<MashhadUserInfoData> { ErrorCode = -1, ErrorMessage = body };
+        return await SendSignedJsonAsync<MashhadUserInfoData>(
+            "/api/Authentication/getUserInfo",
+            _options.HashEncoding,
+            _ => new MashhadUserInfoRequest { Token = accessToken },
+            ct);
     }
 
-    private HttpRequestMessage BuildSignedPost<TPayload>(
+    /// <summary>
+    /// بند ۳: getCurrentTime → امضا → POST؛ در صورت انقضای requestTime یک بار با زمان جدید تکرار می‌شود.
+    /// </summary>
+    private async Task<MashhadSsoResult<T>> SendSignedJsonAsync<T>(
         string relativePath,
-        string requestTime,
-        string apiSecret,
-        TPayload payload)
+        string? hashEncoding,
+        Func<MashhadSsoSigningMaterial, object> buildPayload,
+        CancellationToken ct)
     {
-        var apiName = _options.SigningApiName;
-        if (string.IsNullOrWhiteSpace(apiName))
+        var encoding = NormalizeHashEncoding(hashEncoding);
+        MashhadSsoResult<T>? last = null;
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var time = await GetCurrentTimeAsync(ct);
+            if (!time.IsSuccess || string.IsNullOrWhiteSpace(time.Data))
+            {
+                return new MashhadSsoResult<T>
+                {
+                    ErrorCode = time.ErrorCode,
+                    ErrorMessage = time.ErrorMessage ?? "getCurrentTime ناموفق بود"
+                };
+            }
+
+            var material = MashhadSsoSigning.CreateMaterial(
+                _options.SigningApiName,
+                _options.ClientSecret,
+                time.Data,
+                encoding);
+
+            var payload = buildPayload(material);
+            using var request = BuildSignedPost(relativePath, material, payload);
+            var client = CreateClient();
+            using var response = await client.SendAsync(request, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            last = Deserialize<MashhadSsoResult<T>>(body)
+                ?? new MashhadSsoResult<T> { ErrorCode = -1, ErrorMessage = body };
+
+            if (last.IsSuccess || attempt == 1)
+                return last;
+
+            if (!MashhadSsoSigning.ShouldRetryWithFreshRequestTime(last.ErrorCode, last.ErrorMessage))
+                return last;
+
+            _logger.LogWarning(
+                "Mashhad {Path} returned {Code} ({Message}); retrying with fresh getCurrentTime (SSO doc §3 requestTime validity)",
+                relativePath,
+                last.ErrorCode,
+                last.ErrorMessage);
+        }
+
+        return last ?? new MashhadSsoResult<T> { ErrorCode = -1, ErrorMessage = "SSO signed request failed" };
+    }
+
+    private HttpRequestMessage BuildSignedPost(
+        string relativePath,
+        MashhadSsoSigningMaterial material,
+        object payload)
+    {
+        if (string.IsNullOrWhiteSpace(material.ApiName))
             throw new InvalidOperationException(
-                "Auth:Shimas:ApiName (همان SSOUserName در RuleEngine) تنظیم نشده است.");
+                "Auth:Shimas:ApiName (نام کاربری کاربردی برنامه / apiName) تنظیم نشده است.");
 
         var request = new HttpRequestMessage(HttpMethod.Post, Combine(relativePath));
-        request.Headers.TryAddWithoutValidation("apiName", apiName);
-        request.Headers.TryAddWithoutValidation("requestTime", requestTime);
-        request.Headers.TryAddWithoutValidation("apiSecret", apiSecret);
+        request.Headers.TryAddWithoutValidation("apiName", material.ApiName);
+        request.Headers.TryAddWithoutValidation("requestTime", material.RequestTime);
+        request.Headers.TryAddWithoutValidation("apiSecret", material.ApiSecret);
         request.Content = JsonContent.Create(payload, options: MashhadSsoJson.SerializerOptions);
         return request;
     }

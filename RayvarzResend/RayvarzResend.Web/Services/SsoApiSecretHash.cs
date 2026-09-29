@@ -11,6 +11,7 @@ public static class SsoApiSecretHash
     public static string Sha256HexUpper(string input) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input ?? "")));
 
+    /// <summary>apiSecret سند SSO: SHA256(AppSecretKey + requestTime) به hex.</summary>
     public static string ComputeApiSecret(string secret, string requestTime, string? encoding)
     {
         var raw = (secret ?? "") + (requestTime ?? "");
