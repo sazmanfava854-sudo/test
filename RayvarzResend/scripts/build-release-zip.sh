@@ -22,6 +22,7 @@ cp "$ROOT/scripts/sso-loginkey-print-and-send.ps1" "$STAGE/RayvarzResend/sso-log
 cp "$ROOT/scripts/run-test-mashhad-sso-loginkey.cmd" "$STAGE/RayvarzResend/run-test-mashhad-sso-loginkey.cmd"
 cp "$ROOT/scripts/run-sso-loginkey-print-and-send.cmd" "$STAGE/RayvarzResend/run-sso-loginkey-print-and-send.cmd"
 cp "$ROOT/scripts/sso-loginkey-curl-only.ps1" "$STAGE/RayvarzResend/sso-loginkey-curl-only.ps1"
+cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-loginkey-curl-only.cmd"
 
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
@@ -52,6 +53,10 @@ RayvarzResend v26 — نسخه آخر (اکسل دسته‌ای + epay + تها�
 
 Accounting_DocHeader / Accounting_DocDetails بعد از ارسال موفق به رایورز
 در همین نسخه ثبت می‌شود (اگر DryRun=false باشد).
+
+تست SSO (کنار exe):
+  run-sso-loginkey-curl-only.cmd -SecretKey YOUR_SECRET
+  sso-loginkey-curl-only.ps1 — فقط curl (اگر PowerShell timeout می‌دهد)
 
 سورس روی GitHub است — داخل Zip نیست:
 https://github.com/sazmanfava854-sudo/test/tree/cursor/unified-excel-epay-release-ffcb
