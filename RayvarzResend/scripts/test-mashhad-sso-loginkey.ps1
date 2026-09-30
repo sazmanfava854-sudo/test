@@ -2,10 +2,18 @@
 <#
 .SYNOPSIS
   SSO loginKey test: prints exact apiName / requestTime / apiSecret (headers) then POSTs.
+
+.EXAMPLE
+  PowerShell (one line — do NOT use CMD caret ^):
+  .\test-mashhad-sso-loginkey.ps1 -SecretKey "YOUR_SECRET" -ApiName "FinancialAssistant" -ClientId "53db42619cf3C333b13a18D34fbd9111"
+
+.EXAMPLE
+  CMD:
+  run-test-mashhad-sso-loginkey.cmd -SecretKey "YOUR_SECRET" -ApiName FinancialAssistant -ClientId 53db42619cf3C333b13a18D34fbd9111
 #>
 param(
-    [Parameter(Mandatory)][string]$ApiName,
-    [Parameter()][string]$ClientId = "",
+    [string]$ApiName = "FinancialAssistant",
+    [string]$ClientId = "53db42619cf3C333b13a18D34fbd9111",
     [Parameter(Mandatory)][string]$SecretKey,
     [string]$State = "test",
     [int]$UserType = 0,
