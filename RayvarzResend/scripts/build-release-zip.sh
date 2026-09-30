@@ -21,6 +21,7 @@ cp "$ROOT/scripts/test-mashhad-sso-loginkey.ps1" "$STAGE/RayvarzResend/test-mash
 cp "$ROOT/scripts/sso-loginkey-print-and-send.ps1" "$STAGE/RayvarzResend/sso-loginkey-print-and-send.ps1"
 cp "$ROOT/scripts/run-test-mashhad-sso-loginkey.cmd" "$STAGE/RayvarzResend/run-test-mashhad-sso-loginkey.cmd"
 cp "$ROOT/scripts/run-sso-loginkey-print-and-send.cmd" "$STAGE/RayvarzResend/run-sso-loginkey-print-and-send.cmd"
+cp "$ROOT/scripts/sso-loginkey-curl-only.ps1" "$STAGE/RayvarzResend/sso-loginkey-curl-only.ps1"
 
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
