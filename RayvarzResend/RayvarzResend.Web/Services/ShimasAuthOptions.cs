@@ -25,6 +25,11 @@ public sealed class ShimasAuthOptions
     public string LoginState { get; set; } = "test";
     /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>
     public string HashEncoding { get; set; } = "lower";
+    /// <summary>TimeSecret = requestTime+SecretKey (RuleEngine). SecretTime = SecretKey+requestTime.</summary>
+    public string ApiSecretConcatOrder { get; set; } = "TimeSecret";
+
+    public string EffectiveApiSecretConcatOrder =>
+        string.IsNullOrWhiteSpace(ApiSecretConcatOrder) ? "TimeSecret" : ApiSecretConcatOrder.Trim();
     /// <summary>true = هر loginKey/getAccessToken مقادیر امضا (apiSecret/hash) را در لاگ می‌نویسد — SecretKey هرگز لاگ نمی‌شود.</summary>
     public bool DebugSigning { get; set; }
     /// <summary>اگر loginKey خطا بدهد به Login.aspx برود (همان روال قبلی FinancialAssistant روی IIS).</summary>

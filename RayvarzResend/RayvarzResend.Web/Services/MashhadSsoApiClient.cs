@@ -209,7 +209,8 @@ public sealed class MashhadSsoApiClient
                 _options.SigningApiName,
                 _options.ClientSecret,
                 time.Data,
-                encoding);
+                encoding,
+                _options.EffectiveApiSecretConcatOrder);
 
             if (_options.DebugSigning)
             {

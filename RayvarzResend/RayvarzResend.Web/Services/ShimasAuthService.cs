@@ -237,7 +237,8 @@ public sealed class ShimasAuthService
             _options.SigningApiName,
             _options.ClientSecret,
             time.Data,
-            encoding);
+            encoding,
+            _options.EffectiveApiSecretConcatOrder);
 
         preview.Headers = new SsoSigningHeaderPreview
         {

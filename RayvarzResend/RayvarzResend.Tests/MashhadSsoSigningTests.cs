@@ -5,7 +5,7 @@ namespace RayvarzResend.Tests;
 public class MashhadSsoSigningTests
 {
     [Fact]
-    public void CreateMaterial_uses_sha256_secret_plus_time_per_sso_doc()
+    public void CreateMaterial_uses_sha256_time_plus_secret_rule_engine()
     {
         var material = MashhadSsoSigning.CreateMaterial("myApiUser", "secretKey", "1700000000", "lower");
         Assert.Equal("myApiUser", material.ApiName);

@@ -19,7 +19,8 @@ $SecretKey = $SecretKey.Trim()
 $BaseUrl = $BaseUrl.TrimEnd('/')
 
 function Get-ApiSecretAscii([string]$Secret, [string]$Time) {
-    $raw = $Secret + $Time
+    # RuleEngine: requestTime + SecretKey
+    $raw = $Time + $Secret
     $bytes = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($raw))
     ($bytes | ForEach-Object { $_.ToString("x2") }) -join ''
 }

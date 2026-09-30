@@ -47,7 +47,7 @@ public static class SsoOutboundFieldMap
                 : "Auth:Shimas:ClientId یا LKey (شناسه ۳۲کاراکتری)",
             BodyClientIdMasked = MaskOrEmpty(bodyClientId),
             HeaderRequestTimeSource = "getCurrentTime → هدر requestTime و بدنه Time",
-            HeaderApiSecretSource = "SHA256(ClientSecret + requestTime) → هدر apiSecret و بدنه Hash",
+            HeaderApiSecretSource = "SHA256(requestTime + ClientSecret) → هدر apiSecret و بدنه Hash (RuleEngine)",
             LoginKeyBodyClientIdIsApiName = options.LoginKeyBodyClientIdIsApiName,
             LikelyApiNameClientIdSwappedInConfig = swapped
         };

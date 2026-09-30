@@ -199,7 +199,7 @@ public class MashhadSsoApiClientTests
 
         Assert.Single(results);
         Assert.True(results[0].Ok);
-        Assert.StartsWith("sha256(secret+time) ASCII hex lower", results[0].Variant);
+        Assert.StartsWith("sha256(time+secret) ASCII hex lower", results[0].Variant);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class MashhadSsoApiClientTests
         Assert.False(results[0].Ok);
         Assert.Equal(403, results[0].ErrorCode);
         Assert.True(results[1].Ok);
-        Assert.Equal("sha256(secret+time) ASCII hex upper", results[1].Variant);
+        Assert.Equal("sha256(time+secret) ASCII hex upper", results[1].Variant);
     }
 
     [Fact]

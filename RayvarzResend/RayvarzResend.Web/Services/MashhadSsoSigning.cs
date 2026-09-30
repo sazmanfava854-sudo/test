@@ -4,7 +4,7 @@ namespace RayvarzResend.Web.Services;
 /// منطق بند ۳ سند «اتصال فنی به درگاه احراز هویت» (صفحه ۲۰):
 /// ۱) apiName = نام کاربری کاربردی برنامه
 /// ۲) requestTime = خروجی getCurrentTime (تنها سرویس بدون این هدرها)
-/// ۳) apiSecret = SHA256(SecretKey + requestTime) — SecretKey همان ClientSecret ثبت‌شده
+/// ۳) apiSecret = SHA256(requestTime + SecretKey) با ASCII (RuleEngine) — SecretKey همان ClientSecret
 /// برای loginKey فیلدهای بدنه Time و Hash همان requestTime و همان مقدار apiSecret هستند.
 /// </summary>
 public static class MashhadSsoSigning
@@ -13,10 +13,12 @@ public static class MashhadSsoSigning
         string apiName,
         string secretKey,
         string requestTime,
-        string? hashEncoding)
+        string? hashEncoding,
+        string? concatOrder = null)
     {
         var time = (requestTime ?? "").Trim();
-        var apiSecret = SsoApiSecretHash.ComputeApiSecret(secretKey, time, hashEncoding);
+        var order = string.IsNullOrWhiteSpace(concatOrder) ? "TimeSecret" : concatOrder.Trim();
+        var apiSecret = SsoApiSecretHash.ComputeApiSecret(secretKey, time, hashEncoding, order);
         return new MashhadSsoSigningMaterial(
             (apiName ?? "").Trim(),
             time,
