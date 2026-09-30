@@ -25,16 +25,15 @@ function Get-Hash([string]$Time, [string]$Secret) {
 }
 
 function Build-RuleEngineBodyJson([string]$Time, [string]$Hash, [string]$Cid) {
-    # همان ترتیب و شکل SSO.cs در RuleEngine
-    return @"
-{
- ""Time"": "$Time",
-""Hash"": "$Hash",
-""ClientId"": "$Cid",
-""State"": ""test"",
-""UserType"": 0,
-""DomainID"": 0
-} "
+    $nl = [Environment]::NewLine
+    return '{' + $nl +
+        ' ""Time"": "' + $Time + '",' + $nl +
+        '""Hash"": "' + $Hash + '",' + $nl +
+        '""ClientId"": "' + $Cid + '",' + $nl +
+        '""State"": ""test""' + ',' + $nl +
+        '""UserType"": 0,' + $nl +
+        '""DomainID"": 0' + $nl +
+        '} '
 }
 
 function Invoke-LoginKeyCurl(
@@ -91,7 +90,7 @@ else {
 
 $hash = Get-Hash $RequestTime $SecretKey
 Write-Host "requestTime = $RequestTime"
-Write-Host "apiSecret   = $hash (SHA256 ASCII hex lower, Secret+time — same as RuleEngine SSO.cs)"
+Write-Host "apiSecret   = $hash (SHA256 ASCII hex lower, Secret+time = RuleEngine SSO.cs)"
 
 if ($RuleEngineJsonBody) {
     $bodyJson = Build-RuleEngineBodyJson $RequestTime $hash $ClientId
