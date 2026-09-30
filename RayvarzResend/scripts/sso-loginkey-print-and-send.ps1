@@ -39,26 +39,40 @@ function ConvertFrom-SsoGetCurrentTimeBody([string]$Raw) {
 function Get-SsoRequestTime([string]$RootUrl, [int]$TimeoutSec) {
     $uri = $RootUrl + "/api/Authentication/getCurrentTime"
     Enable-SsoTlsSession
+    $quick = [Math]::Min(12, $TimeoutSec)
+
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        try {
+            $text = (& curl.exe --ssl-no-revoke -sS --connect-timeout 15 --max-time $TimeoutSec $uri 2>&1 | Out-String).Trim()
+            $parsed = ConvertFrom-SsoGetCurrentTimeBody $text
+            if ($parsed) {
+                Write-Host "getCurrentTime via curl.exe"
+                return $parsed
+            }
+        }
+        catch { }
+    }
+
     try {
-        $r = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec $TimeoutSec
+        $r = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec $quick
         if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
+            Write-Host "getCurrentTime via Invoke-RestMethod"
             return [string]$r.Data
         }
     }
     catch { }
     try {
-        $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
+        $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $quick -UseBasicParsing
         $parsed = ConvertFrom-SsoGetCurrentTimeBody $wr.Content
-        if ($parsed) { return $parsed }
+        if ($parsed) {
+            Write-Host "getCurrentTime via Invoke-WebRequest"
+            return $parsed
+        }
     }
     catch { }
-    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-    if ($curl) {
-        $text = (& curl.exe --ssl-no-revoke -sS --max-time $TimeoutSec $uri 2>&1 | Out-String).Trim()
-        $parsed = ConvertFrom-SsoGetCurrentTimeBody $text
-        if ($parsed) { return $parsed }
-    }
-    throw "getCurrentTime failed"
+
+    throw "getCurrentTime failed (curl works in CMD? try: curl.exe --ssl-no-revoke `"$uri`")"
 }
 
 function Enable-SsoTlsSession {

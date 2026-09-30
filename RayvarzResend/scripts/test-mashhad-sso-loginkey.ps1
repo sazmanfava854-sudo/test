@@ -72,9 +72,32 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
     $errors = New-Object System.Collections.Generic.List[string]
 
     Enable-SsoTlsSession
+    $quick = [Math]::Min(12, $TimeoutSec)
+
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        try {
+            $out = & curl.exe --ssl-no-revoke -sS --connect-timeout 15 --max-time $TimeoutSec $uri 2>&1
+            $text = ($out | Out-String).Trim()
+            if ($text.Length -gt 0) {
+                $parsed = ConvertFrom-SsoGetCurrentTimeBody $text
+                if ($parsed) {
+                    Write-Host 'getCurrentTime OK via curl.exe (try first on Windows)'
+                    return $parsed
+                }
+            }
+            $errors.Add('curl: empty or bad body: ' + $text)
+        }
+        catch {
+            $errors.Add('curl: ' + $_.Exception.Message)
+        }
+    }
+    else {
+        $errors.Add('curl.exe not found')
+    }
 
     try {
-        $r = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec $TimeoutSec
+        $r = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec $quick
         if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
             Write-Host ('getCurrentTime OK via Invoke-RestMethod')
             return [string]$r.Data
@@ -93,7 +116,7 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
     }
 
     try {
-        $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
+        $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $quick -UseBasicParsing
         $parsed = ConvertFrom-SsoGetCurrentTimeBody $wr.Content
         if ($parsed) {
             Write-Host 'getCurrentTime OK via Invoke-WebRequest (JSON or XML)'
@@ -127,28 +150,6 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
     }
     catch {
         $errors.Add('HttpClient: ' + $_.Exception.Message)
-    }
-
-    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-    if ($curl) {
-        try {
-            $out = & curl.exe --ssl-no-revoke -sS --connect-timeout 20 --max-time $TimeoutSec $uri 2>&1
-            $text = ($out | Out-String).Trim()
-            if ($text.Length -gt 0) {
-                $parsed = ConvertFrom-SsoGetCurrentTimeBody $text
-                if ($parsed) {
-                    Write-Host 'getCurrentTime OK via curl.exe (JSON or XML)'
-                    return $parsed
-                }
-            }
-            $errors.Add('curl: empty or bad body: ' + $text)
-        }
-        catch {
-            $errors.Add('curl: ' + $_.Exception.Message)
-        }
-    }
-    else {
-        $errors.Add('curl.exe not found')
     }
 
     Write-Host ''
