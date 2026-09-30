@@ -36,6 +36,24 @@ if ([string]::IsNullOrWhiteSpace($SecretKey)) {
     throw 'SecretKey is empty after trim (check copy/paste; no trailing spaces).'
 }
 
+function ConvertFrom-SsoGetCurrentTimeBody([string]$Raw) {
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return $null }
+    $t = $Raw.Trim()
+    if ($t.StartsWith('{')) {
+        try {
+            $j = $t | ConvertFrom-Json
+            if ($null -ne $j.Data -and -not [string]::IsNullOrWhiteSpace([string]$j.Data)) {
+                return [string]$j.Data
+            }
+        }
+        catch { }
+    }
+    if ($t -match '<Data[^>]*>([^<]+)</Data>') {
+        return $Matches[1]
+    }
+    return $null
+}
+
 function Enable-SsoTlsSession {
     if ($env:OS -notlike '*Windows*') { return }
     try {
@@ -61,6 +79,13 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
             Write-Host ('getCurrentTime OK via Invoke-RestMethod')
             return [string]$r.Data
         }
+        if ($r -is [string]) {
+            $parsed = ConvertFrom-SsoGetCurrentTimeBody ([string]$r)
+            if ($parsed) {
+                Write-Host 'getCurrentTime OK via Invoke-RestMethod (raw)'
+                return $parsed
+            }
+        }
         $errors.Add('Invoke-RestMethod: empty Data')
     }
     catch {
@@ -69,12 +94,12 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
 
     try {
         $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
-        $r = $wr.Content | ConvertFrom-Json
-        if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
-            Write-Host ('getCurrentTime OK via Invoke-WebRequest')
-            return [string]$r.Data
+        $parsed = ConvertFrom-SsoGetCurrentTimeBody $wr.Content
+        if ($parsed) {
+            Write-Host 'getCurrentTime OK via Invoke-WebRequest (JSON or XML)'
+            return $parsed
         }
-        $errors.Add('Invoke-WebRequest: empty Data')
+        $errors.Add('Invoke-WebRequest: could not read Data from body')
     }
     catch {
         $errors.Add('Invoke-WebRequest: ' + $_.Exception.Message)
@@ -86,14 +111,14 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
         $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
         $task = $client.GetStringAsync($uri)
         if ($task.Wait([TimeSpan]::FromSeconds($TimeoutSec + 5))) {
-            $json = $task.Result
-            $r = $json | ConvertFrom-Json
-            if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
-                Write-Host 'getCurrentTime OK via HttpClient'
+            $body = $task.Result
+            $parsed = ConvertFrom-SsoGetCurrentTimeBody $body
+            if ($parsed) {
+                Write-Host 'getCurrentTime OK via HttpClient (JSON or XML)'
                 $client.Dispose()
-                return [string]$r.Data
+                return $parsed
             }
-            $errors.Add('HttpClient: empty Data')
+            $errors.Add('HttpClient: could not read Data from body')
         }
         else {
             $errors.Add('HttpClient: timeout')
@@ -110,13 +135,13 @@ function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
             $out = & curl.exe --ssl-no-revoke -sS --connect-timeout 20 --max-time $TimeoutSec $uri 2>&1
             $text = ($out | Out-String).Trim()
             if ($text.Length -gt 0) {
-                $r = $text | ConvertFrom-Json
-                if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
-                    Write-Host 'getCurrentTime OK via curl.exe'
-                    return [string]$r.Data
+                $parsed = ConvertFrom-SsoGetCurrentTimeBody $text
+                if ($parsed) {
+                    Write-Host 'getCurrentTime OK via curl.exe (JSON or XML)'
+                    return $parsed
                 }
             }
-            $errors.Add('curl: empty or bad JSON: ' + $text)
+            $errors.Add('curl: empty or bad body: ' + $text)
         }
         catch {
             $errors.Add('curl: ' + $_.Exception.Message)

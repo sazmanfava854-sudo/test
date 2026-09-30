@@ -18,6 +18,55 @@ $ClientId = $ClientId.Trim()
 $SecretKey = $SecretKey.Trim()
 $BaseUrl = $BaseUrl.TrimEnd('/')
 
+function ConvertFrom-SsoGetCurrentTimeBody([string]$Raw) {
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return $null }
+    $t = $Raw.Trim()
+    if ($t.StartsWith('{')) {
+        try {
+            $j = $t | ConvertFrom-Json
+            if ($null -ne $j.Data -and -not [string]::IsNullOrWhiteSpace([string]$j.Data)) {
+                return [string]$j.Data
+            }
+        }
+        catch { }
+    }
+    if ($t -match '<Data[^>]*>([^<]+)</Data>') {
+        return $Matches[1]
+    }
+    return $null
+}
+
+function Get-SsoRequestTime([string]$RootUrl, [int]$TimeoutSec) {
+    $uri = $RootUrl + "/api/Authentication/getCurrentTime"
+    Enable-SsoTlsSession
+    try {
+        $r = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec $TimeoutSec
+        if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
+            return [string]$r.Data
+        }
+    }
+    catch { }
+    try {
+        $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
+        $parsed = ConvertFrom-SsoGetCurrentTimeBody $wr.Content
+        if ($parsed) { return $parsed }
+    }
+    catch { }
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        $text = (& curl.exe --ssl-no-revoke -sS --max-time $TimeoutSec $uri 2>&1 | Out-String).Trim()
+        $parsed = ConvertFrom-SsoGetCurrentTimeBody $text
+        if ($parsed) { return $parsed }
+    }
+    throw "getCurrentTime failed"
+}
+
+function Enable-SsoTlsSession {
+    if ($env:OS -notlike '*Windows*') { return }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    [Net.ServicePointManager]::CheckCertificateRevocationList = $false
+}
+
 function Get-ApiSecretAscii([string]$Secret, [string]$Time) {
     # RuleEngine: requestTime + SecretKey
     $raw = $Time + $Secret
@@ -128,9 +177,9 @@ function Post-LoginKeyWithCurl([string]$Url, [string]$Api, [string]$ReqTime, [st
 Write-Host "========== 0) Quick reachability (GET getCurrentTime) =========="
 try {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $requestTime = [string](Invoke-RestMethod -Uri ($BaseUrl + "/api/Authentication/getCurrentTime") -Method Get -TimeoutSec 30).Data
+    $requestTime = Get-SsoRequestTime -RootUrl $BaseUrl -TimeoutSec 30
     $sw.Stop()
-    Write-Host ("OK in " + $sw.ElapsedMilliseconds + " ms")
+    Write-Host ("OK in " + $sw.ElapsedMilliseconds + " ms (JSON or XML BaseOutput)")
 }
 catch {
     Write-Host ("getCurrentTime FAILED: " + $_.Exception.Message)
