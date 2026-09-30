@@ -33,15 +33,33 @@ public sealed class AppAuthService
         }
 
         await _users.EnsureSchemaAsync(ct);
-        if (await _users.CountUsersAsync(ct) > 0)
-            return;
-
         var username = _config["Auth:BootstrapAdmin:Username"] ?? "admin";
         var password = _config["Auth:BootstrapAdmin:Password"] ?? "Admin@1234";
         var firstName = _config["Auth:BootstrapAdmin:FirstName"] ?? "مدیر";
         var lastName = _config["Auth:BootstrapAdmin:LastName"] ?? "سیستم";
         var nationalId = _config["Auth:BootstrapAdmin:NationalId"] ?? "1234567890";
         var domain = _config["Auth:BootstrapAdmin:Domain"] ?? "admin";
+
+        var existing = await _users.FindByUsernameAsync(username, ct);
+        if (existing != null && existing.Username.Equals(username, StringComparison.OrdinalIgnoreCase))
+        {
+            if (await _users.EnsureAdminDomainIfEmptyAsync(username, domain, ct))
+                _logger.LogInformation("Bootstrap admin domain set to {Domain} for {Username}", domain, username);
+
+            // بازیابی ورود ادمین بدون SSO — رمز و وضعیت ادمین از appsettings اعمال می‌شود
+            if (_config.GetValue("Auth:BootstrapAdmin:ResetPasswordOnStartup", false))
+            {
+                await _users.ResetPasswordAsync(existing.Id, password, ct);
+                await _users.EnsureActiveAdminAsync(existing.Id, ct);
+                _logger.LogWarning(
+                    "Bootstrap admin {Username}: password reset from appsettings (ResetPasswordOnStartup=true) — set it back to false",
+                    username);
+            }
+            return;
+        }
+
+        if (await _users.CountUsersAsync(ct) > 0)
+            _logger.LogWarning("Bootstrap admin {Username} not found among existing users — creating it", username);
 
         await _users.CreateUserAsync(new CreateAppUserRequest
         {

@@ -31,7 +31,11 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(MashhadSsoApiClient.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseProxy = false });
 builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
+builder.Services.PostConfigure<ShimasAuthOptions>(o =>
+    ShimasAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>
@@ -46,6 +50,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = "RayvarzResend.Auth";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        // HTTP داخلی (مثلاً 5.252.216.140:8070/login.html) — کوکی Secure فقط وقتی درخواست HTTPS است
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(builder.Configuration.GetValue("Auth:SessionHours", 8));
         options.Events.OnRedirectToLogin = ctx =>
@@ -57,7 +63,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
         options.Events.OnRedirectToAccessDenied = ctx =>
@@ -69,7 +75,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
             }
 
             var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath());
+            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
     });
@@ -83,6 +89,7 @@ builder.Services.AddSingleton<InMemoryAppUserStore>();
 builder.Services.AddSingleton<AppUserRepository>();
 builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
+builder.Services.AddSingleton<MashhadSsoApiClient>();
 builder.Services.AddSingleton<ShimasAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<AccountingDocWriter>();
@@ -97,14 +104,21 @@ builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
+builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto
+        | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-});
+app.UseForwardedHeaders();
 
 app.Services.GetRequiredService<RayvarzPayloadBuilder>();
 
@@ -136,19 +150,100 @@ app.UseExceptionHandler(handler =>
 app.UseAuthentication();
 app.UseAuthorization();
 
-// index.html بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
+async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationToken ct)
+{
+    var shimas = http.RequestServices.GetRequiredService<ShimasAuthService>();
+    var auth = http.RequestServices.GetRequiredService<AppAuthService>();
+
+    var callback = shimas.ParseCallbackQuery(http.Request.Query);
+    if (!shimas.ValidateReturnedState(http, callback.State))
+    {
+        shimas.ClearSsoFlowCookies(http);
+        var error = Uri.EscapeDataString("state بازگشت SSO معتبر نیست — دوباره وارد شوید");
+        return Results.Redirect($"/login.html?error={error}");
+    }
+
+    var validation = await shimas.ValidateAsync(
+        callback.Username,
+        callback.RefreshToken,
+        callback.Domain,
+        ct);
+    if (!validation.Success)
+    {
+        shimas.ClearSsoFlowCookies(http);
+        var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
+        return Results.Redirect($"/login.html?error={error}");
+    }
+
+    if (!string.IsNullOrWhiteSpace(callback.Domain))
+        validation.Profile.Domain = callback.Domain;
+
+    var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
+    if (user == null)
+    {
+        shimas.ClearSsoFlowCookies(http);
+        var hint = Uri.EscapeDataString(
+            "کاربر در دستیار مالی ثبت نشده یا غیرفعال است — کد ملی/دامین را در مدیریت کاربران اضافه کنید (AutoProvisionUsers=false).");
+        return Results.Redirect($"/login.html?error={hint}");
+    }
+
+    await auth.SignInAsync(http, user, ct);
+    shimas.ClearSsoFlowCookies(http);
+    return Results.Redirect(shimas.ResolvePostLoginRedirect(http));
+}
+
+// بازگشت SSO روی ریشه (https://city.mashhad.ir:5065?refresh_token=...) قبل از هدایت به /auth/login
+app.Use(async (context, next) =>
+{
+    var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+    if (shimas.IsSsoCallbackHttpRequest(context.Request))
+    {
+        try
+        {
+            var result = await TryCompleteSsoCallbackAsync(context, context.RequestAborted);
+            if (result != null)
+                await result.ExecuteAsync(context);
+        }
+        catch (SqlException ex)
+        {
+            var dbResult = AuthDatabaseError(ex);
+            await dbResult.ExecuteAsync(context);
+        }
+
+        return;
+    }
+
+    await next();
+});
+
+static bool RequiresAuthenticatedShell(string path) =>
+    path.Equals("/", StringComparison.OrdinalIgnoreCase)
+    || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase)
+    || ManagementHubPaths.IsHubPage(path);
+
+// index.html و صفحهٔ مدیریت بدون لاگین سرو نشود — جلوگیری از فلش UI قبل از redirect کلاینت
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value ?? "";
-    if (path.Equals("/", StringComparison.OrdinalIgnoreCase)
-        || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
+    var authenticated = context.User?.Identity?.IsAuthenticated == true;
+
+    if (RequiresAuthenticatedShell(path) && !authenticated)
     {
-        if (context.User?.Identity?.IsAuthenticated != true)
-        {
-            var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-            context.Response.Redirect(shimas.ResolveLoginRedirectPath());
-            return;
-        }
+        var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+        var login = shimas.ResolveLoginRedirectPath(context.Request);
+        var target = ManagementHubPaths.IsHubPage(path)
+            ? $"{login}?returnUrl={Uri.EscapeDataString(ManagementHubPaths.CanonicalWithSlash)}"
+            : login;
+        context.Response.Redirect(target);
+        return;
+    }
+
+    // /management ، /MANAGMENT و ... → /management/ (فایل‌های استاتیک با حروف کوچک)
+    if (ManagementHubPaths.NeedsCanonicalRedirect(path))
+    {
+        var rest = ManagementHubPaths.IsRoot(path) ? "" : path[(path.IndexOf('/', 1) + 1)..];
+        context.Response.Redirect(ManagementHubPaths.CanonicalWithSlash + rest + context.Request.QueryString);
+        return;
     }
 
     await next();
@@ -163,9 +258,53 @@ var adminOnly = AuthPolicies.AdminOnly;
 app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
     Results.Ok(shimas.GetStatus(http.Request))).AllowAnonymous();
 
-app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
+app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
 {
-    if (!shimas.Options.PreferSsoLogin)
+    var map = SsoOutboundFieldMap.Describe(shimas.Options);
+    return Results.Ok(new
+    {
+        map,
+        correctExampleFa = new
+        {
+            header_apiName = "FinancialAssistant",
+            body_ClientId = "53db42619cf3C333b13a18D34fbd9111",
+            appsettings = new
+            {
+                ApiName_or_SSOUserName = "FinancialAssistant",
+                ClientId_or_LKey = "53db42619cf3C333b13a18D34fbd9111",
+                ClientSecret = "(SecretKey کامل)",
+                LoginKeyBodyClientIdIsApiName = false
+            }
+        }
+    });
+}).AllowAnonymous();
+
+// دیباگ hash: همان apiName / requestTime / apiSecret و بدنه Time/Hash/ClientId که اپ می‌فرستد (بدون ClientSecret)
+app.MapGet("/api/auth/sso-signing-preview", async (ShimasAuthService shimas, CancellationToken ct) =>
+{
+    var preview = await shimas.PreviewLoginKeySigningAsync(ct);
+    return Results.Ok(preview);
+}).AllowAnonymous();
+
+app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shimas) =>
+{
+    var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
+    return Results.Ok(new
+    {
+        registerInSsoPortal = callback,
+        descriptionFa = "این آدرس را در پورتال SSO برای FinancialAssistant در فیلد «برگشت آدرس» ثبت کنید. بعد از لاگین، SSO کاربر را به این URL با ?username&refresh_token&state برمی‌گرداند.",
+        postLoginAppPath = shimas.Options.PostLoginDefaultPath,
+        sampleLoginUrl = shimas.DescribeLoginStartForPortal(http.Request),
+        clientIdLength = shimas.Options.EffectiveClientId.Length,
+        clientIdConfigured = shimas.Options.EffectiveClientId.Length >= 4,
+        debugLoginCheckUrl = $"{http.Request.Scheme}://{http.Request.Host}/auth/login?debug=1",
+        noteFa = "برگشت آدرس SSO باید https://city.mashhad.ir:5065/management باشد؛ اگر هنوز Profile.aspx می‌بینید، ورود را از city.mashhad.ir:5065 شروع کنید و در Login.aspx پارامتر returnUrl را ببینید."
+    });
+}).AllowAnonymous();
+
+app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
+{
+    if (!shimas.Options.PreferSsoLoginForHost(http.Request.Host.Host))
         return Results.Redirect("/login.html");
 
     if (!shimas.Options.SsoReady)
@@ -175,57 +314,200 @@ app.MapGet("/auth/login", (HttpContext http, ShimasAuthService shimas) =>
         return Results.Content("SSO پیکربندی نشده — ClientId و ClientSecret را در Auth:Shimas تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
     }
 
-    var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
-    var loginUrl = shimas.BuildExternalLoginUrl(callbackUrl);
-    return Results.Redirect(loginUrl);
+    try
+    {
+        var returnPath = http.Request.Query["returnUrl"].FirstOrDefault()
+            ?? shimas.Options.PostLoginDefaultPath;
+        shimas.RememberPostLoginReturn(http, returnPath);
+        var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
+        var clientId = shimas.Options.EffectiveClientId;
+        if (clientId.Length < 4)
+        {
+            var logger = http.RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("ShimasAuth");
+            logger.LogWarning("ClientId/lkey در appsettings خالی یا خیلی کوتاه است ({Length} کاراکتر)", clientId.Length);
+        }
+
+        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
+        if (http.Request.Query.ContainsKey("debug"))
+        {
+            var encoded = Uri.EscapeDataString(callbackUrl);
+            var diag = await shimas.DiagnoseLoginKeyAsync(callbackUrl, ct);
+            var flow = loginUrl.Contains("/Authentication/Start/", StringComparison.OrdinalIgnoreCase)
+                ? "loginKey → Authentication/Start/{loginKey} (روش سند SSO؛ برگشت به آدرس ثبت‌شده در پورتال)"
+                : "Login.aspx?lkey&returnUrl (روش قدیمی؛ اگر SSO روی Profile.aspx بماند، این روش را قبول نمی‌کند)";
+            var body = $"""
+                برگشت آدرس (ثبت SSO) = همان آدرسی که به پورتال دادید:
+                {callbackUrl}
+
+                این مقدار باید داخل آدرس ورود به login.mashhad.ir باشد (پارامتر returnUrl):
+                returnUrl={encoded}
+
+                روش ورود فعلی: {flow}
+
+                آدرس کامل ورود (کپی در مرورگر و قبل از لاگین چک کنید returnUrl هست):
+                {loginUrl}
+
+                ClientId/lkey تنظیم شده: بله (طول {clientId.Length} کاراکتر)
+                ApiName (هدر apiName): {shimas.Options.SigningApiName}
+                ClientId بدنه loginKey: {shimas.Options.EffectiveLoginKeyBodyClientId}
+                LoginKeyBodyClientIdIsApiName: {shimas.Options.LoginKeyBodyClientIdIsApiName}
+                جابه‌جایی احتمالی در appsettings: {SsoOutboundFieldMap.LikelyApiNameAndClientIdSwapped(shimas.Options)}
+                نقشه کامل: /api/auth/sso-outbound-map
+                hash دقیق (هدر+بدنه): /api/auth/sso-signing-preview
+                لاگ hash روی هر درخواست SSO: Auth:Shimas:DebugSigning = true
+                UseLoginKeyOnRedirect: {shimas.Options.UseLoginKeyOnRedirect}
+
+                ---- تست loginKey با SSO ({diag.ApiBaseUrl}) ----
+                getCurrentTime: {(diag.GetCurrentTimeOk ? "OK" : "ناموفق")}
+                loginKey: {(diag.LoginKeyOk ? "OK" : $"ناموفق (code {diag.LoginKeyErrorCode}: {diag.LoginKeyErrorMessage})")}
+                ClientSecret طول: {diag.ClientSecretLength} کاراکتر
+                نتیجه: {diag.Verdict}
+                {(diag.StartUrlSample != null ? "نمونه Start URL: " + diag.StartUrlSample : "")}
+                """;
+            return Results.Content(body, "text/plain; charset=utf-8");
+        }
+
+        return Results.Redirect(loginUrl);
+    }
+    catch (Exception ex)
+    {
+        return Results.Content($"خطا در آماده‌سازی ورود SSO: {ex.Message}", "text/plain; charset=utf-8", statusCode: 503);
+    }
 }).AllowAnonymous();
 
-app.MapGet("/auth/callback", async (
-    HttpContext http,
-    ShimasAuthService shimas,
-    AppAuthService auth,
-    CancellationToken ct) =>
+app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
 {
-    var callback = shimas.ParseCallbackQuery(http.Request.Query);
-    var validation = await shimas.ValidateAsync(callback.Username, callback.RefreshToken, ct);
-    if (!validation.Success)
+    var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
+    var diag = await shimas.DiagnoseLoginKeyAsync(callback, ct);
+    return Results.Ok(new
     {
-        var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
-        return Results.Redirect($"/login.html?error={error}");
+        diag.ApiBaseUrl,
+        diag.ApiName,
+        diag.ClientIdMasked,
+        diag.ClientIdLength,
+        diag.ClientSecretLength,
+        diag.UseLoginKeyOnRedirect,
+        diag.ReturnUrlRegisteredInPortal,
+        diag.GetCurrentTimeOk,
+        diag.LoginKeyOk,
+        diag.LoginKeyErrorCode,
+        diag.LoginKeyErrorMessage,
+        diag.StartUrlSample,
+        verdictFa = diag.Verdict
+    });
+}).AllowAnonymous();
+
+// تشخیص 403 Client info missmatched:
+//   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Shimas) با همهٔ فرمول‌های هش
+//   /api/auth/sso-loginkey-probe?profile=settings → اعتبار RuleEngine از بلوک Settings (SSOUserName/SSOClientId/SSOSecret)
+//   &apiName=<نام>                                → همان تست با apiName دیگر (بدون تغییر appsettings) — Secret هرگز از URL گرفته نمی‌شود
+app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthService shimas, IConfiguration config, CancellationToken ct) =>
+{
+    var profile = (http.Request.Query["profile"].FirstOrDefault() ?? "").Trim().ToLowerInvariant();
+    var apiNameOverride = (http.Request.Query["apiName"].FirstOrDefault() ?? "").Trim();
+    string apiName, clientId, secret, source;
+    if (profile == "settings")
+    {
+        source = "Settings (RuleEngine)";
+        apiName = (config["Settings:SSOUserName"] ?? "").Trim();
+        clientId = (config["Settings:SSOClientId"] ?? "").Trim();
+        secret = (config["Settings:SSOSecret"] ?? "").Trim();
+        if (apiName.Length == 0 || clientId.Length == 0 || secret.Length == 0)
+            return Results.Json(new
+            {
+                error = "بلوک Settings کامل نیست — SSOUserName / SSOClientId / SSOSecret همان RuleEngine را در ریشهٔ appsettings.json بگذارید.",
+                sample = new { Settings = new { SSOUserName = "<apiName از پورتال>", SSOClientId = "<ClientId>", SSOSecret = "<SecretKey>" } }
+            }, statusCode: 400);
+    }
+    else
+    {
+        source = "Auth:Shimas (FinancialAssistant)";
+        apiName = shimas.Options.SigningApiName;
+        clientId = shimas.Options.EffectiveClientId;
+        secret = (shimas.Options.ClientSecret ?? "").Trim();
     }
 
-    if (!string.IsNullOrWhiteSpace(callback.Domain))
-        validation.Profile.Domain = callback.Domain;
+    var configuredApiName = apiName;
+    if (apiNameOverride.Length > 0)
+        apiName = apiNameOverride;
 
-    var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
-    if (user == null)
+    var results = await shimas.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct);
+    var winner = results.FirstOrDefault(r => r.Ok);
+    var ssoUnreachable = winner == null && results.Count == 1 && results[0].Variant == "getCurrentTime";
+    var allClientInfoMismatch = winner == null && !ssoUnreachable
+        && results.All(r => r.ErrorCode == 403 && (r.ErrorMessage ?? "").Contains("missmatch", StringComparison.OrdinalIgnoreCase));
+    return Results.Ok(new
     {
-        var error = Uri.EscapeDataString("کاربر مجاز نیست — با مدیر سیستم تماس بگیرید");
-        return Results.Redirect($"/login.html?error={error}");
-    }
+        source,
+        apiName,
+        apiNameFromQuery = apiNameOverride.Length > 0 ? apiNameOverride : null,
+        configuredApiName,
+        clientIdMasked = SsoCredentialMask.MaskId(clientId),
+        clientIdLength = clientId.Length,
+        secretLength = secret.Length,
+        currentFormula = $"sha256(secret+time) hex {(string.Equals(shimas.Options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower")} (RuleEngine / Auth:Shimas:ApiSecretConcatOrder)",
+        anyOk = winner != null,
+        ssoReachable = !ssoUnreachable,
+        workingFormula = winner?.Variant,
+        verdictFa = winner != null
+            ? (winner.Variant.StartsWith("sha256(secret+time) hex", StringComparison.Ordinal)
+                ? (apiNameOverride.Length > 0
+                    ? $"با apiName «{apiName}» OK شد — همین را در Auth:Shimas:ApiName (SSOUserName) بگذارید."
+                    : "فرمول فعلی درست است — پس مشکل از اعتبار (ClientId/Secret/apiName) است، نه کد.")
+                : winner.Variant.StartsWith("apiName = ClientId", StringComparison.Ordinal)
+                    ? "SSO وقتی apiName = ClientId بود OK شد — Auth:Shimas:ApiName را همان ClientId بگذارید."
+                    : $"SSO با «{winner.Variant}» جواب داد — شکل درخواست/فرمول در کد باید همین شود.")
+            : ssoUnreachable
+                ? "getCurrentTime جواب نداد — SSO از این سرور در دسترس نیست (شبکه/فایروال)؛ هیچ فرمولی آزموده نشد."
+                : allClientInfoMismatch
+                    ? "همهٔ فرمول‌ها عیناً «Client info missmatched» — طبق سند SSO (صفحه ۲۰) یعنی apiName (نام کاربری کاربردی برنامه) یا ClientId/SecretKey با ثبت پورتال یکی نیست؛ نام نمایشی برنامه (مثل FinancialAssistant) apiName نیست. اول خارج از برنامه تست کنید: scripts/test-mashhad-sso-loginkey.ps1 روی سرور؛ بعد &apiName=<نام کاربری پورتال> در همین URL."
+                    : "هیچ فرمولی قبول نشد — apiName/ClientId/SecretKey را با پورتال تطبیق دهید یا scripts/test-mashhad-sso-loginkey.ps1 را روی سروری که به login.mashhad.ir دسترسی دارد اجرا کنید.",
+        results
+    });
+}).AllowAnonymous();
 
-    await auth.SignInAsync(http, user, ct);
-    return Results.Redirect("/");
+app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>
+{
+    try
+    {
+        return await TryCompleteSsoCallbackAsync(http, ct)
+            ?? Results.Redirect("/login.html?error=" + Uri.EscapeDataString("پارامترهای بازگشت SSO ناقص است"));
+    }
+    catch (SqlException ex)
+    {
+        return AuthDatabaseError(ex);
+    }
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
 {
-    if (!shimas.Options.LocalLoginAvailable)
-        return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
-
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest(new { error = "نام کاربری و رمز عبور الزامی است" });
 
-    var user = await auth.ValidateCredentialsAsync(req.Username, req.Password, ct);
-    if (user == null)
-        return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
+    try
+    {
+        var user = await auth.ValidateCredentialsAsync(req.Username, req.Password, ct);
+        if (user == null)
+            return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
 
-    var principal = AppAuthService.BuildPrincipal(user);
-    await http.SignInAsync(
-        CookieAuthenticationDefaults.AuthenticationScheme,
-        principal,
-        auth.CreateAuthProperties(persistent: true));
-    return Results.Ok(await auth.ToSessionAsync(user, ct));
+        if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
+        {
+            if (!shimas.Options.AllowAdminLocalLoginOnPublicHost || !user.IsAdmin)
+                return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
+        }
+
+        var principal = AppAuthService.BuildPrincipal(user);
+        await http.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal,
+            auth.CreateAuthProperties(persistent: true));
+        return Results.Ok(await auth.ToSessionAsync(user, ct));
+    }
+    catch (SqlException ex)
+    {
+        return AuthDatabaseError(ex);
+    }
 }).AllowAnonymous();
 
 app.MapPost("/api/auth/logout", async (HttpContext http) =>
@@ -236,10 +518,17 @@ app.MapPost("/api/auth/logout", async (HttpContext http) =>
 
 app.MapGet("/api/auth/me", async (HttpContext http, AppAuthService auth, CancellationToken ct) =>
 {
-    var session = await auth.GetSessionAsync(http.User, ct);
-    return session == null
-        ? Results.Json(new { error = "نشست منقضی شده" }, statusCode: 401)
-        : Results.Ok(session);
+    try
+    {
+        var session = await auth.GetSessionAsync(http.User, ct);
+        return session == null
+            ? Results.Json(new { error = "نشست منقضی شده" }, statusCode: 401)
+            : Results.Ok(session);
+    }
+    catch (SqlException ex)
+    {
+        return AuthDatabaseError(ex);
+    }
 }).RequireAuthorization(authenticated);
 
 app.MapGet("/api/admin/users", async (AppUserRepository users, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
@@ -798,7 +1087,7 @@ app.MapPost("/api/unsent/plan-batch", async (
 {
     var denied = await DenyUnlessUnsent(http, perms, ct);
     if (denied != null) return denied;
-    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+    if (req == null || ((req.Targets == null || req.Targets.Count == 0) && (req.FicheNos == null || req.FicheNos.Count == 0)))
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
@@ -819,11 +1108,42 @@ app.MapPost("/api/unsent/send-batch", async (
 {
     var denied = await DenyUnlessUnsent(http, perms, ct);
     if (denied != null) return denied;
-    if (req?.FicheNos == null || req.FicheNos.Count == 0)
+    if (req == null || ((req.Targets == null || req.Targets.Count == 0) && (req.FicheNos == null || req.FicheNos.Count == 0)))
         return Results.BadRequest(new { error = "حداقل یک فیش انتخاب کنید" });
     try
     {
         return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/unsent/lookup-by-bill-pay", async (
+    UnsentBillPayLookupRequest? req,
+    UnsentFicheService unsent,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessUnsent(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    var validation = UnsentBillPayLookupHelper.ValidateRequest(req);
+    if (validation != null)
+        return Results.BadRequest(new { error = validation });
+    try
+    {
+        var result = await unsent.LookupByBillPayAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
     }
     catch (Exception ex)
     {
@@ -1081,6 +1401,13 @@ app.MapPost("/api/bank-inquiry/diagnose", async (
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
+
+static IResult AuthDatabaseError(SqlException ex) =>
+    Results.Json(new
+    {
+        error = "خطا در اتصال به پایگاه کاربران (AppAuth). ConnectionStrings:AppAuth را بررسی کنید.",
+        detail = ex.Message
+    }, statusCode: 503);
 
 static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {

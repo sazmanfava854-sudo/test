@@ -1,13 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۲۵)** — واسط Accounting، تهاتر تک‌فیش، جفت Payable، poll incmdocsys.
+**نسخه آخر (تحویل: ۲۶)** — اکسل دسته‌ای mixed Income/Duty، دروازه epay، واسط Accounting، تهاتر تک‌فیش.
 
 | دریافت | آدرس |
 |--------|------|
-| **لیبل نسخه آخر** | Tag `rayvarzresend-noskhe-akhar` |
-| Zip publish | `RayvarzResend-25.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
-| شاخه | `cursor/tahator-accounting-doc-ffcb` |
-| جزئیات | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
+| **Tag نسخه** | `rayvarzresend-unified-excel-epay-v26` |
+| Zip publish | `RayvarzResend-26.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| Zip سورس | `RayvarzResend-source.zip` |
+| شاخه | `cursor/unified-excel-epay-release-ffcb` |
+| جزئیات | [`DELIVERY-v26.md`](DELIVERY-v26.md) |
+| v25 قبلی | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
 | v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
 | v23 جزئیات | [`DELIVERY-v23.md`](DELIVERY-v23.md) |
 | v22 غیربحرانی | [`DELIVERY-v22.md`](DELIVERY-v22.md) |
@@ -15,7 +17,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 25` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 26` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مدیریت — دستیار مالی</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css?v=43" />
+  <link rel="stylesheet" href="management.css?v=1" />
+  <style>
+    body:not(.hub-authenticated) .container,
+    body:not(.hub-authenticated) .page-bg {
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-bg" aria-hidden="true"></div>
+  <div class="container hub-container">
+    <header class="hero">
+      <div class="hero-top">
+        <div class="hero-brand">
+          <p class="brand-name">مدیریت دستیار مالی</p>
+          <p class="hub-subtitle">فرم‌هایی که برای شما فعال است در این صفحه نمایش داده می‌شود.</p>
+        </div>
+        <div class="hero-user" id="heroUser" hidden>
+          <div class="user-meta">
+            <span id="userDisplayName" class="user-name"></span>
+            <span id="userRoleBadge" class="user-badge"></span>
+          </div>
+          <button id="btnLogout" class="btn secondary btn-sm" type="button">خروج</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="hubEmpty" class="card hub-empty" hidden>
+      <p>برای حساب شما هیچ فرمی تعریف نشده است. با ادمین تماس بگیرید.</p>
+    </div>
+
+    <div id="hubGrid" class="hub-grid" role="list" hidden></div>
+  </div>
+  <script src="management.js?v=2" type="module"></script>
+</body>
+</html>

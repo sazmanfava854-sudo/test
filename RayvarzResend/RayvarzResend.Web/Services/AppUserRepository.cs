@@ -45,6 +45,7 @@ public sealed class AppUserRepository
                     NationalId      NVARCHAR(20)     NOT NULL CONSTRAINT DF_AppUser_NationalId DEFAULT (N''),
                     Position        NVARCHAR(200)    NOT NULL CONSTRAINT DF_AppUser_Position DEFAULT (N''),
                     District        NVARCHAR(50)     NOT NULL CONSTRAINT DF_AppUser_District DEFAULT (N''),
+                    [Domain]        NVARCHAR(100)    NOT NULL CONSTRAINT DF_AppUser_Domain DEFAULT (N''),
                     IsAdmin         BIT              NOT NULL CONSTRAINT DF_AppUser_IsAdmin DEFAULT (0),
                     IsActive        BIT              NOT NULL CONSTRAINT DF_AppUser_IsActive DEFAULT (1),
                     CreatedAtUtc    DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUser_Created DEFAULT (SYSUTCDATETIME()),
@@ -90,15 +91,32 @@ public sealed class AppUserRepository
             IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
                 ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
                     CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
+            """;
+        await using (var cmd = new SqlCommand(sql, conn))
+            await cmd.ExecuteNonQueryAsync(ct);
 
+        // ستون جدید در همان بچ قابل ارجاع نیست؛ ایندکس و UPDATE بعد از ALTER اجرا می‌شوند.
+        const string domainSql = """
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE name = N'UQ_AppUser_Domain' AND object_id = OBJECT_ID(N'dbo.AppUser'))
                 CREATE UNIQUE INDEX UQ_AppUser_Domain ON dbo.AppUser ([Domain])
                     WHERE [Domain] <> N'';
+
+            UPDATE dbo.AppUser
+            SET [Domain] = N'0925569917'
+            WHERE (NationalId = N'0925569917' OR Username = N'0925569917')
+              AND ISNULL([Domain], N'') = N''
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM dbo.AppUser x
+                  WHERE x.[Domain] = N'0925569917'
+                    AND x.NationalId <> N'0925569917'
+                    AND x.Username <> N'0925569917');
             """;
-        await using var cmd = new SqlCommand(sql, conn);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using (var domainCmd = new SqlCommand(domainSql, conn))
+            await domainCmd.ExecuteNonQueryAsync(ct);
+
         _schemaEnsured = true;
         _logger.LogInformation("AppUser schema ensured");
     }
@@ -116,6 +134,43 @@ public sealed class AppUserRepository
         return result is int i ? i : Convert.ToInt32(result);
     }
 
+    /// <summary>ادمین موجود که قبل از ستون Domain ساخته شده، دامین خالی می‌گیرد.</summary>
+    public async Task<bool> EnsureAdminDomainIfEmptyAsync(string username, string domain, CancellationToken ct = default)
+    {
+        domain = AppUserDomainNormalizer.Normalize(domain);
+        username = (username ?? "").Trim();
+        if (!AppUserDomainNormalizer.IsValid(domain) || username.Length == 0)
+            return false;
+
+        if (_useInMemory)
+            return _memory.EnsureAdminDomainIfEmpty(username, domain);
+
+        await EnsureSchemaAsync(ct);
+        const string sql = """
+            UPDATE dbo.AppUser
+            SET [Domain] = @domain
+            WHERE Id = (
+                SELECT TOP 1 Id
+                FROM dbo.AppUser
+                WHERE IsAdmin = 1
+                  AND ISNULL([Domain], N'') = N''
+                  AND (
+                    Username = @username
+                    OR NOT EXISTS (
+                        SELECT 1 FROM dbo.AppUser named
+                        WHERE named.IsAdmin = 1 AND named.Username = @username))
+                ORDER BY CASE WHEN Username = @username THEN 0 ELSE 1 END, CreatedAtUtc)
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.AppUser taken WHERE taken.[Domain] = @domain);
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@domain", domain);
+        cmd.Parameters.AddWithValue("@username", username);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
     public async Task<AppUserRecord?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
         if (_useInMemory)
@@ -126,7 +181,8 @@ public sealed class AppUserRepository
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
-            WHERE Username = @u
+            WHERE Username = @u OR NationalId = @u
+            ORDER BY CASE WHEN Username = @u THEN 0 ELSE 1 END, IsActive DESC, CreatedAtUtc
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -152,12 +208,14 @@ public sealed class AppUserRepository
                    IsAdmin, IsActive, CreatedAtUtc
             FROM dbo.AppUser
             WHERE (@d <> N'' AND [Domain] = @d)
+               OR (@d <> N'' AND CHARINDEX(N',' + @d + N',', N',' + REPLACE([Domain], N' ', N'') + N',') > 0)
                OR (@d <> N'' AND Username = @d)
                OR (@raw <> N'' AND Username = @raw)
                OR (@raw <> N'' AND NationalId = @raw)
                OR (@d <> N'' AND NationalId = @d)
             ORDER BY CASE
                 WHEN @d <> N'' AND [Domain] = @d THEN 0
+                WHEN @d <> N'' AND CHARINDEX(N',' + @d + N',', N',' + REPLACE([Domain], N' ', N'') + N',') > 0 THEN 0
                 WHEN @d <> N'' AND Username = @d THEN 1
                 WHEN @raw <> N'' AND Username = @raw THEN 2
                 ELSE 3 END
@@ -392,9 +450,9 @@ public sealed class AppUserRepository
             user.IsActive = req.IsActive.Value;
         if (req.Domain != null)
         {
-            var domain = AppUserDomainNormalizer.Normalize(req.Domain);
-            if (!AppUserDomainNormalizer.IsValid(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
+            var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
+            if (!AppUserDomainNormalizer.IsValidList(domain))
+                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
             user.Domain = domain;
         }
 
@@ -447,6 +505,23 @@ public sealed class AppUserRepository
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
             throw new InvalidOperationException("کاربر یافت نشد");
+    }
+
+    public async Task EnsureActiveAdminAsync(Guid id, CancellationToken ct = default)
+    {
+        if (_useInMemory)
+        {
+            _memory.EnsureActiveAdmin(id);
+            return;
+        }
+
+        await EnsureSchemaAsync(ct);
+        const string sql = "UPDATE dbo.AppUser SET IsAdmin = 1, IsActive = 1 WHERE Id = @id";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", id);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     private async Task<List<(Guid UserId, Guid GroupId)>> ListAllGroupMembershipsAsync(CancellationToken ct)

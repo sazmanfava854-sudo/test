@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=40" />
+  <link rel="stylesheet" href="css/style.css?v=43" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -24,6 +24,7 @@
         <div class="hero-brand">
           <div>
             <p class="brand-name">دستیار مالی</p>
+            <p class="field-hint" style="margin:4px 0 0"><a href="/management/">بازگشت به صفحهٔ مدیریت</a></p>
           </div>
         </div>
         <div class="hero-user" id="heroUser" hidden>
@@ -39,14 +40,14 @@
     <div id="appToastHost" class="app-toast-host" aria-live="polite"></div>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
+      <button type="button" class="main-tab perm-rayvarz active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
-    <div id="tabUnsent" class="tab-panel active" role="tabpanel">
+    <div id="tabUnsent" class="tab-panel perm-rayvarz active" role="tabpanel">
     <section class="card card-enter rayvarz-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📤</span>
@@ -151,8 +152,13 @@
       </div>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
+        <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
+        <label for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
+        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
+      </div>
+      <div class="unsent-excel-status-row">
+        <span id="unsentExcelStatus" class="installment-excel-status" aria-live="polite">فایل اکسل انتخاب نشده</span>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
         <div class="unsent-toolbar">
@@ -162,20 +168,17 @@
           </label>
           <span id="unsentCountLabel" class="unsent-count"></span>
         </div>
-        <div class="table-wrap">
-          <table id="unsentTable">
+        <div class="table-wrap installment-preview-table-wrap">
+          <table id="unsentTable" class="installment-preview-table unsent-bulk-table">
             <thead>
               <tr>
-                <th class="col-check"></th>
+                <th class="col-check" scope="col" aria-label="انتخاب"></th>
                 <th>نوع</th>
-                <th>شماره فرآیند</th>
-                <th>کد نوسازی</th>
-                <th>شناسه قبض</th>
-                <th>شناسه پرداخت</th>
-                <th>تاریخ پرداخت بانک</th>
-                <th>تاریخ پرداخت دستی</th>
-                <th>شماره فیش</th>
-                <th>مبلغ</th>
+                <th class="col-unsent-bill">شناسه قبض</th>
+                <th class="col-unsent-pay">شناسه پرداخت</th>
+                <th class="col-unsent-fiche">شماره فиш</th>
+                <th class="col-installment-cost">مبلغ</th>
+                <th class="col-unsent-fill" aria-hidden="true"></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -195,7 +198,7 @@
           </label>
         </div>
       </div>
-      <pre id="unsentResultBox" class="code-block" hidden></pre>
+      <pre id="unsentResultBox" class="result-log" hidden></pre>
       </div>
     </section>
 
@@ -657,7 +660,6 @@
           <label class="field field-required">
             <span class="field-label">دامین</span>
             <input id="newUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh" dir="ltr" />
-            <span class="field-hint">نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
@@ -717,7 +719,7 @@
             </label>
             <label class="field field-required">
               <span class="field-label">دامین</span>
-              <input id="editUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh" dir="ltr" />
+              <input id="editUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh یا hoseine-sh,sadathoseini-sh" dir="ltr" />
             </label>
             <label class="field field-required">
               <span class="field-label">گروه کاربری</span>
@@ -741,7 +743,7 @@
     </div>
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=76"></script>
+  <script src="lib/xlsx/xlsx.full.min.js"></script>
+  <script src="js/app.js?v=92"></script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 namespace RayvarzResend.Web;
 
-/// <summary>نسخه آخر — v25: واسط Accounting + تهاتر تک‌فیش + جفت Payable + poll incmdocsys.</summary>
+/// <summary>نسخه آخر — v26: اکسل دسته‌ای (جستجوی mixed Income/Duty) + دروازه epay + v25 Accounting/تهاتر.</summary>
 public static class ReleaseInfo
 {
-    public const int Number = 25;
-    public const string Label = "25";
-    public const string Tag = "rayvarzresend-noskhe-akhar";
+    public const int Number = 26;
+    public const string Label = "26";
+    public const string Tag = "rayvarzresend-unified-excel-epay-v26";
     public const string DisplayName = "نسخه آخر";
 }
