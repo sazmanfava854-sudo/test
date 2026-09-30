@@ -36,22 +36,120 @@ if ([string]::IsNullOrWhiteSpace($SecretKey)) {
     throw 'SecretKey is empty after trim (check copy/paste; no trailing spaces).'
 }
 
-if ($env:OS -like '*Windows*') {
+function Enable-SsoTlsSession {
+    if ($env:OS -notlike '*Windows*') { return }
     try {
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-        [System.Net.ServicePointManager]::CheckCertificateRevocationList = $false
-        Write-Host 'TLS: revocation check off for this session.'
+        # PowerShell 5.1: TLS 1.2 only (avoid SSL3/TLS1.0 handshake failures)
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        [Net.ServicePointManager]::CheckCertificateRevocationList = $false
+        Write-Host 'TLS: TLS 1.2, revocation check off for this session.'
     }
     catch {
         Write-Host ('TLS note: ' + $_.Exception.Message)
     }
 }
 
+function Get-SsoCurrentTime([string]$RootUrl, [int]$TimeoutSec) {
+    $uri = $RootUrl + '/api/Authentication/getCurrentTime'
+    $errors = New-Object System.Collections.Generic.List[string]
+
+    Enable-SsoTlsSession
+
+    try {
+        $r = Invoke-RestMethod -Uri $uri -Method Get -TimeoutSec $TimeoutSec
+        if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
+            Write-Host ('getCurrentTime OK via Invoke-RestMethod')
+            return [string]$r.Data
+        }
+        $errors.Add('Invoke-RestMethod: empty Data')
+    }
+    catch {
+        $errors.Add('Invoke-RestMethod: ' + $_.Exception.Message)
+    }
+
+    try {
+        $wr = Invoke-WebRequest -Uri $uri -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing
+        $r = $wr.Content | ConvertFrom-Json
+        if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
+            Write-Host ('getCurrentTime OK via Invoke-WebRequest')
+            return [string]$r.Data
+        }
+        $errors.Add('Invoke-WebRequest: empty Data')
+    }
+    catch {
+        $errors.Add('Invoke-WebRequest: ' + $_.Exception.Message)
+    }
+
+    try {
+        Add-Type -AssemblyName System.Net.Http -ErrorAction Stop | Out-Null
+        $client = New-Object System.Net.Http.HttpClient
+        $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+        $task = $client.GetStringAsync($uri)
+        if ($task.Wait([TimeSpan]::FromSeconds($TimeoutSec + 5))) {
+            $json = $task.Result
+            $r = $json | ConvertFrom-Json
+            if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
+                Write-Host 'getCurrentTime OK via HttpClient'
+                $client.Dispose()
+                return [string]$r.Data
+            }
+            $errors.Add('HttpClient: empty Data')
+        }
+        else {
+            $errors.Add('HttpClient: timeout')
+        }
+        $client.Dispose()
+    }
+    catch {
+        $errors.Add('HttpClient: ' + $_.Exception.Message)
+    }
+
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        try {
+            $out = & curl.exe --ssl-no-revoke -sS --connect-timeout 20 --max-time $TimeoutSec $uri 2>&1
+            $text = ($out | Out-String).Trim()
+            if ($text.Length -gt 0) {
+                $r = $text | ConvertFrom-Json
+                if ($null -ne $r.Data -and -not [string]::IsNullOrWhiteSpace([string]$r.Data)) {
+                    Write-Host 'getCurrentTime OK via curl.exe'
+                    return [string]$r.Data
+                }
+            }
+            $errors.Add('curl: empty or bad JSON: ' + $text)
+        }
+        catch {
+            $errors.Add('curl: ' + $_.Exception.Message)
+        }
+    }
+    else {
+        $errors.Add('curl.exe not found')
+    }
+
+    Write-Host ''
+    Write-Host 'getCurrentTime FAILED from this PC. Tried:'
+    foreach ($e in $errors) { Write-Host ('  - ' + $e) }
+    Write-Host ''
+    Write-Host 'Checks:'
+    Write-Host '  1) Browser: ' + $uri
+    Write-Host '  2) CMD: curl.exe --ssl-no-revoke "' + $uri + '"'
+    Write-Host '  3) VPN / proxy / antivirus SSL scan — try another network (mobile hotspot).'
+    Write-Host '  4) If PS shows ">>" you have unclosed quotes — press Ctrl+C and paste as ONE line.'
+    throw 'Cannot reach login.mashhad.ir getCurrentTime'
+}
+
+Enable-SsoTlsSession
+
 if ([string]::IsNullOrWhiteSpace($ClientId) -and -not [string]::IsNullOrWhiteSpace($env:MASHHAD_SSO_CLIENT_ID)) {
     $ClientId = $env:MASHHAD_SSO_CLIENT_ID.Trim()
 }
 if ([string]::IsNullOrWhiteSpace($ClientId)) {
-    throw 'ClientId required for body (e.g. 53db42619cf3C333b13a18D34fbd9111). Header apiName = -ApiName.'
+    throw @'
+ClientId required for loginKey body (GUID from SSO portal).
+PowerShell example (single line):
+  .\test-mashhad-sso-loginkey.ps1 -SecretKey "..." -ClientId "53db42619cf3C333b13a18D34fbd9111" -ApiName "FinancialAssistant"
+In PowerShell use backtick ` for line break, NOT caret ^ (that is CMD only).
+'@
 }
 
 function Get-Sha256Hex([string]$Text, [bool]$Upper) {
@@ -158,9 +256,7 @@ function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$R
 }
 
 Write-Host '== 1) GET getCurrentTime =='
-$timeResp = Invoke-RestMethod -Uri ($BaseUrl + '/api/Authentication/getCurrentTime') -Method Get -TimeoutSec 60
-$requestTime = [string]$timeResp.Data
-if ([string]::IsNullOrWhiteSpace($requestTime)) { throw 'getCurrentTime returned no Data' }
+$requestTime = Get-SsoCurrentTime -RootUrl $BaseUrl -TimeoutSec $RequestTimeoutSec
 Write-Host ('Data (will become header requestTime and body Time): ' + $requestTime)
 
 $attempts = @(
