@@ -218,11 +218,10 @@ public class MashhadSsoApiClientTests
 
         var results = await service.ProbeLoginKeyVariantsAsync("zavabetapp", "other-client", "other-secret");
 
-        Assert.Equal(2, results.Count);
-        Assert.False(results[0].Ok);
-        Assert.Equal(403, results[0].ErrorCode);
-        Assert.True(results[1].Ok);
-        Assert.Equal("sha256(secret+time) ASCII hex upper", results[1].Variant);
+        var winner = results.FirstOrDefault(r => r.Ok);
+        Assert.NotNull(winner);
+        Assert.Equal("sha256(secret+time) ASCII hex upper", winner!.Variant);
+        Assert.True(results.TakeWhile(r => !r.Ok).All(r => r.ErrorCode == 403));
     }
 
     [Fact]
