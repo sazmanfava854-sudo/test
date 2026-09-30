@@ -28,7 +28,7 @@ public static class SsoApiSecretHash
 
     /// <summary>
     /// رشتهٔ ورودی هش قبل از SHA256.
-    /// پیش‌فرض RuleEngine: requestTime + SecretKey (TimeSecret).
+    /// پیش‌فرض RuleEngine (SSO.cs): SSOSecret + requestTime.
     /// </summary>
     public static string BuildConcatRaw(string secret, string requestTime, string? concatOrder = null)
     {
@@ -37,9 +37,15 @@ public static class SsoApiSecretHash
         return UsesSecretBeforeTime(concatOrder) ? s + t : t + s;
     }
 
-    public static bool UsesSecretBeforeTime(string? concatOrder) =>
-        string.Equals(concatOrder, "SecretTime", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(concatOrder, "secret+time", StringComparison.OrdinalIgnoreCase);
+    public static bool UsesSecretBeforeTime(string? concatOrder)
+    {
+        if (string.IsNullOrWhiteSpace(concatOrder)
+            || string.Equals(concatOrder, "SecretTime", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(concatOrder, "secret+time", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
 
     /// <summary>apiSecret: SHA256(concat) با ASCII و hex — ترتیب concat از concatOrder.</summary>
     public static string ComputeApiSecret(string secret, string requestTime, string? encoding, string? concatOrder = null)
@@ -53,9 +59,9 @@ public static class SsoApiSecretHash
     /// <summary>فرمول‌های محتمل هدر apiSecret — برای تشخیص وقتی SSO 403 می‌دهد.</summary>
     public static IReadOnlyList<(string Name, Func<string, string, string> Compute)> ProbeVariants { get; } =
     [
+        ("sha256(secret+time) ASCII hex lower", (s, t) => Sha256AsciiHexLower(s + t)),
         ("sha256(time+secret) ASCII hex lower", (s, t) => Sha256AsciiHexLower(t + s)),
         ("sha256(time+secret) ASCII hex upper", (s, t) => Sha256AsciiHexUpper(t + s)),
-        ("sha256(secret+time) ASCII hex lower", (s, t) => Sha256AsciiHexLower(s + t)),
         ("sha256(secret+time) ASCII hex upper", (s, t) => Sha256AsciiHexUpper(s + t)),
         ("sha256(secret+time) UTF8 hex lower", (s, t) => Sha256Utf8HexLower(s + t)),
         ("sha256(secret+time) base64 UTF8", (s, t) => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(s + t)))),

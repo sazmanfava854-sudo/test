@@ -5,6 +5,7 @@ param(
     [Parameter(Mandatory)][string]$SecretKey,
     [string]$BaseUrl = "https://login.mashhad.ir",
     [int]$TimeoutSec = 45,
+    [string]$RequestTime = "",
     [switch]$SkipPost,
     [switch]$UseCurl
 )
@@ -82,8 +83,8 @@ function Enable-SsoTlsSession {
 }
 
 function Get-ApiSecretAscii([string]$Secret, [string]$Time) {
-    # RuleEngine: requestTime + SecretKey
-    $raw = $Time + $Secret
+    # RuleEngine SSO.cs: SSOSecret + requestTime
+    $raw = $Secret + $Time
     $bytes = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($raw))
     ($bytes | ForEach-Object { $_.ToString("x2") }) -join ''
 }
@@ -189,16 +190,22 @@ function Post-LoginKeyWithCurl([string]$Url, [string]$Api, [string]$ReqTime, [st
 }
 
 Write-Host "========== 0) Quick reachability (GET getCurrentTime) =========="
-try {
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    $requestTime = Get-SsoRequestTime -RootUrl $BaseUrl -TimeoutSec 30
-    $sw.Stop()
-    Write-Host ("OK in " + $sw.ElapsedMilliseconds + " ms (JSON or XML BaseOutput)")
+if (-not [string]::IsNullOrWhiteSpace($RequestTime)) {
+    $requestTime = $RequestTime.Trim()
+    Write-Host ("Using -RequestTime from command line: " + $requestTime)
 }
-catch {
-    Write-Host ("getCurrentTime FAILED: " + $_.Exception.Message)
-    Write-Host "If GET fails, POST will not work from this network."
-    exit 1
+else {
+    try {
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $requestTime = Get-SsoRequestTime -RootUrl $BaseUrl -TimeoutSec 30
+        $sw.Stop()
+        Write-Host ("OK in " + $sw.ElapsedMilliseconds + " ms (JSON or XML BaseOutput)")
+    }
+    catch {
+        Write-Host ("getCurrentTime FAILED: " + $_.Exception.Message)
+        Write-Host "Tip: curl time then pass -RequestTime 1790..."
+        exit 1
+    }
 }
 Write-Host "requestTime = $requestTime"
 

@@ -8,7 +8,7 @@ public class SsoApiSecretHashTests
     [Fact]
     public void Sha256AsciiHexLower_matches_rule_engine_style_loop()
     {
-        const string password = "1700000000secret";
+        const string password = "secret1700000000";
         using var crypt = System.Security.Cryptography.SHA256.Create();
         var crypto = crypt.ComputeHash(Encoding.ASCII.GetBytes(password));
         var expected = string.Empty;
@@ -22,7 +22,8 @@ public class SsoApiSecretHashTests
     [Fact]
     public void BuildConcatRaw_TimeSecret_puts_request_time_first()
     {
-        Assert.Equal("1700000000secret", SsoApiSecretHash.BuildConcatRaw("secret", "1700000000", "TimeSecret"));
+        Assert.Equal("secret1700000000", SsoApiSecretHash.BuildConcatRaw("secret", "1700000000", null));
         Assert.Equal("secret1700000000", SsoApiSecretHash.BuildConcatRaw("secret", "1700000000", "SecretTime"));
+        Assert.Equal("1700000000secret", SsoApiSecretHash.BuildConcatRaw("secret", "1700000000", "TimeSecret"));
     }
 }

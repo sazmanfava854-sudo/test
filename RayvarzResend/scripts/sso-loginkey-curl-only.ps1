@@ -15,7 +15,7 @@ $BaseUrl = $BaseUrl.TrimEnd('/')
 $uriTime = $BaseUrl + "/api/Authentication/getCurrentTime"
 
 function Get-Hash([string]$Time, [string]$Secret) {
-    $raw = $Time + $Secret
+    $raw = $Secret + $Time
     $bytes = [Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($raw))
     ($bytes | ForEach-Object { $_.ToString("x2") }) -join ''
 }

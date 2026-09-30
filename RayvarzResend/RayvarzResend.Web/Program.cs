@@ -446,12 +446,12 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
         clientIdMasked = SsoCredentialMask.MaskId(clientId),
         clientIdLength = clientId.Length,
         secretLength = secret.Length,
-        currentFormula = $"sha256(time+secret) hex {(string.Equals(shimas.Options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower")} (Auth:Shimas:ApiSecretConcatOrder)",
+        currentFormula = $"sha256(secret+time) hex {(string.Equals(shimas.Options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower")} (RuleEngine / Auth:Shimas:ApiSecretConcatOrder)",
         anyOk = winner != null,
         ssoReachable = !ssoUnreachable,
         workingFormula = winner?.Variant,
         verdictFa = winner != null
-            ? (winner.Variant.StartsWith("sha256(time+secret) hex", StringComparison.Ordinal)
+            ? (winner.Variant.StartsWith("sha256(secret+time) hex", StringComparison.Ordinal)
                 ? (apiNameOverride.Length > 0
                     ? $"با apiName «{apiName}» OK شد — همین را در Auth:Shimas:ApiName (SSOUserName) بگذارید."
                     : "فرمول فعلی درست است — پس مشکل از اعتبار (ClientId/Secret/apiName) است، نه کد.")

@@ -195,7 +195,7 @@ function Write-SsoOutboundPreview(
     [bool]$Upper,
     [string]$BodyJson
 ) {
-    $raw = $ReqTime + $Secret
+    $raw = $Secret + $ReqTime
     $hash = Get-Sha256Hex $raw $Upper
     $enc = if ($Upper) { 'upper' } else { 'lower' }
 
@@ -206,9 +206,9 @@ function Write-SsoOutboundPreview(
     Write-Host ('requestTime = ' + $ReqTime)
     Write-Host ('apiSecret   = ' + $hash)
     Write-Host '--- Hash formula (SecretKey is NOT sent in header) ---'
-    Write-Host ('SHA256(requestTime + SecretKey) hex ' + $enc)
+    Write-Host ('SHA256(SecretKey + requestTime) hex ' + $enc)
     Write-Host ('SecretKey length = ' + $Secret.Length + ' chars')
-    Write-Host ('Concat preview     = "' + $ReqTime + '" + [SecretKey]')
+    Write-Host ('Concat preview     = [SecretKey] + "' + $ReqTime + '"')
     Write-Host '--- Body JSON (loginKey) ---'
     Write-Host ('Time     = ' + $ReqTime + '  (must equal header requestTime)')
     Write-Host ('Hash     = ' + $hash + '  (must equal header apiSecret)')
@@ -219,7 +219,7 @@ function Write-SsoOutboundPreview(
 }
 
 function Invoke-LoginKey([string]$Api, [string]$Cid, [string]$Secret, [string]$ReqTime, [bool]$Upper) {
-    $raw = $ReqTime + $Secret
+    $raw = $Secret + $ReqTime
     $hash = Get-Sha256Hex $raw $Upper
     $bodyObj = @{
         Time     = $ReqTime
