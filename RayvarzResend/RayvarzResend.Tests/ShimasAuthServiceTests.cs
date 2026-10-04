@@ -175,14 +175,15 @@ public class ShimasAuthServiceTests
         var service = CreateService(options);
         var local = new DefaultHttpContext();
         local.Request.Host = new HostString("localhost", 5000);
-        Assert.Equal("/login.html", service.ResolveLoginRedirectPath(local.Request));
+        Assert.Equal("https://city.mashhad.ir:5065/auth/login", service.ResolveLoginRedirectPath(local.Request));
         Assert.False(service.GetStatus(local.Request).PreferSsoLogin);
         Assert.True(service.GetStatus(local.Request).LocalLoginAvailable);
+        Assert.Equal("https://city.mashhad.ir:5065/auth/login", service.GetStatus(local.Request).PublicSsoLoginUrl);
+        Assert.True(service.UsesPublicSsoLoginUrl(local.Request));
 
         options.AllowSsoOnLoopbackForDebug = true;
         var serviceDebug = CreateService(options);
-        Assert.Equal("/auth/login", serviceDebug.ResolveLoginRedirectPath(local.Request));
-        Assert.True(serviceDebug.GetStatus(local.Request).PreferSsoLogin);
+        Assert.Equal("https://city.mashhad.ir:5065/auth/login", serviceDebug.ResolveLoginRedirectPath(local.Request));
         Assert.True(serviceDebug.GetStatus(local.Request).AllowSsoOnLoopbackForDebug);
 
         var server = new DefaultHttpContext();

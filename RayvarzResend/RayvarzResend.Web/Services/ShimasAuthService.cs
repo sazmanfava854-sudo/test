@@ -44,15 +44,18 @@ public sealed class ShimasAuthService
         var host = request?.Host.Host;
         var allowLoopbackSso = _options.AllowSsoOnLoopbackForDebug && ShimasAuthOptions.IsLoopbackHost(host);
         var preferSso = _options.PreferSsoLoginForHost(host);
+        var loginPath = ResolveLoginPath(request);
+        var publicSso = UsesPublicSsoLoginUrl(request);
         return new ShimasAuthStatusDto
         {
             Enabled = _options.Enabled,
             SsoReady = _options.SsoReady,
             PreferSsoLogin = preferSso,
             AllowSsoOnLoopbackForDebug = allowLoopbackSso,
+            PublicSsoLoginUrl = publicSso ? loginPath : null,
             LocalLoginAvailable = _options.LocalLoginAvailableForHost(host),
             AllowAdminLocalLoginOnPublicHost = _options.AllowAdminLocalLoginOnPublicHost,
-            LoginPath = preferSso ? "/auth/login" : "/login.html",
+            LoginPath = loginPath,
             PostLoginDefaultPath = NormalizePostLoginPath(_options.PostLoginDefaultPath),
             CallbackPath = NormalizeCallbackPath(_options.CallbackPath),
             RegisteredCallbackUrl = request != null ? BuildCallbackAbsoluteUrl(request) : ResolvePublicCallbackUrl(),
@@ -94,9 +97,33 @@ public sealed class ShimasAuthService
 
     public string ResolveLoginRedirectPath(HttpRequest? request = null)
     {
-        if (_options.PreferSsoLoginForHost(request?.Host.Host))
-            return "/auth/login";
-        return "/login.html";
+        return ResolveLoginPath(request);
+    }
+
+    /// <summary>روی localhost با PublicBaseUrl — SSO از همان آدرس ثبت‌شده (مثلاً city.mashhad.ir:5065).</summary>
+    public bool UsesPublicSsoLoginUrl(HttpRequest? request) =>
+        request != null
+        && ShimasAuthOptions.IsLoopbackHost(request.Host.Host)
+        && !string.IsNullOrWhiteSpace(NormalizePublicBaseUrl(_options.PublicBaseUrl))
+        && _options.SsoReady;
+
+    public string ResolveLoginPath(HttpRequest? request)
+    {
+        if (UsesPublicSsoLoginUrl(request))
+            return CombinePublicBaseUrl(request!, "/auth/login");
+
+        return _options.PreferSsoLoginForHost(request?.Host.Host) ? "/auth/login" : "/login.html";
+    }
+
+    public string CombinePublicBaseUrl(HttpRequest request, string relativePath)
+    {
+        var configured = NormalizePublicBaseUrl(_options.PublicBaseUrl);
+        if (string.IsNullOrWhiteSpace(configured))
+            throw new InvalidOperationException("PublicBaseUrl تنظیم نشده است");
+
+        var appPath = ResolveApplicationPath(request);
+        var rel = relativePath.StartsWith('/') ? relativePath : "/" + relativePath;
+        return $"{configured}{appPath}{rel}";
     }
 
     public string BuildExternalLoginUrl(string callbackAbsoluteUrl)

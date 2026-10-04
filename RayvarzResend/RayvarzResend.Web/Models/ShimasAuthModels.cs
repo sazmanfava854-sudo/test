@@ -98,6 +98,8 @@ public sealed class ShimasAuthStatusDto
     public bool PreferSsoLogin { get; set; }
     /// <summary>localhost با AllowSsoOnLoopbackForDebug — دکمه SSO در login.html.</summary>
     public bool AllowSsoOnLoopbackForDebug { get; set; }
+    /// <summary>ورود سازمانی روی آدرس عمومی (PublicBaseUrl) — نه localhost.</summary>
+    public string? PublicSsoLoginUrl { get; set; }
     public bool LocalLoginAvailable { get; set; }
     /// <summary>صفحه login.html روی host عمومی برای ادمین (بدون ریدایرکت اجباری به SSO).</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; }

@@ -306,6 +306,15 @@ app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shim
 
 app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
 {
+    if (shimas.UsesPublicSsoLoginUrl(http.Request))
+    {
+        var target = shimas.ResolveLoginPath(http.Request);
+        var ret = http.Request.Query["returnUrl"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(ret))
+            target += "?returnUrl=" + Uri.EscapeDataString(ret);
+        return Results.Redirect(target);
+    }
+
     if (!shimas.Options.PreferSsoLoginForHost(http.Request.Host.Host))
         return Results.Redirect("/login.html");
 
