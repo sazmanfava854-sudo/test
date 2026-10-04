@@ -41,6 +41,8 @@ public sealed class SsoLoginKeyDiagnostics
     public int? LoginKeyErrorCode { get; set; }
     public string? LoginKeyErrorMessage { get; set; }
     public string? StartUrlSample { get; set; }
+    /// <summary>همان URLی که BuildExternalLoginUrlAsync می‌ساخت — فقط یک بار loginKey برای صفحه debug.</summary>
+    public string? SuggestedLoginUrl { get; set; }
     public string? Error { get; set; }
 
     public string Verdict =>

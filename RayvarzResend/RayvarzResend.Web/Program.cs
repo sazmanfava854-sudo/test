@@ -374,12 +374,12 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
             logger.LogWarning("ClientId/lkey در appsettings خالی یا خیلی کوتاه است ({Length} کاراکتر)", clientId.Length);
         }
 
-        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
         if (http.Request.Query.ContainsKey("debug"))
         {
             var encoded = Uri.EscapeDataString(callbackUrl);
             var diag = await shimas.DiagnoseLoginKeyAsync(callbackUrl, ct);
-            var flow = loginUrl.Contains("/Authentication/Start/", StringComparison.OrdinalIgnoreCase)
+            var debugLoginUrl = diag.SuggestedLoginUrl ?? shimas.BuildExternalLoginUrl(callbackUrl);
+            var flow = debugLoginUrl.Contains("/Authentication/Start/", StringComparison.OrdinalIgnoreCase)
                 ? "loginKey → Authentication/Start/{loginKey} (روش سند SSO؛ برگشت به آدرس ثبت‌شده در پورتال)"
                 : "Login.aspx?lkey&returnUrl (روش قدیمی؛ اگر SSO روی Profile.aspx بماند، این روش را قبول نمی‌کند)";
             var body = $"""
@@ -392,7 +392,7 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 روش ورود فعلی: {flow}
 
                 آدرس کامل ورود (کپی در مرورگر و قبل از لاگین چک کنید returnUrl هست):
-                {loginUrl}
+                {debugLoginUrl}
 
                 ClientId/lkey تنظیم شده: بله (طول {clientId.Length} کاراکتر)
                 ApiName (هدر apiName): {shimas.Options.SigningApiName}
@@ -411,10 +411,13 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 نتیجه: {diag.Verdict}
                 {(diag.Error != null ? "جزئیات: " + diag.Error : "")}
                 {(diag.StartUrlSample != null ? "نمونه Start URL: " + diag.StartUrlSample : "")}
+
+                نکته: هر بار loginKey حداکثر ۲ POST (هش lower سپس upper روی 403) — HTTP 200 با بدنه ErrorCode=403 یعنی خطای JSON، نه موفقیت.
                 """;
             return Results.Content(body, "text/plain; charset=utf-8");
         }
 
+        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
         return Results.Redirect(loginUrl);
     }
     catch (Exception ex)

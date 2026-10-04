@@ -230,6 +230,16 @@ public sealed class MashhadSsoApiClient
             last = Deserialize<MashhadSsoResult<T>>(body)
                 ?? new MashhadSsoResult<T> { ErrorCode = -1, ErrorMessage = body };
 
+            if (_options.DebugSigning && !last.IsSuccess)
+            {
+                _logger.LogInformation(
+                    "SSO response {Path}: HTTP {Status} body ErrorCode={Code} Message={Message} (IsSuccess=false when ErrorCode!=0)",
+                    relativePath,
+                    (int)response.StatusCode,
+                    last.ErrorCode,
+                    last.ErrorMessage);
+            }
+
             if (last.IsSuccess || attempt == 1)
                 return last;
 

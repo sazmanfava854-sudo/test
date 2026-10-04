@@ -250,7 +250,12 @@ public sealed class ShimasAuthService
             var loginKey = key.Data?.EffectiveLoginKey;
             diag.LoginKeyOk = key.IsSuccess && !string.IsNullOrWhiteSpace(loginKey);
             if (diag.LoginKeyOk)
+            {
+                diag.SuggestedLoginUrl = BuildLoginStartUrl(loginKey);
                 diag.StartUrlSample = BuildLoginStartUrl(SsoCredentialMask.MaskId(loginKey));
+            }
+            else if (_options.AllowLegacyLoginUrlWithoutLoginKey)
+                diag.SuggestedLoginUrl = BuildExternalLoginUrl(callbackAbsoluteUrl);
             else if (key.ErrorCode == 403)
                 diag.Error = "SSO می‌گوید Client info mismatch — ClientId/ClientSecret/apiName با ثبت پورتال یکی نیست (Secret کامل؟ apiName = نام کاربری SSO؟).";
             else
