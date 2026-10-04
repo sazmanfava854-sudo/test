@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RayvarzResend.Web.Models;
@@ -9,6 +10,18 @@ namespace RayvarzResend.Tests;
 
 public class ShimasAuthServiceTests
 {
+    private sealed class StubHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Production;
+        public string ApplicationName { get; set; } = "Test";
+        public string ContentRootPath { get; set; } = "";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+            new Microsoft.Extensions.FileProviders.NullFileProvider();
+    }
+
+    internal static IHostEnvironment StubHost(string environmentName = "Production") =>
+        new StubHostEnvironment { EnvironmentName = environmentName };
+
     private static ShimasAuthService CreateService(
         ShimasAuthOptions? options = null,
         InMemoryAppUserStore? memory = null)
@@ -33,7 +46,8 @@ public class ShimasAuthServiceTests
             repo,
             mashhad,
             httpFactory,
-            NullLogger<ShimasAuthService>.Instance);
+            NullLogger<ShimasAuthService>.Instance,
+            StubHost());
     }
 
     [Fact]

@@ -1,7 +1,9 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using RayvarzResend.Web.Models;
 
@@ -22,19 +24,22 @@ public sealed class ShimasAuthService
     private readonly MashhadSsoApiClient _mashhadSso;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ShimasAuthService> _logger;
+    private readonly bool _isDevelopment;
 
     public ShimasAuthService(
         IOptions<ShimasAuthOptions> options,
         AppUserRepository users,
         MashhadSsoApiClient mashhadSso,
         IHttpClientFactory httpClientFactory,
-        ILogger<ShimasAuthService> logger)
+        ILogger<ShimasAuthService> logger,
+        IHostEnvironment hostEnvironment)
     {
         _options = options.Value;
         _users = users;
         _mashhadSso = mashhadSso;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _isDevelopment = hostEnvironment.IsDevelopment();
     }
 
     public ShimasAuthOptions Options => _options;
@@ -100,9 +105,10 @@ public sealed class ShimasAuthService
         return ResolveLoginPath(request);
     }
 
-    /// <summary>روی localhost با PublicBaseUrl — SSO از همان آدرس ثبت‌شده (مثلاً city.mashhad.ir:5065).</summary>
+    /// <summary>روی localhost با PublicBaseUrl — لینک SSO برای کاربر نهایی (city). در Development خاموش است تا F5 به مشهد redirect نشود.</summary>
     public bool UsesPublicSsoLoginUrl(HttpRequest? request) =>
         request != null
+        && !_isDevelopment
         && ShimasAuthOptions.IsLoopbackHost(request.Host.Host)
         && !string.IsNullOrWhiteSpace(NormalizePublicBaseUrl(_options.PublicBaseUrl))
         && _options.SsoReady;
@@ -111,6 +117,12 @@ public sealed class ShimasAuthService
     {
         if (UsesPublicSsoLoginUrl(request))
             return CombinePublicBaseUrl(request!, "/auth/login");
+
+        if (request != null
+            && _isDevelopment
+            && ShimasAuthOptions.IsLoopbackHost(request.Host.Host)
+            && _options.SsoReady)
+            return "/auth/login";
 
         return _options.PreferSsoLoginForHost(request?.Host.Host) ? "/auth/login" : "/login.html";
     }

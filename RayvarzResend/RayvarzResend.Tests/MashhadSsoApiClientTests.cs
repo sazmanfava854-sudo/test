@@ -143,7 +143,8 @@ public class MashhadSsoApiClientTests
             repo,
             mashhad,
             httpFactory,
-            NullLogger<ShimasAuthService>.Instance);
+            NullLogger<ShimasAuthService>.Instance,
+            ShimasAuthServiceTests.StubHost());
 
         var validation = await service.ValidateAsync("1234567890", "refresh-from-callback");
         Assert.True(validation.Success);
@@ -345,7 +346,13 @@ public class MashhadSsoApiClientTests
         config["Auth:UseInMemoryStore"] = "true";
         var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
         var mashhad = new MashhadSsoApiClient(opts, httpFactory, NullLogger<MashhadSsoApiClient>.Instance);
-        return new ShimasAuthService(opts, repo, mashhad, httpFactory, NullLogger<ShimasAuthService>.Instance);
+        return new ShimasAuthService(
+            opts,
+            repo,
+            mashhad,
+            httpFactory,
+            NullLogger<ShimasAuthService>.Instance,
+            ShimasAuthServiceTests.StubHost());
     }
 
     private sealed class NamedHttpClientFactory : IHttpClientFactory
