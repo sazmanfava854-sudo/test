@@ -150,6 +150,7 @@ public class MashhadSsoApiClientTests
         Assert.True(validation.UsedRemoteApi);
         Assert.Equal("1234567890", validation.Profile.NationalId);
         Assert.Equal("hoseine-sh", validation.Profile.Domain);
+        Assert.Equal("hoseine-sh", validation.Profile.Username);
 
         var user = await service.ResolveOrCreateUserAsync(validation.Profile);
         Assert.NotNull(user);

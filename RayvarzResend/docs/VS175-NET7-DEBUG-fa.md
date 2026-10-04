@@ -51,7 +51,8 @@
 }
 ```
 
-7. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`
+7. **ورود محلی و SSO یکسان:** در فرم `login.html` همان **دامین** را بزنید (مثلاً `alidoost-pa`)، نه فقط کد ملی — با SSO یکی است.
+8. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`
 
 ### خروج با code 1 و JsonReaderException / InvalidDataException
 

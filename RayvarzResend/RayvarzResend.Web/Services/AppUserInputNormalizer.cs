@@ -2,7 +2,7 @@ using RayvarzResend.Web.Models;
 
 namespace RayvarzResend.Web.Services;
 
-/// <summary>اعتبارسنجی و نرمال‌سازی ورودی ثبت کاربر — ورود با کد ملی.</summary>
+/// <summary>اعتبارسنجی و نرمال‌سازی ثبت کاربر — ورود محلی همان دامین SSO (مثلاً alidoost-pa).</summary>
 public static class AppUserInputNormalizer
 {
     public const int NationalIdLength = 10;
@@ -31,18 +31,26 @@ public static class AppUserInputNormalizer
             throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه یا شعبه مرکز الزامی است");
     }
 
-    /// <summary>ورود با کد ملی — اگر Username خالی باشد همان کد ملی ذخیره می‌شود.</summary>
+    /// <summary>ورود محلی همان SSO: اول دامین (alidoost-pa)، بعد کد ملی اگر Username خالی باشد.</summary>
     public static string ResolveLoginUsername(CreateAppUserRequest req)
     {
         var username = (req.Username ?? "").Trim();
         if (!string.IsNullOrEmpty(username))
             return username;
 
+        var domainList = AppUserDomainNormalizer.NormalizeList(req.Domain);
+        if (!string.IsNullOrEmpty(domainList))
+        {
+            var first = domainList.Split(',')[0].Trim();
+            if (AppUserDomainNormalizer.IsValid(first))
+                return first;
+        }
+
         var nationalId = (req.NationalId ?? "").Trim();
         if (IsValidNationalId(nationalId))
             return nationalId;
 
-        throw new ArgumentException("کد ملی برای ورود الزامی است (۱۰ رقم)");
+        throw new ArgumentException("دامین سازمانی یا کد ملی برای ورود الزامی است");
     }
 
     public static bool IsValidNationalId(string? value) =>

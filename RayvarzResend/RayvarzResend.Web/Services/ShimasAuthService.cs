@@ -706,9 +706,12 @@ public sealed class ShimasAuthService
         var domainAccount = AppUserDomainNormalizer.Normalize(
             basic?.username ?? data.UserName ?? fallbackUsername);
         var nationalId = (data.NationalCode ?? basic?.nationalCode ?? "").Trim();
-        var loginUsername = AppUserInputNormalizer.IsValidNationalId(nationalId)
-            ? nationalId
-            : AppUserDomainNormalizer.Normalize(data.UserName ?? fallbackUsername);
+        // همان شناسهٔ ورود SSO و فرم محلی: اول دامین سازمانی (alidoost-pa)، بعد کد ملی
+        var loginUsername = AppUserDomainNormalizer.IsValid(domainAccount)
+            ? domainAccount
+            : AppUserInputNormalizer.IsValidNationalId(nationalId)
+                ? nationalId
+                : AppUserDomainNormalizer.Normalize(data.UserName ?? fallbackUsername);
 
         if (string.IsNullOrEmpty(loginUsername))
             loginUsername = domainAccount;

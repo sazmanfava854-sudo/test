@@ -7,7 +7,7 @@ namespace RayvarzResend.Tests;
 public class AppUserInputNormalizerTests
 {
     [Fact]
-    public void ResolveLoginUsername_uses_national_id_when_username_empty()
+    public void ResolveLoginUsername_prefers_domain_account_like_sso()
     {
         var req = new CreateAppUserRequest
         {
@@ -15,12 +15,12 @@ public class AppUserInputNormalizerTests
             FirstName = "علی",
             LastName = "رضایی",
             Password = "secret1",
-            Domain = "hoseine-sh",
+            Domain = "alidoost-pa",
             District = "2"
         };
         AppUserInputNormalizer.ValidateAndApply(req);
-        Assert.Equal("1234567890", req.Username);
-        Assert.Equal("hoseine-sh", req.Domain);
+        Assert.Equal("alidoost-pa", req.Username);
+        Assert.Equal("alidoost-pa", req.Domain);
     }
 
     [Fact]

@@ -171,6 +171,23 @@ public sealed class AppUserRepository
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
+    /// <summary>ورود محلی: کد ملی، Username، یا دامین SSO (مثلاً alidoost-pa).</summary>
+    public async Task<AppUserRecord?> FindByLoginIdentityAsync(string identity, CancellationToken ct = default)
+    {
+        var trimmed = (identity ?? "").Trim();
+        if (trimmed.Length == 0)
+            return null;
+
+        if (_useInMemory)
+            return _memory.FindByUsername(trimmed) ?? _memory.FindBySsoIdentity(trimmed);
+
+        var byUsername = await FindByUsernameAsync(trimmed, ct);
+        if (byUsername != null)
+            return byUsername;
+
+        return await FindBySsoIdentityAsync(trimmed, ct);
+    }
+
     public async Task<AppUserRecord?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
         if (_useInMemory)
