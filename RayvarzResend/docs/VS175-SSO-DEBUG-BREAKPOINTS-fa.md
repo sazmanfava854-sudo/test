@@ -10,6 +10,8 @@
 | `MashhadSsoApiClient.cs` | `GetLoginKeyAsync` → `SendSignedJsonAsync` | اگر `UseLoginKeyOnRedirect=true` و API در دسترس باشد |
 | `MashhadSsoSigning.cs` | `CreateMaterial` | داخل هر درخواست امضاشدهٔ فاز ۱ (مثلاً loginKey) |
 
+**گیر روی `Profile.aspx` بعد از لاگین:** [SSO-PROFILE-STUCK-fa.md](./SSO-PROFILE-STUCK-fa.md) — `returnUrl` در Login.aspx درست است ولی مشهد به city برنمی‌گرداند؛ اول loginKey و ثبت «برگشت آدرس» را درست کنید.
+
 **نکته:** اگر در آدرس مرورگر **`Login.aspx?lkey=...&returnUrl=...`** می‌بینید (نه `Authentication/Start/{loginKey}`)، یعنی loginKey ناموفق بوده و با `AllowLegacyLoginUrlWithoutLoginKey` به روش قدیمی fallback شده است. در این حالت `CreateMaterial` برای loginKey ممکن است **قبل از redirect** یک بار خورده باشد؛ خط ۱۹۴ (`return BuildLoginStartUrl`) در این سناریو **اجرا نمی‌شود** — به‌جای آن `BuildExternalLoginUrl` (حدود خط ۱۸۳) اجرا می‌شود.
 
 این فاز فقط روی **همان processی** breakpoint می‌خورد که درخواست `/auth/login` را جواب می‌دهد:
