@@ -14,7 +14,13 @@ public static class AppSettingsJsonGuard
 
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            // همان انعطاف appsettings در ASP.NET (کامنت // و ویرگول انتهایی)
+            var options = new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            };
+            using var doc = JsonDocument.Parse(File.ReadAllText(path), options);
             _ = doc.RootElement.ValueKind;
         }
         catch (JsonException ex)

@@ -55,6 +55,27 @@ public class AppSettingsConfigurationTests
     }
 
     [Fact]
+    public void Guard_allows_json_comments_like_aspnet_config()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "rr-appsettings-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "appsettings.json"), """
+                {
+                  // SSO debug
+                  "Auth": { "SessionHours": 8 }
+                }
+                """);
+            AppSettingsJsonGuard.ValidateOrThrow(dir);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Guard_describes_missing_comma_after_connection_strings()
     {
         var dir = Path.Combine(Path.GetTempPath(), "rr-appsettings-" + Guid.NewGuid().ToString("N"));

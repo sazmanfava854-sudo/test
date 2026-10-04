@@ -48,6 +48,23 @@
 
 6. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`
 
+### خروج با code 1 و JsonReaderException / InvalidDataException
+
+یعنی **`appsettings.json` JSON معتبر نیست** (قبل از بالا آمدن سایت).
+
+1. فایل: `RayvarzResend.Web\appsettings.json` (همان که در Output کپی می‌شود).
+2. در Visual Studio پنجره **Output** → Show output from: **Debug** — متن فارسی خط (شماره خط) را ببینید.
+3. علت‌های رایج:
+   - بعد از بستن `ConnectionStrings` **ویرگول** جا مانده نیست → باید `},` و بعد `"Auth":`
+   - رمز SQL داخل رشته **`"`** یا **`\`** دارد → escape: `\"` و `\\`
+   - یک `{` یا `}` کم/زیاد
+4. اعتبارسنجی سریع در PowerShell (از پوشه Web):
+   ```powershell
+   Get-Content appsettings.json -Raw | ConvertFrom-Json
+   ```
+   اگر خطا داد، همان خط را در JSON اصلاح کنید.
+5. برای دیباگ SSO می‌توانید فقط بخش `Auth:Shimas` را عوض کنید؛ `ConnectionStrings` را از zip سالم کپی کنید و فقط Server/Password را عوض کنید.
+
 ## APIهای کمکی (بعد از Run)
 
 - `GET /api/auth/sso-outbound-map`

@@ -17,8 +17,10 @@ try
 }
 catch (Exception ex) when (AppSettingsJsonGuard.IsLoadError(ex))
 {
+    var message = AppSettingsJsonGuard.Describe(ex, Directory.GetCurrentDirectory());
     Console.OutputEncoding = System.Text.Encoding.UTF8;
-    Console.Error.WriteLine(AppSettingsJsonGuard.Describe(ex, Directory.GetCurrentDirectory()));
+    Console.Error.WriteLine(message);
+    System.Diagnostics.Debug.WriteLine(message);
     Environment.Exit(1);
     throw;
 }
