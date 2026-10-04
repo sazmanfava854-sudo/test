@@ -52,7 +52,8 @@
 ```
 
 7. **ورود محلی و SSO یکسان:** در فرم `login.html` همان **دامین** را بزنید (مثلاً `alidoost-pa`)، نه فقط کد ملی — با SSO یکی است.
-8. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`
+8. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`  
+   **اگر بعد از لاگین در login.mashhad.ir breakpoint نمی‌خورد:** [VS175-SSO-DEBUG-BREAKPOINTS-fa.md](./VS175-SSO-DEBUG-BREAKPOINTS-fa.md) — فاز ۱ (شروع SSO) و فاز ۲ (callback روی city) جدا هستند.
 
 ### خروج با code 1 و JsonReaderException / InvalidDataException
 
