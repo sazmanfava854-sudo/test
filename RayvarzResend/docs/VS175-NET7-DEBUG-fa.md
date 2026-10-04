@@ -34,12 +34,13 @@
 2. Solution: `RayvarzResend/RayvarzResend.sln`
 3. Startup project: **RayvarzResend.Web**
 4. پروفایل: **http** یا **RayvarzResend.Web** — معمولاً `http://localhost:5088`
-5. **ورود سازمانی** باید از آدرس ثبت SSO باشد، نه localhost:
+5. **دو محیط (گیج‌کننده):** سرور Publish `http://5.252.216.140:8070` ≠ F5 روی `localhost` — [SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md](./SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md)
+6. **ورود سازمانی** باید از آدرس ثبت SSO باشد، نه localhost:
    - `Auth:Shimas:PublicBaseUrl` = `https://city.mashhad.ir:5065`
    - روی `login.html` لوکال، دکمه «ورود سازمانی» به **`https://city.mashhad.ir:5065/auth/login`** می‌رود (از `/api/auth/mode` → `publicSsoLoginUrl`).
    - برای تست واقعی SSO همان آدرس شهر را در مرورگر باز کنید: `https://city.mashhad.ir:5065/login.html` یا مستقیم `/auth/login?debug=1`
    - F5 روی localhost فقط برای دیباگ کد backend (breakpoint قبل از redirect) است؛ callback SSO به `/management` روی **city** برمی‌گردد.
-6. برای لاگ SSO در `appsettings.json`:
+7. برای لاگ SSO در `appsettings.json`:
 
 ```json
 "Auth": {
@@ -51,8 +52,8 @@
 }
 ```
 
-7. **ورود محلی و SSO یکسان:** در فرم `login.html` همان **دامین** را بزنید (مثلاً `alidoost-pa`)، نه فقط کد ملی — با SSO یکی است.
-8. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`  
+8. **ورود محلی و SSO یکسان:** در فرم `login.html` همان **دامین** را بزنید (مثلاً `alidoost-pa`)، نه فقط کد ملی — با SSO یکی است.
+9. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`  
    **اگر بعد از لاگین در login.mashhad.ir breakpoint نمی‌خورد:** [VS175-SSO-DEBUG-BREAKPOINTS-fa.md](./VS175-SSO-DEBUG-BREAKPOINTS-fa.md) — فاز ۱ (شروع SSO) و فاز ۲ (callback روی city) جدا هستند.
 
 ### خروج با code 1 و JsonReaderException / InvalidDataException
