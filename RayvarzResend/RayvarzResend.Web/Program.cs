@@ -340,7 +340,8 @@ app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shim
 
 app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
 {
-    if (shimas.UsesPublicSsoLoginUrl(http.Request))
+    // روی localhost با PublicBaseUrl=city معمولاً به city redirect می‌شود — با ?debug=1 همان‌جا بمان تا F10 روی PC ممکن شود.
+    if (shimas.UsesPublicSsoLoginUrl(http.Request) && !http.Request.Query.ContainsKey("debug"))
     {
         var target = shimas.ResolveLoginPath(http.Request);
         var ret = http.Request.Query["returnUrl"].FirstOrDefault();

@@ -57,15 +57,23 @@
 2. Startup: `RayvarzResend.Web`
 3. F5 → مثلاً `http://localhost:5088`
 
-### مرحله ۳ — فقط localhost در مرورگر (مهم)
+### مرحله ۳ — F10 روی PC (حتی وقتی کاربران `city.mashhad.ir:5065` می‌بینند)
 
-این را باز کنید (نه 140):
+در `appsettings.Development.json` همان `PublicBaseUrl` را بگذارید:
 
-`http://localhost:5088/auth/login?debug=1`
+`https://city.mashhad.ir:5065`
 
-یا:
+(برگشت SSO همان است؛ فقط **درخواست از localhost** اجرا می‌شود تا breakpoint بخورد.)
 
-`http://localhost:5088/api/auth/sso-loginkey-check`
+با شاخهٔ جدید، `?debug=1` روی localhost **به city redirect نمی‌شود**.
+
+| URL در مرورگر (F5) | برای F10 |
+|--------------------|----------|
+| `http://localhost:5088/api/auth/sso-loginkey-check` | ساده‌ترین — مستقیم loginKey |
+| `http://localhost:5088/api/auth/sso-signing-preview` | فقط ساخت hash/هدر (بدون POST loginKey) |
+| `http://localhost:5088/auth/login?debug=1` | همان مسیر `/auth/login` + DiagnoseLoginKey |
+
+**نه** `https://city.mashhad.ir:5065/...` در مرورگر اگر F5 روی لپ‌تاپ زده‌اید — آن روی IIS پشت city است.
 
 ### مرحله ۴ — breakpoint (هدر loginKey)
 
