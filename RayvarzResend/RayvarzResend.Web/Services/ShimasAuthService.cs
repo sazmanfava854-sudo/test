@@ -511,13 +511,67 @@ public sealed class ShimasAuthService
     /// <summary>بازگشت SSO روی ریشه سایت (مثلاً https://city.mashhad.ir:5065) با querystring توکن.</summary>
     public bool IsSsoCallbackHttpRequest(HttpRequest request)
     {
-        if (!HttpMethods.IsGet(request.Method))
-            return false;
+        var probe = ProbeSsoCallbackHttpRequest(request);
+        return probe.IsSsoCallbackHttpRequest;
+    }
 
-        if (!MatchesCallbackRequestPath(request.Path.Value ?? ""))
-            return false;
+    public SsoCallbackProbeDto ProbeSsoCallbackHttpRequest(HttpRequest request)
+    {
+        var path = request.Path.Value ?? "";
+        var pathBase = (request.PathBase.Value ?? "").Trim();
+        var effectivePath = ResolveRequestPathForCallback(request);
+        var payload = ParseCallbackQuery(request.Query);
+        var isGet = HttpMethods.IsGet(request.Method);
+        var pathMatches = MatchesCallbackRequestPath(effectivePath)
+            || (!string.Equals(effectivePath, path, StringComparison.Ordinal)
+                && MatchesCallbackRequestPath(path));
+        var tokenOk = payload.RefreshToken.Length >= _options.MinRefreshTokenLength;
+        var hasIdentity = !string.IsNullOrWhiteSpace(payload.Username)
+            || !string.IsNullOrWhiteSpace(payload.Domain);
+        var isCallback = isGet && pathMatches && tokenOk && hasIdentity;
 
-        return QueryLooksLikeSsoCallback(request.Query);
+        string? rejection = null;
+        if (!isCallback)
+        {
+            if (!isGet)
+                rejection = "متد درخواست GET نیست — callback SSO فقط با GET شناسایی می‌شود.";
+            else if (!pathMatches)
+                rejection = $"مسیر «{effectivePath}» با CallbackPath «{NormalizeCallbackPath(_options.CallbackPath)}» (یا /auth/callback) جور نیست.";
+            else if (!tokenOk)
+                rejection = $"refresh_token در query نیست یا کوتاه‌تر از MinRefreshTokenLength ({_options.MinRefreshTokenLength}) است.";
+            else if (!hasIdentity)
+                rejection = "username یا domain در querystring نیست — SSO باید ?username=...&refresh_token=... برگرداند.";
+        }
+
+        return new SsoCallbackProbeDto
+        {
+            Method = request.Method,
+            Path = path,
+            PathBase = pathBase,
+            EffectivePath = effectivePath,
+            ConfiguredCallbackPath = NormalizeCallbackPath(_options.CallbackPath),
+            IsGet = isGet,
+            PathMatchesCallback = pathMatches,
+            RefreshTokenLength = payload.RefreshToken.Length,
+            MinRefreshTokenLength = _options.MinRefreshTokenLength,
+            HasUsernameOrDomain = hasIdentity,
+            IsSsoCallbackHttpRequest = isCallback,
+            RejectionReasonFa = rejection,
+            QueryKeys = request.Query.Keys.Take(32).ToArray()
+        };
+    }
+
+    public string ResolveRequestPathForCallback(HttpRequest request)
+    {
+        var path = request.Path.Value ?? "";
+        var pathBase = (request.PathBase.Value ?? "").TrimEnd('/');
+        if (pathBase.Length == 0)
+            return path;
+
+        if (path.StartsWith('/'))
+            return pathBase + path;
+
+        return pathBase + "/" + path;
     }
 
     public bool QueryLooksLikeSsoCallback(IQueryCollection query)

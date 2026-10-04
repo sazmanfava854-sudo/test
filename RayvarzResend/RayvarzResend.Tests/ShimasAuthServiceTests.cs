@@ -600,6 +600,36 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void ProbeSsoCallbackHttpRequest_explains_missing_username_on_management()
+    {
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/management";
+        context.Request.QueryString = new QueryString("?refresh_token=only-token-value-here");
+
+        var probe = service.ProbeSsoCallbackHttpRequest(context.Request);
+
+        Assert.False(probe.IsSsoCallbackHttpRequest);
+        Assert.True(probe.PathMatchesCallback);
+        Assert.Contains("username", probe.RejectionReasonFa ?? "", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IsSsoCallbackHttpRequest_matches_path_with_path_base()
+    {
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.PathBase = "/app";
+        context.Request.Path = "/management";
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+        Assert.Equal("/app/management", service.ResolveRequestPathForCallback(context.Request));
+    }
+
+    [Fact]
     public void GetStatus_includes_registered_callback_from_public_base_url()
     {
         var service = CreateService(new ShimasAuthOptions

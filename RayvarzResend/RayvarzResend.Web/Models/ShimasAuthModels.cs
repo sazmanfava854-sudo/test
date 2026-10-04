@@ -117,6 +117,25 @@ public sealed class ShimasAuthStatusDto
     public SsoLoginKeyOutboundMap? SsoOutboundMap { get; set; }
 }
 
+/// <summary>چرا middleware SSO به <c>await next()</c> می‌رود — برای دیباگ Visual Studio.</summary>
+public sealed class SsoCallbackProbeDto
+{
+    public string Method { get; set; } = "";
+    public string Path { get; set; } = "";
+    public string PathBase { get; set; } = "";
+    public string EffectivePath { get; set; } = "";
+    public string ConfiguredCallbackPath { get; set; } = "";
+    public bool IsGet { get; set; }
+    public bool PathMatchesCallback { get; set; }
+    public int RefreshTokenLength { get; set; }
+    public int MinRefreshTokenLength { get; set; }
+    public bool HasUsernameOrDomain { get; set; }
+    public bool IsSsoCallbackHttpRequest { get; set; }
+    /// <summary>اگر false است، دلیل فارسی برای دیباگ.</summary>
+    public string? RejectionReasonFa { get; set; }
+    public string[] QueryKeys { get; set; } = Array.Empty<string>();
+}
+
 public sealed class ShimasCallbackPayload
 {
     public string Username { get; set; } = "";

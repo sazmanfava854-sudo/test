@@ -198,24 +198,38 @@ async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationT
 app.Use(async (context, next) =>
 {
     var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-    if (shimas.IsSsoCallbackHttpRequest(context.Request))
+    if (!shimas.IsSsoCallbackHttpRequest(context.Request))
     {
-        try
+        if (shimas.Options.DebugSigning)
         {
-            var result = await TryCompleteSsoCallbackAsync(context, context.RequestAborted);
-            if (result != null)
-                await result.ExecuteAsync(context);
-        }
-        catch (SqlException ex)
-        {
-            var dbResult = AuthDatabaseError(ex);
-            await dbResult.ExecuteAsync(context);
+            var probe = shimas.ProbeSsoCallbackHttpRequest(context.Request);
+            if (probe.PathMatchesCallback && probe.RefreshTokenLength > 0 && !probe.IsSsoCallbackHttpRequest)
+            {
+                var log = context.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("ShimasSsoCallback");
+                log.LogWarning(
+                    "درخواست شبیه callback روی {Path} رد شد: {Reason} (keys: {Keys})",
+                    probe.EffectivePath,
+                    probe.RejectionReasonFa,
+                    string.Join(", ", probe.QueryKeys));
+            }
         }
 
+        await next();
         return;
     }
 
-    await next();
+    try
+    {
+        var result = await TryCompleteSsoCallbackAsync(context, context.RequestAborted);
+        if (result != null)
+            await result.ExecuteAsync(context);
+    }
+    catch (SqlException ex)
+    {
+        var dbResult = AuthDatabaseError(ex);
+        await dbResult.ExecuteAsync(context);
+    }
 });
 
 static bool RequiresAuthenticatedShell(string path) =>
@@ -232,6 +246,14 @@ app.Use(async (context, next) =>
     if (RequiresAuthenticatedShell(path) && !authenticated)
     {
         var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
+        var probe = shimas.ProbeSsoCallbackHttpRequest(context.Request);
+        if (probe.PathMatchesCallback && probe.RefreshTokenLength > 0 && !probe.IsSsoCallbackHttpRequest)
+        {
+            var error = Uri.EscapeDataString(probe.RejectionReasonFa ?? "بازگشت SSO ناقص است");
+            context.Response.Redirect($"/login.html?error={error}");
+            return;
+        }
+
         var login = shimas.ResolveLoginRedirectPath(context.Request);
         var target = ManagementHubPaths.IsHubPage(path)
             ? $"{login}?returnUrl={Uri.EscapeDataString(ManagementHubPaths.CanonicalWithSlash)}"
@@ -286,6 +308,18 @@ app.MapGet("/api/auth/sso-signing-preview", async (ShimasAuthService shimas, Can
 {
     var preview = await shimas.PreviewLoginKeySigningAsync(ct);
     return Results.Ok(preview);
+}).AllowAnonymous();
+
+app.MapGet("/api/auth/sso-callback-probe", (HttpContext http, ShimasAuthService shimas) =>
+{
+    var probe = shimas.ProbeSsoCallbackHttpRequest(http.Request);
+    return Results.Ok(new
+    {
+        probe,
+        hintFa = probe.IsSsoCallbackHttpRequest
+            ? "این درخواست باید در middleware قبل از await next() به TryCompleteSsoCallbackAsync بخورد."
+            : "اگر بعد از لاگین مشهد این را می‌بینید، همان URL را در مرورگر باز کنید یا در VS روی Path/QueryString بریک‌پوینت بگذارید — " + (probe.RejectionReasonFa ?? "")
+    });
 }).AllowAnonymous();
 
 app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shimas) =>

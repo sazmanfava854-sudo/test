@@ -37,6 +37,38 @@
 
 پس breakpointهای `CreateMaterial` و `SendSignedJsonAsync` **بعد از لاگین** باید روی **process سرویس‌دهندهٔ city:5065** بخورند، نه روی localhost مگر عمداً callback را به localhost برگردانده باشید (در پورتال SSO معمولاً فقط city ثبت است).
 
+## `await next()` در middleware — طبیعی است یا نه؟
+
+در `Program.cs` ترتیب درست این است (اول `if`، بعد `await next()`):
+
+```csharp
+if (shimas.IsSsoCallbackHttpRequest(context.Request)) { ... return; }
+await next();
+```
+
+اگر دیباگر به **`await next()`** می‌رسد، یعنی **`IsSsoCallbackHttpRequest` = false** برای **این درخواست**. خیلی وقت‌ها درخواست فعلی اصلاً callback نیست (مثلاً `/auth/login`، فایل JS، یا `/management/` بدون query).
+
+برای **همان URL بعد از لاگین مشهد** در Immediate Window یا Watch بزنید:
+
+- `context.Request.Path`
+- `context.Request.QueryString`
+- `shimas.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa`
+
+یا در مرورگر (با همان querystring):
+
+`GET /api/auth/sso-callback-probe`
+
+دلایل رایج `false`:
+
+| شرط | علامت |
+|-----|--------|
+| متد | باید **GET** باشد |
+| مسیر | باید `/management` (یا `CallbackPath`) باشد — نه فقط `/login.html` |
+| توکن | `refresh_token` / `refreshToken` در query با طول ≥ `MinRefreshTokenLength` |
+| هویت | حداقل **username** یا **domain** در query |
+
+اگر توکن هست ولی username نیست، middleware دوم ممکن است قبلاً شما را بدون پیام به `/auth/login` می‌فرستاد؛ در نسخهٔ جدید به `login.html?error=...` با دلیل فارسی می‌رود.
+
 ## چک‌لیست سریع
 
 1. **دیباگر به کدام process وصل است؟**  
