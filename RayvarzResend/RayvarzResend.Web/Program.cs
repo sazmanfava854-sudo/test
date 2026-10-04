@@ -407,8 +407,9 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 ---- تست loginKey با SSO ({diag.ApiBaseUrl}) ----
                 getCurrentTime: {(diag.GetCurrentTimeOk ? "OK" : "ناموفق")}
                 loginKey: {(diag.LoginKeyOk ? "OK" : $"ناموفق (code {diag.LoginKeyErrorCode}: {diag.LoginKeyErrorMessage})")}
-                ClientSecret طول: {diag.ClientSecretLength} کاراکتر
+                ClientSecret طول: {diag.ClientSecretLength} کاراکتر{(diag.ClientSecretLength < 8 ? " ← خیلی کوتاه؛ SecretKey کامل پورتال را در appsettings بگذارید (نه D2fbf نمونه git)" : "")}
                 نتیجه: {diag.Verdict}
+                {(diag.Error != null ? "جزئیات: " + diag.Error : "")}
                 {(diag.StartUrlSample != null ? "نمونه Start URL: " + diag.StartUrlSample : "")}
                 """;
             return Results.Content(body, "text/plain; charset=utf-8");

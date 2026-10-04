@@ -226,6 +226,14 @@ public sealed class ShimasAuthService
             return diag;
         }
 
+        if (SsoCredentialMask.SecretLooksTooShort(_options.ClientSecret))
+        {
+            diag.Error =
+                $"ClientSecret در appsettings فقط {diag.ClientSecretLength} کاراکتر است — احتمالاً placeholder (مثل D2fbf) است، نه SecretKey کامل پورتال SSO. "
+                + "SecretKey را از ادمین SSO بگیرید و در Auth:Shimas:ClientSecret (یا appsettings.Development.json روی PC) بگذارید؛ بعد recycle IIS.";
+            return diag;
+        }
+
         try
         {
             var time = await _mashhadSso.GetCurrentTimeAsync(ct);
