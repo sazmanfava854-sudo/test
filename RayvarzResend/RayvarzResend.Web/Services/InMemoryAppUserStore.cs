@@ -41,7 +41,7 @@ public sealed class InMemoryAppUserStore
         };
         _byUsername[user.Username] = user;
         _byId[user.Id] = user;
-        _userGroups[user.Id] = [];
+        _userGroups[user.Id] = new HashSet<Guid>();
         return user;
     }
 
@@ -194,7 +194,7 @@ public sealed class InMemoryAppUserStore
     }
 
     public List<Guid> GetUserGroupIds(Guid userId) =>
-        _userGroups.TryGetValue(userId, out var set) ? set.ToList() : [];
+        _userGroups.TryGetValue(userId, out var set) ? set.ToList() : new List<Guid>();
 
     public void SetUserGroups(Guid userId, IReadOnlyList<Guid> groupIds)
     {
@@ -270,7 +270,7 @@ public sealed class InMemoryAppUserStore
         };
         _byUsername[user.Username] = user;
         _byId[user.Id] = user;
-        _userGroups[user.Id] = [];
+        _userGroups[user.Id] = new HashSet<Guid>();
         return user;
     }
 }

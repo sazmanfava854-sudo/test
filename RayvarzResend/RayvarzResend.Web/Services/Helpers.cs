@@ -24,7 +24,7 @@ public static class DateHelper
         var trimmed = NumericHelper.NormalizeDigits(input.Trim());
         if (trimmed.Contains('/') || trimmed.Contains('-'))
         {
-            var parts = trimmed.Split(['/', '-'], StringSplitOptions.RemoveEmptyEntries);
+            var parts = trimmed.Split(new[] { '/', '-' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 3
                 && int.TryParse(parts[0], out var y)
                 && int.TryParse(parts[1], out var m)

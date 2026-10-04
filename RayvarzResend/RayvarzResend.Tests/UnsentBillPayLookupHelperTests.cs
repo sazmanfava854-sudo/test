@@ -9,12 +9,12 @@ public class UnsentBillPayLookupHelperTests
     [Fact]
     public void NormalizePairs_pads_persian_digits_and_deduplicates()
     {
-        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
-        [
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(new List<UnsentBillPayPair>
+        {
             new UnsentBillPayPair { BillId = "۶۰۵۱۰۵۷۴", PaymentId = "123" },
             new UnsentBillPayPair { BillId = "0000060510574", PaymentId = "0000000000123" },
             new UnsentBillPayPair { BillId = "", PaymentId = "1" }
-        ]);
+        });
 
         Assert.Single(pairs);
         Assert.Equal("0000060510574", pairs[0].BillId);
@@ -57,10 +57,10 @@ public class UnsentBillPayLookupHelperTests
     [Fact]
     public void IndexRawPairs_keeps_excel_values_for_miss_display()
     {
-        var map = UnsentBillPayLookupHelper.IndexRawPairs(
-        [
+        var map = UnsentBillPayLookupHelper.IndexRawPairs(new List<UnsentBillPayPair>
+        {
             new UnsentBillPayPair { BillId = "3091418652060", PaymentId = "1426270355" }
-        ]);
+        });
 
         var key = "3091418652060|0001426270355";
         Assert.True(map.TryGetValue(key, out var raw));
@@ -95,11 +95,11 @@ public class UnsentBillPayLookupHelperTests
     [Fact]
     public void BuildMixedLookupResult_income_then_duty_without_conflict()
     {
-        var requested = UnsentBillPayLookupHelper.NormalizePairs(
-        [
+        var requested = UnsentBillPayLookupHelper.NormalizePairs(new List<UnsentBillPayPair>
+        {
             new UnsentBillPayPair { BillId = "111", PaymentId = "222" },
             new UnsentBillPayPair { BillId = "333", PaymentId = "444" }
-        ]);
+        });
         var income = new List<UnsentFicheListItem>
         {
             new() { FicheNo = "I1", BillId = "0000000000111", PaymentId = "0000000000222" }
@@ -110,7 +110,7 @@ public class UnsentBillPayLookupHelperTests
         };
 
         var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
-            requested, income, [], duty);
+            requested, income, Array.Empty<UnsentFicheListItem>(), duty);
 
         Assert.Equal(2, result.Found);
         Assert.Empty(result.Conflicts);
@@ -121,10 +121,10 @@ public class UnsentBillPayLookupHelperTests
     [Fact]
     public void BuildMixedLookupResult_flags_income_and_duty_conflict()
     {
-        var requested = UnsentBillPayLookupHelper.NormalizePairs(
-        [
+        var requested = UnsentBillPayLookupHelper.NormalizePairs(new List<UnsentBillPayPair>
+        {
             new UnsentBillPayPair { BillId = "111", PaymentId = "222" }
-        ]);
+        });
         var income = new List<UnsentFicheListItem>
         {
             new() { FicheNo = "I1", BillId = "0000000000111", PaymentId = "0000000000222" }
@@ -135,7 +135,7 @@ public class UnsentBillPayLookupHelperTests
         };
 
         var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
-            requested, income, dutyProbe, []);
+            requested, income, dutyProbe, Array.Empty<UnsentFicheListItem>());
 
         Assert.Empty(result.Items);
         Assert.Single(result.Conflicts);

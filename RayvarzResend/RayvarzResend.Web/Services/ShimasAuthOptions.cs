@@ -56,7 +56,7 @@ public sealed class ShimasAuthOptions
     /// <summary>روی آدرس عمومی (مثلاً city.mashhad.ir) ورود محلی فقط برای کاربران IsAdmin.</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; } = true;
     /// <summary>روی این hostها (مثلاً IP داخلی سرور) به‌جای SSO به login.html هدایت می‌شود — ورود محلی برای ادمین/عملیات.</summary>
-    public string[] PreferLocalLoginHosts { get; set; } = [];
+    public string[] PreferLocalLoginHosts { get; set; } = Array.Empty<string>();
     public int MinRefreshTokenLength { get; set; } = 3;
 
     public string EffectiveClientId

@@ -26,7 +26,7 @@ public static class UnsentBillPayLookupHelper
     {
         var result = new List<NormalizedBillPayPair>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var pair in pairs ?? [])
+        foreach (var pair in pairs ?? Enumerable.Empty<UnsentBillPayPair>())
         {
             var bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.BillId);
             var pay = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.PaymentId);
@@ -63,7 +63,7 @@ public static class UnsentBillPayLookupHelper
         IEnumerable<UnsentBillPayPair>? pairs)
     {
         var map = new Dictionary<string, (string RawBill, string RawPay)>(StringComparer.Ordinal);
-        foreach (var pair in pairs ?? [])
+        foreach (var pair in pairs ?? Enumerable.Empty<UnsentBillPayPair>())
         {
             var bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.BillId);
             var pay = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.PaymentId);

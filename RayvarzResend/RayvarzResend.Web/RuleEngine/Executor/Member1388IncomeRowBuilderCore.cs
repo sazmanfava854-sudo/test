@@ -36,7 +36,7 @@ public static class Member1388IncomeRowBuilderCore
 
         var debtRows = bedeHi > 0
             ? BuildBedeHiDebtRows(fiche, bedeHi)
-            : [];
+            : new List<IncmRowDto>();
 
         var baseSum = IncomeOddmentLogic.SumEligibleRows(working);
         if (baseSum == 0 && debtRows.Count == 0)
@@ -91,14 +91,14 @@ public static class Member1388IncomeRowBuilderCore
         }
         else
         {
-            fiche.Rows =
-            [
+            fiche.Rows = new List<IncmRowDto>
+            {
                 new IncmRowDto
                 {
                     IncmNo = primaryIncmNo,
                     Val = fiche.Payable
                 }
-            ];
+            };
         }
 
         if (!string.IsNullOrWhiteSpace(rowNum))
@@ -116,8 +116,8 @@ public static class Member1388IncomeRowBuilderCore
             return;
         }
 
-        fiche.Rows =
-        [
+        fiche.Rows = new List<IncmRowDto>
+        {
             new IncmRowDto
             {
                 IncmNo = BackSeprdehIncmNo,
@@ -125,7 +125,7 @@ public static class Member1388IncomeRowBuilderCore
                 IncmRowDsc = "برگشت از سپرده",
                 Num = "3"
             }
-        ];
+        };
     }
 
     private static bool ShouldApplyBedeHi(FicheHeaderDto fiche, Member1388IncomeRowOptions options)
@@ -157,7 +157,7 @@ public static class Member1388IncomeRowBuilderCore
 
         var total = eligible.Sum(r => r.Val);
         if (total <= 0)
-            return [];
+            return new List<IncmRowDto>();
 
         var debtRows = new List<IncmRowDto>();
         foreach (var src in eligible)

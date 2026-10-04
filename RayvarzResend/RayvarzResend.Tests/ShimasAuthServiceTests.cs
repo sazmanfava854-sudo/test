@@ -192,7 +192,7 @@ public class ShimasAuthServiceTests
             ClientId = "19cf3C33",
             ClientSecret = "D2fbf",
             AllowLocalLoginFallback = true,
-            PreferLocalLoginHosts = ["5.252.216.140"],
+            PreferLocalLoginHosts = new[] { "5.252.216.140" },
             PublicBaseUrl = "https://city.mashhad.ir:5065",
             PostLoginDefaultPath = "/management/"
         };

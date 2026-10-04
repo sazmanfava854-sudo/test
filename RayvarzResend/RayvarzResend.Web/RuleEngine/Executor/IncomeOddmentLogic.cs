@@ -6,8 +6,8 @@ namespace RayvarzResend.Web.RuleEngine.Executor;
 /// <summary>رندمان Income_OddmentAccount — VB LstOdd / LstOdd_1 در iNcOMEOragh.</summary>
 public static class IncomeOddmentLogic
 {
-  private static readonly HashSet<int> SubtractTypes = [2, 3, 6, 7];
-  private static readonly HashSet<int> AddTypes = [8, 1, 4];
+  private static readonly HashSet<int> SubtractTypes = new HashSet<int> { 2, 3, 6, 7 };
+  private static readonly HashSet<int> AddTypes = new HashSet<int> { 8, 1, 4 };
 
   public static void ApplyToRows(IList<IncmRowDto> rows, IReadOnlyList<IncomeOddmentDto> oddments, Guid? nidIncome)
   {

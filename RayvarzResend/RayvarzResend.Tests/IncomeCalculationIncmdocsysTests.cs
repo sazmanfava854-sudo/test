@@ -13,23 +13,23 @@ public class IncomeCalculationIncmdocsysTests
 {
     /// <summary>مقادیر ناخالص تقریبی dbo.Income_Calculation — از IncomeRowScalerTests شاخه parity.</summary>
     public static readonly IncmRowDto[] G5_GrossIncomeCalculation =
-    [
+    {
         new() { IncmNo = 100116, Val = 94_400_000m, IncmRowDsc = "ماده 9" },
         new() { IncmNo = 1025, Val = 3_783_000_000m, IncmRowDsc = "ماده 100" },
         new() { IncmNo = 1271, Val = 1_744_000_000m, IncmRowDsc = "زیربنا" },
         new() { IncmNo = 1288, Val = 37_760_000m, IncmRowDsc = "آتش‌نشانی پایانکار" },
         new() { IncmNo = 1267, Val = 143_851_424m, IncmRowDsc = "مستحدثات" },
-    ];
+    };
 
     /// <summary>مقادیر ثبت‌شده در ray.incmdocsys — فیش 050733453546 (منبع: 04_RuleGolden_Seed_Phase6_Samples.sql).</summary>
     public static readonly (int IncmNo, decimal Val)[] G5_IncmdocsysExpected =
-    [
+    {
         (100116, 87_501_332m),
         (1025, 3_506_537_488m),
         (1271, 1_616_686_008m),
         (1288, 35_000_533m),
         (1267, 133_340_639m),
-    ];
+    };
 
     public const string G5_FicheNo = "050733453546";
     public const decimal G5_Payable = 5_379_066_000m;

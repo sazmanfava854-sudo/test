@@ -8,7 +8,7 @@ namespace RayvarzResend.Web.RuleEngine.Executor;
 /// </summary>
 public static class Member1388BazAfarineOldRowBuilder
 {
-    public static readonly HashSet<int> AllowedIncomeCodes = [100098, 100107, 100108];
+    public static readonly HashSet<int> AllowedIncomeCodes = new HashSet<int> { 100098, 100107, 100108 };
 
     public static void Apply(FicheHeaderDto fiche)
     {
@@ -25,15 +25,15 @@ public static class Member1388BazAfarineOldRowBuilder
 
         if (candidates.Count == 0)
         {
-            fiche.Rows =
-            [
+            fiche.Rows = new List<IncmRowDto>
+            {
                 new IncmRowDto
                 {
                     IncmNo = 100098,
                     Val = fiche.Payable,
                     IncmRowDsc = "بازافرینی قدیم"
                 }
-            ];
+            };
             return;
         }
 

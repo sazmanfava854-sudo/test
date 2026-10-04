@@ -58,17 +58,18 @@ public static class SsoApiSecretHash
 
     /// <summary>فرمول‌های محتمل هدر apiSecret — برای تشخیص وقتی SSO 403 می‌دهد.</summary>
     public static IReadOnlyList<(string Name, Func<string, string, string> Compute)> ProbeVariants { get; } =
-    [
-        ("sha256(secret+time) ASCII hex lower", (s, t) => Sha256AsciiHexLower(s + t)),
-        ("sha256(time+secret) ASCII hex lower", (s, t) => Sha256AsciiHexLower(t + s)),
-        ("sha256(time+secret) ASCII hex upper", (s, t) => Sha256AsciiHexUpper(t + s)),
-        ("sha256(secret+time) ASCII hex upper", (s, t) => Sha256AsciiHexUpper(s + t)),
-        ("sha256(secret+time) UTF8 hex lower", (s, t) => Sha256Utf8HexLower(s + t)),
-        ("sha256(secret+time) base64 UTF8", (s, t) => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(s + t)))),
-        ("md5(secret+time) ASCII hex lower", (s, t) => Convert.ToHexString(MD5.HashData(Encoding.ASCII.GetBytes(s + t))).ToLowerInvariant()),
-        ("sha256(secret) ASCII hex lower (بدون time)", (s, _) => Sha256AsciiHexLower(s)),
-        ("raw secret (بدون هش)", (s, _) => s)
-    ];
+        new (string Name, Func<string, string, string> Compute)[]
+        {
+            ("sha256(secret+time) ASCII hex lower", (s, t) => Sha256AsciiHexLower(s + t)),
+            ("sha256(time+secret) ASCII hex lower", (s, t) => Sha256AsciiHexLower(t + s)),
+            ("sha256(time+secret) ASCII hex upper", (s, t) => Sha256AsciiHexUpper(t + s)),
+            ("sha256(secret+time) ASCII hex upper", (s, t) => Sha256AsciiHexUpper(s + t)),
+            ("sha256(secret+time) UTF8 hex lower", (s, t) => Sha256Utf8HexLower(s + t)),
+            ("sha256(secret+time) base64 UTF8", (s, t) => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(s + t)))),
+            ("md5(secret+time) ASCII hex lower", (s, t) => Convert.ToHexString(MD5.HashData(Encoding.ASCII.GetBytes(s + t))).ToLowerInvariant()),
+            ("sha256(secret) ASCII hex lower (بدون time)", (s, _) => Sha256AsciiHexLower(s)),
+            ("raw secret (بدون هش)", (s, _) => s)
+        };
 
     private static string Sha256Utf8HexLower(string input) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input ?? ""))).ToLowerInvariant();

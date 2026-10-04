@@ -6,4 +6,6 @@ Visual Studio: "The SDK Microsoft.NET.Sdk.Web specified could not be found"
    Install .NET SDK 7 or 8 if the list is empty.
 4) VS Installer -> Modify -> enable "ASP.NET and web development".
 
+CS1617 langversion 12: pull latest net7 branch (C# 11, no LangVersion 12 in csproj).
+
 Full guide (Persian): docs/VS175-NET7-DEBUG-fa.md

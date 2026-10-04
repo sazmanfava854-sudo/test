@@ -11,8 +11,8 @@
 
 این شاخه **`global.json` ندارد** — عمداً، تا Visual Studio همان SDK نصب‌شده روی ویندوز را انتخاب کند و خطای **MSB4236** (`Microsoft.NET.Sdk.Web` could not be found) به‌خاطر نسخهٔ اشتباه در `global.json` پیش نیاید.
 
-- **net7.0** با **SDK 7.0.x** (مثلاً 7.0.203) یا **SDK 8.0.x** (مثلاً 8.0.423) بیلد می‌شود.
-- کد **C# 12** است (`LangVersion` در csproj). اگر فقط SDK 7 دارید و خطای `Invalid option '12' for /langversion` می‌گیرید، [SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0) را نصب کنید (یا `dotnet --list-sdks` در CMD).
+- **net7.0** با **SDK 7.0.x** (مثلاً 7.0.203) — همان چیزی که VS 17.5 معمولاً استفاده می‌کند — بیلد می‌شود.
+- کد این شاخه **C# 11** است (بدون `LangVersion 12`). خطای **CS1617** (`Invalid option '12' for /langversion`) در نسخهٔ به‌روز شاخه برطرف شده است.
 
 ### خطای «The SDK Microsoft.NET.Sdk.Web specified could not be found»
 

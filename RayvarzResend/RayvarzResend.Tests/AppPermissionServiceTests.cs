@@ -62,7 +62,7 @@ public class AppPermissionServiceTests
             District = "1",
             IsAdmin = false
         });
-        await repo.SetUserGroupsAsync(user.Id, [group.Id]);
+        await repo.SetUserGroupsAsync(user.Id, new[] { group.Id });
 
         var resolved = await perms.ResolveAsync(user);
         Assert.False(resolved.CanAccessUnsentFiches);
@@ -96,7 +96,7 @@ public class AppPermissionServiceTests
             District = "1",
             IsAdmin = false
         });
-        await repo.SetUserGroupsAsync(user.Id, [group.Id]);
+        await repo.SetUserGroupsAsync(user.Id, new[] { group.Id });
 
         var resolved = await perms.ResolveAsync(user);
         Assert.False(resolved.CanAccessUnsentFiches);
@@ -130,7 +130,7 @@ public class AppPermissionServiceTests
             District = "1",
             IsAdmin = false
         });
-        await repo.SetUserGroupsAsync(user.Id, [group.Id]);
+        await repo.SetUserGroupsAsync(user.Id, new[] { group.Id });
 
         var resolved = await perms.ResolveAsync(user);
         Assert.False(resolved.CanAccessUnsentFiches);

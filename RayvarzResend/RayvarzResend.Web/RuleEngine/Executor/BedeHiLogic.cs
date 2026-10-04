@@ -7,12 +7,13 @@ public static class BedeHiLogic
 {
   public const string PriorCandidatesKey = "PriorIncomeCandidates";
 
-  private static readonly int[] RegionalAccountGroups = [1, 7, 10];
+  private static readonly int[] RegionalAccountGroups = new[] { 1, 7, 10 };
   private static readonly int[] StandardAccountGroups =
-  [
+  new[]
+  {
       64, 78, 1, 8, 15, 22, 29, 36, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100,
       43, 50, 71, 101, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116
-  ];
+  };
 
   private const string MinPaymentDate = "1399/01/01";
 

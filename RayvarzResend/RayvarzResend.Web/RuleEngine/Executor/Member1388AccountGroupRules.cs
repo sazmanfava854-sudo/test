@@ -9,15 +9,15 @@ namespace RayvarzResend.Web.RuleEngine.Executor;
 public static class Member1388AccountGroupRules
 {
     private static readonly HashSet<int> IncomeCityPlanningGroups =
-    [
+    new HashSet<int> { 
         1, 7, 8, 10, 11, 15, 22, 29, 36, 43, 50, 57, 64, 71, 78,
         125, 126, 150, 152, 161, 162
-    ];
+     };
 
     private static readonly HashSet<int> EshghalGroups =
-    [
+    new HashSet<int> { 
         7, 14, 19, 21, 24, 28, 35, 42, 46, 49, 63, 70, 77, 84, 85, 102, 120, 124
-    ];
+     };
 
     public static bool AppliesToFiche(string functionName, FicheHeaderDto fiche)
     {

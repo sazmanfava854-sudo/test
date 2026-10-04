@@ -46,7 +46,7 @@ public static class AppUserDomainNormalizer
     private static List<string> SplitList(string? value)
     {
         var result = new List<string>();
-        foreach (var raw in (value ?? "").Split([',', ';', '،'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var raw in (value ?? "").Split(new char[] { ',', ';', '،' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var item = Normalize(raw);
             if (item.Length > 0 && !result.Contains(item, StringComparer.OrdinalIgnoreCase))

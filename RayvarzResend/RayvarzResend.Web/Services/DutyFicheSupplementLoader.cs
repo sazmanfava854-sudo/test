@@ -73,7 +73,7 @@ public static class DutyFicheSupplementLoader
         }
         catch (SqlException)
         {
-            return [];
+            return new List<DutyOddmentDto>();
         }
 
         return list;

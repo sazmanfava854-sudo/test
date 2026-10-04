@@ -12,14 +12,14 @@ public class AccountingDocRowBuilderTests
   public const decimal SamplePayable = 7_511_382_000m;
 
   public static readonly (int IncmNo, decimal Price, string Desc)[] SampleExpectedDetails =
-  [
+    {
       (100116, 188_847_878m, "عوارض ناشي از اجراي ماده 9 قانون حمل و نقل ريلي"),
       (1270, 3_776_957_552m, "عوارض زيربنا (مسکوني)"),
       (1278, 113_308_727m, "عوارض آتشنشاني در هنگام صدور پروانه ساختماني"),
       (100070, 4_070_696_911m, "سرانه معابر ، تائسيسات،تجهيزات و خدمات عمومي"),
       (100118, -1_265_280_572m, "پرداختي قبلي 33%"),
       (1281, 626_851_504m, "عوارض ارزش افزوده ناشي از اجراي طرح هاي عمران شهري"),
-  ];
+  };
 
   [Fact]
   public void Sample_fiche_details_sum_to_payable()

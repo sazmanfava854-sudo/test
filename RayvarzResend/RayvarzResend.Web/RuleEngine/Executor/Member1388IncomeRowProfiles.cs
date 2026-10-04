@@ -10,7 +10,7 @@ public static class Member1388IncomeRowProfiles
     {
         ApplyOddments = true,
         ApplyBedeHi = true,
-        ExcludeBedeHiWhenAccountGroups = [125, 126],
+        ExcludeBedeHiWhenAccountGroups = new[] { 125, 126 },
         RowNum = "1",
         RowNumWhenAccountGroup = 150
     };

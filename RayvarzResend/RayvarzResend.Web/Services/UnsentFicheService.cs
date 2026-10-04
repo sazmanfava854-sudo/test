@@ -59,7 +59,7 @@ public class UnsentFicheService
         var dutyConflictBatch = incomeFoundPairs.Count > 0
             ? await _repo.LookupBillPayBatchAsync(
                 UnsentFicheKind.Duty, incomeFoundPairs, diagnoseMisses: false, ct)
-            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+            : new FicheRepository.BillPayBatchLookupResult(new List<UnsentFicheListItem>(), new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
 
         var remainingPairs = pairs
             .Where(p => !incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
@@ -67,7 +67,7 @@ public class UnsentFicheService
         var dutyBatch = remainingPairs.Count > 0
             ? await _repo.LookupBillPayBatchAsync(
                 UnsentFicheKind.Duty, remainingPairs, diagnoseMisses: false, ct)
-            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+            : new FicheRepository.BillPayBatchLookupResult(new List<UnsentFicheListItem>(), new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
 
         var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
             pairs,
@@ -142,7 +142,7 @@ public class UnsentFicheService
                 .ToList();
         }
 
-        return (req.FicheNos ?? [])
+        return (req.FicheNos ?? new List<string>())
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Select(n => new UnsentBatchFicheTarget
             {

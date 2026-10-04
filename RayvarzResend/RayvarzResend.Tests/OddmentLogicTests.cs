@@ -15,10 +15,11 @@ public class DutyOddmentLogicTests
         };
 
         DutyOddmentLogic.ApplyToSubs(subs,
-        [
+        new List<DutyOddmentDto>
+        {
             new DutyOddmentDto { DutyFormula = 5, DutyFormulaFiche = 0, Price = 100_000m, OddmentType = 2 },
             new DutyOddmentDto { DutyFormula = 5, DutyFormulaFiche = 0, Price = 50_000m, OddmentType = 4 }
-        ],
+        },
         "F001");
 
         Assert.Equal(950_000m, subs[0].Price);
@@ -33,9 +34,10 @@ public class DutyOddmentLogicTests
         };
 
         DutyOddmentLogic.ApplyToSubs(subs,
-        [
+        new List<DutyOddmentDto>
+        {
             new DutyOddmentDto { DutyFormula = 3, DutyFormulaFiche = 0, Price = 200_000m, OddmentType = 1 }
-        ],
+        },
         "F001");
 
         Assert.Equal(2, subs.Count);
@@ -48,7 +50,8 @@ public class DutyOddmentLogicTests
         var subs = new List<(int Formula, int Fiche, decimal Price)> { (5, 0, 1_000_000m) };
 
         DutyOddmentLogic.ApplyToSubs(subs,
-        [
+        new List<DutyOddmentDto>
+        {
             new DutyOddmentDto
             {
                 DutyFormula = 5, DutyFormulaFiche = 0, Price = 100_000m, OddmentType = 2, FicheNo = "OTHER"
@@ -57,7 +60,7 @@ public class DutyOddmentLogicTests
             {
                 DutyFormula = 5, DutyFormulaFiche = 0, Price = 50_000m, OddmentType = 2, FicheNo = "F001"
             }
-        ],
+        },
         "F001");
 
         Assert.Equal(950_000m, subs[0].Price);
@@ -74,9 +77,10 @@ public class DutyOddmentLogicTests
         };
 
         DutyOddmentLogic.ApplyToSubs(subs,
-        [
+        new List<DutyOddmentDto>
+        {
             new DutyOddmentDto { DutyFormula = 5, DutyFormulaFiche = 0, Price = 50_000m, OddmentType = 2 }
-        ],
+        },
         "F001");
 
         var amounts = DutyNosaziLogic.CalculateSubAmounts(subs, 1_000_000m);
@@ -95,10 +99,11 @@ public class IncomeOddmentLogicTests
     {
         var rows = new List<IncmRowDto> { new() { IncmNo = 1025, Val = 1_000_000m } };
         IncomeOddmentLogic.ApplyToRows(rows,
-        [
+        new List<IncomeOddmentDto>
+        {
             new IncomeOddmentDto { IncmNo = 1025, Value = 100_000m, OddmentType = 2 },
             new IncomeOddmentDto { IncmNo = 1025, Value = 50_000m, OddmentType = 4 }
-        ], null);
+        }, null);
 
         Assert.Equal(950_000m, rows[0].Val);
     }
@@ -108,9 +113,10 @@ public class IncomeOddmentLogicTests
     {
         var rows = new List<IncmRowDto> { new() { IncmNo = 1262, Val = 1_000_000m } };
         IncomeOddmentLogic.ApplyToRows(rows,
-        [
+        new List<IncomeOddmentDto>
+        {
             new IncomeOddmentDto { IncmNo = 1025, Value = 200_000m, OddmentType = 1 }
-        ], null);
+        }, null);
 
         Assert.Equal(2, rows.Count);
         Assert.Contains(rows, r => r.IncmNo == 1025 && r.Val == 200_000m);
@@ -121,9 +127,10 @@ public class IncomeOddmentLogicTests
     {
         var rows = new List<IncmRowDto>();
         IncomeOddmentLogic.ApplyToRows(rows,
-        [
+        new List<IncomeOddmentDto>
+        {
             new IncomeOddmentDto { IncmNo = 100202, Value = 200_000m, OddmentType = 1 }
-        ], null);
+        }, null);
 
         Assert.Empty(rows);
     }
@@ -132,7 +139,7 @@ public class IncomeOddmentLogicTests
     public void Empty_oddments_leaves_rows_unchanged()
     {
         var rows = new List<IncmRowDto> { new() { IncmNo = 1262, Val = 1_000_000m } };
-        IncomeOddmentLogic.ApplyToRows(rows, [], null);
+        IncomeOddmentLogic.ApplyToRows(rows, Array.Empty<IncomeOddmentDto>(), null);
         Assert.Equal(1_000_000m, rows[0].Val);
     }
 }

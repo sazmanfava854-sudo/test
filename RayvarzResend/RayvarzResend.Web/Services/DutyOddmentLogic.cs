@@ -5,8 +5,8 @@ namespace RayvarzResend.Web.Services;
 /// <summary>اعمال رندمان Duty_OddmentAccount روی Duty_FicheSub — همان الگوی IncomeOddmentLogic.</summary>
 public static class DutyOddmentLogic
 {
-    private static readonly HashSet<int> SubtractTypes = [2, 3, 6, 7];
-    private static readonly HashSet<int> AddTypes = [8, 1, 4];
+    private static readonly HashSet<int> SubtractTypes = new HashSet<int> { 2, 3, 6, 7 };
+    private static readonly HashSet<int> AddTypes = new HashSet<int> { 8, 1, 4 };
 
     public static void ApplyToSubs(
         IList<(int Formula, int Fiche, decimal Price)> subs,
