@@ -443,6 +443,52 @@ app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthSe
     });
 }).AllowAnonymous();
 
+app.MapGet("/api/auth/sso-credential-compare", (ShimasAuthService shimas, IConfiguration config) =>
+{
+    static (string source, string apiName, string clientId, string secret) ReadRow(
+        string label, string? apiName, string? clientId, string? secret) =>
+        (label, (apiName ?? "").Trim(), (clientId ?? "").Trim(), (secret ?? "").Trim());
+
+    static object ToDto((string source, string apiName, string clientId, string secret) row) => new
+    {
+        source = row.source,
+        apiName = row.apiName,
+        clientIdMasked = SsoCredentialMask.MaskId(row.clientId),
+        clientIdLength = row.clientId.Length,
+        secretLength = row.secret.Length,
+        secretLooksShort = SsoCredentialMask.SecretLooksTooShort(row.secret)
+    };
+
+    var shimasRow = ReadRow(
+        "Auth:Shimas (فعال در اپ)",
+        shimas.Options.SigningApiName,
+        shimas.Options.EffectiveClientId,
+        shimas.Options.ClientSecret);
+
+    var settingsRow = ReadRow(
+        "Settings (RuleEngine)",
+        config["Settings:SSOUserName"],
+        config["Settings:SSOClientId"],
+        config["Settings:SSOSecret"]);
+
+    var sameApiName = string.Equals(shimasRow.apiName, settingsRow.apiName, StringComparison.Ordinal);
+    var sameClientId = shimas.Options.EffectiveClientId.Trim()
+        == (config["Settings:SSOClientId"] ?? "").Trim();
+    var settingsSecretLen = (config["Settings:SSOSecret"] ?? "").Trim().Length;
+    var shimasSecretLen = (shimas.Options.ClientSecret ?? "").Trim().Length;
+    var sameSecretLength = settingsSecretLen > 0 && settingsSecretLen == shimasSecretLen;
+
+    return Results.Ok(new
+    {
+        shimas = ToDto(shimasRow),
+        settings = ToDto(settingsRow),
+        aligned = sameApiName && sameClientId && (settingsSecretLen == 0 || sameSecretLength),
+        noteFa = "اگر loginKey 403 است و همهٔ فرمول‌های probe شکست خورد، دیباگ کد کمکی نمی‌کند — trio apiName/ClientId/SecretKey را با پورتال SSO یکی کنید. "
+            + "اگر RuleEngine روی همان سرور SSO دارد، `sso-loginkey-probe?profile=settings` را بزنید؛ اگر آن OK شد، مقادیر Settings را در Auth:Shimas کپی کنید. "
+            + "دیباگر Visual Studio فقط با Attach به w3wp همان سایت 5065 هنگام باز کردن این URLها breakpoint می‌خورد، نه F5 لوکال."
+    });
+}).AllowAnonymous();
+
 // تشخیص 403 Client info missmatched:
 //   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Shimas) با همهٔ فرمول‌های هش
 //   /api/auth/sso-loginkey-probe?profile=settings → اعتبار RuleEngine از بلوک Settings (SSOUserName/SSOClientId/SSOSecret)
