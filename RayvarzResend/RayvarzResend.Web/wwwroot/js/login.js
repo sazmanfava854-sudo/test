@@ -34,7 +34,10 @@ async function checkExistingSession(mode) {
 function showSsoBlock(mode) {
   const block = $('loginSsoBlock');
   if (!block) return;
-  const show = !!mode?.preferSsoLogin && !!mode?.allowAdminLocalLoginOnPublicHost;
+  const show = !!mode?.ssoReady && (
+    !!mode?.preferSsoLogin ||
+    !!mode?.allowSsoOnLoopbackForDebug
+  );
   block.hidden = !show;
   const link = $('btnSsoLogin');
   if (link && mode?.loginPath) link.setAttribute('href', mode.loginPath);

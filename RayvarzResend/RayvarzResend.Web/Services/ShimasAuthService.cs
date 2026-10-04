@@ -42,12 +42,14 @@ public sealed class ShimasAuthService
     public ShimasAuthStatusDto GetStatus(HttpRequest? request = null)
     {
         var host = request?.Host.Host;
+        var allowLoopbackSso = _options.AllowSsoOnLoopbackForDebug && ShimasAuthOptions.IsLoopbackHost(host);
         var preferSso = _options.PreferSsoLoginForHost(host);
         return new ShimasAuthStatusDto
         {
             Enabled = _options.Enabled,
             SsoReady = _options.SsoReady,
             PreferSsoLogin = preferSso,
+            AllowSsoOnLoopbackForDebug = allowLoopbackSso,
             LocalLoginAvailable = _options.LocalLoginAvailableForHost(host),
             AllowAdminLocalLoginOnPublicHost = _options.AllowAdminLocalLoginOnPublicHost,
             LoginPath = preferSso ? "/auth/login" : "/login.html",

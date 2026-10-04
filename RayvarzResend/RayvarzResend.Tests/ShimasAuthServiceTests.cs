@@ -165,6 +165,9 @@ public class ShimasAuthServiceTests
         Assert.False(ShimasAuthOptions.IsLoopbackHost("city.mashhad.ir"));
 
         Assert.False(options.PreferSsoLoginForHost("localhost"));
+        options.AllowSsoOnLoopbackForDebug = true;
+        Assert.True(options.PreferSsoLoginForHost("localhost"));
+        options.AllowSsoOnLoopbackForDebug = false;
         Assert.True(options.LocalLoginAvailableForHost("localhost"));
         Assert.True(options.PreferSsoLoginForHost("city.mashhad.ir"));
         Assert.False(options.LocalLoginAvailableForHost("city.mashhad.ir"));
@@ -175,6 +178,12 @@ public class ShimasAuthServiceTests
         Assert.Equal("/login.html", service.ResolveLoginRedirectPath(local.Request));
         Assert.False(service.GetStatus(local.Request).PreferSsoLogin);
         Assert.True(service.GetStatus(local.Request).LocalLoginAvailable);
+
+        options.AllowSsoOnLoopbackForDebug = true;
+        var serviceDebug = CreateService(options);
+        Assert.Equal("/auth/login", serviceDebug.ResolveLoginRedirectPath(local.Request));
+        Assert.True(serviceDebug.GetStatus(local.Request).PreferSsoLogin);
+        Assert.True(serviceDebug.GetStatus(local.Request).AllowSsoOnLoopbackForDebug);
 
         var server = new DefaultHttpContext();
         server.Request.Host = new HostString("city.mashhad.ir", 5065);

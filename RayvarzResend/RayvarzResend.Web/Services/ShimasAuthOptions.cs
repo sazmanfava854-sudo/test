@@ -57,6 +57,8 @@ public sealed class ShimasAuthOptions
     public bool AllowAdminLocalLoginOnPublicHost { get; set; } = true;
     /// <summary>روی این hostها (مثلاً IP داخلی سرور) به‌جای SSO به login.html هدایت می‌شود — ورود محلی برای ادمین/عملیات.</summary>
     public string[] PreferLocalLoginHosts { get; set; } = Array.Empty<string>();
+    /// <summary>روی localhost/127.0.0.1 هم /auth/login و SSO فعال شود (فقط دیباگ F5 در Visual Studio).</summary>
+    public bool AllowSsoOnLoopbackForDebug { get; set; }
     public int MinRefreshTokenLength { get; set; } = 3;
 
     public string EffectiveClientId
@@ -140,7 +142,9 @@ public sealed class ShimasAuthOptions
     }
 
     public bool PreferSsoLoginForHost(string? host) =>
-        PreferSsoLogin && !IsLoopbackHost(host) && !IsPreferLocalLoginHost(host);
+        PreferSsoLogin
+        && !IsPreferLocalLoginHost(host)
+        && (!IsLoopbackHost(host) || AllowSsoOnLoopbackForDebug);
 
     public bool LocalLoginAvailableForHost(string? host) =>
         LocalLoginAvailable || IsLoopbackHost(host) || IsPreferLocalLoginHost(host);

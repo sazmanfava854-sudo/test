@@ -34,7 +34,11 @@
 2. Solution: `RayvarzResend/RayvarzResend.sln`
 3. Startup project: **RayvarzResend.Web**
 4. پروفایل: **http** یا **RayvarzResend.Web** — معمولاً `http://localhost:5088`
-5. برای لاگ SSO در `appsettings.json` (یا `appsettings.Development.json`):
+5. برای **ورود سازمانی روی localhost** (F5 با `https://localhost:...`):
+   - `Auth:Shimas:AllowSsoOnLoopbackForDebug` = **true** (در شاخه net7 پیش‌فرض است)
+   - بدون این فلگ، کلیک «ورود سازمانی» به `/auth/login` می‌رود و بلافاصله به `login.html` برمی‌گردد.
+   - مستقیم برای دیباگ: `https://localhost:پورت/auth/login?debug=1`
+6. برای لاگ SSO در `appsettings.json`:
 
 ```json
 "Auth": {
@@ -46,7 +50,7 @@
 }
 ```
 
-6. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`
+7. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`
 
 ### خروج با code 1 و JsonReaderException / InvalidDataException
 
