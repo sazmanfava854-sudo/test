@@ -127,3 +127,44 @@ Program.cs          → if (shimas.IsSsoCallbackHttpRequest(...))  (~۲۰۱)
 **`BuildExternalLoginUrlAsync` و loginKey = قبل از رفتن به مشهد؛ `CreateMaterial`/`SendSignedJsonAsync` بعد از لاگین = روی همان سروری که `returnUrl` (معمولاً city) را جواب می‌دهد — نه لزوماً همان Visual Studio F5 روی localhost.**
 
 مستندات عمومی net7: [VS175-NET7-DEBUG-fa.md](./VS175-NET7-DEBUG-fa.md)
+
+## خطاهای دیباگر: IsCollectible / CustomAttributes / Session
+
+در **Locals** یا **Immediate Window** گاهی این پیام‌ها دیده می‌شود:
+
+- `Method ... get_IsCollectible cannot be called in this context`
+- `MemberInfo.get_CustomAttributes cannot be called in this context`
+- `'Session' threw an exception of type 'System.InvalidOperationException'`
+
+این‌ها **خطای اجرای برنامه نیستند** — Visual Studio هنگام باز کردن (expand) بعضی propertyها در حالت توقف (breakpoint)، reflection یا `HttpContext.Session` را صدا می‌زند و در آن context مجاز نیست.
+
+| علامت در دیباگر | معنی |
+|-----------------|------|
+| `IsCollectible` / `CustomAttributes` / `IsConstructedGenericMethod` | روی **MethodInfo** یا delegate باز کرده‌اید — نادیده بگیرید. |
+| `Session` روی `HttpContext` | این پروژه **ASP.NET Session** (`UseSession`) ندارد؛ cookie احراز هویت است. expand کردن `context.Session` همیشه خطا می‌دهد — طبیعی است. |
+
+**به‌جای expand کردن `context` یا `Request`، در Watch این‌ها را بزنید (رشته):**
+
+```text
+context.Request.Method
+context.Request.Path.Value
+context.Request.QueryString.Value
+context.Request.Host.Value
+```
+
+برای SSO (بعد از pull شاخهٔ net7):
+
+```text
+shimas.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa
+shimas.ProbeSsoCallbackHttpRequest(context.Request).IsSsoCallbackHttpRequest
+```
+
+**تنظیم اختیاری VS:** Tools → Options → Debugging → General → خاموش کردن **Enable property evaluation and other implicit function calls** (کمتر خطای عجیب در Locals؛ بعضی propertyها خودکار پر نمی‌شوند).
+
+**جایگزین:** یک خط موقت در `Program.cs` داخل middleware (فقط لوکال) قبل از `await next()`:
+
+```csharp
+var _dbg = shimas.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa;
+```
+
+روی `_dbg` breakpoint بگذارید — بدون Immediate Window.
