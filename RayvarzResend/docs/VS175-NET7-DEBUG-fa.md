@@ -7,13 +7,26 @@
 - پروژهٔ اصلی `net8.0` است و با SDK 7.0.x خطای **NETSDK1045** می‌دهد.
 - این شاخه `TargetFramework` را **net7.0** می‌گذارد تا با **Visual Studio 17.5** و SDK نصب‌شدهٔ 7.0.203 بتوانید **F5** بزنید و لاگین SSO را دیباگ کنید.
 
-## SDK و global.json
+## SDK (بدون global.json)
 
-در `RayvarzResend/global.json`:
+این شاخه **`global.json` ندارد** — عمداً، تا Visual Studio همان SDK نصب‌شده روی ویندوز را انتخاب کند و خطای **MSB4236** (`Microsoft.NET.Sdk.Web` could not be found) به‌خاطر نسخهٔ اشتباه در `global.json` پیش نیاید.
 
-- حداقل SDK: **7.0.203**
-- `rollForward: latestMajor` — اگر **SDK 8** (مثلاً 8.0.423) نصب باشد، برای **کامپایل** از آن استفاده می‌شود (کد از C# 12 استفاده می‌کند).
-- اگر **فقط** SDK 7 دارید و بیلد با خطای `Invalid option '12' for /langversion` می‌خورد، SDK 8 را نصب کنید یا از همان ماشین با `dotnet --list-sdks` مطمئن شوید 8.x موجود است.
+- **net7.0** با **SDK 7.0.x** (مثلاً 7.0.203) یا **SDK 8.0.x** (مثلاً 8.0.423) بیلد می‌شود.
+- کد **C# 12** است (`LangVersion` در csproj). اگر فقط SDK 7 دارید و خطای `Invalid option '12' for /langversion` می‌گیرید، [SDK 8.0](https://dotnet.microsoft.com/download/dotnet/8.0) را نصب کنید (یا `dotnet --list-sdks` در CMD).
+
+### خطای «The SDK Microsoft.NET.Sdk.Web specified could not be found»
+
+1. Solution را باز کنید: `RayvarzResend\RayvarzResend.sln` (نه فقط یک `.csproj` از پوشهٔ دیگر).
+2. در **Developer PowerShell** یا CMD:
+   ```bat
+   cd مسیر\RayvarzResend
+   dotnet --list-sdks
+   dotnet restore RayvarzResend.sln
+   ```
+   باید حداقل یک خط `7.0.x` یا `8.0.x` ببینید.
+3. اگر `dotnet` شناخته نشد یا لیست خالی است: از Visual Studio Installer → **Modify** → workload **ASP.NET and web development** و **.NET desktop development** را فعال کنید؛ یا SDK 7/8 را جدا نصب کنید.
+4. اگر از zip قدیمی استفاده می‌کنید و هنوز `RayvarzResend\global.json` دارید که `7.0.203` می‌گوید: آن فایل را **حذف** کنید یا آخرین zip/شاخه را بگیرید.
+5. در `C:\Users\...\` یا `Downloads` اگر `global.json` دیگری هست که SDK را قفل کرده، موقتاً rename کنید.
 
 ## باز کردن در Visual Studio
 
