@@ -626,6 +626,32 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void ProbeSsoCallbackHttpRequest_sso_restart_is_not_callback()
+    {
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/auth/sso-restart";
+
+        var probe = service.ProbeSsoCallbackHttpRequest(context.Request);
+
+        Assert.False(probe.IsSsoCallbackHttpRequest);
+        Assert.False(probe.PathMatchesCallback);
+        Assert.Contains("شروع", probe.RejectionReasonFa ?? "", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildSsoPortalLogoutRedirectUrl_empty_when_logout_url_not_configured()
+    {
+        var service = CreateService(new ShimasAuthOptions { SsoPortalLogoutUrl = "" });
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost", 5088);
+
+        Assert.Null(service.BuildSsoPortalLogoutRedirectUrl(context.Request));
+    }
+
+    [Fact]
     public void ProbeSsoCallbackHttpRequest_explains_missing_username_on_management()
     {
         var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });

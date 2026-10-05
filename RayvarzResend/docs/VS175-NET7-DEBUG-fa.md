@@ -33,15 +33,16 @@
 1. شاخه: `cursor/net7-vs175-debug-ffcb`
 2. Solution: `RayvarzResend/RayvarzResend.sln`
 3. Startup project: **RayvarzResend.Web**
-4. پروفایل: **RayvarzResend.Web** یا **http** (هر دو یکسان‌اند؛ Visual Studio گاهی هر دو را نگه می‌دارد) — F5 با `launchUrl`: **`/auth/sso-restart`** (کوکی اپ + خروج SSO مشهد → `/auth/login`).
-5. کوکی **login.mashhad.ir** از کد لوکال پاک نمی‌شود؛ فقط با redirect به `Auth:Shimas:SsoPortalLogoutUrl` (پیش‌فرض Logout.aspx). اگر خروج مشهد کار نکرد، آدرس را با ادمین SSO چک کنید یا یک بار Incognito.
-5. **دو محیط (گیج‌کننده):** سرور Publish `http://5.252.216.140:8070` ≠ F5 روی `localhost` — [SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md](./SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md)
-6. **ورود سازمانی** باید از آدرس ثبت SSO باشد، نه localhost:
+4. پروفایل: **RayvarzResend.Web** یا **http** (هر دو یکسان‌اند؛ Visual Studio گاهی هر دو را نگه می‌دارد) — F5 با `launchUrl`: **`/auth/sso-restart`** (پاک کوکی اپ → `/auth/login`).
+5. کوکی **login.mashhad.ir** از کد لوکال پاک نمی‌شود. پیش‌فرض **`SsoPortalLogoutUrl` خالی** است چون `Authentication/Logout.aspx` روی پورتال اغلب **404** می‌دهد. برای خروج کامل نشست مشهد: آدرس درست را از ادمین SSO در `Auth:Shimas:SsoPortalLogoutUrl` بگذارید، یا یک بار **Incognito** / پاک دستی کوکی `login.mashhad.ir`.
+6. روی `/auth/sso-restart` و `/auth/login` اگر `ParseCallbackQuery` خالی است **طبیعی** است — callback فقط بعد از برگشت از SSO با `?username&refresh_token` است.
+7. **دو محیط (گیج‌کننده):** سرور Publish `http://5.252.216.140:8070` ≠ F5 روی `localhost` — [SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md](./SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md)
+8. **ورود سازمانی** باید از آدرس ثبت SSO باشد، نه localhost:
    - `Auth:Shimas:PublicBaseUrl` = `https://city.mashhad.ir:5065`
    - روی `login.html` لوکال، دکمه «ورود سازمانی» به **`https://city.mashhad.ir:5065/auth/login`** می‌رود (از `/api/auth/mode` → `publicSsoLoginUrl`).
    - برای تست واقعی SSO همان آدرس شهر را در مرورگر باز کنید: `https://city.mashhad.ir:5065/login.html` یا مستقیم `/auth/login?debug=1`
    - F5 روی localhost فقط برای دیباگ کد backend (breakpoint قبل از redirect) است؛ callback SSO به `/management` روی **city** برمی‌گردد.
-7. برای لاگ SSO در `appsettings.json`:
+9. برای لاگ SSO در `appsettings.json`:
 
 ```json
 "Auth": {
@@ -53,8 +54,8 @@
 }
 ```
 
-8. **ورود محلی و SSO یکسان:** در فرم `login.html` همان **دامین** را بزنید (مثلاً `alidoost-pa`)، نه فقط کد ملی — با SSO یکی است.
-9. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`  
+9. **ورود محلی و SSO یکسان:** در فرم `login.html` همان **دامین** را بزنید (مثلاً `alidoost-pa`)، نه فقط کد ملی — با SSO یکی است.
+10. Breakpoint پیشنهادی: `ShimasAuthService`, `MashhadSsoApiClient`, `SsoApiSecretHash`  
    **اگر بعد از لاگین در login.mashhad.ir breakpoint نمی‌خورد:** [VS175-SSO-DEBUG-BREAKPOINTS-fa.md](./VS175-SSO-DEBUG-BREAKPOINTS-fa.md) — فاز ۱ (شروع SSO) و فاز ۲ (callback روی city) جدا هستند.
 
 ### خروج با code 1 و JsonReaderException / InvalidDataException

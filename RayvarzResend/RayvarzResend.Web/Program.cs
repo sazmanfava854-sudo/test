@@ -200,7 +200,8 @@ app.Use(async (context, next) =>
     var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
     if (!shimas.IsSsoCallbackHttpRequest(context.Request))
     {
-        if (shimas.Options.DebugSigning)
+        if (shimas.Options.DebugSigning
+            && !ShimasAuthService.IsKnownNonSsoCallbackPath(context.Request.Path.Value))
         {
             var probe = shimas.ProbeSsoCallbackHttpRequest(context.Request);
             if (probe.PathMatchesCallback && probe.RefreshTokenLength > 0 && !probe.IsSsoCallbackHttpRequest)

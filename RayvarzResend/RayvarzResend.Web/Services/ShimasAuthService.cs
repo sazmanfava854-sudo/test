@@ -565,11 +565,51 @@ public sealed class ShimasAuthService
         return probe.IsSsoCallbackHttpRequest;
     }
 
+    /// <summary>مسیرهای شروع/ری‌استارت ورود — callback SSO نیستند؛ query خالی در ParseCallbackQuery طبیعی است.</summary>
+    public static bool IsKnownNonSsoCallbackPath(string? path)
+    {
+        var value = (path ?? "").Trim();
+        if (value.Length == 0)
+            return false;
+
+        if (value.Equals("/auth/sso-restart", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("/auth/login", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("/login.html", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (value.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
     public SsoCallbackProbeDto ProbeSsoCallbackHttpRequest(HttpRequest request)
     {
         var path = request.Path.Value ?? "";
         var pathBase = (request.PathBase.Value ?? "").Trim();
         var effectivePath = ResolveRequestPathForCallback(request);
+
+        if (IsKnownNonSsoCallbackPath(effectivePath) || IsKnownNonSsoCallbackPath(path))
+        {
+            return new SsoCallbackProbeDto
+            {
+                Method = request.Method,
+                Path = path,
+                PathBase = pathBase,
+                EffectivePath = effectivePath,
+                ConfiguredCallbackPath = NormalizeCallbackPath(_options.CallbackPath),
+                IsGet = HttpMethods.IsGet(request.Method),
+                PathMatchesCallback = false,
+                RefreshTokenLength = 0,
+                MinRefreshTokenLength = _options.MinRefreshTokenLength,
+                HasUsernameOrDomain = false,
+                IsSsoCallbackHttpRequest = false,
+                RejectionReasonFa =
+                    "این مسیر شروع یا ری‌استارت ورود است، نه بازگشت SSO — username و refresh_token بعد از login.mashhad.ir در query می‌آیند.",
+                QueryKeys = request.Query.Keys.Take(32).ToArray()
+            };
+        }
+
         var payload = ParseCallbackQuery(request.Query);
         var isGet = HttpMethods.IsGet(request.Method);
         var pathMatches = MatchesCallbackRequestPath(effectivePath)
