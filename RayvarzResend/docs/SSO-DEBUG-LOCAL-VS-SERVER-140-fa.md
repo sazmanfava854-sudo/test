@@ -65,13 +65,13 @@
 
 (برگشت SSO همان است؛ فقط **درخواست از localhost** اجرا می‌شود تا breakpoint بخورد.)
 
-با شاخهٔ جدید، `?debug=1` روی localhost **به city redirect نمی‌شود**.
+با F5 معمولاً `http://localhost:5088/` باز می‌شود (بدون `auth/login?debug=1`).
 
-| URL در مرورگر (F5) | برای F10 |
-|--------------------|----------|
+| URL در مرورگر (دستی) | برای F10 |
+|----------------------|----------|
 | `http://localhost:5088/api/auth/sso-loginkey-check` | ساده‌ترین — مستقیم loginKey |
 | `http://localhost:5088/api/auth/sso-signing-preview` | فقط ساخت hash/هدر (بدون POST loginKey) |
-| `http://localhost:5088/auth/login?debug=1` | همان مسیر `/auth/login` + DiagnoseLoginKey |
+| `http://localhost:5088/auth/login?debug=1` | (اختیاری) صفحهٔ تشخیص + ادامه به `/auth/login` |
 
 **نه** `https://city.mashhad.ir:5065/...` در مرورگر اگر F5 روی لپ‌تاپ زده‌اید — آن روی IIS پشت city است.
 
