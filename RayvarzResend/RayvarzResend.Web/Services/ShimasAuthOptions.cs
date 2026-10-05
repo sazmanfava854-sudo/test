@@ -35,7 +35,7 @@ public sealed class ShimasAuthOptions
     /// <summary>true = هر loginKey/getAccessToken مقادیر امضا (apiSecret/hash) را در لاگ می‌نویسد — SecretKey هرگز لاگ نمی‌شود.</summary>
     public bool DebugSigning { get; set; }
     /// <summary>اگر loginKey خطا بدهد به Login.aspx برود (همان روال قبلی FinancialAssistant روی IIS).</summary>
-    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
+    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; }
     /// <summary>RuleEngine در loginKey فیلد ReturnUrl نمی‌فرستد؛ برگشت از «برگشت آدرس» ثبت SSO است.</summary>
     public bool IncludeReturnUrlInLoginKey { get; set; }
     /// <summary>true = loginKey API؛ false = Login.aspx?lkey+returnUrl (پیش‌فرض — همان نسخهٔ پایدار قبلی).</summary>

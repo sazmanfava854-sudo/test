@@ -72,7 +72,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"SSOUserName\"", json);
         Assert.Contains("\"UseLoginKeyOnRedirect\": true", json);
         Assert.Contains("\"IncludeReturnUrlInLoginKey\": false", json);
-        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": true", json);
+        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": false", json);
         Assert.Contains("FinancialAssistant", json);
         Assert.Contains("19cf3C33", json);
         Assert.Contains("\"LoginState\": \"test\"", json);
