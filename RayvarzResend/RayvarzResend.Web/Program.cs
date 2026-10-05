@@ -555,7 +555,9 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
     if (apiNameOverride.Length > 0)
         apiName = apiNameOverride;
 
-    var results = await shimas.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct);
+    // پیش‌فرض: فقط فرمول سند (یک POST). all=1 → آزمودن همهٔ فرمول‌ها.
+    var allVariants = (http.Request.Query["all"].FirstOrDefault() ?? "") is "1" or "true";
+    var results = await shimas.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct, allVariants);
     var winner = results.FirstOrDefault(r => r.Ok);
     var ssoUnreachable = winner == null && results.Count == 1 && results[0].Variant == "getCurrentTime";
     var allClientInfoMismatch = winner == null && !ssoUnreachable

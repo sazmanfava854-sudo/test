@@ -324,7 +324,8 @@ public sealed class ShimasAuthService
         string apiName,
         string clientId,
         string secret,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool allVariants = true)
     {
         var results = new List<SsoLoginKeyProbeResult>();
 
@@ -351,6 +352,14 @@ public sealed class ShimasAuthService
         }
 
         var requestTime = time.Data.Trim();
+        if (!allVariants)
+        {
+            // سند ص ۲۰: فقط SHA256(appSecretKey + time) — یک درخواست، بدون آزمودن فرمول‌های دیگر.
+            var (docName, docCompute) = SsoApiSecretHash.ProbeVariants[0];
+            results.Add(await RunProbeAsync(docName, apiName, clientId, secret, requestTime, docCompute, ct));
+            return results;
+        }
+
         foreach (var (name, compute) in SsoApiSecretHash.ProbeVariants)
         {
             var item = await RunProbeAsync(name, apiName, clientId, secret, requestTime, compute, ct);
