@@ -44,6 +44,7 @@
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
+      <button type="button" class="main-tab perm-shahkar" data-tab="shahkar" role="tab" aria-selected="false" hidden>شاهکار</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
@@ -570,6 +571,59 @@
     </section>
     </div>
 
+    <div id="tabShahkar" class="tab-panel perm-shahkar" role="tabpanel" hidden>
+    <section class="card card-enter shahkar-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">✓</span>
+        <h2>شاهکار</h2>
+      </div>
+      <p class="field-hint form-intro">
+        جستجو در جدول <strong>Users</strong> (پایگاه Security) با <strong>نام کاربری</strong> یا <strong>کد ملی</strong>.
+        ردیف‌های انتخاب‌شده با <code>ShahkarOk = 1</code> به‌روز می‌شوند.
+      </p>
+      <div class="bank-inquiry-search-grid unsent-form-grid">
+        <label class="field">
+          <span class="field-label">نام کاربری (دامین)</span>
+          <input id="shahkarUserName" type="text" placeholder="ghobasefidi-s" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">کد ملی</span>
+          <input id="shahkarNationalCode" type="text" placeholder="0922808074" maxlength="10" autocomplete="off" />
+        </label>
+      </div>
+      <p class="field-hint">حداقل یکی از دو فیلد را پر کنید.</p>
+      <div class="actions">
+        <button id="btnShahkarSearch" class="btn primary" type="button">جستجو</button>
+      </div>
+      <div class="subsection" id="shahkarResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="shahkarSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="shahkarCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="shahkarTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>نام کاربری</th>
+                <th>کد ملی</th>
+                <th>ShahkarOk</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button id="btnShahkarConfirm" class="btn danger" type="button" disabled>ثبت ShahkarOk = 1</button>
+        </div>
+      </div>
+      <pre id="shahkarResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
     <div id="tabUsers" class="tab-panel perm-users" role="tabpanel" hidden>
       <section class="card card-enter">
         <div class="card-head">
@@ -608,6 +662,13 @@
                 <span class="user-group-perm-hint">دسترسی به تب «خدمات الکترونیک»</span>
               </span>
             </label>
+            <label class="user-group-perm-item user-group-perm-item-wide">
+              <input id="newGroupShahkar" type="checkbox" />
+              <span class="user-group-perm-content">
+                <span class="user-group-perm-text">شاهکار</span>
+                <span class="user-group-perm-hint">دسترسی به تب «شاهکار»</span>
+              </span>
+            </label>
           </div>
           <div class="actions user-groups-actions">
             <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
@@ -625,6 +686,7 @@
                   <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
                   <th>خدمات الکترونیک</th>
+                  <th>شاهکار</th>
                   <th>عملیات</th>
                 </tr>
               </thead>

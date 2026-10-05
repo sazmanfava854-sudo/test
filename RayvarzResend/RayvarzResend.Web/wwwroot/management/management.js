@@ -32,6 +32,14 @@ const MODULES = [
     can: (user) => isAdminUser(user) || !!user?.canAccessBankInquiryConfirm
   },
   {
+    key: 'shahkar',
+    title: 'شاهکار',
+    description: 'جستجو و ثبت ShahkarOk در Users',
+    icon: '✓',
+    href: '/?tab=shahkar',
+    can: (user) => isAdminUser(user) || !!user?.canAccessShahkar
+  },
+  {
     key: 'users',
     title: 'مدیریت کاربران',
     description: 'کاربران، گروه‌ها و دسترسی‌ها',
@@ -55,6 +63,7 @@ function hasAnyModulePermission(user) {
     || user?.canAccessInstallment
     || user?.canAccessFicheDateChange
     || user?.canAccessBankInquiryConfirm
+    || user?.canAccessShahkar
     || user?.canManageUsers
   );
 }

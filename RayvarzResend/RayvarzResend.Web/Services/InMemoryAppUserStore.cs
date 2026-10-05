@@ -126,6 +126,7 @@ public sealed class InMemoryAppUserStore
                 CanAccessInstallment = g.CanAccessInstallment,
                 CanAccessFicheDateChange = g.CanAccessFicheDateChange,
                 CanAccessBankInquiryConfirm = g.CanAccessBankInquiryConfirm,
+                CanAccessShahkar = g.CanAccessShahkar,
                 CanManageUsers = g.CanManageUsers,
                 CreatedAtUtc = g.CreatedAtUtc.ToString("O")
             })
@@ -147,6 +148,7 @@ public sealed class InMemoryAppUserStore
             CanAccessInstallment = req.CanAccessInstallment,
             CanAccessFicheDateChange = req.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
+            CanAccessShahkar = req.CanAccessShahkar,
             CanManageUsers = req.CanManageUsers,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -159,6 +161,7 @@ public sealed class InMemoryAppUserStore
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
+            CanAccessShahkar = group.CanAccessShahkar,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -178,6 +181,7 @@ public sealed class InMemoryAppUserStore
         group.CanAccessInstallment = req.CanAccessInstallment;
         group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
         group.CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm;
+        group.CanAccessShahkar = req.CanAccessShahkar;
         group.CanManageUsers = req.CanManageUsers;
 
         return new AppUserGroupDto
@@ -188,6 +192,7 @@ public sealed class InMemoryAppUserStore
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
+            CanAccessShahkar = group.CanAccessShahkar,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };

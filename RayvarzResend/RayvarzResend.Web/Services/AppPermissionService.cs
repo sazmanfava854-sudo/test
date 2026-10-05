@@ -24,6 +24,7 @@ public sealed class AppPermissionService
             CanAccessInstallment = memberGroups.Any(g => g.CanAccessInstallment),
             CanAccessFicheDateChange = memberGroups.Any(g => g.CanAccessFicheDateChange),
             CanAccessBankInquiryConfirm = memberGroups.Any(g => g.CanAccessBankInquiryConfirm),
+            CanAccessShahkar = memberGroups.Any(g => g.CanAccessShahkar),
             CanManageUsers = memberGroups.Any(g => g.CanManageUsers),
             GroupIds = groupIds
         };

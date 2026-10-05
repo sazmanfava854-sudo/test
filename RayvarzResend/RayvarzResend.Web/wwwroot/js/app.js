@@ -270,6 +270,7 @@ function setupMainTabs() {
     installment: $('tabInstallment'),
     ficheDate: $('tabFicheDate'),
     bankInquiry: $('tabBankInquiry'),
+    shahkar: $('tabShahkar'),
     users: $('tabUsers')
   };
 
@@ -287,6 +288,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
   installment: $('tabInstallment'),
   ficheDate: $('tabFicheDate'),
   bankInquiry: $('tabBankInquiry'),
+  shahkar: $('tabShahkar'),
   users: $('tabUsers')
 }) {
   tabs.forEach((t) => {
@@ -1277,6 +1279,9 @@ function formatFicheDateUpdateResult(data) {
 
 let bankInquiryItems = [];
 const selectedBankInquiryNos = new Set();
+let shahkarItems = [];
+const selectedShahkarUserNames = new Set();
+const shahkarSelectedItems = new Map();
 const bankInquirySelectedItems = new Map();
 const bankInquirySearchState = {
   page: 1,
@@ -1404,6 +1409,120 @@ function renderBankInquiryTable(items, meta = {}) {
   }
   updateBankInquiryPaginationUi();
   syncBankInquiryConfirmButton();
+}
+
+function setShahkarRowSelected(selectionSet, cacheMap, item, selected) {
+  const key = (item?.userName || '').trim();
+  if (!key) return;
+  if (selected) {
+    selectionSet.add(key);
+    if (cacheMap) cacheMap.set(key, item);
+  } else {
+    selectionSet.delete(key);
+    if (cacheMap) cacheMap.delete(key);
+  }
+}
+
+function syncShahkarConfirmButton() {
+  const btn = $('btnShahkarConfirm');
+  if (btn) btn.disabled = selectedShahkarUserNames.size === 0;
+}
+
+function updateShahkarCountLabel() {
+  const countLabel = $('shahkarCountLabel');
+  if (!countLabel) return;
+  const total = shahkarItems.length;
+  const selectedTotal = selectedShahkarUserNames.size;
+  countLabel.textContent = selectedTotal > 0
+    ? `${total.toLocaleString('fa-IR')} مورد — ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+    : `${total.toLocaleString('fa-IR')} مورد`;
+}
+
+function formatShahkarOkLabel(value, isOk) {
+  if (isOk) return 'تأیید (1)';
+  const v = (value || '').trim();
+  return v ? v : 'خیر';
+}
+
+function renderShahkarTable(items) {
+  shahkarItems = items || [];
+  const section = $('shahkarResultsSection');
+  const tbody = $('shahkarTable')?.querySelector('tbody');
+  const selectAll = $('shahkarSelectAll');
+  if (!section || !tbody) return;
+
+  section.hidden = false;
+
+  if (shahkarItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">موردی یافت نشد</td></tr>';
+    updateShahkarCountLabel();
+    syncShahkarConfirmButton();
+    return;
+  }
+
+  tbody.innerHTML = shahkarItems.map((item) => {
+    const userName = (item.userName || '').trim();
+    const checked = selectedShahkarUserNames.has(userName) ? ' checked' : '';
+    const okLabel = formatShahkarOkLabel(item.shahkarOk, item.isShahkarOk);
+    return `<tr>
+      <td class="col-check"><input type="checkbox" class="shahkar-row-check" data-user-name="${userName}"${checked} /></td>
+      <td>${userName || '-'}</td>
+      <td>${toPersianDigits(item.nationalCode || '-')}</td>
+      <td>${okLabel}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.shahkar-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const userName = (cb.dataset.userName || '').trim();
+      const item = shahkarItems.find((row) => (row.userName || '').trim() === userName);
+      setShahkarRowSelected(selectedShahkarUserNames, shahkarSelectedItems, item || { userName }, cb.checked);
+      syncShahkarConfirmButton();
+      if (selectAll) {
+        const all = tbody.querySelectorAll('.shahkar-row-check');
+        selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
+      }
+      updateShahkarCountLabel();
+    });
+  });
+
+  updateShahkarCountLabel();
+  if (selectAll) {
+    const selectedOnPage = shahkarItems.filter((item) => selectedShahkarUserNames.has((item.userName || '').trim())).length;
+    selectAll.checked = shahkarItems.length > 0 && selectedOnPage === shahkarItems.length;
+  }
+  syncShahkarConfirmButton();
+}
+
+async function fetchShahkarResults({ clearSelection = false } = {}) {
+  const userName = ($('shahkarUserName')?.value || '').trim();
+  const nationalCode = ($('shahkarNationalCode')?.value || '').trim();
+  if (!userName && !nationalCode) {
+    return showAppWarning('نام کاربری یا کد ملی را وارد کنید');
+  }
+
+  if (clearSelection) {
+    clearGridSelection(selectedShahkarUserNames, shahkarSelectedItems);
+  }
+
+  const box = $('shahkarResultBox');
+  try {
+    const res = await apiFetch('/api/shahkar/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName, nationalCode })
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    renderShahkarTable(data.items || []);
+    if (box) box.hidden = true;
+  } catch (e) {
+    if (box) {
+      box.hidden = false;
+      box.textContent = e.message;
+    }
+    showAppError(e.message);
+  }
 }
 
 async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}) {
@@ -1925,6 +2044,7 @@ function hasAnyModulePermission() {
     || currentUser?.canAccessInstallment
     || currentUser?.canAccessFicheDateChange
     || currentUser?.canAccessBankInquiryConfirm
+    || currentUser?.canAccessShahkar
     || currentUser?.canManageUsers
   );
 }
@@ -1941,6 +2061,7 @@ const MAIN_TAB_ACCESS_ORDER = [
   { key: 'installment', can: () => canAccessInstallment() },
   { key: 'ficheDate', can: () => canAccessFicheDateChange() },
   { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
+  { key: 'shahkar', can: () => canAccessShahkar() },
   { key: 'users', can: () => canManageUsers() }
 ];
 
@@ -1954,6 +2075,10 @@ function canAccessFicheDateChange() {
 
 function canAccessBankInquiryConfirm() {
   return isAdminUser() || !!currentUser?.canAccessBankInquiryConfirm;
+}
+
+function canAccessShahkar() {
+  return isAdminUser() || !!currentUser?.canAccessShahkar;
 }
 
 function canManageUsers() {
@@ -1979,6 +2104,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-bank-inquiry').forEach((el) => {
     el.hidden = !canAccessBankInquiryConfirm();
+  });
+  document.querySelectorAll('.perm-shahkar').forEach((el) => {
+    el.hidden = !canAccessShahkar();
   });
   document.querySelectorAll('.perm-users').forEach((el) => {
     el.hidden = !canManageUsers();
@@ -2104,6 +2232,7 @@ function renderGroupsTableBody() {
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessShahkar ? 'بله' : 'خیر'}</td>
       <td class="group-actions-cell">
         <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${g.id}">ذخیره</button>` : ''}
       </td>
@@ -2133,6 +2262,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
+  if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   renderGroupsTableBody();
 }
@@ -2144,6 +2274,7 @@ function resetGroupForm() {
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
+  if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   renderGroupsTableBody();
 }
@@ -2155,6 +2286,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
+    canAccessShahkar: !!$('newGroupShahkar')?.checked,
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
@@ -3044,6 +3176,69 @@ function setupEventHandlers() {
     });
     updateBankInquiryCountLabel();
     syncBankInquiryConfirmButton();
+  });
+
+  bindClick('btnShahkarSearch', async () => {
+    await fetchShahkarResults({ clearSelection: true });
+  });
+
+  $('shahkarSelectAll')?.addEventListener('change', (e) => {
+    const tbody = $('shahkarTable')?.querySelector('tbody');
+    const selectAll = e.target;
+    if (!tbody || !selectAll) return;
+    shahkarItems.forEach((item) => {
+      setShahkarRowSelected(selectedShahkarUserNames, shahkarSelectedItems, item, selectAll.checked);
+    });
+    tbody.querySelectorAll('.shahkar-row-check').forEach((cb) => {
+      cb.checked = selectAll.checked;
+    });
+    updateShahkarCountLabel();
+    syncShahkarConfirmButton();
+  });
+
+  bindClick('btnShahkarConfirm', async () => {
+    const userNames = Array.from(selectedShahkarUserNames);
+    if (userNames.length === 0) return showAppWarning('حداقل یک کاربر انتخاب کنید');
+
+    const dry = config?.shahkar?.dryRun ?? config?.dryRun ?? false;
+    const warn = dry
+      ? `DryRun فعال — ShahkarOk برای ${userNames.length} کاربر فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `ShahkarOk = 1 برای ${userNames.length} کاربر ثبت شود؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnShahkarConfirm');
+    const box = $('shahkarResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال ثبت…';
+    }
+    try {
+      const res = await apiFetch('/api/shahkar/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userNames })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      const lines = (data.results || []).map((r) => `${r.userName}: ${r.success ? 'OK' : 'خطا'} — ${r.message || ''}`);
+      if (box) box.textContent = [data.message || '', ...lines].filter(Boolean).join('\n');
+      if (data.dryRun) {
+        showAppInfo('شاهکار — DryRun؛ تغییری در دیتابیس اعمال نشد.');
+      } else if (data.success && (data.updated || 0) > 0) {
+        showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
+        clearGridSelection(selectedShahkarUserNames, shahkarSelectedItems);
+        await fetchShahkarResults();
+      } else {
+        showAppError(data.message || 'به‌روزرسانی ناموفق بود');
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+      syncShahkarConfirmButton();
+    }
   });
 
   bindClick('btnBankInquiryConfirm', async () => {

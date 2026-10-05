@@ -10,6 +10,7 @@ internal sealed class AppUserGroupRecord
     public bool CanAccessInstallment { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
+    public bool CanAccessShahkar { get; set; }
     public bool CanManageUsers { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

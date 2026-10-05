@@ -63,6 +63,7 @@ public sealed class AppUserRepository
                     CanAccessInstallment    BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Installment DEFAULT (0),
                     CanAccessFicheDateChange BIT             NOT NULL CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0),
                     CanAccessBankInquiryConfirm BIT          NOT NULL CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0),
+                    CanAccessShahkar          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0),
                     CanManageUsers          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Users DEFAULT (0),
                     CreatedAtUtc            DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserGroup_Created DEFAULT (SYSUTCDATETIME())
                 );
@@ -87,6 +88,10 @@ public sealed class AppUserRepository
             IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
                 ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
                     CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0);
+
+            IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessShahkar') IS NULL
+                ALTER TABLE dbo.AppUserGroup ADD CanAccessShahkar BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0);
 
             IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
                 ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
@@ -306,7 +311,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanManageUsers, CreatedAtUtc
+            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanAccessShahkar, CanManageUsers, CreatedAtUtc
             FROM dbo.AppUserGroup
             ORDER BY Name
             """;
@@ -330,8 +335,8 @@ public sealed class AppUserRepository
         var group = NewGroupRecord(req);
         const string sql = """
             INSERT INTO dbo.AppUserGroup
-                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanManageUsers, CreatedAtUtc)
-            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry, @users, @created)
+                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanAccessShahkar, CanManageUsers, CreatedAtUtc)
+            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry, @shahkar, @users, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -342,6 +347,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@installment", group.CanAccessInstallment);
         cmd.Parameters.AddWithValue("@ficheDate", group.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@bankInquiry", group.CanAccessBankInquiryConfirm);
+        cmd.Parameters.AddWithValue("@shahkar", group.CanAccessShahkar);
         cmd.Parameters.AddWithValue("@users", group.CanManageUsers);
         cmd.Parameters.AddWithValue("@created", group.CreatedAtUtc);
         try
@@ -370,6 +376,7 @@ public sealed class AppUserRepository
                 CanAccessInstallment = @installment,
                 CanAccessFicheDateChange = @ficheDate,
                 CanAccessBankInquiryConfirm = @bankInquiry,
+                CanAccessShahkar = @shahkar,
                 CanManageUsers = @users
             WHERE Id = @id
             """;
@@ -382,6 +389,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@installment", req.CanAccessInstallment);
         cmd.Parameters.AddWithValue("@ficheDate", req.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@bankInquiry", req.CanAccessBankInquiryConfirm);
+        cmd.Parameters.AddWithValue("@shahkar", req.CanAccessShahkar);
         cmd.Parameters.AddWithValue("@users", req.CanManageUsers);
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
@@ -554,6 +562,7 @@ public sealed class AppUserRepository
         CanAccessInstallment = req.CanAccessInstallment,
         CanAccessFicheDateChange = req.CanAccessFicheDateChange,
         CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
+        CanAccessShahkar = req.CanAccessShahkar,
         CanManageUsers = req.CanManageUsers,
         CreatedAtUtc = DateTime.UtcNow
     };
@@ -566,6 +575,7 @@ public sealed class AppUserRepository
         CanAccessInstallment = group.CanAccessInstallment,
         CanAccessFicheDateChange = group.CanAccessFicheDateChange,
         CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
+        CanAccessShahkar = group.CanAccessShahkar,
         CanManageUsers = group.CanManageUsers,
         CreatedAtUtc = group.CreatedAtUtc.ToString("O")
     };
@@ -578,6 +588,7 @@ public sealed class AppUserRepository
         CanAccessInstallment = reader.GetBoolean(reader.GetOrdinal("CanAccessInstallment")),
         CanAccessFicheDateChange = ReadOptionalBoolean(reader, "CanAccessFicheDateChange"),
         CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "CanAccessBankInquiryConfirm"),
+        CanAccessShahkar = ReadOptionalBoolean(reader, "CanAccessShahkar"),
         CanManageUsers = reader.GetBoolean(reader.GetOrdinal("CanManageUsers")),
         CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O")
     };

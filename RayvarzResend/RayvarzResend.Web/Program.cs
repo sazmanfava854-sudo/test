@@ -37,6 +37,7 @@ builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(S
 builder.Services.PostConfigure<ShimasAuthOptions>(o =>
     ShimasAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
+builder.Services.Configure<ShahkarOptions>(builder.Configuration.GetSection(ShahkarOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>
     {
@@ -106,6 +107,7 @@ builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
+builder.Services.AddSingleton<ShahkarService>();
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -717,7 +719,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         isAdmin = AppAuthService.IsAdmin(http.User),
         shimas = shimas.GetStatus()
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true, shahkar = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
@@ -767,6 +769,13 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         table = "dbo.Income_Fiche",
         ficheStatus = BankInquiryConfirmHelper.ConfirmedFicheStatus,
         incomePaymentType = BankInquiryConfirmHelper.ConfirmedIncomePaymentType
+    },
+    shahkar = new
+    {
+        dryRun = config.GetValue<bool?>("Shahkar:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = $"ConnectionStrings:{config["Shahkar:ConnectionStringName"] ?? "Security"}",
+        table = $"{config["Shahkar:Schema"] ?? "dbo"}.{config["Shahkar:TableName"] ?? "Users"}",
+        configured = !string.IsNullOrWhiteSpace(config.GetConnectionString(config["Shahkar:ConnectionStringName"] ?? "Security"))
     },
     ruleEngine = new
     {
@@ -1291,6 +1300,42 @@ app.MapPost("/api/fiche-date/update", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/shahkar/search", async (
+    ShahkarSearchRequest? req,
+    ShahkarService shahkar,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessShahkar(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+
+    var result = await shahkar.SearchAsync(req, ct);
+    if (!string.IsNullOrWhiteSpace(result.Error) && !result.Success)
+        return Results.BadRequest(new { error = result.Error });
+    return Results.Ok(result);
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/shahkar/confirm", async (
+    ShahkarConfirmRequest? req,
+    ShahkarService shahkar,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessShahkar(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+
+    var result = await shahkar.ConfirmAsync(req, ct);
+    if (!string.IsNullOrWhiteSpace(result.Error))
+        return Results.BadRequest(new { error = result.Error });
+    return Results.Ok(result);
+}).RequireAuthorization(authenticated);
+
 app.MapPost("/api/bank-inquiry/search", async (
     BankInquirySearchRequest? req,
     BankInquiryConfirmService bankInquiry,
@@ -1408,6 +1453,14 @@ static IResult AuthDatabaseError(SqlException ex) =>
         error = "خطا در اتصال به پایگاه کاربران (AppAuth). ConnectionStrings:AppAuth را بررسی کنید.",
         detail = ex.Message
     }, statusCode: 503);
+
+static async Task<IResult?> DenyUnlessShahkar(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessShahkar))
+        return Results.Json(new { error = "دسترسی به شاهکار مجاز نیست" }, statusCode: 403);
+    return null;
+}
 
 static async Task<IResult?> DenyUnlessBankInquiryConfirm(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {
