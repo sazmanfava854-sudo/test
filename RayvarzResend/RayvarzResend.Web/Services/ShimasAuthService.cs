@@ -573,7 +573,10 @@ public sealed class ShimasAuthService
             if (!isGet)
                 rejection = "متد درخواست GET نیست — callback SSO فقط با GET شناسایی می‌شود.";
             else if (!pathMatches)
-                rejection = $"مسیر «{effectivePath}» با CallbackPath «{NormalizeCallbackPath(_options.CallbackPath)}» (یا /auth/callback) جور نیست.";
+                rejection = $"مسیر «{effectivePath}» با CallbackPath «{NormalizeCallbackPath(_options.CallbackPath)}» (یا /auth/callback) جور نیست."
+                    + (effectivePath == "/" || effectivePath.Equals("/index.html", StringComparison.OrdinalIgnoreCase)
+                        ? " اگر توکن در query هست ولی این پیام را می‌بینید، appsettings را به‌روز کنید (شاخه net7: / هم برای CallbackPath=/management پذیرفته می‌شود)."
+                        : "");
             else if (!tokenOk)
                 rejection = $"refresh_token در query نیست یا کوتاه‌تر از MinRefreshTokenLength ({_options.MinRefreshTokenLength}) است.";
             else if (!hasIdentity)
@@ -629,6 +632,12 @@ public sealed class ShimasAuthService
 
         // SSO ممکن است با /management یا املای قدیمی /MANAGMENT ثبت شده باشد
         if (ManagementHubPaths.IsHubPage(callbackPath.TrimEnd('/')) && ManagementHubPaths.IsHubPage(path))
+            return true;
+
+        // برگشت آدرس ثبت‌شده /management ولی SSO گاهی به ریشه ?username&refresh_token می‌فرستد
+        if (ManagementHubPaths.IsHubPage(callbackPath.TrimEnd('/'))
+            && (path.Equals("/", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase)))
             return true;
 
         if (callbackPath == "/" && path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))

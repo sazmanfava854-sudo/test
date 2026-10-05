@@ -537,6 +537,18 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void IsSsoCallbackHttpRequest_detects_root_return_when_callback_is_management()
+    {
+        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/";
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+    }
+
+    [Fact]
     public void IsSsoCallbackHttpRequest_detects_root_return_with_token_query()
     {
         var service = CreateService(new ShimasAuthOptions { CallbackPath = "/" });
