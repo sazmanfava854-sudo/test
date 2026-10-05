@@ -51,8 +51,8 @@ public class AppSettingsConfigurationTests
         Assert.True(shimas.GetProperty("Enabled").GetBoolean());
         Assert.Equal("53db42619cf3C333b13a18D34fbd9111", shimas.GetProperty("ClientId").GetString());
         Assert.Equal("D2fbf", shimas.GetProperty("ClientSecret").GetString());
-        Assert.Equal("FinancialAssistant", shimas.GetProperty("ApiName").GetString());
-        Assert.Equal("FinancialAssistant", shimas.GetProperty("SSOUserName").GetString());
+        Assert.Equal("financial_Assist", shimas.GetProperty("ApiName").GetString());
+        Assert.Equal("financial_Assist", shimas.GetProperty("SSOUserName").GetString());
         Assert.False(shimas.GetProperty("AllowLegacyLoginUrlWithoutLoginKey").GetBoolean());
     }
 

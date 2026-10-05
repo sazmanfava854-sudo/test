@@ -9,11 +9,11 @@ public static class ShimasAuthConfiguration
     {
         var section = ShimasAuthOptions.SectionName;
 
-        options.ApiName = NormalizeApiName(Coalesce(
+        options.ApiName = Coalesce(
             options.ApiName,
             configuration[$"{section}:SSOUserName"],
             configuration[$"{section}:ApiName"],
-            configuration["Settings:SSOUserName"]));
+            configuration["Settings:SSOUserName"]);
 
         options.ClientId = Coalesce(
             options.ClientId,
@@ -54,18 +54,5 @@ public static class ShimasAuthConfiguration
         }
 
         return "";
-    }
-
-    /// <summary>ثبت پورتال دستیار مالی: apiName = FinancialAssistant (نه financial_Assist).</summary>
-    internal static string NormalizeApiName(string? apiName)
-    {
-        var text = (apiName ?? "").Trim();
-        if (text.Length == 0)
-            return "";
-
-        if (text.Equals("financial_Assist", StringComparison.OrdinalIgnoreCase))
-            return "FinancialAssistant";
-
-        return text;
     }
 }

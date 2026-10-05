@@ -29,7 +29,7 @@ public class ShimasAuthConfigurationTests
     }
 
     [Fact]
-    public void ApplyMashhadAliases_corrects_financial_Assist_typo_to_FinancialAssistant()
+    public void ApplyMashhadAliases_reads_financial_Assist_from_SSOUserName()
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -41,7 +41,7 @@ public class ShimasAuthConfigurationTests
         var options = new ShimasAuthOptions { ApiName = "", ClientId = "53db42619cf3C333b13a18D34fbd9111", ClientSecret = "x" };
         ShimasAuthConfiguration.ApplyMashhadAliases(config, options);
 
-        Assert.Equal("FinancialAssistant", options.ApiName);
+        Assert.Equal("financial_Assist", options.ApiName);
     }
 
     [Fact]

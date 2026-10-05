@@ -62,8 +62,8 @@
 ```json
 "Shimas": {
   "ApiBaseUrl": "https://login.mashhad.ir",
-  "ApiName": "FinancialAssistant",
-  "SSOUserName": "FinancialAssistant",
+  "ApiName": "financial_Assist",
+  "SSOUserName": "financial_Assist",
   "ClientId": "53db42619cf3C333b13a18D34fbd9111",
   "LKey": "53db42619cf3C333b13a18D34fbd9111",
   "ClientSecret": "<Secret ثبت‌شده در پورتال>",

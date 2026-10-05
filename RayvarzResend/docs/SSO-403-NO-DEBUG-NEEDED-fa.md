@@ -39,7 +39,7 @@
 | شناسه / ClientId / lkey | `ClientId` / `LKey` |
 | SecretKey کامل | `ClientSecret` |
 
-**FinancialAssistant** ممکن است **نام نمایشی** باشد؛ apiName واقعی چیز دیگری است (مثلاً نام کاربری انگلیسی کوتاه).
+برای دستیار مالی، **apiName** ثبت‌شده در پورتال معمولاً **`financial_Assist`** است (نام نمایشی برنامه ممکن است FinancialAssistant باشد).
 
 ### ۲) appsettings روی **سرور** (نه فقط git)
 

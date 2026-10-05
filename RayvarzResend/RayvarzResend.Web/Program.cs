@@ -291,11 +291,11 @@ app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
         map,
         correctExampleFa = new
         {
-            header_apiName = "FinancialAssistant",
+            header_apiName = "financial_Assist",
             body_ClientId = "53db42619cf3C333b13a18D34fbd9111",
             appsettings = new
             {
-                ApiName_or_SSOUserName = "FinancialAssistant",
+                ApiName_or_SSOUserName = "financial_Assist",
                 ClientId_or_LKey = "53db42619cf3C333b13a18D34fbd9111",
                 ClientSecret = "(SecretKey کامل)",
                 LoginKeyBodyClientIdIsApiName = false
