@@ -10,7 +10,7 @@ public static class InstallmentExcelMatcher
     "شناسه", "مبلغ", "تاریخ پرداخت"
   };
 
-  public static readonly string[] OptionalColumnNames = [];
+  public static readonly string[] OptionalColumnNames = Array.Empty<string>();
 
   public static string NormalizeCell(string? raw) => (raw ?? "").Trim();
 
@@ -37,7 +37,7 @@ public static class InstallmentExcelMatcher
     if (string.IsNullOrEmpty(text))
       return "";
 
-    var parts = text.Split(['/', '-'], StringSplitOptions.RemoveEmptyEntries);
+    var parts = text.Split(new[] { '/', '-' }, StringSplitOptions.RemoveEmptyEntries);
     if (parts.Length >= 3)
     {
       var year = NormalizeDigits(parts[0]);

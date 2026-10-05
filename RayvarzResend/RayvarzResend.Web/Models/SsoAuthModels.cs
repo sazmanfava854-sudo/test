@@ -1,6 +1,6 @@
 namespace RayvarzResend.Web.Models;
 
-public sealed class ShimasUserProfile
+public sealed class SsoUserProfile
 {
     public string Username { get; set; } = "";
     public string Domain { get; set; } = "";
@@ -11,12 +11,12 @@ public sealed class ShimasUserProfile
     public string District { get; set; } = "";
 }
 
-public sealed class ShimasValidationResult
+public sealed class SsoValidationResult
 {
     public bool Success { get; set; }
     public string? Error { get; set; }
     public bool UsedRemoteApi { get; set; }
-    public ShimasUserProfile Profile { get; set; } = new();
+    public SsoUserProfile Profile { get; set; } = new();
 }
 
 public sealed class SsoLoginKeyProbeResult
@@ -41,6 +41,8 @@ public sealed class SsoLoginKeyDiagnostics
     public int? LoginKeyErrorCode { get; set; }
     public string? LoginKeyErrorMessage { get; set; }
     public string? StartUrlSample { get; set; }
+    /// <summary>همان URLی که BuildExternalLoginUrlAsync می‌ساخت — فقط یک بار loginKey برای صفحه debug.</summary>
+    public string? SuggestedLoginUrl { get; set; }
     public string? Error { get; set; }
 
     public string Verdict =>
@@ -91,11 +93,15 @@ public sealed class SsoLoginKeyOutboundMap
     public string VerdictFa { get; set; } = "";
 }
 
-public sealed class ShimasAuthStatusDto
+public sealed class SsoAuthStatusDto
 {
     public bool Enabled { get; set; }
     public bool SsoReady { get; set; }
     public bool PreferSsoLogin { get; set; }
+    /// <summary>localhost با AllowSsoOnLoopbackForDebug — دکمه SSO در login.html.</summary>
+    public bool AllowSsoOnLoopbackForDebug { get; set; }
+    /// <summary>ورود سازمانی روی آدرس عمومی (PublicBaseUrl) — نه localhost.</summary>
+    public string? PublicSsoLoginUrl { get; set; }
     public bool LocalLoginAvailable { get; set; }
     /// <summary>صفحه login.html روی host عمومی برای ادمین (بدون ریدایرکت اجباری به SSO).</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; }
@@ -113,7 +119,26 @@ public sealed class ShimasAuthStatusDto
     public SsoLoginKeyOutboundMap? SsoOutboundMap { get; set; }
 }
 
-public sealed class ShimasCallbackPayload
+/// <summary>چرا middleware SSO به <c>await next()</c> می‌رود — برای دیباگ Visual Studio.</summary>
+public sealed class SsoCallbackProbeDto
+{
+    public string Method { get; set; } = "";
+    public string Path { get; set; } = "";
+    public string PathBase { get; set; } = "";
+    public string EffectivePath { get; set; } = "";
+    public string ConfiguredCallbackPath { get; set; } = "";
+    public bool IsGet { get; set; }
+    public bool PathMatchesCallback { get; set; }
+    public int RefreshTokenLength { get; set; }
+    public int MinRefreshTokenLength { get; set; }
+    public bool HasUsernameOrDomain { get; set; }
+    public bool IsSsoCallbackHttpRequest { get; set; }
+    /// <summary>اگر false است، دلیل فارسی برای دیباگ.</summary>
+    public string? RejectionReasonFa { get; set; }
+    public string[] QueryKeys { get; set; } = Array.Empty<string>();
+}
+
+public sealed class SsoCallbackPayload
 {
     public string Username { get; set; } = "";
     public string Domain { get; set; } = "";

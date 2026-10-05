@@ -1,8 +1,10 @@
 namespace RayvarzResend.Web.Services;
 
-public sealed class ShimasAuthOptions
+public sealed class SsoAuthOptions
 {
-    public const string SectionName = "Auth:Shimas";
+    public const string SectionName = "Auth:Sso";
+    /// <summary>نام قبلی بلوک تنظیمات — هنوز bind می‌شود؛ <see cref="SectionName"/> اولویت دارد.</summary>
+    public const string LegacySectionName = "Auth:Shimas";
 
     public bool Enabled { get; set; }
     /// <summary>آدرس عمومی سایت — برای callback سامزان/شیماس روی سرور پشت IIS یا IP:Port.</summary>
@@ -14,6 +16,8 @@ public sealed class ShimasAuthOptions
     /// <summary>بعد از ورود موفق SSO به کدام مسیر داخلی برود (صفحهٔ اصلی با تب‌ها).</summary>
     public string PostLoginDefaultPath { get; set; } = "/";
     public string LoginUrl { get; set; } = "https://login.mashhad.ir/Authentication/Login.aspx";
+    /// <summary>خروج از نشست SSO مشهد قبل از ورود دوباره (redirect مرورگر). خالی = فقط پاک کوکی اپ و /auth/login (Logout.aspx روی پورتال اغلب 404 است).</summary>
+    public string SsoPortalLogoutUrl { get; set; } = "";
     /// <summary>طبق سند SSO: https://login.mashhad.ir/Authentication/Start/{loginKey}</summary>
     public string LoginStartUrlTemplate { get; set; } = "https://login.mashhad.ir/Authentication/Start/{loginKey}";
     /// <summary>پایه API احراز هویت (همان SSOBaseUrl در RuleEngine) — مثلاً https://login.mashhad.ir</summary>
@@ -33,7 +37,7 @@ public sealed class ShimasAuthOptions
     /// <summary>true = هر loginKey/getAccessToken مقادیر امضا (apiSecret/hash) را در لاگ می‌نویسد — SecretKey هرگز لاگ نمی‌شود.</summary>
     public bool DebugSigning { get; set; }
     /// <summary>اگر loginKey خطا بدهد به Login.aspx برود (همان روال قبلی FinancialAssistant روی IIS).</summary>
-    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; } = true;
+    public bool AllowLegacyLoginUrlWithoutLoginKey { get; set; }
     /// <summary>RuleEngine در loginKey فیلد ReturnUrl نمی‌فرستد؛ برگشت از «برگشت آدرس» ثبت SSO است.</summary>
     public bool IncludeReturnUrlInLoginKey { get; set; }
     /// <summary>true = loginKey API؛ false = Login.aspx?lkey+returnUrl (پیش‌فرض — همان نسخهٔ پایدار قبلی).</summary>
@@ -56,7 +60,9 @@ public sealed class ShimasAuthOptions
     /// <summary>روی آدرس عمومی (مثلاً city.mashhad.ir) ورود محلی فقط برای کاربران IsAdmin.</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; } = true;
     /// <summary>روی این hostها (مثلاً IP داخلی سرور) به‌جای SSO به login.html هدایت می‌شود — ورود محلی برای ادمین/عملیات.</summary>
-    public string[] PreferLocalLoginHosts { get; set; } = [];
+    public string[] PreferLocalLoginHosts { get; set; } = Array.Empty<string>();
+    /// <summary>روی localhost/127.0.0.1 هم /auth/login و SSO فعال شود (فقط دیباگ F5 در Visual Studio).</summary>
+    public bool AllowSsoOnLoopbackForDebug { get; set; }
     public int MinRefreshTokenLength { get; set; } = 3;
 
     public string EffectiveClientId
@@ -140,7 +146,9 @@ public sealed class ShimasAuthOptions
     }
 
     public bool PreferSsoLoginForHost(string? host) =>
-        PreferSsoLogin && !IsLoopbackHost(host) && !IsPreferLocalLoginHost(host);
+        PreferSsoLogin
+        && !IsPreferLocalLoginHost(host)
+        && (!IsLoopbackHost(host) || AllowSsoOnLoopbackForDebug);
 
     public bool LocalLoginAvailableForHost(string? host) =>
         LocalLoginAvailable || IsLoopbackHost(host) || IsPreferLocalLoginHost(host);

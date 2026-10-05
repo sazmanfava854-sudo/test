@@ -20,8 +20,8 @@ public static class Member1388SpecialIncomeRowBuilder
 
     var basePrice = Math.Round(fiche.Payable / 1.1m, 0);
     var vat = Math.Round(basePrice * 0.1m, 0);
-  fiche.Rows =
-    [
+    fiche.Rows = new List<IncmRowDto>
+    {
       new IncmRowDto
       {
         IncmNo = BaseIncmNo,
@@ -34,7 +34,7 @@ public static class Member1388SpecialIncomeRowBuilder
         Val = vat,
         IncmRowDsc = "ارزش افزوده"
       }
-    ];
+    };
 
     ReconcileToPayable(fiche.Rows, fiche.Payable);
     Member1388IncomeCenterResolver.ApplyHoushmand(fiche);
@@ -50,8 +50,8 @@ public static class Member1388SpecialIncomeRowBuilder
 
     var basePrice = Math.Round(fiche.Payable, 0);
     var vat = Math.Round(basePrice * 0.1m, 0);
-    fiche.Rows =
-    [
+    fiche.Rows = new List<IncmRowDto>
+    {
       new IncmRowDto
       {
         IncmNo = BaseIncmNo,
@@ -64,7 +64,7 @@ public static class Member1388SpecialIncomeRowBuilder
         Val = vat,
         IncmRowDsc = "ارزش افزوده"
       }
-    ];
+    };
 
     ReconcileToPayable(fiche.Rows, fiche.Payable);
     Member1388IncomeCenterResolver.ApplySrvElectronic(fiche);

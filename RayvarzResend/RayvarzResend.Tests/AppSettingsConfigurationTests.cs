@@ -41,17 +41,40 @@ public class AppSettingsConfigurationTests
     }
 
     [Fact]
-    public void Appsettings_shimas_has_client_id_and_secret()
+    public void Appsettings_sso_has_client_id_and_secret()
     {
         var path = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..",
             "RayvarzResend.Web", "appsettings.json"));
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
-        var shimas = doc.RootElement.GetProperty("Auth").GetProperty("Shimas");
-        Assert.True(shimas.GetProperty("Enabled").GetBoolean());
-        Assert.Equal("53db42619cf3C333b13a18D34fbd9111", shimas.GetProperty("ClientId").GetString());
-        Assert.Equal("D2fbf", shimas.GetProperty("ClientSecret").GetString());
-        Assert.Equal("FinancialAssistant", shimas.GetProperty("ApiName").GetString());
+        var sso = doc.RootElement.GetProperty("Auth").GetProperty("Sso");
+        Assert.True(sso.GetProperty("Enabled").GetBoolean());
+        Assert.Equal("53db42619cf3C333b13a18D34fbd9111", sso.GetProperty("ClientId").GetString());
+        Assert.Equal("D2fbf", sso.GetProperty("ClientSecret").GetString());
+        Assert.Equal("financial_Assist", sso.GetProperty("ApiName").GetString());
+        Assert.Equal("financial_Assist", sso.GetProperty("SSOUserName").GetString());
+        Assert.False(sso.GetProperty("AllowLegacyLoginUrlWithoutLoginKey").GetBoolean());
+    }
+
+    [Fact]
+    public void Guard_allows_json_comments_like_aspnet_config()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "rr-appsettings-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "appsettings.json"), """
+                {
+                  // SSO debug
+                  "Auth": { "SessionHours": 8 }
+                }
+                """);
+            AppSettingsJsonGuard.ValidateOrThrow(dir);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

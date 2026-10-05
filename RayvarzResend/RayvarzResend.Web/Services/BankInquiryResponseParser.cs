@@ -9,17 +9,17 @@ public static class BankInquiryResponseParser
     public const string OnlineBankSourceLabel = "استعلام آنی بانک";
 
     private static readonly string[] RecordNotFoundHints =
-    [
+    {
         "یافت نشد",
         "وجود ندارد",
         "عدم وجود",
         "not found",
         "no record",
         "record not found"
-    ];
+    };
 
     private static readonly string[] ServiceFailureHints =
-    [
+    {
         "meaningful reply",
         "contract mismatch",
         "premature session shutdown",
@@ -27,17 +27,17 @@ public static class BankInquiryResponseParser
         "خطا در ارتباط",
         "سرویس بانک",
         "در دسترس نیست"
-    ];
+    };
 
     private static readonly string[] PermissionDeniedHints =
-    [
+    {
         "مجوز دسترسی",
         "دسترسی به سرویس",
         "عدم دسترسی",
         "access denied",
         "unauthorized",
         "forbidden"
-    ];
+    };
 
     public static bool LooksLikeServiceFailure(string? message) => ContainsAny(message, ServiceFailureHints);
 
@@ -46,15 +46,15 @@ public static class BankInquiryResponseParser
     public static bool LooksLikePermissionDenied(string? message) =>
         ContainsAny(message, PermissionDeniedHints);
     private static readonly string[] PaidMessageHints =
-    [
+    {
         "پرداخت شده",
         "پرداخت موفق",
         "تایید شد",
         "موفق"
-    ];
+    };
 
     private static readonly string[] UnpaidMessageHints =
-    [
+    {
         "پرداخت نشده",
         "پرداخت نگردیده",
         "پرداخت نکرده",
@@ -64,7 +64,7 @@ public static class BankInquiryResponseParser
         "not found",
         "not paid",
         "unpaid"
-    ];
+    };
 
     /// <summary>epay_FindFichesByBillIDPayID — ثبت فیش با تأخیر ~۱ روز.</summary>
     public static BankInquiryParsedStep ParseFicheLookupStep(string? rawJson, int httpStatusCode)
@@ -103,7 +103,7 @@ public static class BankInquiryResponseParser
                 return PaidStep(paymentDate, message);
 
             if (intResult == 0
-                && ContainsAny(message, ["یافت شد", "found"])
+                && ContainsAny(message, new[] { "یافت شد", "found" })
                 && (ReadInt(root, "amount", "Amount") is > 0 || HasBillOrPayId(root)))
                 return PaidStep(paymentDate, message);
 

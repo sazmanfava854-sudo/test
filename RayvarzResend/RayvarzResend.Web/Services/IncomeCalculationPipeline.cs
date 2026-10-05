@@ -16,7 +16,7 @@ public static class IncomeCalculationPipeline
             Category = FicheCategory.Income,
             IncomeAccountGroup = incomeAccountGroup,
             Payable = payable,
-            Oddments = oddments?.ToList() ?? [],
+            Oddments = oddments?.ToList() ?? new List<IncomeOddmentDto>(),
             Rows = rawRows
                 .Select(r => new IncmRowDto
                 {

@@ -11,7 +11,7 @@
 | | RuleEngine | RayvarzResend (نسخه فعلی) |
 |---|------------|---------------------------|
 | ورودی SHA256 | `SSOSecret + r.Data` | `ClientSecret + requestTime` |
-| تنظیم | ثابت در کد | `Auth:Shimas:ApiSecretConcatOrder` = **`SecretTime`** |
+| تنظیم | ثابت در کد | `Auth:Sso:ApiSecretConcatOrder` = **`SecretTime`** |
 | الگوریتم | `PublicHelper.getHashSha256` — ASCII + hex `x2` | `SsoApiSecretHash.Sha256AsciiHexLower` — همان الگو |
 
 **اشتباه رایج:** `requestTime + Secret` — در RuleEngine **هرگز** این ترتیب نیست.
@@ -60,10 +60,10 @@
 ## ۵) تنظیم پیشنهادی FinancialAssistant (RayvarzResend)
 
 ```json
-"Shimas": {
+"Sso": {
   "ApiBaseUrl": "https://login.mashhad.ir",
-  "ApiName": "FinancialAssistant",
-  "SSOUserName": "FinancialAssistant",
+  "ApiName": "financial_Assist",
+  "SSOUserName": "financial_Assist",
   "ClientId": "53db42619cf3C333b13a18D34fbd9111",
   "LKey": "53db42619cf3C333b13a18D34fbd9111",
   "ClientSecret": "<Secret ثبت‌شده در پورتال>",

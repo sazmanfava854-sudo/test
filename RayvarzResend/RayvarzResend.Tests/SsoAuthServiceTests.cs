@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using RayvarzResend.Web.Models;
@@ -7,10 +8,22 @@ using Xunit;
 
 namespace RayvarzResend.Tests;
 
-public class ShimasAuthServiceTests
+public class SsoAuthServiceTests
 {
-    private static ShimasAuthService CreateService(
-        ShimasAuthOptions? options = null,
+    private sealed class StubHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Production;
+        public string ApplicationName { get; set; } = "Test";
+        public string ContentRootPath { get; set; } = "";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } =
+            new Microsoft.Extensions.FileProviders.NullFileProvider();
+    }
+
+    internal static IHostEnvironment StubHost(string environmentName = "Production") =>
+        new StubHostEnvironment { EnvironmentName = environmentName };
+
+    private static SsoAuthService CreateService(
+        SsoAuthOptions? options = null,
         InMemoryAppUserStore? memory = null)
     {
         memory ??= new InMemoryAppUserStore();
@@ -21,25 +34,26 @@ public class ShimasAuthServiceTests
             memory,
             NullLogger<AppUserRepository>.Instance);
 
-        var opts = Options.Create(options ?? new ShimasAuthOptions());
+        var opts = Options.Create(options ?? new SsoAuthOptions());
         var httpFactory = new TestHttpClientFactory();
         var mashhad = new MashhadSsoApiClient(
             opts,
             httpFactory,
             NullLogger<MashhadSsoApiClient>.Instance);
 
-        return new ShimasAuthService(
+        return new SsoAuthService(
             opts,
             repo,
             mashhad,
             httpFactory,
-            NullLogger<ShimasAuthService>.Instance);
+            NullLogger<SsoAuthService>.Instance,
+            StubHost());
     }
 
     [Fact]
     public void BuildLoginStartUrl_uses_official_start_path()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             LoginStartUrlTemplate = "https://login.mashhad.ir/Authentication/Start/{loginKey}"
         });
@@ -51,7 +65,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public async Task BuildExternalLoginUrlAsync_skips_loginKey_when_disabled()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "19cf3C33",
@@ -71,7 +85,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildExternalLoginUrl_sends_return_url_only_once_case_insensitively()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "19cf3C33",
@@ -89,7 +103,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildExternalLoginUrl_includes_lkey_and_returnUrl()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             LKey = "test-lkey-123",
@@ -109,7 +123,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildExternalLoginUrl_uses_ClientId_when_LKey_empty()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "19cf3C33",
@@ -129,7 +143,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildExternalLoginUrl_throws_when_lkey_missing()
     {
-        var service = CreateService(new ShimasAuthOptions { Enabled = true, LKey = "" });
+        var service = CreateService(new SsoAuthOptions { Enabled = true, LKey = "" });
         Assert.Throws<InvalidOperationException>(() =>
             service.BuildExternalLoginUrl("https://app.example.com/auth/callback"));
     }
@@ -137,7 +151,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void ResolveLoginRedirectPath_prefers_sso_when_ready()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             LKey = "abc",
@@ -150,7 +164,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void Localhost_keeps_local_login_while_public_host_uses_sso()
     {
-        var options = new ShimasAuthOptions
+        var options = new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "19cf3C33",
@@ -159,12 +173,15 @@ public class ShimasAuthServiceTests
             PublicBaseUrl = "https://city.mashhad.ir:5065"
         };
 
-        Assert.True(ShimasAuthOptions.IsLoopbackHost("localhost"));
-        Assert.True(ShimasAuthOptions.IsLoopbackHost("localhost:5000"));
-        Assert.True(ShimasAuthOptions.IsLoopbackHost("127.0.0.1"));
-        Assert.False(ShimasAuthOptions.IsLoopbackHost("city.mashhad.ir"));
+        Assert.True(SsoAuthOptions.IsLoopbackHost("localhost"));
+        Assert.True(SsoAuthOptions.IsLoopbackHost("localhost:5000"));
+        Assert.True(SsoAuthOptions.IsLoopbackHost("127.0.0.1"));
+        Assert.False(SsoAuthOptions.IsLoopbackHost("city.mashhad.ir"));
 
         Assert.False(options.PreferSsoLoginForHost("localhost"));
+        options.AllowSsoOnLoopbackForDebug = true;
+        Assert.True(options.PreferSsoLoginForHost("localhost"));
+        options.AllowSsoOnLoopbackForDebug = false;
         Assert.True(options.LocalLoginAvailableForHost("localhost"));
         Assert.True(options.PreferSsoLoginForHost("city.mashhad.ir"));
         Assert.False(options.LocalLoginAvailableForHost("city.mashhad.ir"));
@@ -172,9 +189,16 @@ public class ShimasAuthServiceTests
         var service = CreateService(options);
         var local = new DefaultHttpContext();
         local.Request.Host = new HostString("localhost", 5000);
-        Assert.Equal("/login.html", service.ResolveLoginRedirectPath(local.Request));
+        Assert.Equal("https://city.mashhad.ir:5065/auth/login", service.ResolveLoginRedirectPath(local.Request));
         Assert.False(service.GetStatus(local.Request).PreferSsoLogin);
         Assert.True(service.GetStatus(local.Request).LocalLoginAvailable);
+        Assert.Equal("https://city.mashhad.ir:5065/auth/login", service.GetStatus(local.Request).PublicSsoLoginUrl);
+        Assert.True(service.UsesPublicSsoLoginUrl(local.Request));
+
+        options.AllowSsoOnLoopbackForDebug = true;
+        var serviceDebug = CreateService(options);
+        Assert.Equal("https://city.mashhad.ir:5065/auth/login", serviceDebug.ResolveLoginRedirectPath(local.Request));
+        Assert.True(serviceDebug.GetStatus(local.Request).AllowSsoOnLoopbackForDebug);
 
         var server = new DefaultHttpContext();
         server.Request.Host = new HostString("city.mashhad.ir", 5065);
@@ -186,13 +210,13 @@ public class ShimasAuthServiceTests
     [Fact]
     public void Internal_server_host_uses_login_html_without_sso_redirect()
     {
-        var options = new ShimasAuthOptions
+        var options = new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "19cf3C33",
             ClientSecret = "D2fbf",
             AllowLocalLoginFallback = true,
-            PreferLocalLoginHosts = ["5.252.216.140"],
+            PreferLocalLoginHosts = new[] { "5.252.216.140" },
             PublicBaseUrl = "https://city.mashhad.ir:5065",
             PostLoginDefaultPath = "/management/"
         };
@@ -214,7 +238,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void GetStatus_exposes_admin_local_login_flag()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "id",
@@ -272,10 +296,10 @@ public class ShimasAuthServiceTests
         Assert.Equal(user.Id, (await repo.FindBySsoIdentityAsync(@"MASHHAD\sadathoseini-sh"))?.Id);
         Assert.Null(await repo.FindBySsoIdentityAsync("hoseine"));
 
-        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = false }, memory);
+        var service = CreateService(new SsoAuthOptions { AutoProvisionUsers = false }, memory);
         foreach (var domain in new[] { "hoseine-sh", "sadathoseini-sh" })
         {
-            var resolved = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = domain, Domain = domain });
+            var resolved = await service.ResolveOrCreateUserAsync(new SsoUserProfile { Username = domain, Domain = domain });
             Assert.Equal(user.Id, resolved?.Id);
         }
     }
@@ -295,14 +319,14 @@ public class ShimasAuthServiceTests
     [Fact]
     public void ResolveLoginRedirectPath_uses_local_when_sso_disabled()
     {
-        var service = CreateService(new ShimasAuthOptions { Enabled = false });
+        var service = CreateService(new SsoAuthOptions { Enabled = false });
         Assert.Equal("/login.html", service.ResolveLoginRedirectPath());
     }
 
     [Fact]
     public void GetStatus_reflects_options()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             LKey = "key",
@@ -322,7 +346,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public async Task ValidateAsync_succeeds_with_stub_when_remote_url_missing()
     {
-        var service = CreateService(new ShimasAuthOptions { Enabled = true, ValidateTokenUrl = "" });
+        var service = CreateService(new SsoAuthOptions { Enabled = true, ValidateTokenUrl = "" });
 
         var result = await service.ValidateAsync("1234567890", "refresh-token-abc");
 
@@ -352,9 +376,9 @@ public class ShimasAuthServiceTests
     [Fact]
     public async Task ResolveOrCreateUserAsync_auto_provisions_new_user()
     {
-        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = true });
+        var service = CreateService(new SsoAuthOptions { AutoProvisionUsers = true });
 
-        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile
+        var user = await service.ResolveOrCreateUserAsync(new SsoUserProfile
         {
             Username = "9988776655",
             FirstName = "علی",
@@ -387,8 +411,8 @@ public class ShimasAuthServiceTests
             District = "1"
         });
 
-        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = true }, memory);
-        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = @"MASHHAD\hoseine-sh" });
+        var service = CreateService(new SsoAuthOptions { AutoProvisionUsers = true }, memory);
+        var user = await service.ResolveOrCreateUserAsync(new SsoUserProfile { Username = @"MASHHAD\hoseine-sh" });
 
         Assert.NotNull(user);
         Assert.Equal(existing.Id, user!.Id);
@@ -412,8 +436,8 @@ public class ShimasAuthServiceTests
             District = "1"
         });
 
-        var service = CreateService(new ShimasAuthOptions { AutoProvisionUsers = false }, memory);
-        var user = await service.ResolveOrCreateUserAsync(new ShimasUserProfile { Username = "hoseine-sh" });
+        var service = CreateService(new SsoAuthOptions { AutoProvisionUsers = false }, memory);
+        var user = await service.ResolveOrCreateUserAsync(new SsoUserProfile { Username = "hoseine-sh" });
 
         Assert.NotNull(user);
         Assert.Equal(existing.Id, user!.Id);
@@ -449,7 +473,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildCallbackAbsoluteUrl_uses_public_base_url_when_configured()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             PublicBaseUrl = "http://5.252.216.140:8070"
         });
@@ -465,7 +489,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildCallbackAbsoluteUrl_uses_city_mashhad_public_base()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             PublicBaseUrl = "https://city.mashhad.ir:5065"
         });
@@ -482,7 +506,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildCallbackAbsoluteUrl_uses_sso_registered_return_url_when_set()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             SsoRegisteredReturnUrl = "https://city.mashhad.ir:5065",
             PublicBaseUrl = "https://wrong.example.com",
@@ -495,7 +519,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildCallbackAbsoluteUrl_uses_public_base_only_when_callback_path_is_root()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             PublicBaseUrl = "https://city.mashhad.ir:5065",
             CallbackPath = "/"
@@ -513,9 +537,21 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void IsSsoCallbackHttpRequest_detects_root_return_when_callback_is_management()
+    {
+        var service = CreateService(new SsoAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/";
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+    }
+
+    [Fact]
     public void IsSsoCallbackHttpRequest_detects_root_return_with_token_query()
     {
-        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/" });
+        var service = CreateService(new SsoAuthOptions { CallbackPath = "/" });
         var context = new DefaultHttpContext();
         context.Request.Method = "GET";
         context.Request.Path = "/";
@@ -530,7 +566,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void BuildCallbackAbsoluteUrl_uses_management_return_url_when_registered()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             SsoRegisteredReturnUrl = "https://city.mashhad.ir:5065/management",
             CallbackPath = "/management"
@@ -547,7 +583,7 @@ public class ShimasAuthServiceTests
     [InlineData("/MANAGMENT/index.html")]
     public void IsSsoCallbackHttpRequest_detects_management_path_with_token_query(string path)
     {
-        var service = CreateService(new ShimasAuthOptions { CallbackPath = "/management" });
+        var service = CreateService(new SsoAuthOptions { CallbackPath = "/management" });
         var context = new DefaultHttpContext();
         context.Request.Method = "GET";
         context.Request.Path = path;
@@ -559,7 +595,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void ResolvePostLoginRedirect_falls_back_to_management_hub_without_cookie()
     {
-        var service = CreateService(new ShimasAuthOptions { PostLoginDefaultPath = "/management/" });
+        var service = CreateService(new SsoAuthOptions { PostLoginDefaultPath = "/management/" });
         var context = new DefaultHttpContext();
         Assert.Equal("/management/", service.ResolvePostLoginRedirect(context));
     }
@@ -590,9 +626,65 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void ProbeSsoCallbackHttpRequest_sso_restart_is_not_callback()
+    {
+        var service = CreateService(new SsoAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/auth/sso-restart";
+
+        var probe = service.ProbeSsoCallbackHttpRequest(context.Request);
+
+        Assert.False(probe.IsSsoCallbackHttpRequest);
+        Assert.False(probe.PathMatchesCallback);
+        Assert.Contains("شروع", probe.RejectionReasonFa ?? "", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildSsoPortalLogoutRedirectUrl_empty_when_logout_url_not_configured()
+    {
+        var service = CreateService(new SsoAuthOptions { SsoPortalLogoutUrl = "" });
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("localhost", 5088);
+
+        Assert.Null(service.BuildSsoPortalLogoutRedirectUrl(context.Request));
+    }
+
+    [Fact]
+    public void ProbeSsoCallbackHttpRequest_explains_missing_username_on_management()
+    {
+        var service = CreateService(new SsoAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.Path = "/management";
+        context.Request.QueryString = new QueryString("?refresh_token=only-token-value-here");
+
+        var probe = service.ProbeSsoCallbackHttpRequest(context.Request);
+
+        Assert.False(probe.IsSsoCallbackHttpRequest);
+        Assert.True(probe.PathMatchesCallback);
+        Assert.Contains("username", probe.RejectionReasonFa ?? "", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IsSsoCallbackHttpRequest_matches_path_with_path_base()
+    {
+        var service = CreateService(new SsoAuthOptions { CallbackPath = "/management" });
+        var context = new DefaultHttpContext();
+        context.Request.Method = "GET";
+        context.Request.PathBase = "/app";
+        context.Request.Path = "/management";
+        context.Request.QueryString = new QueryString("?userName=1234567890&refreshToken=abc-token-xyz");
+
+        Assert.True(service.IsSsoCallbackHttpRequest(context.Request));
+        Assert.Equal("/app/management", service.ResolveRequestPathForCallback(context.Request));
+    }
+
+    [Fact]
     public void GetStatus_includes_registered_callback_from_public_base_url()
     {
-        var service = CreateService(new ShimasAuthOptions
+        var service = CreateService(new SsoAuthOptions
         {
             Enabled = true,
             LKey = "key",
@@ -607,7 +699,7 @@ public class ShimasAuthServiceTests
     [Fact]
     public void ValidateReturnedState_allows_legacy_callback_without_state_or_cookie()
     {
-        var service = CreateService(new ShimasAuthOptions { LoginState = "test" });
+        var service = CreateService(new SsoAuthOptions { LoginState = "test" });
         var context = new DefaultHttpContext();
 
         Assert.True(service.ValidateReturnedState(context, null));
@@ -617,9 +709,9 @@ public class ShimasAuthServiceTests
     [Fact]
     public void ValidateReturnedState_requires_cookie_match_for_loginKey_flow()
     {
-        var service = CreateService(new ShimasAuthOptions { LoginState = "test" });
+        var service = CreateService(new SsoAuthOptions { LoginState = "test" });
         var context = new DefaultHttpContext();
-        context.Request.Headers.Cookie = $"{ShimasAuthService.SsoStateCookieName}=abc-state";
+        context.Request.Headers.Cookie = $"{SsoAuthService.SsoStateCookieName}=abc-state";
 
         Assert.True(service.ValidateReturnedState(context, "abc-state"));
         Assert.False(service.ValidateReturnedState(context, "other"));
@@ -630,11 +722,11 @@ public class ShimasAuthServiceTests
     {
         var service = CreateService();
         var context = new DefaultHttpContext();
-        context.Request.Headers.Cookie = $"{ShimasAuthService.PostLoginReturnCookieName}=%2F";
+        context.Request.Headers.Cookie = $"{SsoAuthService.PostLoginReturnCookieName}=%2F";
 
         Assert.Equal("/", service.ResolvePostLoginRedirect(context));
 
-        context.Request.Headers.Cookie = $"{ShimasAuthService.PostLoginReturnCookieName}=https%3A%2F%2Fevil";
+        context.Request.Headers.Cookie = $"{SsoAuthService.PostLoginReturnCookieName}=https%3A%2F%2Fevil";
         Assert.Equal("/", service.ResolvePostLoginRedirect(context));
     }
 

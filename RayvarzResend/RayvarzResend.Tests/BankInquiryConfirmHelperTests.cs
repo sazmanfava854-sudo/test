@@ -105,7 +105,7 @@ public class BankInquiryConfirmHelperTests
         Assert.Equal("تاریخ پرداخت جدید نامعتبر است",
             BankInquiryConfirmHelper.ValidateConfirmRequest(new BankInquiryConfirmRequest
             {
-                FicheNos = ["101104/9881711"]
+                FicheNos = new List<string> { "101104/9881711" }
             }));
     }
 
@@ -114,7 +114,7 @@ public class BankInquiryConfirmHelperTests
     {
         Assert.Null(BankInquiryConfirmHelper.ValidateConfirmRequest(new BankInquiryConfirmRequest
         {
-            FicheNos = ["101104/9881711"],
+            FicheNos = new List<string> { "101104/9881711" },
             NewPaymentDate = "1404/02/01"
         }));
     }

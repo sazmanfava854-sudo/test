@@ -114,7 +114,7 @@ public static class BankInquiryConfirmHelper
         if (req == null)
             return "درخواست نامعتبر است";
 
-        var ficheNos = (req.FicheNos ?? [])
+        var ficheNos = (req.FicheNos ?? new List<string>())
             .Select(s => (s ?? "").Trim())
             .Where(s => s.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)

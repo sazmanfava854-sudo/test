@@ -49,7 +49,7 @@ public sealed class AppUserDto
     public bool IsAdmin { get; set; }
     public bool IsActive { get; set; }
     public string CreatedAtUtc { get; set; } = "";
-    public List<Guid> GroupIds { get; set; } = [];
+    public List<Guid> GroupIds { get; set; } = new();
 }
 
 public sealed class AuthSessionDto
@@ -69,7 +69,7 @@ public sealed class AuthSessionDto
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
-    public List<Guid> GroupIds { get; set; } = [];
+    public List<Guid> GroupIds { get; set; } = new();
 }
 
 public sealed class UserPermissionsDto
@@ -80,7 +80,7 @@ public sealed class UserPermissionsDto
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanManageUsers { get; set; }
-    public List<Guid> GroupIds { get; set; } = [];
+    public List<Guid> GroupIds { get; set; } = new();
 
     public static UserPermissionsDto FullAdmin() => new()
     {

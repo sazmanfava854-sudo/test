@@ -13,12 +13,12 @@ public sealed class MashhadSsoApiClient
         PropertyNameCaseInsensitive = true
     };
 
-    private readonly ShimasAuthOptions _options;
+    private readonly SsoAuthOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<MashhadSsoApiClient> _logger;
 
     public MashhadSsoApiClient(
-        IOptions<ShimasAuthOptions> options,
+        IOptions<SsoAuthOptions> options,
         IHttpClientFactory httpClientFactory,
         ILogger<MashhadSsoApiClient> logger)
     {
@@ -42,27 +42,12 @@ public sealed class MashhadSsoApiClient
             ?? new MashhadSsoResult<string> { ErrorCode = -1, ErrorMessage = body };
     }
 
+    /// <summary>سند SSO بند ۳٫۳٫۳: یک POST با هدرهای apiName/requestTime/apiSecret = SHA256(SecretKey+time).</summary>
     public async Task<MashhadSsoResult<MashhadLoginKeyData>> GetLoginKeyAsync(
         string? returnUrl,
         string? state,
-        CancellationToken ct = default)
-    {
-        var primary = NormalizeHashEncoding(_options.HashEncoding);
-        var result = await SendLoginKeyAsync(returnUrl, state, primary, ct);
-        if (ShouldRetryLoginKeyWithAlternateHash(result, primary))
-        {
-            var alternate = primary == "upper" ? "lower" : "upper";
-            _logger.LogWarning(
-                "Mashhad loginKey returned {Code} ({Message}) with HashEncoding={Primary}; retrying with {Alternate}",
-                result.ErrorCode,
-                result.ErrorMessage,
-                primary,
-                alternate);
-            result = await SendLoginKeyAsync(returnUrl, state, alternate, ct);
-        }
-
-        return result;
-    }
+        CancellationToken ct = default) =>
+        await SendLoginKeyAsync(returnUrl, state, NormalizeHashEncoding(_options.HashEncoding), ct);
 
     private async Task<MashhadSsoResult<MashhadLoginKeyData>> SendLoginKeyAsync(
         string? returnUrl,
@@ -131,23 +116,6 @@ public sealed class MashhadSsoApiClient
         var body = await response.Content.ReadAsStringAsync(ct);
         return Deserialize<MashhadSsoResult<MashhadLoginKeyData>>(body)
             ?? new MashhadSsoResult<MashhadLoginKeyData> { ErrorCode = (int)response.StatusCode, ErrorMessage = body };
-    }
-
-    private static bool ShouldRetryLoginKeyWithAlternateHash(MashhadSsoResult<MashhadLoginKeyData> result, string primaryEncoding)
-    {
-        if (result.IsSuccess)
-            return false;
-
-        if (result.ErrorCode != 403)
-            return false;
-
-        var message = (result.ErrorMessage ?? "").Trim();
-        if (message.Length == 0)
-            return true;
-
-        return message.Contains("missmatch", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("mismatch", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("Client info", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeHashEncoding(string? encoding) =>
@@ -230,6 +198,16 @@ public sealed class MashhadSsoApiClient
             last = Deserialize<MashhadSsoResult<T>>(body)
                 ?? new MashhadSsoResult<T> { ErrorCode = -1, ErrorMessage = body };
 
+            if (_options.DebugSigning && !last.IsSuccess)
+            {
+                _logger.LogInformation(
+                    "SSO response {Path}: HTTP {Status} body ErrorCode={Code} Message={Message} (IsSuccess=false when ErrorCode!=0)",
+                    relativePath,
+                    (int)response.StatusCode,
+                    last.ErrorCode,
+                    last.ErrorMessage);
+            }
+
             if (last.IsSuccess || attempt == 1)
                 return last;
 
@@ -253,7 +231,7 @@ public sealed class MashhadSsoApiClient
     {
         if (string.IsNullOrWhiteSpace(material.ApiName))
             throw new InvalidOperationException(
-                "Auth:Shimas:ApiName (نام کاربری کاربردی برنامه / apiName) تنظیم نشده است.");
+                "Auth:Sso:ApiName (نام کاربری کاربردی برنامه / apiName) تنظیم نشده است.");
 
         var request = new HttpRequestMessage(HttpMethod.Post, Combine(relativePath));
         request.Headers.TryAddWithoutValidation("apiName", material.ApiName);

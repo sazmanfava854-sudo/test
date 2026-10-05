@@ -81,7 +81,7 @@ public static class IncomeFicheSupplementLoader
         }
         catch (SqlException)
         {
-            return [];
+            return new List<IncomeOddmentDto>();
         }
 
         return list;

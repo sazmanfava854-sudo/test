@@ -17,8 +17,10 @@ try
 }
 catch (Exception ex) when (AppSettingsJsonGuard.IsLoadError(ex))
 {
+    var message = AppSettingsJsonGuard.Describe(ex, Directory.GetCurrentDirectory());
     Console.OutputEncoding = System.Text.Encoding.UTF8;
-    Console.Error.WriteLine(AppSettingsJsonGuard.Describe(ex, Directory.GetCurrentDirectory()));
+    Console.Error.WriteLine(message);
+    System.Diagnostics.Debug.WriteLine(message);
     Environment.Exit(1);
     throw;
 }
@@ -33,9 +35,10 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient(MashhadSsoApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseProxy = false });
-builder.Services.Configure<ShimasAuthOptions>(builder.Configuration.GetSection(ShimasAuthOptions.SectionName));
-builder.Services.PostConfigure<ShimasAuthOptions>(o =>
-    ShimasAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
+builder.Services.Configure<SsoAuthOptions>(o =>
+    SsoAuthConfiguration.BindSsoOptions(builder.Configuration, o));
+builder.Services.PostConfigure<SsoAuthOptions>(o =>
+    SsoAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>
@@ -62,8 +65,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 return Task.CompletedTask;
             }
 
-            var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
+            var sso = ctx.HttpContext.RequestServices.GetRequiredService<SsoAuthService>();
+            ctx.Response.Redirect(sso.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
         options.Events.OnRedirectToAccessDenied = ctx =>
@@ -74,8 +77,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 return Task.CompletedTask;
             }
 
-            var shimas = ctx.HttpContext.RequestServices.GetRequiredService<ShimasAuthService>();
-            ctx.Response.Redirect(shimas.ResolveLoginRedirectPath(ctx.Request));
+            var sso = ctx.HttpContext.RequestServices.GetRequiredService<SsoAuthService>();
+            ctx.Response.Redirect(sso.ResolveLoginRedirectPath(ctx.Request));
             return Task.CompletedTask;
         };
     });
@@ -90,7 +93,7 @@ builder.Services.AddSingleton<AppUserRepository>();
 builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
 builder.Services.AddSingleton<MashhadSsoApiClient>();
-builder.Services.AddSingleton<ShimasAuthService>();
+builder.Services.AddSingleton<SsoAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
 builder.Services.AddSingleton<AccountingDocWriter>();
 builder.Services.AddSingleton<FicheSendService>();
@@ -152,25 +155,25 @@ app.UseAuthorization();
 
 async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationToken ct)
 {
-    var shimas = http.RequestServices.GetRequiredService<ShimasAuthService>();
+    var sso = http.RequestServices.GetRequiredService<SsoAuthService>();
     var auth = http.RequestServices.GetRequiredService<AppAuthService>();
 
-    var callback = shimas.ParseCallbackQuery(http.Request.Query);
-    if (!shimas.ValidateReturnedState(http, callback.State))
+    var callback = sso.ParseCallbackQuery(http.Request.Query);
+    if (!sso.ValidateReturnedState(http, callback.State))
     {
-        shimas.ClearSsoFlowCookies(http);
+        sso.ClearSsoFlowCookies(http);
         var error = Uri.EscapeDataString("state بازگشت SSO معتبر نیست — دوباره وارد شوید");
         return Results.Redirect($"/login.html?error={error}");
     }
 
-    var validation = await shimas.ValidateAsync(
+    var validation = await sso.ValidateAsync(
         callback.Username,
         callback.RefreshToken,
         callback.Domain,
         ct);
     if (!validation.Success)
     {
-        shimas.ClearSsoFlowCookies(http);
+        sso.ClearSsoFlowCookies(http);
         var error = Uri.EscapeDataString(validation.Error ?? "ورود ناموفق");
         return Results.Redirect($"/login.html?error={error}");
     }
@@ -178,42 +181,57 @@ async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationT
     if (!string.IsNullOrWhiteSpace(callback.Domain))
         validation.Profile.Domain = callback.Domain;
 
-    var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
+    var user = await sso.ResolveOrCreateUserAsync(validation.Profile, ct);
     if (user == null)
     {
-        shimas.ClearSsoFlowCookies(http);
+        sso.ClearSsoFlowCookies(http);
         var hint = Uri.EscapeDataString(
             "کاربر در دستیار مالی ثبت نشده یا غیرفعال است — کد ملی/دامین را در مدیریت کاربران اضافه کنید (AutoProvisionUsers=false).");
         return Results.Redirect($"/login.html?error={hint}");
     }
 
     await auth.SignInAsync(http, user, ct);
-    shimas.ClearSsoFlowCookies(http);
-    return Results.Redirect(shimas.ResolvePostLoginRedirect(http));
+    sso.ClearSsoFlowCookies(http);
+    return Results.Redirect(sso.ResolvePostLoginRedirect(http));
 }
 
 // بازگشت SSO روی ریشه (https://city.mashhad.ir:5065?refresh_token=...) قبل از هدایت به /auth/login
 app.Use(async (context, next) =>
 {
-    var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-    if (shimas.IsSsoCallbackHttpRequest(context.Request))
+    var sso = context.RequestServices.GetRequiredService<SsoAuthService>();
+    if (!sso.IsSsoCallbackHttpRequest(context.Request))
     {
-        try
+        if (sso.Options.DebugSigning
+            && !SsoAuthService.IsKnownNonSsoCallbackPath(context.Request.Path.Value))
         {
-            var result = await TryCompleteSsoCallbackAsync(context, context.RequestAborted);
-            if (result != null)
-                await result.ExecuteAsync(context);
-        }
-        catch (SqlException ex)
-        {
-            var dbResult = AuthDatabaseError(ex);
-            await dbResult.ExecuteAsync(context);
+            var probe = sso.ProbeSsoCallbackHttpRequest(context.Request);
+            if (probe.PathMatchesCallback && probe.RefreshTokenLength > 0 && !probe.IsSsoCallbackHttpRequest)
+            {
+                var log = context.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("SsoCallback");
+                log.LogWarning(
+                    "درخواست شبیه callback روی {Path} رد شد: {Reason} (keys: {Keys})",
+                    probe.EffectivePath,
+                    probe.RejectionReasonFa,
+                    string.Join(", ", probe.QueryKeys));
+            }
         }
 
+        await next();
         return;
     }
 
-    await next();
+    try
+    {
+        var result = await TryCompleteSsoCallbackAsync(context, context.RequestAborted);
+        if (result != null)
+            await result.ExecuteAsync(context);
+    }
+    catch (SqlException ex)
+    {
+        var dbResult = AuthDatabaseError(ex);
+        await dbResult.ExecuteAsync(context);
+    }
 });
 
 static bool RequiresAuthenticatedShell(string path) =>
@@ -229,8 +247,16 @@ app.Use(async (context, next) =>
 
     if (RequiresAuthenticatedShell(path) && !authenticated)
     {
-        var shimas = context.RequestServices.GetRequiredService<ShimasAuthService>();
-        var login = shimas.ResolveLoginRedirectPath(context.Request);
+        var sso = context.RequestServices.GetRequiredService<SsoAuthService>();
+        var probe = sso.ProbeSsoCallbackHttpRequest(context.Request);
+        if (probe.PathMatchesCallback && probe.RefreshTokenLength > 0 && !probe.IsSsoCallbackHttpRequest)
+        {
+            var error = Uri.EscapeDataString(probe.RejectionReasonFa ?? "بازگشت SSO ناقص است");
+            context.Response.Redirect($"/login.html?error={error}");
+            return;
+        }
+
+        var login = sso.ResolveLoginRedirectPath(context.Request);
         var target = ManagementHubPaths.IsHubPage(path)
             ? $"{login}?returnUrl={Uri.EscapeDataString(ManagementHubPaths.CanonicalWithSlash)}"
             : login;
@@ -255,22 +281,22 @@ app.UseStaticFiles();
 var authenticated = AuthPolicies.Authenticated;
 var adminOnly = AuthPolicies.AdminOnly;
 
-app.MapGet("/api/auth/mode", (HttpContext http, ShimasAuthService shimas) =>
-    Results.Ok(shimas.GetStatus(http.Request))).AllowAnonymous();
+app.MapGet("/api/auth/mode", (HttpContext http, SsoAuthService sso) =>
+    Results.Ok(sso.GetStatus(http.Request))).AllowAnonymous();
 
-app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
+app.MapGet("/api/auth/sso-outbound-map", (SsoAuthService sso) =>
 {
-    var map = SsoOutboundFieldMap.Describe(shimas.Options);
+    var map = SsoOutboundFieldMap.Describe(sso.Options);
     return Results.Ok(new
     {
         map,
         correctExampleFa = new
         {
-            header_apiName = "FinancialAssistant",
+            header_apiName = "financial_Assist",
             body_ClientId = "53db42619cf3C333b13a18D34fbd9111",
             appsettings = new
             {
-                ApiName_or_SSOUserName = "FinancialAssistant",
+                ApiName_or_SSOUserName = "financial_Assist",
                 ClientId_or_LKey = "53db42619cf3C333b13a18D34fbd9111",
                 ClientSecret = "(SecretKey کامل)",
                 LoginKeyBodyClientIdIsApiName = false
@@ -280,60 +306,96 @@ app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
 }).AllowAnonymous();
 
 // دیباگ hash: همان apiName / requestTime / apiSecret و بدنه Time/Hash/ClientId که اپ می‌فرستد (بدون ClientSecret)
-app.MapGet("/api/auth/sso-signing-preview", async (ShimasAuthService shimas, CancellationToken ct) =>
+app.MapGet("/api/auth/sso-signing-preview", async (SsoAuthService sso, CancellationToken ct) =>
 {
-    var preview = await shimas.PreviewLoginKeySigningAsync(ct);
+    var preview = await sso.PreviewLoginKeySigningAsync(ct);
     return Results.Ok(preview);
 }).AllowAnonymous();
 
-app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shimas) =>
+app.MapGet("/api/auth/sso-callback-probe", (HttpContext http, SsoAuthService sso) =>
 {
-    var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
+    var probe = sso.ProbeSsoCallbackHttpRequest(http.Request);
+    return Results.Ok(new
+    {
+        probe,
+        hintFa = probe.IsSsoCallbackHttpRequest
+            ? "این درخواست باید در middleware قبل از await next() به TryCompleteSsoCallbackAsync بخورد."
+            : "اگر بعد از لاگین مشهد این را می‌بینید، همان URL را در مرورگر باز کنید یا در VS روی Path/QueryString بریک‌پوینت بگذارید — " + (probe.RejectionReasonFa ?? "")
+    });
+}).AllowAnonymous();
+
+app.MapGet("/api/auth/sso-return-url", (HttpContext http, SsoAuthService sso) =>
+{
+    var callback = sso.BuildCallbackAbsoluteUrl(http.Request);
     return Results.Ok(new
     {
         registerInSsoPortal = callback,
         descriptionFa = "این آدرس را در پورتال SSO برای FinancialAssistant در فیلد «برگشت آدرس» ثبت کنید. بعد از لاگین، SSO کاربر را به این URL با ?username&refresh_token&state برمی‌گرداند.",
-        postLoginAppPath = shimas.Options.PostLoginDefaultPath,
-        sampleLoginUrl = shimas.DescribeLoginStartForPortal(http.Request),
-        clientIdLength = shimas.Options.EffectiveClientId.Length,
-        clientIdConfigured = shimas.Options.EffectiveClientId.Length >= 4,
+        postLoginAppPath = sso.Options.PostLoginDefaultPath,
+        sampleLoginUrl = sso.DescribeLoginStartForPortal(http.Request),
+        clientIdLength = sso.Options.EffectiveClientId.Length,
+        clientIdConfigured = sso.Options.EffectiveClientId.Length >= 4,
         debugLoginCheckUrl = $"{http.Request.Scheme}://{http.Request.Host}/auth/login?debug=1",
         noteFa = "برگشت آدرس SSO باید https://city.mashhad.ir:5065/management باشد؛ اگر هنوز Profile.aspx می‌بینید، ورود را از city.mashhad.ir:5065 شروع کنید و در Login.aspx پارامتر returnUrl را ببینید."
     });
 }).AllowAnonymous();
 
-app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
+// Development / localhost: کوکی اپ + هدایت به Logout مشهد → برگشت به /auth/login → صفحهٔ ورود SSO
+app.MapGet("/auth/sso-restart", async (HttpContext http, SsoAuthService sso, IHostEnvironment env) =>
 {
-    if (!shimas.Options.PreferSsoLoginForHost(http.Request.Host.Host))
+    var loopback = SsoAuthOptions.IsLoopbackHost(http.Request.Host.Host);
+    if (!env.IsDevelopment() && !(loopback && sso.Options.AllowSsoOnLoopbackForDebug))
+        return Results.NotFound();
+
+    sso.ClearSsoFlowCookies(http);
+    await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+    var portalLogout = sso.BuildSsoPortalLogoutRedirectUrl(http.Request);
+    return Results.Redirect(portalLogout ?? "/auth/login");
+}).AllowAnonymous();
+
+app.MapGet("/auth/login", async (HttpContext http, SsoAuthService sso, CancellationToken ct) =>
+{
+    // روی localhost با PublicBaseUrl=city معمولاً به city redirect می‌شود — با ?debug=1 همان‌جا بمان تا F10 روی PC ممکن شود.
+    if (sso.UsesPublicSsoLoginUrl(http.Request) && !http.Request.Query.ContainsKey("debug"))
+    {
+        var target = sso.ResolveLoginPath(http.Request);
+        var ret = http.Request.Query["returnUrl"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(ret))
+            target += "?returnUrl=" + Uri.EscapeDataString(ret);
+        return Results.Redirect(target);
+    }
+
+    if (!sso.Options.PreferSsoLoginForHost(http.Request.Host.Host))
         return Results.Redirect("/login.html");
 
-    if (!shimas.Options.SsoReady)
+    if (!sso.Options.SsoReady)
     {
-        if (shimas.Options.AllowLocalLoginFallback)
+        if (sso.Options.AllowLocalLoginFallback)
             return Results.Redirect("/login.html");
-        return Results.Content("SSO پیکربندی نشده — ClientId و ClientSecret را در Auth:Shimas تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
+        return Results.Content("SSO پیکربندی نشده — ClientId و ClientSecret را در Auth:Sso تنظیم کنید.", "text/plain; charset=utf-8", statusCode: 503);
     }
 
     try
     {
         var returnPath = http.Request.Query["returnUrl"].FirstOrDefault()
-            ?? shimas.Options.PostLoginDefaultPath;
-        shimas.RememberPostLoginReturn(http, returnPath);
-        var callbackUrl = shimas.BuildCallbackAbsoluteUrl(http.Request);
-        var clientId = shimas.Options.EffectiveClientId;
+            ?? sso.Options.PostLoginDefaultPath;
+        sso.RememberPostLoginReturn(http, returnPath);
+        var callbackUrl = sso.BuildCallbackAbsoluteUrl(http.Request);
+        var clientId = sso.Options.EffectiveClientId;
         if (clientId.Length < 4)
         {
             var logger = http.RequestServices.GetRequiredService<ILoggerFactory>()
-                .CreateLogger("ShimasAuth");
+                .CreateLogger("SsoAuth");
             logger.LogWarning("ClientId/lkey در appsettings خالی یا خیلی کوتاه است ({Length} کاراکتر)", clientId.Length);
         }
 
-        var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
         if (http.Request.Query.ContainsKey("debug"))
         {
             var encoded = Uri.EscapeDataString(callbackUrl);
-            var diag = await shimas.DiagnoseLoginKeyAsync(callbackUrl, ct);
-            var flow = loginUrl.Contains("/Authentication/Start/", StringComparison.OrdinalIgnoreCase)
+            var diag = await sso.DiagnoseLoginKeyAsync(callbackUrl, ct);
+            var debugLoginUrl = diag.SuggestedLoginUrl ?? sso.BuildExternalLoginUrl(callbackUrl);
+            var flow = debugLoginUrl.Contains("/Authentication/Start/", StringComparison.OrdinalIgnoreCase)
                 ? "loginKey → Authentication/Start/{loginKey} (روش سند SSO؛ برگشت به آدرس ثبت‌شده در پورتال)"
                 : "Login.aspx?lkey&returnUrl (روش قدیمی؛ اگر SSO روی Profile.aspx بماند، این روش را قبول نمی‌کند)";
             var body = $"""
@@ -346,28 +408,59 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 روش ورود فعلی: {flow}
 
                 آدرس کامل ورود (کپی در مرورگر و قبل از لاگین چک کنید returnUrl هست):
-                {loginUrl}
+                {debugLoginUrl}
 
                 ClientId/lkey تنظیم شده: بله (طول {clientId.Length} کاراکتر)
-                ApiName (هدر apiName): {shimas.Options.SigningApiName}
-                ClientId بدنه loginKey: {shimas.Options.EffectiveLoginKeyBodyClientId}
-                LoginKeyBodyClientIdIsApiName: {shimas.Options.LoginKeyBodyClientIdIsApiName}
-                جابه‌جایی احتمالی در appsettings: {SsoOutboundFieldMap.LikelyApiNameAndClientIdSwapped(shimas.Options)}
+                ApiName (هدر apiName): {sso.Options.SigningApiName}
+                ClientId بدنه loginKey: {sso.Options.EffectiveLoginKeyBodyClientId}
+                LoginKeyBodyClientIdIsApiName: {sso.Options.LoginKeyBodyClientIdIsApiName}
+                جابه‌جایی احتمالی در appsettings: {SsoOutboundFieldMap.LikelyApiNameAndClientIdSwapped(sso.Options)}
                 نقشه کامل: /api/auth/sso-outbound-map
                 hash دقیق (هدر+بدنه): /api/auth/sso-signing-preview
-                لاگ hash روی هر درخواست SSO: Auth:Shimas:DebugSigning = true
-                UseLoginKeyOnRedirect: {shimas.Options.UseLoginKeyOnRedirect}
+                لاگ hash روی هر درخواست SSO: Auth:Sso:DebugSigning = true
+                UseLoginKeyOnRedirect: {sso.Options.UseLoginKeyOnRedirect}
 
                 ---- تست loginKey با SSO ({diag.ApiBaseUrl}) ----
                 getCurrentTime: {(diag.GetCurrentTimeOk ? "OK" : "ناموفق")}
                 loginKey: {(diag.LoginKeyOk ? "OK" : $"ناموفق (code {diag.LoginKeyErrorCode}: {diag.LoginKeyErrorMessage})")}
-                ClientSecret طول: {diag.ClientSecretLength} کاراکتر
+                ClientSecret طول: {diag.ClientSecretLength} کاراکتر{(diag.ClientSecretLength < 8 ? " ← خیلی کوتاه؛ SecretKey کامل پورتال را در appsettings بگذارید (نه D2fbf نمونه git)" : "")}
                 نتیجه: {diag.Verdict}
+                {(diag.Error != null ? "جزئیات: " + diag.Error : "")}
                 {(diag.StartUrlSample != null ? "نمونه Start URL: " + diag.StartUrlSample : "")}
+
+                نکته: طبق سند SSO (بند ۳٫۳٫۳) برای هر ورود فقط **یک** POST به loginKey با هش SHA256(SecretKey+requestTime) ارسال می‌شود.
+                HTTP 200 با بدنه ErrorCode=403 یعنی خطای JSON، نه موفقیت.
                 """;
-            return Results.Content(body, "text/plain; charset=utf-8");
+
+            // wait=0 → بدون ادامه خودکار (برای خواندن آرام مقادیر هنگام دیباگ)
+            var continueSeconds = int.TryParse(http.Request.Query["wait"].FirstOrDefault(), out var w) && w >= 0 ? w : 6;
+            var autoContinue = continueSeconds > 0
+                ? $"""<meta http-equiv="refresh" content="{continueSeconds};url=/auth/login" />"""
+                : "";
+            var heading = continueSeconds > 0
+                ? $"دیباگ ورود SSO — ادامه خودکار بعد از {continueSeconds} ثانیه"
+                : "دیباگ ورود SSO — ادامه خودکار خاموش (wait=0)";
+            var html = $$"""
+                <!DOCTYPE html>
+                <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
+                <title>دیباگ ورود SSO</title>
+                {{autoContinue}}
+                <style>body{font-family:Tahoma,sans-serif;margin:16px;background:#f6f8fa}
+                pre{background:#fff;border:1px solid #d0d7de;border-radius:8px;padding:12px;white-space:pre-wrap;line-height:1.8}
+                .go{display:inline-block;margin:8px 0;padding:8px 16px;background:#0969da;color:#fff;border-radius:6px;text-decoration:none}</style>
+                </head><body>
+                <h3>{{heading}}</h3>
+                <p>بعد از این صفحه، <code>/auth/login</code> اجرا می‌شود (بریک‌پوینت <code>BuildExternalLoginUrlAsync</code> دوباره می‌خورد) و سپس به صفحهٔ لاگین مشهد می‌روید.</p>
+                <p><a class="go" href="/auth/login">ادامه به صفحهٔ لاگین (الان)</a>
+                &nbsp;<a href="/auth/login?debug=1&amp;wait=0">توقف روی همین صفحه (بدون ادامه خودکار)</a>
+                &nbsp;<a href="/login.html">ورود محلی</a></p>
+                <pre>{{System.Net.WebUtility.HtmlEncode(body)}}</pre>
+                </body></html>
+                """;
+            return Results.Content(html, "text/html; charset=utf-8");
         }
 
+        var loginUrl = await sso.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
         return Results.Redirect(loginUrl);
     }
     catch (Exception ex)
@@ -376,10 +469,10 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
     }
 }).AllowAnonymous();
 
-app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
+app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, SsoAuthService sso, CancellationToken ct) =>
 {
-    var callback = shimas.BuildCallbackAbsoluteUrl(http.Request);
-    var diag = await shimas.DiagnoseLoginKeyAsync(callback, ct);
+    var callback = sso.BuildCallbackAbsoluteUrl(http.Request);
+    var diag = await sso.DiagnoseLoginKeyAsync(callback, ct);
     return Results.Ok(new
     {
         diag.ApiBaseUrl,
@@ -398,11 +491,57 @@ app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthSe
     });
 }).AllowAnonymous();
 
+app.MapGet("/api/auth/sso-credential-compare", (SsoAuthService sso, IConfiguration config) =>
+{
+    static (string source, string apiName, string clientId, string secret) ReadRow(
+        string label, string? apiName, string? clientId, string? secret) =>
+        (label, (apiName ?? "").Trim(), (clientId ?? "").Trim(), (secret ?? "").Trim());
+
+    static object ToDto((string source, string apiName, string clientId, string secret) row) => new
+    {
+        source = row.source,
+        apiName = row.apiName,
+        clientIdMasked = SsoCredentialMask.MaskId(row.clientId),
+        clientIdLength = row.clientId.Length,
+        secretLength = row.secret.Length,
+        secretLooksShort = SsoCredentialMask.SecretLooksTooShort(row.secret)
+    };
+
+    var ssoRow = ReadRow(
+        "Auth:Sso (فعال در اپ)",
+        sso.Options.SigningApiName,
+        sso.Options.EffectiveClientId,
+        sso.Options.ClientSecret);
+
+    var settingsRow = ReadRow(
+        "Settings (RuleEngine)",
+        config["Settings:SSOUserName"],
+        config["Settings:SSOClientId"],
+        config["Settings:SSOSecret"]);
+
+    var sameApiName = string.Equals(ssoRow.apiName, settingsRow.apiName, StringComparison.Ordinal);
+    var sameClientId = sso.Options.EffectiveClientId.Trim()
+        == (config["Settings:SSOClientId"] ?? "").Trim();
+    var settingsSecretLen = (config["Settings:SSOSecret"] ?? "").Trim().Length;
+    var ssoSecretLen = (sso.Options.ClientSecret ?? "").Trim().Length;
+    var sameSecretLength = settingsSecretLen > 0 && settingsSecretLen == ssoSecretLen;
+
+    return Results.Ok(new
+    {
+        sso = ToDto(ssoRow),
+        settings = ToDto(settingsRow),
+        aligned = sameApiName && sameClientId && (settingsSecretLen == 0 || sameSecretLength),
+        noteFa = "اگر loginKey 403 است و همهٔ فرمول‌های probe شکست خورد، دیباگ کد کمکی نمی‌کند — trio apiName/ClientId/SecretKey را با پورتال SSO یکی کنید. "
+            + "اگر RuleEngine روی همان سرور SSO دارد، `sso-loginkey-probe?profile=settings` را بزنید؛ اگر آن OK شد، مقادیر Settings را در Auth:Sso کپی کنید. "
+            + "دیباگر Visual Studio فقط با Attach به w3wp همان سایت 5065 هنگام باز کردن این URLها breakpoint می‌خورد، نه F5 لوکال."
+    });
+}).AllowAnonymous();
+
 // تشخیص 403 Client info missmatched:
-//   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Shimas) با همهٔ فرمول‌های هش
+//   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Sso) با همهٔ فرمول‌های هش
 //   /api/auth/sso-loginkey-probe?profile=settings → اعتبار RuleEngine از بلوک Settings (SSOUserName/SSOClientId/SSOSecret)
 //   &apiName=<نام>                                → همان تست با apiName دیگر (بدون تغییر appsettings) — Secret هرگز از URL گرفته نمی‌شود
-app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthService shimas, IConfiguration config, CancellationToken ct) =>
+app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, SsoAuthService sso, IConfiguration config, CancellationToken ct) =>
 {
     var profile = (http.Request.Query["profile"].FirstOrDefault() ?? "").Trim().ToLowerInvariant();
     var apiNameOverride = (http.Request.Query["apiName"].FirstOrDefault() ?? "").Trim();
@@ -422,17 +561,19 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
     }
     else
     {
-        source = "Auth:Shimas (FinancialAssistant)";
-        apiName = shimas.Options.SigningApiName;
-        clientId = shimas.Options.EffectiveClientId;
-        secret = (shimas.Options.ClientSecret ?? "").Trim();
+        source = "Auth:Sso (FinancialAssistant)";
+        apiName = sso.Options.SigningApiName;
+        clientId = sso.Options.EffectiveClientId;
+        secret = (sso.Options.ClientSecret ?? "").Trim();
     }
 
     var configuredApiName = apiName;
     if (apiNameOverride.Length > 0)
         apiName = apiNameOverride;
 
-    var results = await shimas.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct);
+    // پیش‌فرض: فقط فرمول سند (یک POST). all=1 → آزمودن همهٔ فرمول‌ها.
+    var allVariants = (http.Request.Query["all"].FirstOrDefault() ?? "") is "1" or "true";
+    var results = await sso.ProbeLoginKeyVariantsAsync(apiName, clientId, secret, ct, allVariants);
     var winner = results.FirstOrDefault(r => r.Ok);
     var ssoUnreachable = winner == null && results.Count == 1 && results[0].Variant == "getCurrentTime";
     var allClientInfoMismatch = winner == null && !ssoUnreachable
@@ -446,17 +587,17 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
         clientIdMasked = SsoCredentialMask.MaskId(clientId),
         clientIdLength = clientId.Length,
         secretLength = secret.Length,
-        currentFormula = $"sha256(secret+time) hex {(string.Equals(shimas.Options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower")} (RuleEngine / Auth:Shimas:ApiSecretConcatOrder)",
+        currentFormula = $"sha256(secret+time) hex {(string.Equals(sso.Options.HashEncoding, "upper", StringComparison.OrdinalIgnoreCase) ? "upper" : "lower")} (RuleEngine / Auth:Sso:ApiSecretConcatOrder)",
         anyOk = winner != null,
         ssoReachable = !ssoUnreachable,
         workingFormula = winner?.Variant,
         verdictFa = winner != null
             ? (winner.Variant.StartsWith("sha256(secret+time) hex", StringComparison.Ordinal)
                 ? (apiNameOverride.Length > 0
-                    ? $"با apiName «{apiName}» OK شد — همین را در Auth:Shimas:ApiName (SSOUserName) بگذارید."
+                    ? $"با apiName «{apiName}» OK شد — همین را در Auth:Sso:ApiName (SSOUserName) بگذارید."
                     : "فرمول فعلی درست است — پس مشکل از اعتبار (ClientId/Secret/apiName) است، نه کد.")
                 : winner.Variant.StartsWith("apiName = ClientId", StringComparison.Ordinal)
-                    ? "SSO وقتی apiName = ClientId بود OK شد — Auth:Shimas:ApiName را همان ClientId بگذارید."
+                    ? "SSO وقتی apiName = ClientId بود OK شد — Auth:Sso:ApiName را همان ClientId بگذارید."
                     : $"SSO با «{winner.Variant}» جواب داد — شکل درخواست/فرمول در کد باید همین شود.")
             : ssoUnreachable
                 ? "getCurrentTime جواب نداد — SSO از این سرور در دسترس نیست (شبکه/فایروال)؛ هیچ فرمولی آزموده نشد."
@@ -480,7 +621,7 @@ app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>
     }
 }).AllowAnonymous();
 
-app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, SsoAuthService sso, HttpContext http, CancellationToken ct) =>
 {
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest(new { error = "نام کاربری و رمز عبور الزامی است" });
@@ -491,9 +632,9 @@ app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, Sh
         if (user == null)
             return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
 
-        if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
+        if (!sso.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
         {
-            if (!shimas.Options.AllowAdminLocalLoginOnPublicHost || !user.IsAdmin)
+            if (!sso.Options.AllowAdminLocalLoginOnPublicHost || !user.IsAdmin)
                 return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
         }
 
@@ -689,7 +830,7 @@ app.MapPut("/api/admin/groups/{id:guid}", async (
     }
 }).RequireAuthorization(authenticated);
 
-app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthService shimas) => new
+app.MapGet("/api/config", (IConfiguration config, HttpContext http, SsoAuthService sso) => new
 {
     releaseVersion = ReleaseInfo.Number,
     releaseLabel = ReleaseInfo.Label,
@@ -715,7 +856,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     {
         enabled = true,
         isAdmin = AppAuthService.IsAdmin(http.User),
-        shimas = shimas.GetStatus()
+        sso = sso.GetStatus()
     },
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true },
     tahator = new

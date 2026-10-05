@@ -20,7 +20,7 @@ public static class SsoOutboundFieldMap
         return true;
     }
 
-    public static bool LikelyApiNameAndClientIdSwapped(ShimasAuthOptions options)
+    public static bool LikelyApiNameAndClientIdSwapped(SsoAuthOptions options)
     {
         var apiName = options.SigningApiName;
         var clientId = options.EffectiveClientId;
@@ -30,7 +30,7 @@ public static class SsoOutboundFieldMap
         return LooksLikeLkeyClientId(apiName) && !LooksLikeLkeyClientId(clientId);
     }
 
-    public static SsoLoginKeyOutboundMap Describe(ShimasAuthOptions options)
+    public static SsoLoginKeyOutboundMap Describe(SsoAuthOptions options)
     {
         var apiName = options.SigningApiName;
         var bodyClientId = options.EffectiveLoginKeyBodyClientId;
@@ -39,12 +39,12 @@ public static class SsoOutboundFieldMap
         var map = new SsoLoginKeyOutboundMap
         {
             HeaderApiName = apiName,
-            HeaderApiNameSource = "Auth:Shimas:ApiName یا SSOUserName (نام کاربری API)",
+            HeaderApiNameSource = "Auth:Sso:ApiName یا SSOUserName (نام کاربری API)",
             HeaderApiNameMasked = MaskOrEmpty(apiName),
             BodyClientId = bodyClientId,
             BodyClientIdSource = options.LoginKeyBodyClientIdIsApiName
                 ? "همان ApiName (LoginKeyBodyClientIdIsApiName=true)"
-                : "Auth:Shimas:ClientId یا LKey (شناسه ۳۲کاراکتری)",
+                : "Auth:Sso:ClientId یا LKey (شناسه ۳۲کاراکتری)",
             BodyClientIdMasked = MaskOrEmpty(bodyClientId),
             HeaderRequestTimeSource = "getCurrentTime → هدر requestTime و بدنه Time",
             HeaderApiSecretSource = "SHA256(ClientSecret + requestTime) → هدر apiSecret و بدنه Hash (RuleEngine SSO.cs)",
@@ -53,9 +53,9 @@ public static class SsoOutboundFieldMap
         };
 
         map.VerdictFa = swapped
-            ? "احتمال جابه‌جایی در appsettings: مقدار ۳۲کاراکتری (lkey) در ApiName/SSOUserName و نام کاربری در ClientId است. apiName هدر = FinancialAssistant؛ ClientId بدنه = 53db…9111."
+            ? "احتمال جابه‌جایی در appsettings: مقدار ۳۲کاراکتری (lkey) در ApiName/SSOUserName و نام کاربری در ClientId است. apiName هدر = financial_Assist؛ ClientId بدنه = 53db…9111."
             : (LooksLikeLkeyClientId(apiName) && LooksLikeLkeyClientId(bodyClientId) && string.Equals(apiName, bodyClientId, StringComparison.Ordinal)
-                ? "هر دو apiName و ClientId بدنه یکسان و شبیه lkey هستند — اگر SSO نام کاربری جدا داده، ApiName را FinancialAssistant بگذارید."
+                ? "هر دو apiName و ClientId بدنه یکسان و شبیه lkey هستند — اگر SSO نام کاربری جدا داده، ApiName را financial_Assist بگذارید."
                 : "نقشهٔ فعلی: apiName در هدر، ClientId در بدنه، Secret فقط برای هش (هرگز در URL).");
 
         return map;

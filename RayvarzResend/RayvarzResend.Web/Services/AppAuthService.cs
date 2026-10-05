@@ -81,7 +81,7 @@ public sealed class AppAuthService
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
             return null;
 
-        var user = await _users.FindByUsernameAsync(username, ct);
+        var user = await _users.FindByLoginIdentityAsync(username, ct);
         if (user == null || !user.IsActive)
             return null;
         return PasswordHasherUtil.Verify(password, user.PasswordHash) ? user : null;

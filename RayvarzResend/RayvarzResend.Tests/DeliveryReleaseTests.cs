@@ -72,7 +72,8 @@ public class DeliveryReleaseTests
         Assert.Contains("\"SSOUserName\"", json);
         Assert.Contains("\"UseLoginKeyOnRedirect\": true", json);
         Assert.Contains("\"IncludeReturnUrlInLoginKey\": false", json);
-        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": true", json);
+        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": false", json);
+        Assert.Contains("financial_Assist", json);
         Assert.Contains("FinancialAssistant", json);
         Assert.Contains("19cf3C33", json);
         Assert.Contains("\"LoginState\": \"test\"", json);
@@ -94,7 +95,7 @@ public class DeliveryReleaseTests
         Assert.Contains("KnownNetworks.Clear()", program);
         Assert.Contains("CookieSecurePolicy.SameAsRequest", program);
         Assert.DoesNotContain(
-            "if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))\n        return Results.Json(new { error = \"ورود محلی غیرفعال است",
+            "if (!sso.Options.LocalLoginAvailableForHost(http.Request.Host.Host))\n        return Results.Json(new { error = \"ورود محلی غیرفعال است",
             program);
     }
 
@@ -104,17 +105,18 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
-        Assert.Contains("login.js?v=5", html);
+        Assert.Contains("login.js?v=", html);
         var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
         Assert.Contains("allowAdminLocalLoginOnPublicHost", js);
         Assert.DoesNotContain("if (mode.preferSsoLogin) {\n        window.location.href = mode.loginPath", js);
     }
 
     [Fact]
-    public void Unpublished_login_page_has_no_national_id_hint()
+    public void Unpublished_login_page_asks_for_organizational_domain()
     {
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
-        Assert.Contains("کد ملی", html);
+        // ورود محلی و SSO یک هویت دارند: دامین سازمانی (مثل alidoost-pa)، نه کد ملی
+        Assert.Contains("نام کاربری سازمانی (دامین)", html);
         Assert.Contains("رمز عبور", html);
         Assert.DoesNotContain("ورود با کد ملی و رمز عبور", html);
         Assert.DoesNotContain("با کد ملی وارد شود", html);

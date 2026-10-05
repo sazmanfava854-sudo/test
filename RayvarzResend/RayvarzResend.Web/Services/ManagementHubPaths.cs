@@ -6,7 +6,7 @@ public static class ManagementHubPaths
     public const string Canonical = "/management";
     public const string CanonicalWithSlash = "/management/";
 
-    private static readonly string[] Roots = ["/management", "/managment"];
+    private static readonly string[] Roots = new[] { "/management", "/managment" };
 
     /// <summary>ریشهٔ هاب بدون اسلش آخر (هر حالت حروف).</summary>
     public static bool IsRoot(string? path)

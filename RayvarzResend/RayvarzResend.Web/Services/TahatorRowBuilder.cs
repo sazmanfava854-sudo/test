@@ -280,8 +280,8 @@ public static class TahatorRowBuilder
 
         var incmNo = bank == "4" ? IncmNoBank4 : IncmNoOther;
         var refVal = bank == "4" ? "4" : "2";
-        fiche.Rows =
-        [
+        fiche.Rows = new List<IncmRowDto>
+    {
             new IncmRowDto
             {
                 IncmNo = incmNo,
@@ -293,7 +293,7 @@ public static class TahatorRowBuilder
                 Ref = refVal,
                 Num = fiche.DepositId?.ToString()
             }
-        ];
+        };
     }
 
     private static void ApplyDistrictAndFund(FicheHeaderDto fiche, bool amountPath)

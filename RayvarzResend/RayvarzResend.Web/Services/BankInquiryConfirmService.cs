@@ -147,7 +147,7 @@ public sealed class BankInquiryConfirmService
             return result;
         }
 
-        var ficheNos = (req.FicheNos ?? [])
+        var ficheNos = (req.FicheNos ?? new List<string>())
             .Select(s => (s ?? "").Trim())
             .Where(s => s.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)

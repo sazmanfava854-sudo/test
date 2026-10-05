@@ -32,8 +32,8 @@ public static class AccountingDocTestFixtures
     public static IEnumerable<object[]> AllFixtures =>
         All.Select(f => new object[] { f });
 
-    public static readonly FicheFixture[] All =
-    [
+    public static readonly FicheFixture[] All = new FicheFixture[]
+    {
         // --- درآمد شهرسازی (DocTyp 3) ---
         Income(
             "050533518749", 173_495_000m, branch: 205, doc: 9017,
@@ -146,7 +146,7 @@ public static class AccountingDocTestFixtures
             (100062, 1_009_060m, "صنفی"),
             (100003, 521_764m, "پسماند"),
             (206098003, 52_176m, "ماليات برارزش افزوده")),
-    ];
+    };
 
     private static FicheFixture Income(
         string ficheNo, decimal payable, int branch, int doc,

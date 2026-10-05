@@ -5,7 +5,7 @@ namespace RayvarzResend.Web.Services;
 internal static class SsoUserProvisioningHelper
 {
     public static (string FirstName, string LastName, string NationalId, string Position, string District)
-        NormalizeProfile(ShimasUserProfile profile)
+        NormalizeProfile(SsoUserProfile profile)
     {
         var username = (profile.Username ?? "").Trim();
         var firstName = (profile.FirstName ?? "").Trim();

@@ -34,10 +34,22 @@ async function checkExistingSession(mode) {
 function showSsoBlock(mode) {
   const block = $('loginSsoBlock');
   if (!block) return;
-  const show = !!mode?.preferSsoLogin && !!mode?.allowAdminLocalLoginOnPublicHost;
+  const publicSso = (mode?.publicSsoLoginUrl || '').trim();
+  const loginPath = (mode?.loginPath || '/auth/login').trim();
+  const show = !!mode?.ssoReady && (
+    !!mode?.preferSsoLogin ||
+    !!mode?.allowSsoOnLoopbackForDebug ||
+    publicSso.length > 0 ||
+    loginPath.startsWith('http')
+  );
   block.hidden = !show;
   const link = $('btnSsoLogin');
-  if (link && mode?.loginPath) link.setAttribute('href', mode.loginPath);
+  if (link) {
+    link.setAttribute('href', publicSso || loginPath);
+    if ((publicSso || loginPath).startsWith('http')) {
+      link.setAttribute('rel', 'noopener');
+    }
+  }
 }
 
 async function initLoginPage() {
