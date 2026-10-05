@@ -575,7 +575,7 @@ app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserReposit
     }
 }).RequireAuthorization(authenticated);
 
-app.MapPut("/api/admin/users/{id:guid}", async (
+app.MapMethods("/api/admin/users/{id:guid}", ["PUT", "POST"], async (
     Guid id,
     UpdateAppUserRequest? req,
     AppUserRepository users,
@@ -662,7 +662,7 @@ app.MapPost("/api/admin/groups", async (
     }
 }).RequireAuthorization(authenticated);
 
-app.MapPut("/api/admin/groups/{id:guid}", async (
+app.MapMethods("/api/admin/groups/{id:guid}", ["PUT", "POST"], async (
     Guid id,
     UpdateAppUserGroupRequest? req,
     AppUserRepository users,

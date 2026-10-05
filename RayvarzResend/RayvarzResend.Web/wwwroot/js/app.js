@@ -2162,7 +2162,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
   const url = isUpdate
     ? `/api/admin/groups/${editingGroupId}`
     : '/api/admin/groups';
-  const method = isUpdate ? 'PUT' : 'POST';
+  const method = 'POST';
   const res = await apiFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -2228,7 +2228,7 @@ async function saveUserEdit() {
     groupIds
   };
   const res = await apiFetch(`/api/admin/users/${editingUserId}`, {
-    method: 'PUT',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });

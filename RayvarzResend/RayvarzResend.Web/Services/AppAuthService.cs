@@ -81,10 +81,21 @@ public sealed class AppAuthService
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
             return null;
 
-        var user = await _users.FindByUsernameAsync(username, ct);
+        // ورود با دامین سازمانی (مثلاً alidoost-pa)، کد ملی، یا Username
+        var user = await _users.FindBySsoIdentityAsync(username, ct)
+            ?? await _users.FindByUsernameAsync(username, ct);
         if (user == null || !user.IsActive)
             return null;
-        return PasswordHasherUtil.Verify(password, user.PasswordHash) ? user : null;
+        if (!PasswordHasherUtil.Verify(password, user.PasswordHash))
+        {
+            if (!PasswordHasherUtil.IsStoredHashFormat(user.PasswordHash))
+                _logger.LogWarning(
+                    "Login rejected for {Login}: PasswordHash in DB is not app format (expected salt.hash PBKDF2) — use UI reset-password or API",
+                    username);
+            return null;
+        }
+
+        return user;
     }
 
     public async Task<AuthSessionDto> ToSessionAsync(AppUserRecord user, CancellationToken ct = default)
