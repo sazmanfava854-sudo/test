@@ -412,9 +412,36 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
                 {(diag.Error != null ? "جزئیات: " + diag.Error : "")}
                 {(diag.StartUrlSample != null ? "نمونه Start URL: " + diag.StartUrlSample : "")}
 
-                نکته: هر بار loginKey حداکثر ۲ POST (هش lower سپس upper روی 403) — HTTP 200 با بدنه ErrorCode=403 یعنی خطای JSON، نه موفقیت.
+                نکته: طبق سند SSO (بند ۳٫۳٫۳) برای هر ورود فقط **یک** POST به loginKey با هش SHA256(SecretKey+requestTime) ارسال می‌شود.
+                HTTP 200 با بدنه ErrorCode=403 یعنی خطای JSON، نه موفقیت.
                 """;
-            return Results.Content(body, "text/plain; charset=utf-8");
+
+            // wait=0 → بدون ادامه خودکار (برای خواندن آرام مقادیر هنگام دیباگ)
+            var continueSeconds = int.TryParse(http.Request.Query["wait"].FirstOrDefault(), out var w) && w >= 0 ? w : 6;
+            var autoContinue = continueSeconds > 0
+                ? $"""<meta http-equiv="refresh" content="{continueSeconds};url=/auth/login" />"""
+                : "";
+            var heading = continueSeconds > 0
+                ? $"دیباگ ورود SSO — ادامه خودکار بعد از {continueSeconds} ثانیه"
+                : "دیباگ ورود SSO — ادامه خودکار خاموش (wait=0)";
+            var html = $$"""
+                <!DOCTYPE html>
+                <html lang="fa" dir="rtl"><head><meta charset="utf-8" />
+                <title>دیباگ ورود SSO</title>
+                {{autoContinue}}
+                <style>body{font-family:Tahoma,sans-serif;margin:16px;background:#f6f8fa}
+                pre{background:#fff;border:1px solid #d0d7de;border-radius:8px;padding:12px;white-space:pre-wrap;line-height:1.8}
+                .go{display:inline-block;margin:8px 0;padding:8px 16px;background:#0969da;color:#fff;border-radius:6px;text-decoration:none}</style>
+                </head><body>
+                <h3>{{heading}}</h3>
+                <p>بعد از این صفحه، <code>/auth/login</code> اجرا می‌شود (بریک‌پوینت <code>BuildExternalLoginUrlAsync</code> دوباره می‌خورد) و سپس به صفحهٔ لاگین مشهد می‌روید.</p>
+                <p><a class="go" href="/auth/login">ادامه به صفحهٔ لاگین (الان)</a>
+                &nbsp;<a href="/auth/login?debug=1&amp;wait=0">توقف روی همین صفحه (بدون ادامه خودکار)</a>
+                &nbsp;<a href="/login.html">ورود محلی</a></p>
+                <pre>{{System.Net.WebUtility.HtmlEncode(body)}}</pre>
+                </body></html>
+                """;
+            return Results.Content(html, "text/html; charset=utf-8");
         }
 
         var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);

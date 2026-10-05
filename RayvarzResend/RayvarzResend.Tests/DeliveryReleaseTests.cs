@@ -104,17 +104,18 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
-        Assert.Contains("login.js?v=5", html);
+        Assert.Contains("login.js?v=", html);
         var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
         Assert.Contains("allowAdminLocalLoginOnPublicHost", js);
         Assert.DoesNotContain("if (mode.preferSsoLogin) {\n        window.location.href = mode.loginPath", js);
     }
 
     [Fact]
-    public void Unpublished_login_page_has_no_national_id_hint()
+    public void Unpublished_login_page_asks_for_organizational_domain()
     {
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
-        Assert.Contains("کد ملی", html);
+        // ورود محلی و SSO یک هویت دارند: دامین سازمانی (مثل alidoost-pa)، نه کد ملی
+        Assert.Contains("نام کاربری سازمانی (دامین)", html);
         Assert.Contains("رمز عبور", html);
         Assert.DoesNotContain("ورود با کد ملی و رمز عبور", html);
         Assert.DoesNotContain("با کد ملی وارد شود", html);

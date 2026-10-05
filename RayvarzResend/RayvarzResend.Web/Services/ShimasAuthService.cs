@@ -254,12 +254,15 @@ public sealed class ShimasAuthService
                 diag.SuggestedLoginUrl = BuildLoginStartUrl(loginKey);
                 diag.StartUrlSample = BuildLoginStartUrl(SsoCredentialMask.MaskId(loginKey));
             }
-            else if (_options.AllowLegacyLoginUrlWithoutLoginKey)
-                diag.SuggestedLoginUrl = BuildExternalLoginUrl(callbackAbsoluteUrl);
-            else if (key.ErrorCode == 403)
-                diag.Error = "SSO می‌گوید Client info mismatch — ClientId/ClientSecret/apiName با ثبت پورتال یکی نیست (Secret کامل؟ apiName = نام کاربری SSO؟).";
             else
-                diag.Error = $"loginKey ناموفق: {key.ErrorMessage} (code {key.ErrorCode})";
+            {
+                if (_options.AllowLegacyLoginUrlWithoutLoginKey)
+                    diag.SuggestedLoginUrl = BuildExternalLoginUrl(callbackAbsoluteUrl);
+
+                diag.Error = key.ErrorCode == 403
+                    ? "SSO می‌گوید Client info mismatch — ClientId/ClientSecret/apiName با ثبت پورتال یکی نیست (Secret کامل؟ apiName = نام کاربری SSO؟)."
+                    : $"loginKey ناموفق: {key.ErrorMessage} (code {key.ErrorCode})";
+            }
         }
         catch (Exception ex)
         {
