@@ -31,9 +31,9 @@
 
 | فایل | خط (تقریبی) | متد |
 |------|-------------|-----|
-| `Program.cs` | `var loginUrl = await shimas.BuildExternalLoginUrlAsync(...)` | `/auth/login` |
-| `Program.cs` | `var diag = await shimas.DiagnoseLoginKeyAsync(...)` | همان با `?debug=1` |
-| `ShimasAuthService.cs` | `var key = await _mashhadSso.GetLoginKeyAsync(...)` | `DiagnoseLoginKeyAsync` |
+| `Program.cs` | `var loginUrl = await sso.BuildExternalLoginUrlAsync(...)` | `/auth/login` |
+| `Program.cs` | `var diag = await sso.DiagnoseLoginKeyAsync(...)` | همان با `?debug=1` |
+| `SsoAuthService.cs` | `var key = await _mashhadSso.GetLoginKeyAsync(...)` | `DiagnoseLoginKeyAsync` |
 
 ### ۲) امضا و POST (مهم‌ترین برای 403)
 
@@ -88,7 +88,7 @@ last.ErrorMessage
 `/api/auth/sso-loginkey-probe?apiName=نام_کاربری_از_پورتال`
 
 اگر **هیچ** variant OK نشد → Secret/ClientId/apiName در appsettings با پورتال یکی نیست.  
-اگر یک variant OK شد → همان `HashEncoding` / `ApiSecretConcatOrder` / `LoginKeyBodyClientIdIsApiName` را در `Auth:Shimas` بگذارید.
+اگر یک variant OK شد → همان `HashEncoding` / `ApiSecretConcatOrder` / `LoginKeyBodyClientIdIsApiName` را در `Auth:Sso` بگذارید.
 
 ## بعد از رفع 403
 

@@ -9,7 +9,7 @@ using RayvarzResend.Web.Models;
 
 namespace RayvarzResend.Web.Services;
 
-public sealed class ShimasAuthService
+public sealed class SsoAuthService
 {
     public const string SsoStateCookieName = "RayvarzResend.SsoState";
     public const string PostLoginReturnCookieName = "RayvarzResend.PostLoginReturn";
@@ -19,19 +19,19 @@ public sealed class ShimasAuthService
         PropertyNameCaseInsensitive = true
     };
 
-    private readonly ShimasAuthOptions _options;
+    private readonly SsoAuthOptions _options;
     private readonly AppUserRepository _users;
     private readonly MashhadSsoApiClient _mashhadSso;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<ShimasAuthService> _logger;
+    private readonly ILogger<SsoAuthService> _logger;
     private readonly bool _isDevelopment;
 
-    public ShimasAuthService(
-        IOptions<ShimasAuthOptions> options,
+    public SsoAuthService(
+        IOptions<SsoAuthOptions> options,
         AppUserRepository users,
         MashhadSsoApiClient mashhadSso,
         IHttpClientFactory httpClientFactory,
-        ILogger<ShimasAuthService> logger,
+        ILogger<SsoAuthService> logger,
         IHostEnvironment hostEnvironment)
     {
         _options = options.Value;
@@ -42,16 +42,16 @@ public sealed class ShimasAuthService
         _isDevelopment = hostEnvironment.IsDevelopment();
     }
 
-    public ShimasAuthOptions Options => _options;
+    public SsoAuthOptions Options => _options;
 
-    public ShimasAuthStatusDto GetStatus(HttpRequest? request = null)
+    public SsoAuthStatusDto GetStatus(HttpRequest? request = null)
     {
         var host = request?.Host.Host;
-        var allowLoopbackSso = _options.AllowSsoOnLoopbackForDebug && ShimasAuthOptions.IsLoopbackHost(host);
+        var allowLoopbackSso = _options.AllowSsoOnLoopbackForDebug && SsoAuthOptions.IsLoopbackHost(host);
         var preferSso = _options.PreferSsoLoginForHost(host);
         var loginPath = ResolveLoginPath(request);
         var publicSso = UsesPublicSsoLoginUrl(request);
-        return new ShimasAuthStatusDto
+        return new SsoAuthStatusDto
         {
             Enabled = _options.Enabled,
             SsoReady = _options.SsoReady,
@@ -109,7 +109,7 @@ public sealed class ShimasAuthService
     public bool UsesPublicSsoLoginUrl(HttpRequest? request) =>
         request != null
         && !_isDevelopment
-        && ShimasAuthOptions.IsLoopbackHost(request.Host.Host)
+        && SsoAuthOptions.IsLoopbackHost(request.Host.Host)
         && !string.IsNullOrWhiteSpace(NormalizePublicBaseUrl(_options.PublicBaseUrl))
         && _options.SsoReady;
 
@@ -120,7 +120,7 @@ public sealed class ShimasAuthService
 
         if (request != null
             && _isDevelopment
-            && ShimasAuthOptions.IsLoopbackHost(request.Host.Host)
+            && SsoAuthOptions.IsLoopbackHost(request.Host.Host)
             && _options.SsoReady)
             return "/auth/login";
 
@@ -167,7 +167,7 @@ public sealed class ShimasAuthService
 
         if (string.IsNullOrWhiteSpace(_options.SigningApiName))
             throw new InvalidOperationException(
-                "Auth:Shimas:ApiName = نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲، همان SSOUserName در RuleEngine) — نه ClientId.");
+                "Auth:Sso:ApiName = نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲، همان SSOUserName در RuleEngine) — نه ClientId.");
 
         var state = ResolveLoginState(http);
 
@@ -230,7 +230,7 @@ public sealed class ShimasAuthService
         {
             diag.Error =
                 $"ClientSecret در appsettings فقط {diag.ClientSecretLength} کاراکتر است — احتمالاً placeholder (مثل D2fbf) است، نه SecretKey کامل پورتال SSO. "
-                + "SecretKey را از ادمین SSO بگیرید و در Auth:Shimas:ClientSecret (یا appsettings.Development.json روی PC) بگذارید؛ بعد recycle IIS.";
+                + "SecretKey را از ادمین SSO بگیرید و در Auth:Sso:ClientSecret (یا appsettings.Development.json روی PC) بگذارید؛ بعد recycle IIS.";
             return diag;
         }
 
@@ -708,7 +708,7 @@ public sealed class ShimasAuthService
     }
 
     /// <summary>پارامترهای بازگشت از login.mashhad.ir / سامزان: username + refresh_token.</summary>
-    public ShimasCallbackPayload ParseCallbackQuery(IQueryCollection query)
+    public SsoCallbackPayload ParseCallbackQuery(IQueryCollection query)
     {
         var username = ReadQuery(query,
             "username", "userName", "UserName",
@@ -725,7 +725,7 @@ public sealed class ShimasAuthService
         if (string.IsNullOrEmpty(normalizedUsername))
             normalizedUsername = normalizedDomain;
 
-        return new ShimasCallbackPayload
+        return new SsoCallbackPayload
         {
             Username = normalizedUsername,
             Domain = normalizedDomain,
@@ -734,13 +734,13 @@ public sealed class ShimasAuthService
         };
     }
 
-    public async Task<ShimasValidationResult> ValidateAsync(
+    public async Task<SsoValidationResult> ValidateAsync(
         string username,
         string refreshToken,
         CancellationToken ct = default) =>
         await ValidateAsync(username, refreshToken, alternateIdentity: null, ct);
 
-    public async Task<ShimasValidationResult> ValidateAsync(
+    public async Task<SsoValidationResult> ValidateAsync(
         string username,
         string refreshToken,
         string? alternateIdentity,
@@ -764,10 +764,10 @@ public sealed class ShimasAuthService
             return await ValidateRemoteAsync(normalizedUsername, normalizedToken, ct);
 
         _logger.LogWarning(
-            "Shimas ValidateTokenUrl تنظیم نشده — فقط بررسی اولیه refresh_token انجام شد برای {Username}",
+            "Sso ValidateTokenUrl تنظیم نشده — فقط بررسی اولیه refresh_token انجام شد برای {Username}",
             MaskUsername(normalizedUsername));
 
-        return new ShimasValidationResult
+        return new SsoValidationResult
         {
             Success = true,
             UsedRemoteApi = false,
@@ -775,7 +775,7 @@ public sealed class ShimasAuthService
         };
     }
 
-    private async Task<ShimasValidationResult> ValidateViaMashhadApiAsync(
+    private async Task<SsoValidationResult> ValidateViaMashhadApiAsync(
         string username,
         string refreshToken,
         string? alternateIdentity,
@@ -819,7 +819,7 @@ public sealed class ShimasAuthService
             }
 
             var profile = MapMashhadUserInfo(infoResult.Data, tokenUsernameUsed ?? username);
-            return new ShimasValidationResult
+            return new SsoValidationResult
             {
                 Success = true,
                 UsedRemoteApi = true,
@@ -853,7 +853,7 @@ public sealed class ShimasAuthService
         return list;
     }
 
-    private static ShimasUserProfile MapMashhadUserInfo(MashhadUserInfoData data, string fallbackUsername)
+    private static SsoUserProfile MapMashhadUserInfo(MashhadUserInfoData data, string fallbackUsername)
     {
         var basic = data.OldSSO_UserInfo?.basicInfo;
         var domainAccount = AppUserDomainNormalizer.Normalize(
@@ -869,7 +869,7 @@ public sealed class ShimasAuthService
         if (string.IsNullOrEmpty(loginUsername))
             loginUsername = domainAccount;
 
-        return new ShimasUserProfile
+        return new SsoUserProfile
         {
             Username = loginUsername,
             Domain = domainAccount,
@@ -880,7 +880,7 @@ public sealed class ShimasAuthService
     }
 
     public async Task<AppUserRecord?> ResolveOrCreateUserAsync(
-        ShimasUserProfile profile,
+        SsoUserProfile profile,
         CancellationToken ct = default)
     {
         var username = (profile.Username ?? "").Trim();
@@ -902,14 +902,14 @@ public sealed class ShimasAuthService
         return await _users.CreateSsoUserAsync(profile, ct);
     }
 
-    private async Task<ShimasValidationResult> ValidateRemoteAsync(
+    private async Task<SsoValidationResult> ValidateRemoteAsync(
         string username,
         string refreshToken,
         CancellationToken ct)
     {
         try
         {
-            var client = _httpClientFactory.CreateClient(nameof(ShimasAuthService));
+            var client = _httpClientFactory.CreateClient(nameof(SsoAuthService));
             using var request = new HttpRequestMessage(HttpMethod.Post, _options.ValidateTokenUrl);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             request.Content = JsonContent.Create(new
@@ -926,7 +926,7 @@ public sealed class ShimasAuthService
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
-                    "Shimas token validation failed ({Status}) for {Username}",
+                    "Sso token validation failed ({Status}) for {Username}",
                     (int)response.StatusCode,
                     MaskUsername(username));
                 return Fail("اعتبارسنجی refresh_token ناموفق بود");
@@ -937,7 +937,7 @@ public sealed class ShimasAuthService
                 ?? BuildProfileFromUsername(username);
 
             profile.Username = username;
-            return new ShimasValidationResult
+            return new SsoValidationResult
             {
                 Success = true,
                 UsedRemoteApi = true,
@@ -946,12 +946,12 @@ public sealed class ShimasAuthService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Shimas remote validation error for {Username}", MaskUsername(username));
+            _logger.LogError(ex, "Sso remote validation error for {Username}", MaskUsername(username));
             return Fail("خطا در ارتباط با سرویس احراز هویت سازمان");
         }
     }
 
-    private async Task<ShimasUserProfile?> TryLoadProfileAsync(
+    private async Task<SsoUserProfile?> TryLoadProfileAsync(
         string username,
         string refreshToken,
         CancellationToken ct)
@@ -959,7 +959,7 @@ public sealed class ShimasAuthService
         if (string.IsNullOrWhiteSpace(_options.UserProfileUrl))
             return null;
 
-        var client = _httpClientFactory.CreateClient(nameof(ShimasAuthService));
+        var client = _httpClientFactory.CreateClient(nameof(SsoAuthService));
         using var request = new HttpRequestMessage(HttpMethod.Get, _options.UserProfileUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {refreshToken}");
@@ -973,7 +973,7 @@ public sealed class ShimasAuthService
         return ParseProfileFromJson(body, username);
     }
 
-    private static ShimasUserProfile? ParseProfileFromJson(string json, string username)
+    private static SsoUserProfile? ParseProfileFromJson(string json, string username)
     {
         if (string.IsNullOrWhiteSpace(json))
             return null;
@@ -982,7 +982,7 @@ public sealed class ShimasAuthService
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            return new ShimasUserProfile
+            return new SsoUserProfile
             {
                 Username = ReadJsonString(root, "username", "userName", "UserName") ?? username,
                 FirstName = ReadJsonString(root, "firstName", "FirstName", "name", "Name") ?? "",
@@ -998,10 +998,10 @@ public sealed class ShimasAuthService
         }
     }
 
-    private static ShimasUserProfile BuildProfileFromUsername(string username)
+    private static SsoUserProfile BuildProfileFromUsername(string username)
     {
         var parts = username.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return new ShimasUserProfile
+        return new SsoUserProfile
         {
             Username = username,
             Domain = AppUserDomainNormalizer.Normalize(username),
@@ -1010,7 +1010,7 @@ public sealed class ShimasAuthService
         };
     }
 
-    private static ShimasValidationResult Fail(string error) => new()
+    private static SsoValidationResult Fail(string error) => new()
     {
         Success = false,
         Error = error

@@ -1,8 +1,10 @@
 namespace RayvarzResend.Web.Services;
 
-public sealed class ShimasAuthOptions
+public sealed class SsoAuthOptions
 {
-    public const string SectionName = "Auth:Shimas";
+    public const string SectionName = "Auth:Sso";
+    /// <summary>نام قبلی بلوک تنظیمات — هنوز bind می‌شود؛ <see cref="SectionName"/> اولویت دارد.</summary>
+    public const string LegacySectionName = "Auth:Shimas";
 
     public bool Enabled { get; set; }
     /// <summary>آدرس عمومی سایت — برای callback سامزان/شیماس روی سرور پشت IIS یا IP:Port.</summary>

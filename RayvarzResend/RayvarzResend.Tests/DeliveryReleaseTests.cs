@@ -95,7 +95,7 @@ public class DeliveryReleaseTests
         Assert.Contains("KnownNetworks.Clear()", program);
         Assert.Contains("CookieSecurePolicy.SameAsRequest", program);
         Assert.DoesNotContain(
-            "if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))\n        return Results.Json(new { error = \"ورود محلی غیرفعال است",
+            "if (!sso.Options.LocalLoginAvailableForHost(http.Request.Host.Host))\n        return Results.Json(new { error = \"ورود محلی غیرفعال است",
             program);
     }
 

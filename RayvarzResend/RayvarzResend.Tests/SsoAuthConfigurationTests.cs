@@ -4,7 +4,7 @@ using Xunit;
 
 namespace RayvarzResend.Tests;
 
-public class ShimasAuthConfigurationTests
+public class SsoAuthConfigurationTests
 {
     [Fact]
     public void ApplyMashhadAliases_reads_Settings_section_like_RuleEngine()
@@ -19,8 +19,8 @@ public class ShimasAuthConfigurationTests
             })
             .Build();
 
-        var options = new ShimasAuthOptions { ApiName = "", ClientId = "", ClientSecret = "" };
-        ShimasAuthConfiguration.ApplyMashhadAliases(config, options);
+        var options = new SsoAuthOptions { ApiName = "", ClientId = "", ClientSecret = "" };
+        SsoAuthConfiguration.ApplyMashhadAliases(config, options);
 
         Assert.Equal("zavabetapp", options.ApiName);
         Assert.Equal("4d7475D499c02B3", options.ClientId);
@@ -34,12 +34,48 @@ public class ShimasAuthConfigurationTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Auth:Shimas:SSOUserName"] = "financial_Assist"
+                ["Auth:Sso:SSOUserName"] = "financial_Assist"
             })
             .Build();
 
-        var options = new ShimasAuthOptions { ApiName = "", ClientId = "53db42619cf3C333b13a18D34fbd9111", ClientSecret = "x" };
-        ShimasAuthConfiguration.ApplyMashhadAliases(config, options);
+        var options = new SsoAuthOptions { ApiName = "", ClientId = "53db42619cf3C333b13a18D34fbd9111", ClientSecret = "x" };
+        SsoAuthConfiguration.ApplyMashhadAliases(config, options);
+
+        Assert.Equal("financial_Assist", options.ApiName);
+    }
+
+    [Fact]
+    public void BindSsoOptions_reads_legacy_Auth_Shimas_when_Sso_missing()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Auth:Shimas:ApiName"] = "financial_Assist",
+                ["Auth:Shimas:ClientId"] = "legacy-client-id"
+            })
+            .Build();
+
+        var options = new SsoAuthOptions();
+        SsoAuthConfiguration.BindSsoOptions(config, options);
+        SsoAuthConfiguration.ApplyMashhadAliases(config, options);
+
+        Assert.Equal("financial_Assist", options.ApiName);
+        Assert.Equal("legacy-client-id", options.ClientId);
+    }
+
+    [Fact]
+    public void BindSsoOptions_Auth_Sso_overrides_legacy_Shimas()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Auth:Shimas:ApiName"] = "old",
+                ["Auth:Sso:ApiName"] = "financial_Assist"
+            })
+            .Build();
+
+        var options = new SsoAuthOptions();
+        SsoAuthConfiguration.BindSsoOptions(config, options);
 
         Assert.Equal("financial_Assist", options.ApiName);
     }
@@ -55,13 +91,13 @@ public class ShimasAuthConfigurationTests
             })
             .Build();
 
-        var options = new ShimasAuthOptions
+        var options = new SsoAuthOptions
         {
             ApiName = "FinancialAssistant",
             ClientId = "19cf3C33",
             ClientSecret = "D2fbf"
         };
-        ShimasAuthConfiguration.ApplyMashhadAliases(config, options);
+        SsoAuthConfiguration.ApplyMashhadAliases(config, options);
         Assert.Equal("FinancialAssistant", options.ApiName);
         Assert.Equal("19cf3C33", options.ClientId);
         Assert.Equal("D2fbf", options.ClientSecret);

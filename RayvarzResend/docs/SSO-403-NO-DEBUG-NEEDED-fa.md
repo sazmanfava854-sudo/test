@@ -35,7 +35,7 @@
 
 | فیلد پورتال | کلید appsettings |
 |-------------|------------------|
-| نام کاربری کاربردی (apiName) | `Auth:Shimas:ApiName` یا `SSOUserName` |
+| نام کاربری کاربردی (apiName) | `Auth:Sso:ApiName` یا `SSOUserName` |
 | شناسه / ClientId / lkey | `ClientId` / `LKey` |
 | SecretKey کامل | `ClientSecret` |
 
@@ -55,7 +55,7 @@
 
 `GET /api/auth/sso-loginkey-probe?profile=settings`
 
-اگر **settings** OK شد → همان سه مقدار را در `Auth:Shimas` بگذارید.
+اگر **settings** OK شد → همان سه مقدار را در `Auth:Sso` بگذارید.
 
 ### ۴) امتحان apiName دیگر (بدون deploy)
 

@@ -22,7 +22,7 @@ public class MashhadSsoApiClientTests
                 : """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk-retry"}}""";
         });
         var api = new MashhadSsoApiClient(
-            Options.Create(new ShimasAuthOptions
+            Options.Create(new SsoAuthOptions
             {
                 ApiBaseUrl = "https://login.mashhad.ir",
                 ApiName = "api",
@@ -50,7 +50,7 @@ public class MashhadSsoApiClientTests
                 return """{"ErrorCode":0,"ErrorMessage":"","Data":{"loginKey":"lk"}}""";
             });
         var api = new MashhadSsoApiClient(
-            Options.Create(new ShimasAuthOptions
+            Options.Create(new SsoAuthOptions
             {
                 ApiBaseUrl = "https://login.mashhad.ir",
                 ApiName = "api",
@@ -73,7 +73,7 @@ public class MashhadSsoApiClientTests
         string? loginKeyBody = null;
         var handler = new MashhadSsoFakeHandler(b => loginKeyBody = b);
         var httpFactory = new NamedHttpClientFactory(handler);
-        var options = Options.Create(new ShimasAuthOptions
+        var options = Options.Create(new SsoAuthOptions
         {
             ApiBaseUrl = "https://login.mashhad.ir",
             ApiName = "zavabetapp",
@@ -105,7 +105,7 @@ public class MashhadSsoApiClientTests
     {
         var handler = new MashhadSsoFakeHandler();
         var httpFactory = new NamedHttpClientFactory(handler);
-        var options = Options.Create(new ShimasAuthOptions
+        var options = Options.Create(new SsoAuthOptions
         {
             ApiBaseUrl = "https://login.mashhad.ir",
             ApiName = "FinancialAssistant",
@@ -113,7 +113,7 @@ public class MashhadSsoApiClientTests
             ClientSecret = "D2fbf"
         });
         var api = new MashhadSsoApiClient(options, httpFactory, NullLogger<MashhadSsoApiClient>.Instance);
-        var opts = Options.Create(new ShimasAuthOptions
+        var opts = Options.Create(new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "19cf3C33",
@@ -138,13 +138,13 @@ public class MashhadSsoApiClientTests
         });
 
         var mashhad = new MashhadSsoApiClient(opts, httpFactory, NullLogger<MashhadSsoApiClient>.Instance);
-        var service = new ShimasAuthService(
+        var service = new SsoAuthService(
             opts,
             repo,
             mashhad,
             httpFactory,
-            NullLogger<ShimasAuthService>.Instance,
-            ShimasAuthServiceTests.StubHost());
+            NullLogger<SsoAuthService>.Instance,
+            SsoAuthServiceTests.StubHost());
 
         var validation = await service.ValidateAsync("1234567890", "refresh-from-callback");
         Assert.True(validation.Success);
@@ -299,7 +299,7 @@ public class MashhadSsoApiClientTests
     {
         string? body = null;
         var handler = new MashhadSsoFakeHandler(b => body = b);
-        var opts = Options.Create(new ShimasAuthOptions { ApiBaseUrl = "https://login.mashhad.ir", LoginState = "test", LoginDomainId = 0 });
+        var opts = Options.Create(new SsoAuthOptions { ApiBaseUrl = "https://login.mashhad.ir", LoginState = "test", LoginDomainId = 0 });
         var client = new MashhadSsoApiClient(opts, new NamedHttpClientFactory(handler), NullLogger<MashhadSsoApiClient>.Instance);
 
         await client.SendLoginKeyProbeAsync("api", "cid", "sec", "1700000000", (s, t) => "hash", default);
@@ -314,7 +314,7 @@ public class MashhadSsoApiClientTests
     {
         string? body = null;
         var handler = new MashhadSsoFakeHandler(b => body = b);
-        var opts = Options.Create(new ShimasAuthOptions { ApiBaseUrl = "https://login.mashhad.ir", LoginState = "test" });
+        var opts = Options.Create(new SsoAuthOptions { ApiBaseUrl = "https://login.mashhad.ir", LoginState = "test" });
         var client = new MashhadSsoApiClient(opts, new NamedHttpClientFactory(handler), NullLogger<MashhadSsoApiClient>.Instance);
 
         await client.SendLoginKeyProbeAsync("api", "cid", "sec", "1700000000", (s, t) => "hash", default, omitUserTypeAndDomain: true, clientIdKey: "ClientID");
@@ -326,10 +326,10 @@ public class MashhadSsoApiClientTests
         Assert.DoesNotContain("DomainId", body);
     }
 
-    private static ShimasAuthService CreateServiceWithSso(HttpMessageHandler handler, bool useLoginKey)
+    private static SsoAuthService CreateServiceWithSso(HttpMessageHandler handler, bool useLoginKey)
     {
         var httpFactory = new NamedHttpClientFactory(handler);
-        var opts = Options.Create(new ShimasAuthOptions
+        var opts = Options.Create(new SsoAuthOptions
         {
             Enabled = true,
             ClientId = "53db42619cf3C333b13a18D34fbd9111",
@@ -346,13 +346,13 @@ public class MashhadSsoApiClientTests
         config["Auth:UseInMemoryStore"] = "true";
         var repo = new AppUserRepository(config, memory, NullLogger<AppUserRepository>.Instance);
         var mashhad = new MashhadSsoApiClient(opts, httpFactory, NullLogger<MashhadSsoApiClient>.Instance);
-        return new ShimasAuthService(
+        return new SsoAuthService(
             opts,
             repo,
             mashhad,
             httpFactory,
-            NullLogger<ShimasAuthService>.Instance,
-            ShimasAuthServiceTests.StubHost());
+            NullLogger<SsoAuthService>.Instance,
+            SsoAuthServiceTests.StubHost());
     }
 
     private sealed class NamedHttpClientFactory : IHttpClientFactory

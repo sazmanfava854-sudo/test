@@ -69,7 +69,7 @@
 
 ### ۴) آزمایش نام پارامتر returnUrl (فقط اگر پورتال قدیمی است)
 
-گاهی Login.aspx فقط **`ReturnUrl`** (R بزرگ) را می‌پذیرد. یک بار در `Auth:Shimas`:
+گاهی Login.aspx فقط **`ReturnUrl`** (R بزرگ) را می‌پذیرد. یک بار در `Auth:Sso`:
 
 ```json
 "ReturnUrlParameter": "ReturnUrl"

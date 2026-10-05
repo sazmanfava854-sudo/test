@@ -27,8 +27,8 @@ data = json.loads(p.read_text(encoding='utf-8'))
 data.setdefault('Logging', {}).setdefault('LogLevel', {})['Default'] = 'Debug'
 data['Logging']['LogLevel']['RayvarzResend.Web'] = 'Debug'
 data['Logging']['LogLevel']['RayvarzResend.Web.Services.MashhadSsoApiClient'] = 'Debug'
-data['Logging']['LogLevel']['RayvarzResend.Web.Services.ShimasAuthService'] = 'Debug'
-sh = data.setdefault('Auth', {}).setdefault('Shimas', {})
+data['Logging']['LogLevel']['RayvarzResend.Web.Services.SsoAuthService'] = 'Debug'
+sh = data.setdefault('Auth', {}).setdefault('Sso', {})
 sh['DebugSigning'] = True
 sh['ApiSecretConcatOrder'] = 'SecretTime'
 p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -44,7 +44,7 @@ cat > "$STAGE/RayvarzResend/start-debug.bat" << 'EOF'
 cd /d "%~dp0"
 set ASPNETCORE_ENVIRONMENT=Development
 echo RayvarzResend v26 DEBUG (PDB + verbose SSO logs)
-echo Auth:Shimas:DebugSigning=true in appsettings.json
+echo Auth:Sso:DebugSigning=true in appsettings.json
 echo.
 echo SSO debug URLs (after start):
 echo   http://localhost:5088/api/auth/sso-outbound-map
@@ -59,7 +59,7 @@ cat > "$STAGE/RayvarzResend/DEBUG-README.txt" << 'EOF'
 RayvarzResend v26 — نسخه DEBUG (غیر پابلیش)
 
 - Build: Debug + فایل .pdb (اتصال Visual Studio / dnSpy)
-- appsettings: LogLevel=Debug, Auth:Shimas:DebugSigning=true
+- appsettings: LogLevel=Debug, Auth:Sso:DebugSigning=true
 - start-debug.bat را اجرا کنید (نه start.bat نسخه Release)
 
 APIهای SSO (مرورگر یا curl):

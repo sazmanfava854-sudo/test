@@ -2,7 +2,7 @@
 
 اجرا با `dotnet run` از همین پوشه — بدون exe publish.
 
-ورود یکپارچه (شیماس): `Auth:Shimas` در `appsettings.json`  
+ورود یکپارچه (شیماس): `Auth:Sso` در `appsettings.json`  
 - ClientId / LKey: `19cf3C33`  
 - ClientSecret: `D2fbf` (فقط سمت سرور؛ در URL مرورگر نمی‌رود)  
 - callback (ReturnUrl): `https://city.mashhad.ir:5065` (`CallbackPath`: `/`)  

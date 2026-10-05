@@ -656,7 +656,7 @@ public sealed class AppUserRepository
         return user;
     }
 
-    public async Task<AppUserRecord> CreateSsoUserAsync(ShimasUserProfile profile, CancellationToken ct = default)
+    public async Task<AppUserRecord> CreateSsoUserAsync(SsoUserProfile profile, CancellationToken ct = default)
     {
         var username = (profile.Username ?? "").Trim();
         if (username.Length == 0)

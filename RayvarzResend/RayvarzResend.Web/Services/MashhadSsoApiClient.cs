@@ -13,12 +13,12 @@ public sealed class MashhadSsoApiClient
         PropertyNameCaseInsensitive = true
     };
 
-    private readonly ShimasAuthOptions _options;
+    private readonly SsoAuthOptions _options;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<MashhadSsoApiClient> _logger;
 
     public MashhadSsoApiClient(
-        IOptions<ShimasAuthOptions> options,
+        IOptions<SsoAuthOptions> options,
         IHttpClientFactory httpClientFactory,
         ILogger<MashhadSsoApiClient> logger)
     {
@@ -231,7 +231,7 @@ public sealed class MashhadSsoApiClient
     {
         if (string.IsNullOrWhiteSpace(material.ApiName))
             throw new InvalidOperationException(
-                "Auth:Shimas:ApiName (نام کاربری کاربردی برنامه / apiName) تنظیم نشده است.");
+                "Auth:Sso:ApiName (نام کاربری کاربردی برنامه / apiName) تنظیم نشده است.");
 
         var request = new HttpRequestMessage(HttpMethod.Post, Combine(relativePath));
         request.Headers.TryAddWithoutValidation("apiName", material.ApiName);

@@ -38,7 +38,7 @@
 
 `RayvarzResend.Web\appsettings.json` (یا `appsettings.Production.json`)
 
-روی PC در **`appsettings.Development.json`** (یا User Secrets) بلوک `Auth:Shimas` را بگذارید — **Secret را commit نکنید.**
+روی PC در **`appsettings.Development.json`** (یا User Secrets) بلوک `Auth:Sso` را بگذارید — **Secret را commit نکنید.**
 
 برای **8070** معمولاً:
 

@@ -7,7 +7,7 @@ public class SsoOutboundFieldMapTests
     [Fact]
     public void Describe_maps_apiName_header_and_guid_body()
     {
-        var o = new ShimasAuthOptions
+        var o = new SsoAuthOptions
         {
             ApiName = "FinancialAssistant",
             ClientId = "53db42619cf3C333b13a18D34fbd9111",
@@ -22,7 +22,7 @@ public class SsoOutboundFieldMapTests
     [Fact]
     public void LikelySwap_when_guid_in_apiName_and_name_in_clientId()
     {
-        var o = new ShimasAuthOptions
+        var o = new SsoAuthOptions
         {
             ApiName = "53db42619cf3C333b13a18D34fbd9111",
             ClientId = "FinancialAssistant"

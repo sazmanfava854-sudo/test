@@ -46,7 +46,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 **در کد (بند ۳ سند):** کلاس `MashhadSsoSigning` + `MashhadSsoApiClient.SendSignedJsonAsync` — همهٔ `loginKey` / `getAccessToken` / `getUserInfo` ابتدا `getCurrentTime` می‌گیرند، سپس هدرهای `apiName` + `requestTime` + `apiSecret`؛ اگر SSO خطای انقضای `requestTime` بدهد یک بار با زمان جدید تکرار می‌شود. تنها `getCurrentTime` بدون این هدرهاست.
 
-در `Auth:Shimas`:
+در `Auth:Sso`:
 
 **روال:** `loginKey` → `Authentication/Start/{LoginKey}` → callback با `username` + `refresh_token` + `state` → `getAccessToken`.
 
@@ -74,7 +74,7 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 
 403 **Client info missmatched** = طبق سند (صفحه ۲۱): هدر `apiName` / `ClientId` / `apiSecret` با ثبت کاربردی برنامه یکی نیست.
 
-بعد از OK شدن اسکریپت، در `Auth:Shimas` بگذارید: `ApiName`/`SSOUserName` = همان apiName، `ClientId`، `ClientSecret` = SecretKey کامل.
+بعد از OK شدن اسکریپت، در `Auth:Sso` بگذارید: `ApiName`/`SSOUserName` = همان apiName، `ClientId`، `ClientSecret` = SecretKey کامل.
 
 بررسی: `GET /api/auth/mode` → `signingApiName`, `clientIdHint`, `clientSecretLooksShort`.
 

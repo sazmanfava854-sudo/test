@@ -6,7 +6,7 @@
 
 | فایل | متد | چه زمانی |
 |------|-----|----------|
-| `ShimasAuthService.cs` | `BuildExternalLoginUrlAsync` | یک بار وقتی `/auth/login` (یا معادل) را باز می‌کنید |
+| `SsoAuthService.cs` | `BuildExternalLoginUrlAsync` | یک بار وقتی `/auth/login` (یا معادل) را باز می‌کنید |
 | `MashhadSsoApiClient.cs` | `GetLoginKeyAsync` → `SendSignedJsonAsync` | اگر `UseLoginKeyOnRedirect=true` و API در دسترس باشد |
 | `MashhadSsoSigning.cs` | `CreateMaterial` | داخل هر درخواست امضاشدهٔ فاز ۱ (مثلاً loginKey) |
 
@@ -33,7 +33,7 @@
 |-------|------|-----|
 | ۱ | `Program.cs` | middleware ~۱۹۸: `IsSsoCallbackHttpRequest` |
 | ۲ | `Program.cs` | `TryCompleteSsoCallbackAsync` (~۱۵۵): `ParseCallbackQuery`, `ValidateReturnedState` |
-| ۳ | `ShimasAuthService.cs` | `ValidateAsync` → `ValidateViaMashhadApiAsync` (~۶۲۵) |
+| ۳ | `SsoAuthService.cs` | `ValidateAsync` → `ValidateViaMashhadApiAsync` (~۶۲۵) |
 | ۴ | `MashhadSsoApiClient.cs` | `GetAccessTokenAsync` → **`SendSignedJsonAsync`** |
 | ۵ | `MashhadSsoSigning.cs` | **`CreateMaterial`** (دوباره، برای getAccessToken / getUserInfo) |
 
@@ -44,7 +44,7 @@
 در `Program.cs` ترتیب درست این است (اول `if`، بعد `await next()`):
 
 ```csharp
-if (shimas.IsSsoCallbackHttpRequest(context.Request)) { ... return; }
+if (sso.IsSsoCallbackHttpRequest(context.Request)) { ... return; }
 await next();
 ```
 
@@ -54,7 +54,7 @@ await next();
 
 - `context.Request.Path`
 - `context.Request.QueryString`
-- `shimas.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa`
+- `sso.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa`
 
 یا در مرورگر (با همان querystring):
 
@@ -82,14 +82,14 @@ await next();
    - باید به `city.mashhad.ir:5065/management` (یا `/auth/callback`) با `refresh_token` طولانی برسید.
 
 3. **فاز ۲ اصلاً شروع نشده**  
-   Breakpoint در `Program.cs` خط ~۲۰۱ (`if (shimas.IsSsoCallbackHttpRequest`) بگذارید. اگر نمی‌خورد: مسیر یا query با `CallbackPath` و `MinRefreshTokenLength` جور نیست.
+   Breakpoint در `Program.cs` خط ~۲۰۱ (`if (sso.IsSsoCallbackHttpRequest`) بگذارید. اگر نمی‌خورد: مسیر یا query با `CallbackPath` و `MinRefreshTokenLength` جور نیست.
 
 4. **فاز ۲ شروع شده ولی قبل از API می‌ایستد**  
    - `ValidateReturnedState` در `TryCompleteSsoCallbackAsync` — اگر state کوکی با query یکی نباشد، redirect به `login.html?error=...` بدون `ValidateViaMashhadApiAsync`.  
    - برای **Login.aspx** بدون state، معمولاً state خالی قبول می‌شود (کد فعلی).
 
 5. **لاگ**  
-   `Auth:Shimas:DebugSigning: true` — خروجی امضا و خطاهای loginKey/getAccessToken در لاگ سرور (یا Output در F5).
+   `Auth:Sso:DebugSigning: true` — خروجی امضا و خطاهای loginKey/getAccessToken در لاگ سرور (یا Output در F5).
 
 ## پیشنهاد breakpoint برای مشکل «بعد از زدن اطلاعات لاگین»
 
@@ -97,14 +97,14 @@ await next();
 
 ```
 Program.cs          → TryCompleteSsoCallbackAsync (خط ~۱۶۸ ValidateAsync)
-ShimasAuthService   → ValidateViaMashhadApiAsync (خط ~۶۳۸ GetAccessTokenAsync)
+SsoAuthService   → ValidateViaMashhadApiAsync (خط ~۶۳۸ GetAccessTokenAsync)
 MashhadSsoApiClient → SendSignedJsonAsync
 ```
 
 و برای اطمینان از رسیدن callback:
 
 ```
-Program.cs          → if (shimas.IsSsoCallbackHttpRequest(...))  (~۲۰۱)
+Program.cs          → if (sso.IsSsoCallbackHttpRequest(...))  (~۲۰۱)
 ```
 
 ## دیباگ فاز ۲ روی سرور city (پیشنهاد عملی)
@@ -157,8 +157,8 @@ context.Request.Host.Value
 برای SSO (بعد از pull شاخهٔ net7):
 
 ```text
-shimas.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa
-shimas.ProbeSsoCallbackHttpRequest(context.Request).IsSsoCallbackHttpRequest
+sso.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa
+sso.ProbeSsoCallbackHttpRequest(context.Request).IsSsoCallbackHttpRequest
 ```
 
 **تنظیم اختیاری VS:** Tools → Options → Debugging → General → خاموش کردن **Enable property evaluation and other implicit function calls** (کمتر خطای عجیب در Locals؛ بعضی propertyها خودکار پر نمی‌شوند).
@@ -166,7 +166,7 @@ shimas.ProbeSsoCallbackHttpRequest(context.Request).IsSsoCallbackHttpRequest
 **جایگزین:** یک خط موقت در `Program.cs` داخل middleware (فقط لوکال) قبل از `await next()`:
 
 ```csharp
-var _dbg = shimas.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa;
+var _dbg = sso.ProbeSsoCallbackHttpRequest(context.Request).RejectionReasonFa;
 ```
 
 روی `_dbg` breakpoint بگذارید — بدون Immediate Window.

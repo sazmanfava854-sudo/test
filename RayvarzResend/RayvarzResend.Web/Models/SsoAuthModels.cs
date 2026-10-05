@@ -1,6 +1,6 @@
 namespace RayvarzResend.Web.Models;
 
-public sealed class ShimasUserProfile
+public sealed class SsoUserProfile
 {
     public string Username { get; set; } = "";
     public string Domain { get; set; } = "";
@@ -11,12 +11,12 @@ public sealed class ShimasUserProfile
     public string District { get; set; } = "";
 }
 
-public sealed class ShimasValidationResult
+public sealed class SsoValidationResult
 {
     public bool Success { get; set; }
     public string? Error { get; set; }
     public bool UsedRemoteApi { get; set; }
-    public ShimasUserProfile Profile { get; set; } = new();
+    public SsoUserProfile Profile { get; set; } = new();
 }
 
 public sealed class SsoLoginKeyProbeResult
@@ -93,7 +93,7 @@ public sealed class SsoLoginKeyOutboundMap
     public string VerdictFa { get; set; } = "";
 }
 
-public sealed class ShimasAuthStatusDto
+public sealed class SsoAuthStatusDto
 {
     public bool Enabled { get; set; }
     public bool SsoReady { get; set; }
@@ -138,7 +138,7 @@ public sealed class SsoCallbackProbeDto
     public string[] QueryKeys { get; set; } = Array.Empty<string>();
 }
 
-public sealed class ShimasCallbackPayload
+public sealed class SsoCallbackPayload
 {
     public string Username { get; set; } = "";
     public string Domain { get; set; } = "";

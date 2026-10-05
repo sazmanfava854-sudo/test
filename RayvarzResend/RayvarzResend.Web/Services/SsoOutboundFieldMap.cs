@@ -20,7 +20,7 @@ public static class SsoOutboundFieldMap
         return true;
     }
 
-    public static bool LikelyApiNameAndClientIdSwapped(ShimasAuthOptions options)
+    public static bool LikelyApiNameAndClientIdSwapped(SsoAuthOptions options)
     {
         var apiName = options.SigningApiName;
         var clientId = options.EffectiveClientId;
@@ -30,7 +30,7 @@ public static class SsoOutboundFieldMap
         return LooksLikeLkeyClientId(apiName) && !LooksLikeLkeyClientId(clientId);
     }
 
-    public static SsoLoginKeyOutboundMap Describe(ShimasAuthOptions options)
+    public static SsoLoginKeyOutboundMap Describe(SsoAuthOptions options)
     {
         var apiName = options.SigningApiName;
         var bodyClientId = options.EffectiveLoginKeyBodyClientId;
@@ -39,12 +39,12 @@ public static class SsoOutboundFieldMap
         var map = new SsoLoginKeyOutboundMap
         {
             HeaderApiName = apiName,
-            HeaderApiNameSource = "Auth:Shimas:ApiName یا SSOUserName (نام کاربری API)",
+            HeaderApiNameSource = "Auth:Sso:ApiName یا SSOUserName (نام کاربری API)",
             HeaderApiNameMasked = MaskOrEmpty(apiName),
             BodyClientId = bodyClientId,
             BodyClientIdSource = options.LoginKeyBodyClientIdIsApiName
                 ? "همان ApiName (LoginKeyBodyClientIdIsApiName=true)"
-                : "Auth:Shimas:ClientId یا LKey (شناسه ۳۲کاراکتری)",
+                : "Auth:Sso:ClientId یا LKey (شناسه ۳۲کاراکتری)",
             BodyClientIdMasked = MaskOrEmpty(bodyClientId),
             HeaderRequestTimeSource = "getCurrentTime → هدر requestTime و بدنه Time",
             HeaderApiSecretSource = "SHA256(ClientSecret + requestTime) → هدر apiSecret و بدنه Hash (RuleEngine SSO.cs)",
