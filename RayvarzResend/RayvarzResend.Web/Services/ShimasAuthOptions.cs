@@ -14,6 +14,8 @@ public sealed class ShimasAuthOptions
     /// <summary>بعد از ورود موفق SSO به کدام مسیر داخلی برود (صفحهٔ اصلی با تب‌ها).</summary>
     public string PostLoginDefaultPath { get; set; } = "/";
     public string LoginUrl { get; set; } = "https://login.mashhad.ir/Authentication/Login.aspx";
+    /// <summary>خروج از نشست SSO مشهد قبل از ورود دوباره (فقط با redirect مرورگر به همان دامنه).</summary>
+    public string SsoPortalLogoutUrl { get; set; } = "https://login.mashhad.ir/Authentication/Logout.aspx";
     /// <summary>طبق سند SSO: https://login.mashhad.ir/Authentication/Start/{loginKey}</summary>
     public string LoginStartUrlTemplate { get; set; } = "https://login.mashhad.ir/Authentication/Start/{loginKey}";
     /// <summary>پایه API احراز هویت (همان SSOBaseUrl در RuleEngine) — مثلاً https://login.mashhad.ir</summary>

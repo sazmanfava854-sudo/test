@@ -33,7 +33,8 @@
 1. شاخه: `cursor/net7-vs175-debug-ffcb`
 2. Solution: `RayvarzResend/RayvarzResend.sln`
 3. Startup project: **RayvarzResend.Web**
-4. پروفایل: **http** یا **RayvarzResend.Web** — معمولاً `http://localhost:5088`
+4. پروفایل: **RayvarzResend.Web** یا **http** (هر دو یکسان‌اند؛ Visual Studio گاهی هر دو را نگه می‌دارد) — F5 با `launchUrl`: **`/auth/sso-restart`** (کوکی اپ + خروج SSO مشهد → `/auth/login`).
+5. کوکی **login.mashhad.ir** از کد لوکال پاک نمی‌شود؛ فقط با redirect به `Auth:Shimas:SsoPortalLogoutUrl` (پیش‌فرض Logout.aspx). اگر خروج مشهد کار نکرد، آدرس را با ادمین SSO چک کنید یا یک بار Incognito.
 5. **دو محیط (گیج‌کننده):** سرور Publish `http://5.252.216.140:8070` ≠ F5 روی `localhost` — [SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md](./SSO-DEBUG-LOCAL-VS-SERVER-140-fa.md)
 6. **ورود سازمانی** باید از آدرس ثبت SSO باشد، نه localhost:
    - `Auth:Shimas:PublicBaseUrl` = `https://city.mashhad.ir:5065`

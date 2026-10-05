@@ -338,6 +338,20 @@ app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shim
     });
 }).AllowAnonymous();
 
+// Development / localhost: کوکی اپ + هدایت به Logout مشهد → برگشت به /auth/login → صفحهٔ ورود SSO
+app.MapGet("/auth/sso-restart", async (HttpContext http, ShimasAuthService shimas, IHostEnvironment env) =>
+{
+    var loopback = ShimasAuthOptions.IsLoopbackHost(http.Request.Host.Host);
+    if (!env.IsDevelopment() && !(loopback && shimas.Options.AllowSsoOnLoopbackForDebug))
+        return Results.NotFound();
+
+    shimas.ClearSsoFlowCookies(http);
+    await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+    var portalLogout = shimas.BuildSsoPortalLogoutRedirectUrl(http.Request);
+    return Results.Redirect(portalLogout ?? "/auth/login");
+}).AllowAnonymous();
+
 app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, CancellationToken ct) =>
 {
     // روی localhost با PublicBaseUrl=city معمولاً به city redirect می‌شود — با ?debug=1 همان‌جا بمان تا F10 روی PC ممکن شود.

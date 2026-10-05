@@ -502,6 +502,19 @@ public sealed class ShimasAuthService
         http.Response.Cookies.Delete(PostLoginReturnCookieName, new CookieOptions { Path = "/" });
     }
 
+    /// <summary>بعد از خروج SSO، کاربر به این آدرس برمی‌گردد (معمولاً /auth/login روی همان host).</summary>
+    public string? BuildSsoPortalLogoutRedirectUrl(HttpRequest request, string continueRelativePath = "/auth/login")
+    {
+        var logoutBase = (_options.SsoPortalLogoutUrl ?? "").Trim();
+        if (logoutBase.Length == 0)
+            return null;
+
+        var rel = continueRelativePath.StartsWith('/') ? continueRelativePath : "/" + continueRelativePath;
+        var continueUrl = $"{request.Scheme}://{request.Host}{rel}";
+        var returnUrlKey = string.IsNullOrWhiteSpace(_options.ReturnUrlParameter) ? "ReturnUrl" : _options.ReturnUrlParameter.Trim();
+        return QueryHelpers.AddQueryString(logoutBase, returnUrlKey, continueUrl);
+    }
+
     public string BuildCallbackAbsoluteUrl(HttpRequest request)
     {
         var registered = NormalizePublicBaseUrl(_options.SsoRegisteredReturnUrl);
