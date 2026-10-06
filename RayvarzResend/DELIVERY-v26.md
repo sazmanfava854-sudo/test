@@ -101,10 +101,19 @@ Zip فقط **یک پوشه** دارد: `RayvarzResend\`
 | خروج | به `/login.html` می‌رود (نه `/auth/login`) تا نشست SSO کاربر را فوراً دوباره وارد نکند |
 | پس از ورود: صفحهٔ مدیریت `/management/` با کارت فرم‌های مجاز؛ لینک هر کارت → تب مربوط |
 
+### AppAuth و Security (دو کانکشن جدا)
+
+| کلید | پایگاه | جداول |
+|------|--------|--------|
+| `ConnectionStrings:AppAuth` | **RayvarzRuleEngine** (همان قبلی) | `AppUser`, `AppUserGroup`, `AppUserGroupMember` |
+| `ConnectionStrings:Security` | **security10** روی `172.16.8.138\sql2012` | `dbo.Users` (شاهکار) — کاربر `hService` |
+
+اگر `AppAuth` را به `security10` بگذارید، SSO/ورود با خطای `AppUserGroup` می‌شکند. فقط `Security` را برای شاهکار پر کنید. اگر جدول گروه در RuleEngine نیست، اسکریپت‌های `database/07_AppUser.sql`, `08_AppUserGroup.sql`, `09_AppUserGroup_Shahkar.sql` را روی **AppAuth** اجرا کنید.
+
 ## تست
 
 ```bash
-cd RayvarzResend && dotnet test   # 462
+cd RayvarzResend && dotnet test   # 526+
 ```
 
 ## نسخه قبلی
