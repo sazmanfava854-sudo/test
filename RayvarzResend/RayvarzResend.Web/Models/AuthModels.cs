@@ -27,6 +27,16 @@ public sealed class AppUserDirectPermissions
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
     public bool CanManageUsers { get; set; }
+
+    public static AppUserDirectPermissions AllGranted() => new()
+    {
+        CanAccessUnsentFiches = true,
+        CanAccessInstallment = true,
+        CanAccessFicheDateChange = true,
+        CanAccessBankInquiryConfirm = true,
+        CanAccessShahkar = true,
+        CanManageUsers = true
+    };
 }
 
 public sealed class LoginRequest

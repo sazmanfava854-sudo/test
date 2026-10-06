@@ -100,7 +100,9 @@ public sealed class AppAuthService
 
     public async Task<AuthSessionDto> ToSessionAsync(AppUserRecord user, CancellationToken ct = default)
     {
-        var perms = await _permissions.ResolveAsync(user, ct);
+        var perms = user.IsAdmin
+            ? UserPermissionsDto.FullAdmin()
+            : await _permissions.ResolveAsync(user, ct);
         return new AuthSessionDto
         {
             Id = user.Id,
