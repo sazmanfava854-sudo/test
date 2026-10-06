@@ -11,10 +11,11 @@ public class AppUserDomainSchemaTests
         var repo = File.ReadAllText(RepoFile("RayvarzResend.Web", "Services", "AppUserRepository.cs"));
 
         Assert.Contains("ADD [Domain] NVARCHAR(100)", sql);
-        Assert.Contains("SET [Domain] = N'0925569917'", sql);
+        Assert.Contains("SET [Domain] = N'hoseine-sh'", sql);
         Assert.Contains("NationalId = N'0925569917' OR Username = N'0925569917'", sql);
 
         Assert.Contains("ADD [Domain] NVARCHAR(100)", repo);
+        Assert.Contains("hoseine-sh", repo);
         Assert.Contains("0925569917", repo);
         Assert.Contains("AppUser.Domain backfill", repo);
 

@@ -30,14 +30,14 @@ IF NOT EXISTS (
     CREATE UNIQUE INDEX UQ_AppUser_Domain ON dbo.AppUser ([Domain])
         WHERE [Domain] <> N'';
 
--- دامین لاگین یکپارچه برای کاربر 0925569917 (کد ملی / نام کاربری)
+-- دامین SSO برای کاربر با کد ملی / نام کاربری 0925569917
 UPDATE dbo.AppUser
-SET [Domain] = N'0925569917'
+SET [Domain] = N'hoseine-sh'
 WHERE (NationalId = N'0925569917' OR Username = N'0925569917')
   AND ISNULL([Domain], N'') = N''
   AND NOT EXISTS (
       SELECT 1
       FROM dbo.AppUser x
-      WHERE x.[Domain] = N'0925569917'
+      WHERE x.[Domain] = N'hoseine-sh'
         AND x.NationalId <> N'0925569917'
         AND x.Username <> N'0925569917');

@@ -144,13 +144,13 @@ public sealed class AppUserRepository
         await TryRunSchemaUpgradeAsync(conn, "AppUser.Domain backfill", """
             IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NOT NULL
                 EXEC(N'UPDATE dbo.AppUser
-                    SET [Domain] = N''0925569917''
+                    SET [Domain] = N''hoseine-sh''
                     WHERE (NationalId = N''0925569917'' OR Username = N''0925569917'')
                       AND ISNULL([Domain], N'''') = N''''
                       AND NOT EXISTS (
                           SELECT 1
                           FROM dbo.AppUser x
-                          WHERE x.[Domain] = N''0925569917''
+                          WHERE x.[Domain] = N''hoseine-sh''
                             AND x.NationalId <> N''0925569917''
                             AND x.Username <> N''0925569917'')');
             """, ct);
