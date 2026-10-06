@@ -15,6 +15,18 @@ public sealed class AppUserRecord
     public bool IsAdmin { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; }
+    /// <summary>دسترسی‌های شخصی (بدون گروه) — با مجوز گروه جمع (OR) می‌شود.</summary>
+    public AppUserDirectPermissions DirectPermissions { get; set; } = new();
+}
+
+public sealed class AppUserDirectPermissions
+{
+    public bool CanAccessUnsentFiches { get; set; }
+    public bool CanAccessInstallment { get; set; }
+    public bool CanAccessFicheDateChange { get; set; }
+    public bool CanAccessBankInquiryConfirm { get; set; }
+    public bool CanAccessShahkar { get; set; }
+    public bool CanManageUsers { get; set; }
 }
 
 public sealed class LoginRequest
@@ -34,6 +46,8 @@ public sealed class CreateAppUserRequest
     public string? District { get; set; }
     public string? Domain { get; set; }
     public bool IsAdmin { get; set; }
+    public List<Guid>? GroupIds { get; set; }
+    public AppUserDirectPermissions? DirectPermissions { get; set; }
 }
 
 public sealed class AppUserDto
@@ -50,6 +64,7 @@ public sealed class AppUserDto
     public bool IsActive { get; set; }
     public string CreatedAtUtc { get; set; } = "";
     public List<Guid> GroupIds { get; set; } = [];
+    public AppUserDirectPermissions DirectPermissions { get; set; } = new();
 }
 
 public sealed class AuthSessionDto
@@ -137,6 +152,7 @@ public sealed class UpdateAppUserRequest
     public bool? IsActive { get; set; }
     public string? Domain { get; set; }
     public List<Guid>? GroupIds { get; set; }
+    public AppUserDirectPermissions? DirectPermissions { get; set; }
 }
 
 public sealed class ResetAppUserPasswordRequest

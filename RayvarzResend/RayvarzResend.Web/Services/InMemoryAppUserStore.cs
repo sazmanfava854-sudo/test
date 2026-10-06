@@ -37,11 +37,12 @@ public sealed class InMemoryAppUserStore
             Domain = domain,
             IsAdmin = req.IsAdmin,
             IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow,
+            DirectPermissions = req.DirectPermissions ?? new AppUserDirectPermissions()
         };
         _byUsername[user.Username] = user;
         _byId[user.Id] = user;
-        _userGroups[user.Id] = [];
+        _userGroups[user.Id] = req.GroupIds?.Distinct().ToHashSet() ?? [];
         return user;
     }
 
@@ -111,7 +112,8 @@ public sealed class InMemoryAppUserStore
                 IsAdmin = u.IsAdmin,
                 IsActive = u.IsActive,
                 CreatedAtUtc = u.CreatedAtUtc.ToString("O"),
-                GroupIds = GetUserGroupIds(u.Id)
+                GroupIds = GetUserGroupIds(u.Id),
+                DirectPermissions = u.DirectPermissions
             })
             .ToList();
 
@@ -231,6 +233,8 @@ public sealed class InMemoryAppUserStore
         }
         if (req.GroupIds != null)
             SetUserGroups(id, req.GroupIds);
+        if (req.DirectPermissions != null)
+            user.DirectPermissions = req.DirectPermissions;
 
         return List().First(u => u.Id == id);
     }

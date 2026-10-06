@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=44" />
+  <link rel="stylesheet" href="css/style.css?v=45" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -719,8 +719,52 @@
           <label class="field">
             <span class="field-label">منطقه / شعبه</span>
             <select id="newUserDistrict"></select>
-            <span class="field-hint">مناطق ۱–۱۲ و ثامن، یا شعبه مرکز (۱۰۲)</span>
           </label>
+          <div class="field user-groups-field">
+            <span class="field-label">گروه‌های کاربری</span>
+            <div class="fiche-date-ms user-groups-picker" id="newUserGroupsMulti">
+              <button type="button" class="fiche-date-ms-trigger" id="newUserGroupsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                <span id="newUserGroupsTriggerLabel">انتخاب گروه…</span>
+                <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="fiche-date-ms-menu user-groups-picker-menu" id="newUserGroupsMenu" hidden role="listbox" aria-multiselectable="true"></div>
+            </div>
+          </div>
+          <div class="field user-groups-field">
+            <span class="field-label">دسترسی‌های شخصی (بدون گروه)</span>
+            <div class="fiche-date-ms user-groups-perms-ms" id="newUserDirectPermsMulti">
+              <button type="button" class="fiche-date-ms-trigger" id="newUserDirectPermsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                <span id="newUserDirectPermsTriggerLabel">انتخاب دسترسی…</span>
+                <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="fiche-date-ms-menu user-groups-perms-menu" id="newUserDirectPermsMenu" hidden role="listbox" aria-multiselectable="true">
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectUnsent" type="checkbox" class="user-direct-perm-check" data-perm-label="ارسال به رایورز" />
+                  <span class="fiche-date-ms-option-text">ارسال به رایورز</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectInstallment" type="checkbox" class="user-direct-perm-check" data-perm-label="چک خزانه" />
+                  <span class="fiche-date-ms-option-text">چک خزانه</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectFicheDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ فیش" />
+                  <span class="fiche-date-ms-option-text">تغییر تاریخ فیش</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectBankInquiry" type="checkbox" class="user-direct-perm-check" data-perm-label="خدمات الکترونیک" />
+                  <span class="fiche-date-ms-option-text">خدمات الکترونیک</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectShahkar" type="checkbox" class="user-direct-perm-check" data-perm-label="شاهکار" />
+                  <span class="fiche-date-ms-option-text">شاهکار</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectUsers" type="checkbox" class="user-direct-perm-check" data-perm-label="مدیریت کاربران" />
+                  <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
+                </label>
+              </div>
+            </div>
+          </div>
           <label class="field check-field">
             <input id="newUserIsAdmin" type="checkbox" />
             <span>دسترسی ادمین</span>
@@ -754,32 +798,73 @@
         </div>
         <div id="userEditPanel" class="subsection user-edit-panel" hidden>
           <h3>ویرایش کاربر</h3>
-          <p id="userEditTitle" class="field-hint"></p>
-          <div class="form-grid unsent-form-grid">
-            <label class="field check-field">
-              <input id="editUserIsActive" type="checkbox" />
-              <span>فعال</span>
-            </label>
-            <label class="field check-field">
-              <input id="editUserIsAdmin" type="checkbox" />
-              <span>دسترسی ادمین</span>
-            </label>
+          <p id="userEditTitle" class="user-edit-title"></p>
+          <div class="user-edit-form">
             <label class="field field-required">
               <span class="field-label">دامین</span>
               <input id="editUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh یا hoseine-sh,sadathoseini-sh" dir="ltr" />
             </label>
-            <label class="field field-required">
-              <span class="field-label">گروه کاربری</span>
-              <select id="editUserGroupSelect">
-                <option value="">— انتخاب گروه —</option>
-              </select>
-            </label>
+            <div class="field user-groups-field">
+              <span class="field-label">گروه‌های کاربری</span>
+              <div class="fiche-date-ms user-groups-picker" id="editUserGroupsMulti">
+                <button type="button" class="fiche-date-ms-trigger" id="editUserGroupsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                  <span id="editUserGroupsTriggerLabel">انتخاب گروه…</span>
+                  <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="fiche-date-ms-menu user-groups-picker-menu" id="editUserGroupsMenu" hidden role="listbox" aria-multiselectable="true"></div>
+              </div>
+            </div>
+            <div class="field user-groups-field">
+              <span class="field-label">دسترسی‌های شخصی</span>
+              <div class="fiche-date-ms user-groups-perms-ms" id="editUserDirectPermsMulti">
+                <button type="button" class="fiche-date-ms-trigger" id="editUserDirectPermsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                  <span id="editUserDirectPermsTriggerLabel">انتخاب دسترسی…</span>
+                  <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="fiche-date-ms-menu user-groups-perms-menu" id="editUserDirectPermsMenu" hidden role="listbox" aria-multiselectable="true">
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectUnsent" type="checkbox" class="user-direct-perm-check" data-perm-label="ارسال به رایورز" />
+                    <span class="fiche-date-ms-option-text">ارسال به رایورز</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectInstallment" type="checkbox" class="user-direct-perm-check" data-perm-label="چک خزانه" />
+                    <span class="fiche-date-ms-option-text">چک خزانه</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectFicheDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ فیش" />
+                    <span class="fiche-date-ms-option-text">تغییر تاریخ فیش</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectBankInquiry" type="checkbox" class="user-direct-perm-check" data-perm-label="خدمات الکترونیک" />
+                    <span class="fiche-date-ms-option-text">خدمات الکترونیک</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectShahkar" type="checkbox" class="user-direct-perm-check" data-perm-label="شاهکار" />
+                    <span class="fiche-date-ms-option-text">شاهکار</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectUsers" type="checkbox" class="user-direct-perm-check" data-perm-label="مدیریت کاربران" />
+                    <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="user-edit-flags">
+              <label class="field check-field">
+                <input id="editUserIsActive" type="checkbox" />
+                <span>فعال</span>
+              </label>
+              <label class="field check-field">
+                <input id="editUserIsAdmin" type="checkbox" />
+                <span>دسترسی ادمین</span>
+              </label>
+            </div>
             <label class="field">
               <span class="field-label">رمز عبور جدید</span>
               <input id="editUserNewPassword" type="password" autocomplete="new-password" />
             </label>
           </div>
-          <div class="actions">
+          <div class="actions user-edit-actions">
             <button id="btnSaveUserEdit" class="btn primary" type="button">ذخیره تغییرات</button>
             <button id="btnResetUserPassword" class="btn secondary" type="button">ریست رمز</button>
             <button id="btnCancelUserEdit" class="btn secondary" type="button">انصراف</button>
@@ -791,6 +876,6 @@
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=93"></script>
+  <script src="js/app.js?v=94"></script>
 </body>
 </html>

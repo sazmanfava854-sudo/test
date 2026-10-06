@@ -1504,8 +1504,45 @@ tbody tr:last-child td {
   width: 100%;
 }
 
-.user-groups-perms-field {
+.user-groups-perms-field,
+.user-groups-field {
   max-width: 420px;
+}
+
+.user-edit-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.user-edit-title {
+  margin: 0 0 1rem;
+  font-weight: 600;
+}
+
+.user-edit-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.user-edit-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  grid-column: 1 / -1;
+}
+
+.user-edit-actions {
+  margin-top: 1rem;
+  grid-column: 1 / -1;
+}
+
+.user-groups-picker-menu {
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .user-groups-perms-ms .fiche-date-ms-menu {

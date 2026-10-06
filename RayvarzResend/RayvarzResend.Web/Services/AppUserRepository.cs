@@ -155,6 +155,18 @@ public sealed class AppUserRepository
                             AND x.Username <> N''0925569917'')');
             """, ct);
 
+        await TryRunSchemaUpgradeAsync(conn, "AppUser.DirectPermissions", """
+            IF OBJECT_ID(N'dbo.AppUser', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUser', N'DirectCanAccessUnsentFiches') IS NULL
+                ALTER TABLE dbo.AppUser ADD
+                    DirectCanAccessUnsentFiches BIT NOT NULL CONSTRAINT DF_AppUser_DirectUnsent DEFAULT (0),
+                    DirectCanAccessInstallment BIT NOT NULL CONSTRAINT DF_AppUser_DirectInstallment DEFAULT (0),
+                    DirectCanAccessFicheDateChange BIT NOT NULL CONSTRAINT DF_AppUser_DirectFicheDate DEFAULT (0),
+                    DirectCanAccessBankInquiryConfirm BIT NOT NULL CONSTRAINT DF_AppUser_DirectBankInquiry DEFAULT (0),
+                    DirectCanAccessShahkar BIT NOT NULL CONSTRAINT DF_AppUser_DirectShahkar DEFAULT (0),
+                    DirectCanManageUsers BIT NOT NULL CONSTRAINT DF_AppUser_DirectUsers DEFAULT (0);
+            """, ct);
+
         _groupTablesReady = await TableExistsAsync(conn, "dbo.AppUserGroup", ct);
         _hasShahkarColumn = _groupTablesReady
             && await ColumnExistsAsync(conn, "dbo.AppUserGroup", "CanAccessShahkar", ct);
@@ -286,7 +298,9 @@ public sealed class AppUserRepository
         await EnsureSchemaAsync(ct);
         const string sql = """
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
-                   IsAdmin, IsActive, CreatedAtUtc
+                   IsAdmin, IsActive, CreatedAtUtc,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE Username = @u OR NationalId = @u
             ORDER BY CASE WHEN Username = @u THEN 0 ELSE 1 END, IsActive DESC, CreatedAtUtc
@@ -312,7 +326,9 @@ public sealed class AppUserRepository
         await EnsureSchemaAsync(ct);
         const string sql = """
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
-                   IsAdmin, IsActive, CreatedAtUtc
+                   IsAdmin, IsActive, CreatedAtUtc,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE (@d <> N'' AND [Domain] = @d)
                OR (@d <> N'' AND CHARINDEX(N',' + @d + N',', N',' + REPLACE([Domain], N' ', N'') + N',') > 0)
@@ -344,7 +360,9 @@ public sealed class AppUserRepository
         await EnsureSchemaAsync(ct);
         const string sql = """
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
-                   IsAdmin, IsActive, CreatedAtUtc
+                   IsAdmin, IsActive, CreatedAtUtc,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE Id = @id
             """;
@@ -363,7 +381,9 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT Id, Username, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc
+            SELECT Id, Username, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
             FROM dbo.AppUser
             ORDER BY CreatedAtUtc DESC, Username
             """;
@@ -373,22 +393,7 @@ public sealed class AppUserRepository
         await using var cmd = new SqlCommand(sql, conn);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-        {
-            list.Add(new AppUserDto
-            {
-                Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                Username = reader.GetString(reader.GetOrdinal("Username")),
-                FirstName = reader.GetString(reader.GetOrdinal("FirstName")),
-                LastName = reader.GetString(reader.GetOrdinal("LastName")),
-                NationalId = reader.GetString(reader.GetOrdinal("NationalId")),
-                Position = reader.GetString(reader.GetOrdinal("Position")),
-                District = reader.GetString(reader.GetOrdinal("District")),
-                Domain = ReadOptionalString(reader, "Domain"),
-                IsAdmin = reader.GetBoolean(reader.GetOrdinal("IsAdmin")),
-                IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O")
-            });
-        }
+            list.Add(ReadUserDto(reader));
 
         return list;
     }
@@ -596,9 +601,18 @@ public sealed class AppUserRepository
             user.Domain = domain;
         }
 
+        if (req.DirectPermissions != null)
+            user.DirectPermissions = req.DirectPermissions;
+
         const string sql = """
             UPDATE dbo.AppUser
-            SET IsAdmin = @admin, IsActive = @active, [Domain] = @domain
+            SET IsAdmin = @admin, IsActive = @active, [Domain] = @domain,
+                DirectCanAccessUnsentFiches = @dUnsent,
+                DirectCanAccessInstallment = @dInstallment,
+                DirectCanAccessFicheDateChange = @dFicheDate,
+                DirectCanAccessBankInquiryConfirm = @dBank,
+                DirectCanAccessShahkar = @dShahkar,
+                DirectCanManageUsers = @dUsers
             WHERE Id = @id
             """;
         await using var conn = new SqlConnection(_cs);
@@ -608,6 +622,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@admin", user.IsAdmin);
         cmd.Parameters.AddWithValue("@active", user.IsActive);
         cmd.Parameters.AddWithValue("@domain", user.Domain ?? "");
+        AddDirectPermissionParameters(cmd, user.DirectPermissions);
         try
         {
             await cmd.ExecuteNonQueryAsync(ct);
@@ -759,14 +774,18 @@ public sealed class AppUserRepository
             Domain = req.Domain ?? "",
             IsAdmin = req.IsAdmin,
             IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow,
+            DirectPermissions = req.DirectPermissions ?? new AppUserDirectPermissions()
         };
 
         const string sql = """
             INSERT INTO dbo.AppUser
-                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc)
+                (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc,
+                 DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                 DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers)
             VALUES
-                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @domain, @admin, 1, @created)
+                (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @domain, @admin, 1, @created,
+                 @dUnsent, @dInstallment, @dFicheDate, @dBank, @dShahkar, @dUsers)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -782,6 +801,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@domain", user.Domain);
         cmd.Parameters.AddWithValue("@admin", user.IsAdmin);
         cmd.Parameters.AddWithValue("@created", user.CreatedAtUtc);
+        AddDirectPermissionParameters(cmd, user.DirectPermissions);
         try
         {
             await cmd.ExecuteNonQueryAsync(ct);
@@ -790,6 +810,9 @@ public sealed class AppUserRepository
         {
             throw new InvalidOperationException("کاربر با این کد ملی یا دامین قبلاً ثبت شده است");
         }
+
+        if (req.GroupIds is { Count: > 0 })
+            await SetUserGroupsAsync(user.Id, req.GroupIds, ct);
 
         return user;
     }
@@ -876,6 +899,52 @@ public sealed class AppUserRepository
         }
     }
 
+    private static void AddDirectPermissionParameters(SqlCommand cmd, AppUserDirectPermissions direct)
+    {
+        cmd.Parameters.AddWithValue("@dUnsent", direct.CanAccessUnsentFiches);
+        cmd.Parameters.AddWithValue("@dInstallment", direct.CanAccessInstallment);
+        cmd.Parameters.AddWithValue("@dFicheDate", direct.CanAccessFicheDateChange);
+        cmd.Parameters.AddWithValue("@dBank", direct.CanAccessBankInquiryConfirm);
+        cmd.Parameters.AddWithValue("@dShahkar", direct.CanAccessShahkar);
+        cmd.Parameters.AddWithValue("@dUsers", direct.CanManageUsers);
+    }
+
+    private static AppUserDirectPermissions ReadDirectPermissions(SqlDataReader reader)
+    {
+        try
+        {
+            return new AppUserDirectPermissions
+            {
+                CanAccessUnsentFiches = ReadOptionalBoolean(reader, "DirectCanAccessUnsentFiches"),
+                CanAccessInstallment = ReadOptionalBoolean(reader, "DirectCanAccessInstallment"),
+                CanAccessFicheDateChange = ReadOptionalBoolean(reader, "DirectCanAccessFicheDateChange"),
+                CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "DirectCanAccessBankInquiryConfirm"),
+                CanAccessShahkar = ReadOptionalBoolean(reader, "DirectCanAccessShahkar"),
+                CanManageUsers = ReadOptionalBoolean(reader, "DirectCanManageUsers")
+            };
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return new AppUserDirectPermissions();
+        }
+    }
+
+    private static AppUserDto ReadUserDto(SqlDataReader reader) => new()
+    {
+        Id = reader.GetGuid(reader.GetOrdinal("Id")),
+        Username = reader.GetString(reader.GetOrdinal("Username")),
+        FirstName = reader.GetString(reader.GetOrdinal("FirstName")),
+        LastName = reader.GetString(reader.GetOrdinal("LastName")),
+        NationalId = reader.GetString(reader.GetOrdinal("NationalId")),
+        Position = reader.GetString(reader.GetOrdinal("Position")),
+        District = reader.GetString(reader.GetOrdinal("District")),
+        Domain = ReadOptionalString(reader, "Domain"),
+        IsAdmin = reader.GetBoolean(reader.GetOrdinal("IsAdmin")),
+        IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+        CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O"),
+        DirectPermissions = ReadDirectPermissions(reader)
+    };
+
     private static AppUserRecord ReadUser(SqlDataReader reader) => new()
     {
         Id = reader.GetGuid(reader.GetOrdinal("Id")),
@@ -889,6 +958,7 @@ public sealed class AppUserRepository
         Domain = ReadOptionalString(reader, "Domain"),
         IsAdmin = reader.GetBoolean(reader.GetOrdinal("IsAdmin")),
         IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-        CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc"))
+        CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")),
+        DirectPermissions = ReadDirectPermissions(reader)
     };
 }

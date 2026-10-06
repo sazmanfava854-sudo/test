@@ -122,26 +122,6 @@ function applyUserHeader(user) {
   badge.className = `user-badge ${isAdminUser(user) ? 'badge-admin' : 'badge-user'}`;
 }
 
-function renderHubModuleTabs(user) {
-  const nav = document.getElementById('hubModuleTabs');
-  if (!nav) return;
-  const visible = MODULES.filter((m) => m.can(user));
-  nav.innerHTML = '';
-  if (visible.length === 0) {
-    nav.hidden = true;
-    return;
-  }
-  nav.hidden = false;
-  visible.forEach((mod) => {
-    const link = document.createElement('a');
-    link.className = 'main-tab hub-module-tab';
-    link.href = mod.href;
-    link.setAttribute('role', 'tab');
-    link.textContent = mod.title;
-    nav.appendChild(link);
-  });
-}
-
 function renderModuleCards(user) {
   const grid = document.getElementById('hubGrid');
   const empty = document.getElementById('hubEmpty');
@@ -151,13 +131,11 @@ function renderModuleCards(user) {
   if (visible.length === 0) {
     grid.hidden = true;
     empty.hidden = false;
-    renderHubModuleTabs(user);
     return;
   }
 
   empty.hidden = true;
   grid.hidden = false;
-  renderHubModuleTabs(user);
 
   visible.forEach((mod) => {
     const link = document.createElement('a');

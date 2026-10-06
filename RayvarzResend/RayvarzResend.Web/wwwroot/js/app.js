@@ -92,8 +92,12 @@ function branchFromRegion(regionStr) {
 }
 
 /** همان منطق تب تکی: branch ۲۰۱–۲۱۲ / ۲۱۸ → منطقه ۱–۱۲ / ۲۱۸ برای فیلتر SQL */
+const FAVA_DISTRICT_VALUE = 'fava';
+
 function branchIdToDistrict(branchId) {
-  const id = parseInt(branchId, 10);
+  const raw = String(branchId ?? '').trim();
+  if (raw === FAVA_DISTRICT_VALUE) return FAVA_DISTRICT_VALUE;
+  const id = parseInt(raw, 10);
   if (!id) return '';
   if (id === 102) return '102';
   if (id === 218) return '218';
@@ -113,6 +117,12 @@ function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه م�
     selectEl.appendChild(all);
   }
   const restrict = restrictToDistrict ? String(restrictToDistrict) : '';
+  if (includeAll || selectEl.id === 'newUserDistrict') {
+    const fava = document.createElement('option');
+    fava.value = FAVA_DISTRICT_VALUE;
+    fava.textContent = 'فاوا (پشتیبانی — همه شعب)';
+    selectEl.appendChild(fava);
+  }
   config.branches.forEach((b) => {
     if (restrict) {
       const dist = branchIdToDistrict(String(b.id));
@@ -132,6 +142,14 @@ function getUserDistrict() {
 
 function applyRegionalUserRestrictions() {
   if (isAdminUser()) {
+    fillBranchSelect($('branch'));
+    $('branch')?.removeAttribute('disabled');
+    $('fund')?.removeAttribute('disabled');
+    syncFundFromBranch();
+    return;
+  }
+
+  if (getUserDistrict() === FAVA_DISTRICT_VALUE) {
     fillBranchSelect($('branch'));
     $('branch')?.removeAttribute('disabled');
     $('fund')?.removeAttribute('disabled');
@@ -2262,6 +2280,7 @@ async function ensureAuthenticated() {
 function districtLabelFromValue(value) {
   if (!value) return '—';
   if (String(value) === '102') return 'شعبه مرکز (۱۰۲)';
+  if (String(value) === FAVA_DISTRICT_VALUE) return 'فاوا';
   const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
   return branch ? branch.name : value;
 }
@@ -2310,7 +2329,15 @@ async function loadGroupsTable() {
   const data = await parseJsonResponse(res);
   cachedGroups = data.items || [];
   renderGroupsTableBody();
-  renderUserGroupSelect();
+  const editUser = editingUserId
+    ? cachedUsers.find((u) => String(u.id) === String(editingUserId))
+    : null;
+  renderUserGroupsPickerMenu('newUserGroupsMenu', 'newUserGroupsTriggerLabel', []);
+  renderUserGroupsPickerMenu(
+    'editUserGroupsMenu',
+    'editUserGroupsTriggerLabel',
+    editUser?.groupIds || []
+  );
 }
 
 function renderGroupsTableBody() {
@@ -2404,20 +2431,136 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
   await loadUsersTable();
 }
 
-function renderUserGroupSelect() {
-  const select = $('editUserGroupSelect');
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = '<option value="">— انتخاب گروه —</option>';
-  cachedGroups.forEach((g) => {
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = g.name;
-    select.appendChild(opt);
-  });
-  if (current && cachedGroups.some((g) => String(g.id) === String(current))) {
-    select.value = current;
+function updatePickerTriggerLabel(menuEl, labelEl, fallbackText) {
+  if (!menuEl || !labelEl) return;
+  const labels = Array.from(menuEl.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((el) => (el.dataset.groupName || el.dataset.permLabel || '').trim())
+    .filter(Boolean);
+  if (labels.length === 0) {
+    labelEl.textContent = fallbackText;
+    return;
   }
+  if (labels.length === 1) {
+    labelEl.textContent = labels[0];
+    return;
+  }
+  labelEl.textContent = `${labels.length.toLocaleString('fa-IR')} مورد انتخاب‌شده`;
+}
+
+function renderUserGroupsPickerMenu(menuId, labelId, selectedIds = []) {
+  const menu = $(menuId);
+  const labelEl = $(labelId);
+  if (!menu) return;
+  menu.innerHTML = '';
+  cachedGroups.forEach((g) => {
+    const row = document.createElement('label');
+    row.className = 'fiche-date-ms-option user-group-perm-option';
+    row.setAttribute('role', 'option');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'user-group-membership-check';
+    input.value = g.id;
+    input.dataset.groupName = g.name;
+    input.checked = (selectedIds || []).some((id) => String(id) === String(g.id));
+    input.addEventListener('change', () => updatePickerTriggerLabel(menu, labelEl, 'انتخاب گروه…'));
+    const text = document.createElement('span');
+    text.className = 'fiche-date-ms-option-text';
+    text.textContent = g.name;
+    row.appendChild(input);
+    row.appendChild(text);
+    menu.appendChild(row);
+  });
+  updatePickerTriggerLabel(menu, labelEl, 'انتخاب گروه…');
+}
+
+function readSelectedGroupIdsFromMenu(menuId) {
+  const menu = $(menuId);
+  if (!menu) return [];
+  return Array.from(menu.querySelectorAll('.user-group-membership-check:checked')).map((el) => el.value);
+}
+
+function setupPickerDropdown({ wrapId, triggerId, menuId, labelId, fallbackLabel }) {
+  const wrap = $(wrapId);
+  const trigger = $(triggerId);
+  const menu = $(menuId);
+  const labelEl = $(labelId);
+  if (!wrap || !trigger || !menu || trigger.dataset.bound === '1') return;
+  trigger.dataset.bound = '1';
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  menu.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener('change', () => updatePickerTriggerLabel(menu, labelEl, fallbackLabel));
+  });
+  document.addEventListener('click', (e) => {
+    if (wrap.contains(e.target)) return;
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function readDirectPermissionsFromForm(prefix) {
+  return {
+    canAccessUnsentFiches: !!$(`${prefix}Unsent`)?.checked,
+    canAccessInstallment: !!$(`${prefix}Installment`)?.checked,
+    canAccessFicheDateChange: !!$(`${prefix}FicheDate`)?.checked,
+    canAccessBankInquiryConfirm: !!$(`${prefix}BankInquiry`)?.checked,
+    canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
+    canManageUsers: !!$(`${prefix}Users`)?.checked
+  };
+}
+
+function setDirectPermissionsOnForm(prefix, perms) {
+  const p = perms || {};
+  if ($(`${prefix}Unsent`)) $(`${prefix}Unsent`).checked = !!p.canAccessUnsentFiches;
+  if ($(`${prefix}Installment`)) $(`${prefix}Installment`).checked = !!p.canAccessInstallment;
+  if ($(`${prefix}FicheDate`)) $(`${prefix}FicheDate`).checked = !!p.canAccessFicheDateChange;
+  if ($(`${prefix}BankInquiry`)) $(`${prefix}BankInquiry`).checked = !!p.canAccessBankInquiryConfirm;
+  if ($(`${prefix}Shahkar`)) $(`${prefix}Shahkar`).checked = !!p.canAccessShahkar;
+  if ($(`${prefix}Users`)) $(`${prefix}Users`).checked = !!p.canManageUsers;
+  const menu = $(`${prefix}PermsMenu`);
+  const labelEl = $(`${prefix}PermsTriggerLabel`);
+  if (menu && labelEl) updatePickerTriggerLabel(menu, labelEl, 'انتخاب دسترسی…');
+}
+
+function setupUserManagementPickers() {
+  setupPickerDropdown({
+    wrapId: 'newUserGroupsMulti',
+    triggerId: 'newUserGroupsTrigger',
+    menuId: 'newUserGroupsMenu',
+    labelId: 'newUserGroupsTriggerLabel',
+    fallbackLabel: 'انتخاب گروه…'
+  });
+  setupPickerDropdown({
+    wrapId: 'editUserGroupsMulti',
+    triggerId: 'editUserGroupsTrigger',
+    menuId: 'editUserGroupsMenu',
+    labelId: 'editUserGroupsTriggerLabel',
+    fallbackLabel: 'انتخاب گروه…'
+  });
+  setupPickerDropdown({
+    wrapId: 'newUserDirectPermsMulti',
+    triggerId: 'newUserDirectPermsTrigger',
+    menuId: 'newUserDirectPermsMenu',
+    labelId: 'newUserDirectPermsTriggerLabel',
+    fallbackLabel: 'انتخاب دسترسی…'
+  });
+  setupPickerDropdown({
+    wrapId: 'editUserDirectPermsMulti',
+    triggerId: 'editUserDirectPermsTrigger',
+    menuId: 'editUserDirectPermsMenu',
+    labelId: 'editUserDirectPermsTriggerLabel',
+    fallbackLabel: 'انتخاب دسترسی…'
+  });
+}
+
+function resolveNewUserDistrict() {
+  const raw = ($('newUserDistrict')?.value || '').trim();
+  if (raw === FAVA_DISTRICT_VALUE) return FAVA_DISTRICT_VALUE;
+  return branchIdToDistrict(raw);
 }
 
 function openUserEdit(userId) {
@@ -2433,11 +2576,8 @@ function openUserEdit(userId) {
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserDomain')) $('editUserDomain').value = user.domain || '';
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  renderUserGroupSelect();
-  const primaryGroupId = (user.groupIds || [])[0];
-  if ($('editUserGroupSelect')) {
-    $('editUserGroupSelect').value = primaryGroupId ? String(primaryGroupId) : '';
-  }
+  renderUserGroupsPickerMenu('editUserGroupsMenu', 'editUserGroupsTriggerLabel', user.groupIds || []);
+  setDirectPermissionsOnForm('editUserDirect', user.directPermissions);
 }
 
 function closeUserEdit() {
@@ -2448,13 +2588,12 @@ function closeUserEdit() {
 
 async function saveUserEdit() {
   if (!editingUserId) return;
-  const groupId = ($('editUserGroupSelect')?.value || '').trim();
-  const groupIds = groupId ? [groupId] : [];
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
     domain: ($('editUserDomain')?.value || '').trim(),
-    groupIds
+    groupIds: readSelectedGroupIdsFromMenu('editUserGroupsMenu'),
+    directPermissions: readDirectPermissionsFromForm('editUserDirect')
   };
   const res = await apiFetch(`/api/admin/users/${editingUserId}`, {
     method: 'POST',
@@ -2493,8 +2632,10 @@ async function createUserFromForm() {
     nationalId,
     domain,
     position: ($('newUserPosition')?.value || '').trim(),
-    district: branchIdToDistrict($('newUserDistrict')?.value || ''),
-    isAdmin: !!$('newUserIsAdmin')?.checked
+    district: resolveNewUserDistrict(),
+    isAdmin: !!$('newUserIsAdmin')?.checked,
+    groupIds: readSelectedGroupIdsFromMenu('newUserGroupsMenu'),
+    directPermissions: readDirectPermissionsFromForm('newUserDirect')
   };
   if (!payload.firstName || !payload.lastName || !payload.nationalId || !payload.password) {
     return alert('نام، نام خانوادگی، کد ملی و رمز عبور الزامی است');
@@ -2783,6 +2924,7 @@ async function init() {
   window.addEventListener('load', initDatePickers);
   if (canManageUsers()) {
     setupUserGroupPermsDropdown();
+    setupUserManagementPickers();
     await loadGroupsTable();
     await loadUsersTable();
   }

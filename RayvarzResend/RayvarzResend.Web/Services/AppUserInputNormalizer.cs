@@ -28,7 +28,10 @@ public static class AppUserInputNormalizer
         if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
             throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
         if (!req.IsAdmin && string.IsNullOrWhiteSpace(req.District))
-            throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه یا شعبه مرکز الزامی است");
+            throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه، شعبه مرکز یا فاوا الزامی است");
+        if (string.Equals(req.District, DistrictAccessService.FavaDistrictCode, StringComparison.OrdinalIgnoreCase)
+            || req.District == "فاوا")
+            req.District = DistrictAccessService.FavaDistrictCode;
     }
 
     /// <summary>ورود با کد ملی — اگر Username خالی باشد همان کد ملی ذخیره می‌شود.</summary>
