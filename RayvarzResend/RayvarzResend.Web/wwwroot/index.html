@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=40" />
+  <link rel="stylesheet" href="css/style.css?v=45" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -24,6 +24,7 @@
         <div class="hero-brand">
           <div>
             <p class="brand-name">دستیار مالی</p>
+            <p class="field-hint" style="margin:4px 0 0"><a href="/management/">بازگشت به صفحهٔ مدیریت</a></p>
           </div>
         </div>
         <div class="hero-user" id="heroUser" hidden>
@@ -39,14 +40,15 @@
     <div id="appToastHost" class="app-toast-host" aria-live="polite"></div>
 
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
-      <button type="button" class="main-tab active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
+      <button type="button" class="main-tab perm-rayvarz active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
+      <button type="button" class="main-tab perm-shahkar" data-tab="shahkar" role="tab" aria-selected="false" hidden>شاهکار</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
 
-    <div id="tabUnsent" class="tab-panel active" role="tabpanel">
+    <div id="tabUnsent" class="tab-panel perm-rayvarz active" role="tabpanel">
     <section class="card card-enter rayvarz-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📤</span>
@@ -151,8 +153,13 @@
       </div>
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
-        <button id="btnUnsentPlan" class="btn secondary perm-unsent" type="button" disabled hidden>بررسی مسیر ارسال</button>
+        <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
+        <label for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
+        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
+      </div>
+      <div class="unsent-excel-status-row">
+        <span id="unsentExcelStatus" class="installment-excel-status" aria-live="polite">فایل اکسل انتخاب نشده</span>
       </div>
       <div class="subsection" id="unsentResultsSection" hidden>
         <div class="unsent-toolbar">
@@ -162,20 +169,17 @@
           </label>
           <span id="unsentCountLabel" class="unsent-count"></span>
         </div>
-        <div class="table-wrap">
-          <table id="unsentTable">
+        <div class="table-wrap installment-preview-table-wrap">
+          <table id="unsentTable" class="installment-preview-table unsent-bulk-table">
             <thead>
               <tr>
-                <th class="col-check"></th>
+                <th class="col-check" scope="col" aria-label="انتخاب"></th>
                 <th>نوع</th>
-                <th>شماره فرآیند</th>
-                <th>کد نوسازی</th>
-                <th>شناسه قبض</th>
-                <th>شناسه پرداخت</th>
-                <th>تاریخ پرداخت بانک</th>
-                <th>تاریخ پرداخت دستی</th>
-                <th>شماره فیش</th>
-                <th>مبلغ</th>
+                <th class="col-unsent-bill">شناسه قبض</th>
+                <th class="col-unsent-pay">شناسه پرداخت</th>
+                <th class="col-unsent-fiche">شماره فиш</th>
+                <th class="col-installment-cost">مبلغ</th>
+                <th class="col-unsent-fill" aria-hidden="true"></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -195,7 +199,7 @@
           </label>
         </div>
       </div>
-      <pre id="unsentResultBox" class="code-block" hidden></pre>
+      <pre id="unsentResultBox" class="result-log" hidden></pre>
       </div>
     </section>
 
@@ -268,9 +272,9 @@
             </thead>
             <tbody>
               <tr>
-                <td><code>شناسه</code><br><span class="field-hint">شماره سند یا کد پیگیری</span></td>
-                <td><code>مبلغ</code><br><span class="field-hint">مبلغ (ریال)</span></td>
-                <td><code>تاریخ پرداخت</code><br><span class="field-hint">تاریخ شمسی</span></td>
+                <td><code>شناسه</code></td>
+                <td><code>مبلغ</code></td>
+                <td><code>تاریخ پرداخت</code></td>
               </tr>
             </tbody>
           </table>
@@ -332,9 +336,6 @@
         <span class="card-icon" aria-hidden="true">📅</span>
         <h2>تغییر تاریخ فیش درآمد</h2>
       </div>
-      <p class="field-hint form-intro">
-        فیش‌های درآمد را با فیلترهای زیر جستجو کنید. در بخش «مقادیر جدید» فقط فیلدهایی که تیک «تغییر» دارند به‌روز می‌شوند؛ بقیه در دیتابیس بدون تغییر می‌مانند.
-      </p>
       <div class="form-grid unsent-form-grid">
         <label class="field">
           <span class="field-label">شماره فیش / شناسه قبض+پرداخت</span>
@@ -369,14 +370,21 @@
             <button type="button" class="btn-date-icon" data-for="ficheDateTemporaryTo" title="تقویم" aria-label="تقویم">📅</button>
           </div>
         </label>
-        <label class="field fiche-date-account-group-field">
-          <span class="field-label">عنوان مالکیت</span>
-          <div class="account-group-combobox">
-            <input id="ficheDateAccountGroup" type="text" placeholder="انتخاب از لیست یا جستجو — مثلاً شهردار" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="ficheDateAccountGroupMenu" aria-autocomplete="list" />
-            <div id="ficheDateAccountGroupMenu" class="account-group-combobox-menu" hidden role="listbox"></div>
+        <div class="field">
+          <span class="field-label">عنوان مالکیت (فیلتر)</span>
+          <div class="fiche-date-ms" id="ficheDateAccountGroupMulti">
+            <button type="button" class="fiche-date-ms-trigger" id="ficheDateAccountGroupTrigger" aria-expanded="false" aria-haspopup="listbox">
+              <span id="ficheDateAccountGroupTriggerLabel">انتخاب عنوان مالکیت…</span>
+              <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="fiche-date-ms-menu fiche-date-account-group-menu" id="ficheDateAccountGroupMenu" hidden role="listbox" aria-multiselectable="true">
+              <label class="fiche-date-account-group-search">
+                <input id="ficheDateAccountGroupSearch" type="search" placeholder="جستجو در عنوان‌ها…" autocomplete="off" aria-label="جستجو در عنوان مالکیت" />
+              </label>
+              <div id="ficheDateAccountGroupOptions" class="fiche-date-account-group-options"></div>
+            </div>
           </div>
-          <span class="field-hint">از لیست انتخاب کنید یا بخشی از عنوان را تایپ کنید (Title LIKE N'%متن%')</span>
-        </label>
+        </div>
         <div class="field">
           <span class="field-label">وضعیت فیش (فیلتر)</span>
           <div class="fiche-date-ms" id="ficheDateStatusMulti">
@@ -434,7 +442,6 @@
       </div>
       <div class="subsection fiche-date-change-panel">
         <h3>مقادیر جدید</h3>
-        <p class="field-hint">فقط مواردی که تیک «تغییر» دارند در UPDATE اعمال می‌شوند.</p>
         <div class="fiche-date-apply-rows" dir="rtl">
           <div class="fiche-date-apply-row">
             <input id="ficheDateApplyPermanent" class="fiche-date-apply-check" type="checkbox" />
@@ -480,12 +487,6 @@
         <span class="card-icon" aria-hidden="true">🏦</span>
         <h2>خدمات الکترونیک</h2>
       </div>
-      <p class="field-hint form-intro">
-        ابتدا فیش را با <strong>شماره فیش</strong> یا <strong>شناسه قبض و شناسه پرداخت</strong> جستجو کنید.
-        پس از انتخاب از جدول، تاریخ پرداخت جدید را وارد کرده و ثبت کنید.
-        قبل از هر به‌روزرسانی، ابتدا فیش در سرویس «استعلام قبوض» بررسی می‌شود؛ اگر ثبت نشده باشد، «استعلام آنی بانک» برای پرداخت آنلاین امتحان می‌شود. در صورت عدم پرداخت، پیام «فیش پرداخت نشده» نمایش داده می‌شود. اگر سرویس قطع باشد، پیام خطای مناسب نشان داده می‌شود.
-        وضعیت فیش به <strong>۳</strong> و نوع تایید به <strong>۴</strong> تغییر می‌کند.
-      </p>
       <div class="bank-inquiry-search-grid unsent-form-grid">
         <label class="field">
           <span class="field-label">شماره فیش</span>
@@ -500,7 +501,6 @@
           <input id="bankInquiryPaymentId" type="text" placeholder="همراه با شناسه قبض" autocomplete="off" />
         </label>
       </div>
-      <p class="field-hint">حداقل یکی از فیلترها: <strong>شماره فیش</strong>، یا <strong>هر دو شناسه قبض و پرداخت</strong>.</p>
       <div class="actions">
         <button id="btnBankInquirySearch" class="btn primary" type="button">جستجو</button>
         <button id="btnBankInquiryDiagnose" class="btn secondary" type="button" title="فراخوانی مستقیم هر دو سرویس epay و نمایش درخواست/پاسخ خام (بدون تغییر در دیتابیس)">تست سرویس‌های استعلام</button>
@@ -567,6 +567,54 @@
     </section>
     </div>
 
+    <div id="tabShahkar" class="tab-panel perm-shahkar" role="tabpanel" hidden>
+    <section class="card card-enter shahkar-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">✓</span>
+        <h2>شاهکار</h2>
+      </div>
+      <div class="bank-inquiry-search-grid unsent-form-grid">
+        <label class="field">
+          <span class="field-label">نام کاربری (دامین)</span>
+          <input id="shahkarUserName" type="text" placeholder="ghobasefidi-s" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">کد ملی</span>
+          <input id="shahkarNationalCode" type="text" placeholder="0922808074" maxlength="10" autocomplete="off" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnShahkarSearch" class="btn primary" type="button">جستجو</button>
+      </div>
+      <div class="subsection" id="shahkarResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="shahkarSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="shahkarCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="shahkarTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>نام کاربری</th>
+                <th>کد ملی</th>
+                <th>ShahkarOk</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button id="btnShahkarConfirm" class="btn danger" type="button" disabled>ثبت ShahkarOk = 1</button>
+        </div>
+      </div>
+      <pre id="shahkarResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
     <div id="tabUsers" class="tab-panel perm-users" role="tabpanel" hidden>
       <section class="card card-enter">
         <div class="card-head">
@@ -578,33 +626,40 @@
             <span class="field-label">نام گروه</span>
             <input id="newGroupName" type="text" autocomplete="off" />
           </label>
-          <div class="user-groups-perms">
-            <label class="user-group-perm-item">
-              <input id="newGroupUnsent" type="checkbox" />
-              <span class="user-group-perm-text">ارسال به رایورز</span>
-            </label>
-            <label class="user-group-perm-item">
-              <input id="newGroupInstallment" type="checkbox" />
-              <span class="user-group-perm-text">چک خزانه</span>
-            </label>
-            <label class="user-group-perm-item">
-              <input id="newGroupUsers" type="checkbox" />
-              <span class="user-group-perm-text">مدیریت کاربران</span>
-            </label>
-            <label class="user-group-perm-item user-group-perm-item-wide">
-              <input id="newGroupFicheDate" type="checkbox" />
-              <span class="user-group-perm-content">
-                <span class="user-group-perm-text">تغییر تاریخ فیش</span>
-                <span class="user-group-perm-hint">دسترسی به تب «تغییر تاریخ فیش» — نیاز به ورود و مجوز گروه</span>
-              </span>
-            </label>
-            <label class="user-group-perm-item user-group-perm-item-wide">
-              <input id="newGroupBankInquiry" type="checkbox" />
-              <span class="user-group-perm-content">
-                <span class="user-group-perm-text">خدمات الکترونیک</span>
-                <span class="user-group-perm-hint">دسترسی به تب «خدمات الکترونیک»</span>
-              </span>
-            </label>
+          <div class="field user-groups-perms-field">
+            <span class="field-label">دسترسی‌های گروه</span>
+            <div class="fiche-date-ms user-groups-perms-ms" id="userGroupPermsMulti">
+              <button type="button" class="fiche-date-ms-trigger" id="userGroupPermsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                <span id="userGroupPermsTriggerLabel">انتخاب دسترسی…</span>
+                <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="fiche-date-ms-menu user-groups-perms-menu" id="userGroupPermsMenu" hidden role="listbox" aria-multiselectable="true">
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupUnsent" type="checkbox" class="user-group-perm-check" data-perm-label="ارسال به رایورز" />
+                  <span class="fiche-date-ms-option-text">ارسال به رایورز</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupInstallment" type="checkbox" class="user-group-perm-check" data-perm-label="چک خزانه" />
+                  <span class="fiche-date-ms-option-text">چک خزانه</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupFicheDate" type="checkbox" class="user-group-perm-check" data-perm-label="تغییر تاریخ فیش" />
+                  <span class="fiche-date-ms-option-text">تغییر تاریخ فیش</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupBankInquiry" type="checkbox" class="user-group-perm-check" data-perm-label="خدمات الکترونیک" />
+                  <span class="fiche-date-ms-option-text">خدمات الکترونیک</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupShahkar" type="checkbox" class="user-group-perm-check" data-perm-label="شاهکار" />
+                  <span class="fiche-date-ms-option-text">شاهکار</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupUsers" type="checkbox" class="user-group-perm-check" data-perm-label="مدیریت کاربران" />
+                  <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
+                </label>
+              </div>
+            </div>
           </div>
           <div class="actions user-groups-actions">
             <button id="btnCreateGroup" class="btn primary" type="button">ثبت گروه</button>
@@ -622,6 +677,7 @@
                   <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
                   <th>خدمات الکترونیک</th>
+                  <th>شاهکار</th>
                   <th>عملیات</th>
                 </tr>
               </thead>
@@ -635,12 +691,6 @@
           <span class="card-icon" aria-hidden="true">👤</span>
           <h2>ایجاد کاربر جدید</h2>
         </div>
-        <p class="field-hint form-intro">
-          برای ورود یکپارچه، <strong>دامین</strong> هر کاربر (نام کاربری ویندوز، مثلاً <code>hoseine-sh</code>) باید ثبت شود تا با لاگین کلی سازمان یکی شود.
-          کد ملی برای شناسایی در برنامه است.
-          <strong>شعبه مرکز</strong> در رایورز با شماره <strong>۱۰۲</strong> مشخص است (ارسال تهاتر مبلغ / گروه ۱۵۷).
-          کاربر مرکز فقط فیش‌های مرکز/تهاتر ۱۵۷ را می‌بیند؛ کاربر منطقه‌ای فقط فیش همان منطقه.
-        </p>
         <div class="form-grid unsent-form-grid">
           <label class="field field-required">
             <span class="field-label">نام</span>
@@ -657,7 +707,6 @@
           <label class="field field-required">
             <span class="field-label">دامین</span>
             <input id="newUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh" dir="ltr" />
-            <span class="field-hint">نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh</span>
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
@@ -670,8 +719,52 @@
           <label class="field">
             <span class="field-label">منطقه / شعبه</span>
             <select id="newUserDistrict"></select>
-            <span class="field-hint">مناطق ۱–۱۲ و ثامن، یا شعبه مرکز (۱۰۲)</span>
           </label>
+          <div class="field user-groups-field">
+            <span class="field-label">گروه‌های کاربری</span>
+            <div class="fiche-date-ms user-groups-picker" id="newUserGroupsMulti">
+              <button type="button" class="fiche-date-ms-trigger" id="newUserGroupsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                <span id="newUserGroupsTriggerLabel">انتخاب گروه…</span>
+                <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="fiche-date-ms-menu user-groups-picker-menu" id="newUserGroupsMenu" hidden role="listbox" aria-multiselectable="true"></div>
+            </div>
+          </div>
+          <div class="field user-groups-field">
+            <span class="field-label">دسترسی‌های شخصی (بدون گروه)</span>
+            <div class="fiche-date-ms user-groups-perms-ms" id="newUserDirectPermsMulti">
+              <button type="button" class="fiche-date-ms-trigger" id="newUserDirectPermsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                <span id="newUserDirectPermsTriggerLabel">انتخاب دسترسی…</span>
+                <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="fiche-date-ms-menu user-groups-perms-menu" id="newUserDirectPermsMenu" hidden role="listbox" aria-multiselectable="true">
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectUnsent" type="checkbox" class="user-direct-perm-check" data-perm-label="ارسال به رایورز" />
+                  <span class="fiche-date-ms-option-text">ارسال به رایورز</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectInstallment" type="checkbox" class="user-direct-perm-check" data-perm-label="چک خزانه" />
+                  <span class="fiche-date-ms-option-text">چک خزانه</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectFicheDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ فیش" />
+                  <span class="fiche-date-ms-option-text">تغییر تاریخ فیش</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectBankInquiry" type="checkbox" class="user-direct-perm-check" data-perm-label="خدمات الکترونیک" />
+                  <span class="fiche-date-ms-option-text">خدمات الکترونیک</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectShahkar" type="checkbox" class="user-direct-perm-check" data-perm-label="شاهکار" />
+                  <span class="fiche-date-ms-option-text">شاهکار</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectUsers" type="checkbox" class="user-direct-perm-check" data-perm-label="مدیریت کاربران" />
+                  <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
+                </label>
+              </div>
+            </div>
+          </div>
           <label class="field check-field">
             <input id="newUserIsAdmin" type="checkbox" />
             <span>دسترسی ادمین</span>
@@ -705,32 +798,73 @@
         </div>
         <div id="userEditPanel" class="subsection user-edit-panel" hidden>
           <h3>ویرایش کاربر</h3>
-          <p id="userEditTitle" class="field-hint"></p>
-          <div class="form-grid unsent-form-grid">
-            <label class="field check-field">
-              <input id="editUserIsActive" type="checkbox" />
-              <span>فعال</span>
-            </label>
-            <label class="field check-field">
-              <input id="editUserIsAdmin" type="checkbox" />
-              <span>دسترسی ادمین</span>
-            </label>
+          <p id="userEditTitle" class="user-edit-title"></p>
+          <div class="user-edit-form">
             <label class="field field-required">
               <span class="field-label">دامین</span>
-              <input id="editUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh" dir="ltr" />
+              <input id="editUserDomain" type="text" autocomplete="off" placeholder="hoseine-sh یا hoseine-sh,sadathoseini-sh" dir="ltr" />
             </label>
-            <label class="field field-required">
-              <span class="field-label">گروه کاربری</span>
-              <select id="editUserGroupSelect">
-                <option value="">— انتخاب گروه —</option>
-              </select>
-            </label>
+            <div class="field user-groups-field">
+              <span class="field-label">گروه‌های کاربری</span>
+              <div class="fiche-date-ms user-groups-picker" id="editUserGroupsMulti">
+                <button type="button" class="fiche-date-ms-trigger" id="editUserGroupsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                  <span id="editUserGroupsTriggerLabel">انتخاب گروه…</span>
+                  <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="fiche-date-ms-menu user-groups-picker-menu" id="editUserGroupsMenu" hidden role="listbox" aria-multiselectable="true"></div>
+              </div>
+            </div>
+            <div class="field user-groups-field">
+              <span class="field-label">دسترسی‌های شخصی</span>
+              <div class="fiche-date-ms user-groups-perms-ms" id="editUserDirectPermsMulti">
+                <button type="button" class="fiche-date-ms-trigger" id="editUserDirectPermsTrigger" aria-expanded="false" aria-haspopup="listbox">
+                  <span id="editUserDirectPermsTriggerLabel">انتخاب دسترسی…</span>
+                  <span class="fiche-date-ms-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="fiche-date-ms-menu user-groups-perms-menu" id="editUserDirectPermsMenu" hidden role="listbox" aria-multiselectable="true">
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectUnsent" type="checkbox" class="user-direct-perm-check" data-perm-label="ارسال به رایورز" />
+                    <span class="fiche-date-ms-option-text">ارسال به رایورز</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectInstallment" type="checkbox" class="user-direct-perm-check" data-perm-label="چک خزانه" />
+                    <span class="fiche-date-ms-option-text">چک خزانه</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectFicheDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ فیش" />
+                    <span class="fiche-date-ms-option-text">تغییر تاریخ فیش</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectBankInquiry" type="checkbox" class="user-direct-perm-check" data-perm-label="خدمات الکترونیک" />
+                    <span class="fiche-date-ms-option-text">خدمات الکترونیک</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectShahkar" type="checkbox" class="user-direct-perm-check" data-perm-label="شاهکار" />
+                    <span class="fiche-date-ms-option-text">شاهکار</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectUsers" type="checkbox" class="user-direct-perm-check" data-perm-label="مدیریت کاربران" />
+                    <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="user-edit-flags">
+              <label class="field check-field">
+                <input id="editUserIsActive" type="checkbox" />
+                <span>فعال</span>
+              </label>
+              <label class="field check-field">
+                <input id="editUserIsAdmin" type="checkbox" />
+                <span>دسترسی ادمین</span>
+              </label>
+            </div>
             <label class="field">
               <span class="field-label">رمز عبور جدید</span>
               <input id="editUserNewPassword" type="password" autocomplete="new-password" />
             </label>
           </div>
-          <div class="actions">
+          <div class="actions user-edit-actions">
             <button id="btnSaveUserEdit" class="btn primary" type="button">ذخیره تغییرات</button>
             <button id="btnResetUserPassword" class="btn secondary" type="button">ریست رمز</button>
             <button id="btnCancelUserEdit" class="btn secondary" type="button">انصراف</button>
@@ -741,7 +875,7 @@
     </div>
   </div>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=76"></script>
+  <script src="lib/xlsx/xlsx.full.min.js"></script>
+  <script src="js/app.js?v=94"></script>
 </body>
 </html>

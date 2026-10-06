@@ -9,6 +9,8 @@ public static class DistrictAccessService
     /// <summary>شعبه مرکز رایورز — تهاتر مبلغ (گروه ۱۵۷) به Branch=102 ارسال می‌شود.</summary>
     public const string CenterDistrictCode = "102";
     public const int CenterBranchId = 102;
+    /// <summary>پشتیبانی فاوا — ارسال برای همه شعب/مناطق.</summary>
+    public const string FavaDistrictCode = "fava";
     public static string? GetUserDistrict(ClaimsPrincipal? user) =>
         user?.FindFirst(AuthClaimTypes.District)?.Value;
 
@@ -29,8 +31,15 @@ public static class DistrictAccessService
             return n.ToString();
         if (n == 102)
             return CenterDistrictCode;
+        if (string.Equals(v, FavaDistrictCode, StringComparison.OrdinalIgnoreCase)
+            || v == "فاوا")
+            return FavaDistrictCode;
         return v;
     }
+
+    public static bool IsFavaUser(ClaimsPrincipal? user) =>
+        !AppAuthService.IsAdmin(user)
+        && NormalizeDistrict(GetUserDistrict(user)) == FavaDistrictCode;
 
     public static int? DistrictToBranchId(string? district)
     {
@@ -64,7 +73,7 @@ public static class DistrictAccessService
 
     public static bool CanAccessFiche(ClaimsPrincipal? user, FicheHeaderDto fiche)
     {
-        if (AppAuthService.IsAdmin(user))
+        if (AppAuthService.IsAdmin(user) || IsFavaUser(user))
             return true;
 
         var userDistrict = NormalizeDistrict(GetUserDistrict(user));
@@ -93,6 +102,7 @@ public static class DistrictAccessService
         return d switch
         {
             CenterDistrictCode => "شعبه مرکز (۱۰۲)",
+            FavaDistrictCode => "فاوا",
             "218" => "منطقه ثامن",
             _ when int.TryParse(d, out var n) && n is >= 1 and <= 12 => $"منطقه {n}",
             _ => string.IsNullOrEmpty(d) ? "—" : d
@@ -108,7 +118,7 @@ public static class DistrictAccessService
         ICollection<string> clauses,
         ICollection<(string Name, object Value)> parameters)
     {
-        if (AppAuthService.IsAdmin(user))
+        if (AppAuthService.IsAdmin(user) || IsFavaUser(user))
             return;
 
         var userDistrict = NormalizeDistrict(GetUserDistrict(user));

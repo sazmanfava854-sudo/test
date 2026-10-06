@@ -37,16 +37,44 @@ public sealed class InMemoryAppUserStore
             Domain = domain,
             IsAdmin = req.IsAdmin,
             IsActive = true,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow,
+            DirectPermissions = req.DirectPermissions ?? new AppUserDirectPermissions()
         };
         _byUsername[user.Username] = user;
         _byId[user.Id] = user;
-        _userGroups[user.Id] = [];
+        _userGroups[user.Id] = req.GroupIds?.Distinct().ToHashSet() ?? [];
         return user;
     }
 
-    public AppUserRecord? FindByUsername(string username) =>
-        _byUsername.TryGetValue(username.Trim(), out var user) ? user : null;
+    public bool EnsureAdminDomainIfEmpty(string username, string domain)
+    {
+        domain = AppUserDomainNormalizer.Normalize(domain);
+        if (!AppUserDomainNormalizer.IsValid(domain))
+            return false;
+        if (_byId.Values.Any(u => u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var user = _byUsername.TryGetValue(username.Trim(), out var named) && named.IsAdmin
+            ? named
+            : _byId.Values.FirstOrDefault(u => u.IsAdmin && string.IsNullOrWhiteSpace(u.Domain));
+        if (user == null || !string.IsNullOrWhiteSpace(user.Domain))
+            return false;
+
+        user.Domain = domain;
+        return true;
+    }
+
+    public AppUserRecord? FindByUsername(string username)
+    {
+        var key = username.Trim();
+        if (_byUsername.TryGetValue(key, out var user))
+            return user;
+        return _byId.Values
+            .Where(u => u.NationalId.Equals(key, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(u => u.IsActive)
+            .ThenBy(u => u.CreatedAtUtc)
+            .FirstOrDefault();
+    }
 
     public AppUserRecord? FindBySsoIdentity(string identity)
     {
@@ -58,7 +86,7 @@ public sealed class InMemoryAppUserStore
         AppUserRecord? Match(Func<AppUserRecord, bool> pred) =>
             _byId.Values.FirstOrDefault(pred);
 
-        return Match(u => !string.IsNullOrEmpty(account) && u.Domain.Equals(account, StringComparison.OrdinalIgnoreCase))
+        return Match(u => !string.IsNullOrEmpty(account) && AppUserDomainNormalizer.ListContains(u.Domain, account))
             ?? Match(u => !string.IsNullOrEmpty(account) && u.Username.Equals(account, StringComparison.OrdinalIgnoreCase))
             ?? Match(u => !string.IsNullOrEmpty(raw) && u.Username.Equals(raw, StringComparison.OrdinalIgnoreCase))
             ?? Match(u => !string.IsNullOrEmpty(raw) && u.NationalId.Equals(raw, StringComparison.OrdinalIgnoreCase))
@@ -84,7 +112,8 @@ public sealed class InMemoryAppUserStore
                 IsAdmin = u.IsAdmin,
                 IsActive = u.IsActive,
                 CreatedAtUtc = u.CreatedAtUtc.ToString("O"),
-                GroupIds = GetUserGroupIds(u.Id)
+                GroupIds = GetUserGroupIds(u.Id),
+                DirectPermissions = u.DirectPermissions
             })
             .ToList();
 
@@ -99,6 +128,7 @@ public sealed class InMemoryAppUserStore
                 CanAccessInstallment = g.CanAccessInstallment,
                 CanAccessFicheDateChange = g.CanAccessFicheDateChange,
                 CanAccessBankInquiryConfirm = g.CanAccessBankInquiryConfirm,
+                CanAccessShahkar = g.CanAccessShahkar,
                 CanManageUsers = g.CanManageUsers,
                 CreatedAtUtc = g.CreatedAtUtc.ToString("O")
             })
@@ -120,6 +150,7 @@ public sealed class InMemoryAppUserStore
             CanAccessInstallment = req.CanAccessInstallment,
             CanAccessFicheDateChange = req.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
+            CanAccessShahkar = req.CanAccessShahkar,
             CanManageUsers = req.CanManageUsers,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -132,6 +163,7 @@ public sealed class InMemoryAppUserStore
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
+            CanAccessShahkar = group.CanAccessShahkar,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -151,6 +183,7 @@ public sealed class InMemoryAppUserStore
         group.CanAccessInstallment = req.CanAccessInstallment;
         group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
         group.CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm;
+        group.CanAccessShahkar = req.CanAccessShahkar;
         group.CanManageUsers = req.CanManageUsers;
 
         return new AppUserGroupDto
@@ -161,6 +194,7 @@ public sealed class InMemoryAppUserStore
             CanAccessInstallment = group.CanAccessInstallment,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
+            CanAccessShahkar = group.CanAccessShahkar,
             CanManageUsers = group.CanManageUsers,
             CreatedAtUtc = group.CreatedAtUtc.ToString("O")
         };
@@ -190,15 +224,17 @@ public sealed class InMemoryAppUserStore
             user.IsActive = req.IsActive.Value;
         if (req.Domain != null)
         {
-            var domain = AppUserDomainNormalizer.Normalize(req.Domain);
-            if (!AppUserDomainNormalizer.IsValid(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
+            var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
+            if (!AppUserDomainNormalizer.IsValidList(domain))
+                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
             if (_byId.Values.Any(u => u.Id != id && u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
             user.Domain = domain;
         }
         if (req.GroupIds != null)
             SetUserGroups(id, req.GroupIds);
+        if (req.DirectPermissions != null)
+            user.DirectPermissions = req.DirectPermissions;
 
         return List().First(u => u.Id == id);
     }
@@ -208,6 +244,14 @@ public sealed class InMemoryAppUserStore
         if (!_byId.TryGetValue(id, out var user))
             throw new InvalidOperationException("کاربر یافت نشد");
         user.PasswordHash = PasswordHasherUtil.Hash(password);
+    }
+
+    public void EnsureActiveAdmin(Guid id)
+    {
+        if (!_byId.TryGetValue(id, out var user))
+            return;
+        user.IsAdmin = true;
+        user.IsActive = true;
     }
 
     public AppUserRecord CreateSsoUser(

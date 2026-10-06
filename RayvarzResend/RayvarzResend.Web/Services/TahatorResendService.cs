@@ -21,6 +21,7 @@ public sealed class TahatorResendService
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
     private readonly AccountingDocWriter _accountingDoc;
+    private readonly EpayFichePresenceChecker _epay;
 
     public TahatorResendService(
         IConfiguration config,
@@ -28,7 +29,8 @@ public sealed class TahatorResendService
         FicheRepository fiches,
         RayvarzPayloadBuilder payload,
         RayvarzClient client,
-        AccountingDocWriter accountingDoc)
+        AccountingDocWriter accountingDoc,
+        EpayFichePresenceChecker epay)
     {
         _config = config;
         _logger = logger;
@@ -36,6 +38,7 @@ public sealed class TahatorResendService
         _payload = payload;
         _client = client;
         _accountingDoc = accountingDoc;
+        _epay = epay;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara تنظیم نشده");
     }
@@ -225,6 +228,14 @@ public sealed class TahatorResendService
 
                 if (fiche.Rows.Count == 0 || fiche.Payable <= 0)
                     return Fail(ficheNo, dryRun, steps, $"فیش {no} ردیف/مبلغ معتبر ندارد.");
+
+                var epayIds = EpayFichePresenceChecker.ResolveIds(fiche);
+                var epay = await _epay.CheckAsync(epayIds.BillId, epayIds.PaymentId, ct);
+                if (!epay.Exists)
+                {
+                    steps.Add($"1e) epay {no}: {epay.UserMessage}");
+                    return Fail(ficheNo, dryRun, steps, epay.UserMessage);
+                }
 
                 var state = await TryLoadIncomeFicheStateAsync(no, ct);
                 if (state == null)
