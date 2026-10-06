@@ -10,12 +10,13 @@ public class AppUserDomainSchemaTests
         var sql = File.ReadAllText(RepoFile("database", "07_AppUser.sql"));
         var repo = File.ReadAllText(RepoFile("RayvarzResend.Web", "Services", "AppUserRepository.cs"));
 
-        foreach (var src in new[] { sql, repo })
-        {
-            Assert.Contains("ADD [Domain] NVARCHAR(100)", src);
-            Assert.Contains("SET [Domain] = N'0925569917'", src);
-            Assert.Contains("NationalId = N'0925569917' OR Username = N'0925569917'", src);
-        }
+        Assert.Contains("ADD [Domain] NVARCHAR(100)", sql);
+        Assert.Contains("SET [Domain] = N'0925569917'", sql);
+        Assert.Contains("NationalId = N'0925569917' OR Username = N'0925569917'", sql);
+
+        Assert.Contains("ADD [Domain] NVARCHAR(100)", repo);
+        Assert.Contains("0925569917", repo);
+        Assert.Contains("AppUser.Domain backfill", repo);
 
         var alter = sql.IndexOf("ADD [Domain] NVARCHAR(100)", StringComparison.Ordinal);
         var batchBreak = sql.IndexOf("\nGO\n", alter, StringComparison.Ordinal);
@@ -23,10 +24,9 @@ public class AppUserDomainSchemaTests
         Assert.True(alter >= 0 && batchBreak > alter && index > batchBreak);
 
         var method = repo.Split("public async Task EnsureSchemaAsync")[1].Split("public async Task<int> CountUsersAsync")[0];
-        var firstExec = method.IndexOf("ExecuteNonQueryAsync", StringComparison.Ordinal);
-        var domainSql = method.IndexOf("const string domainSql", StringComparison.Ordinal);
-        var secondExec = method.IndexOf("ExecuteNonQueryAsync", domainSql, StringComparison.Ordinal);
-        Assert.True(firstExec >= 0 && domainSql > firstExec && secondExec > domainSql);
+        Assert.Contains("TryRunSchemaUpgradeAsync", method);
+        Assert.Contains("OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL", method);
+        Assert.Contains("AppUser.Domain backfill", method);
     }
 
     private static string RepoFile(params string[] parts)

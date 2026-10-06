@@ -10,6 +10,9 @@ public sealed class AppUserRepository
     private readonly InMemoryAppUserStore _memory;
     private readonly ILogger<AppUserRepository> _logger;
     private bool _schemaEnsured;
+    private bool _groupTablesReady;
+    /// <summary>اگر کاربر SQL مجوز ALTER نداشته باشد ستون جدید اضافه نمی‌شود — کوئری‌های گروه بدون آن ساخته می‌شوند.</summary>
+    private bool _hasShahkarColumn;
 
     public AppUserRepository(IConfiguration config, InMemoryAppUserStore memory, ILogger<AppUserRepository> logger)
     {
@@ -17,6 +20,23 @@ public sealed class AppUserRepository
         _cs = _useInMemory ? null : ResolveConnectionString(config);
         _memory = memory;
         _logger = logger;
+
+        if (!_useInMemory && !string.IsNullOrWhiteSpace(_cs))
+        {
+            try
+            {
+                var db = new SqlConnectionStringBuilder(_cs).InitialCatalog ?? "";
+                if (db.Contains("security", StringComparison.OrdinalIgnoreCase))
+                    _logger.LogWarning(
+                        "ConnectionStrings:AppAuth به پایگاه «{Database}» اشاره می‌کند — جداول AppUser/AppUserGroup باید در RayvarzRuleEngine (یا AppAuth) باشند، نه security10. " +
+                        "برای شاهکار فقط ConnectionStrings:Security را تنظیم کنید.",
+                        db);
+            }
+            catch (ArgumentException)
+            {
+                // ignore malformed cs at startup
+            }
+        }
     }
 
     public bool IsConfigured => _useInMemory || !string.IsNullOrWhiteSpace(_cs);
@@ -33,7 +53,7 @@ public sealed class AppUserRepository
 
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
-        const string sql = """
+        const string createSql = """
             IF OBJECT_ID(N'dbo.AppUser', N'U') IS NULL
             BEGIN
                 CREATE TABLE dbo.AppUser (
@@ -80,50 +100,132 @@ public sealed class AppUserRepository
                     CONSTRAINT FK_AppUserGroupMember_Group FOREIGN KEY (GroupId) REFERENCES dbo.AppUserGroup (Id)
                 );
             END
-
-            IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
-                ALTER TABLE dbo.AppUserGroup ADD CanAccessFicheDateChange BIT NOT NULL
-                    CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0);
-
-            IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
-                ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
-                    CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0);
-
-            IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessShahkar') IS NULL
-                ALTER TABLE dbo.AppUserGroup ADD CanAccessShahkar BIT NOT NULL
-                    CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0);
-
-            IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
-                ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
-                    CONSTRAINT DF_AppUser_Domain DEFAULT (N'');
             """;
-        await using (var cmd = new SqlCommand(sql, conn))
-            await cmd.ExecuteNonQueryAsync(ct);
+        await TryRunSchemaUpgradeAsync(conn, "create.AppUser", createSql, ct);
 
-        // ستون جدید در همان بچ قابل ارجاع نیست؛ ایندکس و UPDATE بعد از ALTER اجرا می‌شوند.
-        const string domainSql = """
-            IF NOT EXISTS (
+        // هر ALTER در دستور جدا — فقط اگر جدول وجود دارد (COL_LENGTH روی جدول ناموجود = خطای 4902).
+        await TryRunSchemaUpgradeAsync(conn, "AppUserGroup.CanAccessFicheDateChange", """
+            IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
+                EXEC(N'ALTER TABLE dbo.AppUserGroup ADD CanAccessFicheDateChange BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0)');
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUserGroup.CanAccessBankInquiryConfirm", """
+            IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
+                EXEC(N'ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0)');
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUserGroup.CanAccessShahkar", """
+            IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessShahkar') IS NULL
+                EXEC(N'ALTER TABLE dbo.AppUserGroup ADD CanAccessShahkar BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0)');
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUser.Domain", """
+            IF OBJECT_ID(N'dbo.AppUser', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUser', N'Domain') IS NULL
+                EXEC(N'ALTER TABLE dbo.AppUser ADD [Domain] NVARCHAR(100) NOT NULL
+                    CONSTRAINT DF_AppUser_Domain DEFAULT (N'''')');
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUser.Domain index", """
+            IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NOT NULL
+               AND NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE name = N'UQ_AppUser_Domain' AND object_id = OBJECT_ID(N'dbo.AppUser'))
-                CREATE UNIQUE INDEX UQ_AppUser_Domain ON dbo.AppUser ([Domain])
-                    WHERE [Domain] <> N'';
+                EXEC(N'CREATE UNIQUE INDEX UQ_AppUser_Domain ON dbo.AppUser ([Domain])
+                    WHERE [Domain] <> N''''');
+            """, ct);
 
-            UPDATE dbo.AppUser
-            SET [Domain] = N'0925569917'
-            WHERE (NationalId = N'0925569917' OR Username = N'0925569917')
-              AND ISNULL([Domain], N'') = N''
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM dbo.AppUser x
-                  WHERE x.[Domain] = N'0925569917'
-                    AND x.NationalId <> N'0925569917'
-                    AND x.Username <> N'0925569917');
-            """;
-        await using (var domainCmd = new SqlCommand(domainSql, conn))
-            await domainCmd.ExecuteNonQueryAsync(ct);
+        await TryRunSchemaUpgradeAsync(conn, "AppUser.Domain backfill", """
+            IF COL_LENGTH(N'dbo.AppUser', N'Domain') IS NOT NULL
+                EXEC(N'UPDATE dbo.AppUser
+                    SET [Domain] = N''0925569917''
+                    WHERE (NationalId = N''0925569917'' OR Username = N''0925569917'')
+                      AND ISNULL([Domain], N'''') = N''''
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM dbo.AppUser x
+                          WHERE x.[Domain] = N''0925569917''
+                            AND x.NationalId <> N''0925569917''
+                            AND x.Username <> N''0925569917'')');
+            """, ct);
+
+        _groupTablesReady = await TableExistsAsync(conn, "dbo.AppUserGroup", ct);
+        _hasShahkarColumn = _groupTablesReady
+            && await ColumnExistsAsync(conn, "dbo.AppUserGroup", "CanAccessShahkar", ct);
+        if (_groupTablesReady && !_hasShahkarColumn)
+        {
+            _logger.LogWarning(
+                "ستون CanAccessShahkar در dbo.AppUserGroup نیست و افزوده نشد (احتمالاً کاربر SQL مجوز ALTER ندارد). " +
+                "برنامه بدون دسترسی گروهی «شاهکار» کار می‌کند؛ اسکریپت database/09_AppUserGroup_Shahkar.sql را با کاربر dbo اجرا کنید.");
+        }
+
+        if (!_groupTablesReady)
+        {
+            _logger.LogWarning(
+                "dbo.AppUserGroup در AppAuth پیدا نشد — ورود کاربران با IsAdmin یا بدون گروه ادامه می‌یابد. " +
+                "اسکریپت‌های database/07_AppUser.sql و database/08_AppUserGroup.sql را روی RayvarzRuleEngine اجرا کنید.");
+        }
 
         _schemaEnsured = true;
-        _logger.LogInformation("AppUser schema ensured");
+        _logger.LogInformation(
+            "AppUser schema ensured (groupTables={GroupTables}, shahkarColumn={HasShahkar})",
+            _groupTablesReady,
+            _hasShahkarColumn);
+    }
+
+    /// <summary>ارتقای schema نباید ورود کاربران را قطع کند — نبود مجوز ALTER فقط هشدار می‌دهد.</summary>
+    private async Task TryRunSchemaUpgradeAsync(SqlConnection conn, string step, string sql, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = new SqlCommand(sql, conn);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "ارتقای schema برای {Step} انجام نشد (کد {Number}) — برنامه با ساختار فعلی ادامه می‌دهد",
+                step,
+                ex.Number);
+        }
+    }
+
+    private static async Task<bool> TableExistsAsync(SqlConnection conn, string table, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID(@t, N'U') IS NULL THEN 0 ELSE 1 END", conn);
+            cmd.Parameters.AddWithValue("@t", table);
+            var value = await cmd.ExecuteScalarAsync(ct);
+            return value is int i && i == 1;
+        }
+        catch (SqlException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> ColumnExistsAsync(SqlConnection conn, string table, string column, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = new SqlCommand("SELECT COL_LENGTH(@t, @c)", conn);
+            cmd.Parameters.AddWithValue("@t", table);
+            cmd.Parameters.AddWithValue("@c", column);
+            var value = await cmd.ExecuteScalarAsync(ct);
+            return value != null && value != DBNull.Value;
+        }
+        catch (SqlException)
+        {
+            return false;
+        }
     }
 
     public async Task<int> CountUsersAsync(CancellationToken ct = default)
@@ -310,18 +412,30 @@ public sealed class AppUserRepository
             return _memory.ListGroups();
 
         await EnsureSchemaAsync(ct);
-        const string sql = """
-            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanAccessShahkar, CanManageUsers, CreatedAtUtc
+        if (!_groupTablesReady)
+            return [];
+
+        var shahkarColumn = _hasShahkarColumn ? "CanAccessShahkar" : "CAST(0 AS bit) AS CanAccessShahkar";
+        var sql = $"""
+            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, {shahkarColumn}, CanManageUsers, CreatedAtUtc
             FROM dbo.AppUserGroup
             ORDER BY Name
             """;
         var list = new List<AppUserGroupDto>();
-        await using var conn = new SqlConnection(_cs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            list.Add(ReadGroup(reader));
+        try
+        {
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                list.Add(ReadGroup(reader));
+        }
+        catch (SqlException ex)
+        {
+            _logger.LogWarning(ex, "ListGroups failed — returning empty (check AppAuth permissions on dbo.AppUserGroup)");
+        }
+
         return list;
     }
 
@@ -333,10 +447,12 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         var group = NewGroupRecord(req);
-        const string sql = """
+        var shahkarColumn = _hasShahkarColumn ? ", CanAccessShahkar" : "";
+        var shahkarValue = _hasShahkarColumn ? ", @shahkar" : "";
+        var sql = $"""
             INSERT INTO dbo.AppUserGroup
-                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, CanAccessShahkar, CanManageUsers, CreatedAtUtc)
-            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry, @shahkar, @users, @created)
+                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm{shahkarColumn}, CanManageUsers, CreatedAtUtc)
+            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry{shahkarValue}, @users, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -347,7 +463,10 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@installment", group.CanAccessInstallment);
         cmd.Parameters.AddWithValue("@ficheDate", group.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@bankInquiry", group.CanAccessBankInquiryConfirm);
-        cmd.Parameters.AddWithValue("@shahkar", group.CanAccessShahkar);
+        if (_hasShahkarColumn)
+            cmd.Parameters.AddWithValue("@shahkar", group.CanAccessShahkar);
+        else
+            group.CanAccessShahkar = false;
         cmd.Parameters.AddWithValue("@users", group.CanManageUsers);
         cmd.Parameters.AddWithValue("@created", group.CreatedAtUtc);
         try
@@ -369,14 +488,15 @@ public sealed class AppUserRepository
             return _memory.UpdateGroup(id, req);
 
         await EnsureSchemaAsync(ct);
-        const string sql = """
+        var shahkarAssignment = _hasShahkarColumn ? "CanAccessShahkar = @shahkar," : "";
+        var sql = $"""
             UPDATE dbo.AppUserGroup
             SET Name = @name,
                 CanAccessUnsentFiches = @unsent,
                 CanAccessInstallment = @installment,
                 CanAccessFicheDateChange = @ficheDate,
                 CanAccessBankInquiryConfirm = @bankInquiry,
-                CanAccessShahkar = @shahkar,
+                {shahkarAssignment}
                 CanManageUsers = @users
             WHERE Id = @id
             """;
@@ -389,7 +509,8 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@installment", req.CanAccessInstallment);
         cmd.Parameters.AddWithValue("@ficheDate", req.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@bankInquiry", req.CanAccessBankInquiryConfirm);
-        cmd.Parameters.AddWithValue("@shahkar", req.CanAccessShahkar);
+        if (_hasShahkarColumn)
+            cmd.Parameters.AddWithValue("@shahkar", req.CanAccessShahkar);
         cmd.Parameters.AddWithValue("@users", req.CanManageUsers);
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
@@ -405,15 +526,26 @@ public sealed class AppUserRepository
             return _memory.GetUserGroupIds(userId);
 
         await EnsureSchemaAsync(ct);
+        if (!_groupTablesReady)
+            return [];
+
         const string sql = "SELECT GroupId FROM dbo.AppUserGroupMember WHERE UserId = @id";
         var ids = new List<Guid>();
-        await using var conn = new SqlConnection(_cs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", userId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            ids.Add(reader.GetGuid(0));
+        try
+        {
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", userId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                ids.Add(reader.GetGuid(0));
+        }
+        catch (SqlException ex)
+        {
+            _logger.LogWarning(ex, "GetUserGroupIds failed for {UserId} — treating as no groups", userId);
+        }
+
         return ids;
     }
 
@@ -537,14 +669,26 @@ public sealed class AppUserRepository
         if (_useInMemory)
             return _memory.ListMemberships();
 
+        await EnsureSchemaAsync(ct);
+        if (!_groupTablesReady)
+            return [];
+
         const string sql = "SELECT UserId, GroupId FROM dbo.AppUserGroupMember";
         var list = new List<(Guid, Guid)>();
-        await using var conn = new SqlConnection(_cs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            list.Add((reader.GetGuid(0), reader.GetGuid(1)));
+        try
+        {
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                list.Add((reader.GetGuid(0), reader.GetGuid(1)));
+        }
+        catch (SqlException ex)
+        {
+            _logger.LogWarning(ex, "ListAllGroupMemberships failed — returning empty");
+        }
+
         return list;
     }
 
