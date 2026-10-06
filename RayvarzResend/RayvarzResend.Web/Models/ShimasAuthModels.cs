@@ -99,6 +99,8 @@ public sealed class ShimasAuthStatusDto
     public bool LocalLoginAvailable { get; set; }
     /// <summary>صفحه login.html روی host عمومی برای ادمین (بدون ریدایرکت اجباری به SSO).</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; }
+    /// <summary>ورود دوگانه: فرم محلی (دامین/رمز AppUser) + دکمه SSO.</summary>
+    public bool AllowHybridLocalLogin { get; set; }
     public string LoginPath { get; set; } = "/auth/login";
     public string PostLoginDefaultPath { get; set; } = "/";
     public string CallbackPath { get; set; } = "/auth/callback";

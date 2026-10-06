@@ -55,6 +55,11 @@ public sealed class ShimasAuthOptions
     public bool AllowLocalLoginFallback { get; set; } = true;
     /// <summary>روی آدرس عمومی (مثلاً city.mashhad.ir) ورود محلی فقط برای کاربران IsAdmin.</summary>
     public bool AllowAdminLocalLoginOnPublicHost { get; set; } = true;
+    /// <summary>
+    /// ورود دوگانه (Hybrid): روی host عمومی فرم دامین/رمز برای هر کاربر ثبت‌شده در AppUser فعال است؛ SSO با دکمه جدا.
+    /// رمز فرم محلی از PasswordHash داخلی است — SSO رمز را از login.mashhad.ir می‌گیرد.
+    /// </summary>
+    public bool AllowHybridLocalLogin { get; set; } = true;
     /// <summary>روی این hostها (مثلاً IP داخلی سرور) به‌جای SSO به login.html هدایت می‌شود — ورود محلی برای ادمین/عملیات.</summary>
     public string[] PreferLocalLoginHosts { get; set; } = [];
     public int MinRefreshTokenLength { get; set; } = 3;
@@ -144,4 +149,10 @@ public sealed class ShimasAuthOptions
 
     public bool LocalLoginAvailableForHost(string? host) =>
         LocalLoginAvailable || IsLoopbackHost(host) || IsPreferLocalLoginHost(host);
+
+    /// <summary>پس از تأیید رمز در AppUser — آیا کوکی محلی صادر شود؟</summary>
+    public bool AllowLocalPasswordLoginAfterCredentialCheck(string? host, bool userIsAdmin) =>
+        LocalLoginAvailableForHost(host)
+        || AllowHybridLocalLogin
+        || (AllowAdminLocalLoginOnPublicHost && userIsAdmin);
 }

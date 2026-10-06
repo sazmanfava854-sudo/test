@@ -493,11 +493,8 @@ app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, Sh
         if (user == null)
             return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
 
-        if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))
-        {
-            if (!shimas.Options.AllowAdminLocalLoginOnPublicHost || !user.IsAdmin)
-                return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید" }, statusCode: 403);
-        }
+        if (!shimas.Options.AllowLocalPasswordLoginAfterCredentialCheck(http.Request.Host.Host, user.IsAdmin))
+            return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی (SSO) استفاده کنید" }, statusCode: 403);
 
         var principal = AppAuthService.BuildPrincipal(user);
         await http.SignInAsync(

@@ -66,6 +66,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"Tahator\"", json);
         Assert.Contains("https://city.mashhad.ir:5065", json);
         Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
+        Assert.Contains("\"AllowHybridLocalLogin\": true", json);
         Assert.Contains("\"PreferLocalLoginHosts\"", json);
         Assert.Contains("5.252.216.140", json);
         Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
@@ -104,8 +105,9 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
-        Assert.Contains("login.js?v=5", html);
+        Assert.Contains("login.js?v=6", html);
         var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
+        Assert.Contains("allowHybridLocalLogin", js);
         Assert.Contains("allowAdminLocalLoginOnPublicHost", js);
         Assert.DoesNotContain("if (mode.preferSsoLogin) {\n        window.location.href = mode.loginPath", js);
     }

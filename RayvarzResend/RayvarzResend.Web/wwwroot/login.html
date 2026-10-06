@@ -19,24 +19,24 @@
       </div>
       <form id="loginForm" class="login-form">
         <label class="field field-required">
-          <span class="field-label">کد ملی یا نام کاربری</span>
-          <input id="loginUsername" type="text" autocomplete="username" required placeholder="کد ملی یا admin" />
+          <span class="field-label">دامین، کد ملی یا نام کاربری</span>
+          <input id="loginUsername" type="text" autocomplete="username" required placeholder="مثلاً alidoost-pa یا کد ملی" />
         </label>
         <label class="field field-required">
           <span class="field-label">رمز عبور</span>
           <input id="loginPassword" type="password" autocomplete="current-password" required />
         </label>
         <div class="actions">
-          <button id="btnLogin" class="btn primary" type="submit">ورود</button>
+          <button id="btnLogin" class="btn primary" type="submit">ورود با رمز سامانه</button>
         </div>
         <div id="loginSsoBlock" class="login-sso-block" hidden>
-          <p class="login-sso-hint">کاربران سازمانی از ورود یکپارچه استفاده کنند.</p>
+          <p class="login-sso-hint">یا ورود یکپارچه سازمانی (رمز در login.mashhad.ir — بدون رمز دوم در این فرم):</p>
           <a id="btnSsoLogin" class="btn secondary" href="/auth/login">ورود سازمانی (SSO)</a>
         </div>
         <p id="loginError" class="login-error" hidden></p>
       </form>
     </section>
   </div>
-  <script src="js/login.js?v=5"></script>
+  <script src="js/login.js?v=6"></script>
 </body>
 </html>

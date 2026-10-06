@@ -18,6 +18,20 @@ function resolvePostLoginTarget(mode) {
   return fallback.startsWith('/') ? fallback : '/management/';
 }
 
+function canShowLocalLoginForm(mode) {
+  if (!mode) return true;
+  return !!(
+    mode.localLoginAvailable
+    || mode.allowHybridLocalLogin
+    || mode.allowAdminLocalLoginOnPublicHost
+  );
+}
+
+function shouldForceSsoRedirect(mode) {
+  if (!mode?.preferSsoLogin) return false;
+  return !canShowLocalLoginForm(mode);
+}
+
 async function checkExistingSession(mode) {
   try {
     const res = await fetch('/api/auth/me', { credentials: 'include' });
@@ -34,7 +48,7 @@ async function checkExistingSession(mode) {
 function showSsoBlock(mode) {
   const block = $('loginSsoBlock');
   if (!block) return;
-  const show = !!mode?.preferSsoLogin && !!mode?.allowAdminLocalLoginOnPublicHost;
+  const show = !!mode?.preferSsoLogin;
   block.hidden = !show;
   const link = $('btnSsoLogin');
   if (link && mode?.loginPath) link.setAttribute('href', mode.loginPath);
@@ -54,13 +68,13 @@ async function initLoginPage() {
   try {
     if (mode) {
       showSsoBlock(mode);
-      if (mode.preferSsoLogin && !mode.allowAdminLocalLoginOnPublicHost) {
+      if (shouldForceSsoRedirect(mode)) {
         window.location.href = mode.loginPath || '/auth/login';
         return;
       }
-      if (!mode.localLoginAvailable && !mode.allowAdminLocalLoginOnPublicHost) {
+      if (!canShowLocalLoginForm(mode)) {
         const errEl = $('loginError');
-        errEl.textContent = 'ورود محلی غیرفعال است';
+        errEl.textContent = 'ورود محلی غیرفعال است — از ورود سازمانی استفاده کنید';
         errEl.hidden = false;
         $('loginForm').hidden = true;
       }

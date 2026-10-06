@@ -50,6 +50,7 @@ public sealed class ShimasAuthService
             PreferSsoLogin = preferSso,
             LocalLoginAvailable = _options.LocalLoginAvailableForHost(host),
             AllowAdminLocalLoginOnPublicHost = _options.AllowAdminLocalLoginOnPublicHost,
+            AllowHybridLocalLogin = _options.AllowHybridLocalLogin,
             LoginPath = preferSso ? "/auth/login" : "/login.html",
             PostLoginDefaultPath = NormalizePostLoginPath(_options.PostLoginDefaultPath),
             CallbackPath = NormalizeCallbackPath(_options.CallbackPath),

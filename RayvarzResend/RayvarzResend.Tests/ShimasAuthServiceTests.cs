@@ -224,6 +224,25 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
+    public void Hybrid_local_login_allows_registered_user_on_public_host()
+    {
+        var options = new ShimasAuthOptions
+        {
+            Enabled = true,
+            ClientId = "id",
+            ClientSecret = "secret",
+            ApiName = "FinancialAssistant",
+            AllowHybridLocalLogin = true
+        };
+        Assert.False(options.LocalLoginAvailableForHost("city.mashhad.ir"));
+        Assert.True(options.AllowLocalPasswordLoginAfterCredentialCheck("city.mashhad.ir", userIsAdmin: false));
+
+        options.AllowHybridLocalLogin = false;
+        Assert.False(options.AllowLocalPasswordLoginAfterCredentialCheck("city.mashhad.ir", userIsAdmin: false));
+        Assert.True(options.AllowLocalPasswordLoginAfterCredentialCheck("city.mashhad.ir", userIsAdmin: true));
+    }
+
+    [Fact]
     public async Task Existing_admin_without_domain_gets_bootstrap_domain()
     {
         var memory = new InMemoryAppUserStore();
