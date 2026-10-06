@@ -1499,6 +1499,13 @@ tbody tr:last-child td {
   margin-top: 0.25rem;
 }
 
+.user-groups-form.is-editing {
+  padding: 1rem;
+  border-radius: var(--radius, 12px);
+  border: 1px solid var(--accent, #2563eb);
+  background: color-mix(in srgb, var(--accent, #2563eb) 6%, transparent);
+}
+
 .user-groups-name {
   max-width: 320px;
   width: 100%;

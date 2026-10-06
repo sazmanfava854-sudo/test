@@ -1117,8 +1117,9 @@ function setupFicheDateAccountGroupLazyLoad() {
 
 function updateUserGroupPermsTriggerLabel() {
   const labelEl = $('userGroupPermsTriggerLabel');
-  if (!labelEl) return;
-  const labels = Array.from(document.querySelectorAll('.user-group-perm-check:checked'))
+  const menu = $('userGroupPermsMenu');
+  if (!labelEl || !menu) return;
+  const labels = Array.from(menu.querySelectorAll('.user-group-perm-check:checked'))
     .map((el) => (el.dataset.permLabel || '').trim())
     .filter(Boolean);
   if (labels.length === 0) {
@@ -2309,7 +2310,7 @@ async function loadUsersTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/users');
   const data = await parseJsonResponse(res);
-  cachedUsers = data.items || [];
+  cachedUsers = (data.items || []).map(normalizeEntityId);
   const tbody = $('usersTable')?.querySelector('tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -2333,9 +2334,6 @@ async function loadUsersTable() {
     `;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('.btn-edit-user').forEach((btn) => {
-    btn.addEventListener('click', () => openUserEdit(btn.dataset.userId));
-  });
 }
 
 let cachedGroups = [];
@@ -2343,11 +2341,64 @@ let cachedUsers = [];
 let editingUserId = null;
 let editingGroupId = null;
 
+function normalizeEntityId(entity) {
+  if (!entity || typeof entity !== 'object') return entity;
+  const id = entity.id ?? entity.Id;
+  return id != null ? { ...entity, id } : entity;
+}
+
+function syncGroupFormActions() {
+  const createBtn = $('btnCreateGroup');
+  const cancelBtn = $('btnCancelGroupEdit');
+  const form = document.querySelector('.user-groups-form');
+  if (createBtn) {
+    createBtn.textContent = editingGroupId ? 'ذخیره تغییرات گروه' : 'ثبت گروه';
+  }
+  if (cancelBtn) cancelBtn.hidden = !editingGroupId;
+  form?.classList.toggle('is-editing', !!editingGroupId);
+}
+
+function setupGroupsTableActions() {
+  const table = $('groupsTable');
+  const tbody = table?.querySelector('tbody');
+  if (!tbody || tbody.dataset.actionsBound === '1') return;
+  tbody.dataset.actionsBound = '1';
+  tbody.addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.btn-edit-group');
+    if (editBtn) {
+      e.preventDefault();
+      openGroupEdit(editBtn.dataset.groupId);
+      return;
+    }
+    const saveBtn = e.target.closest('.btn-save-group');
+    if (saveBtn) {
+      e.preventDefault();
+      try {
+        await saveGroupFromForm();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  });
+}
+
+function setupUsersTableActions() {
+  const tbody = $('usersTable')?.querySelector('tbody');
+  if (!tbody || tbody.dataset.actionsBound === '1') return;
+  tbody.dataset.actionsBound = '1';
+  tbody.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.btn-edit-user');
+    if (!editBtn) return;
+    e.preventDefault();
+    openUserEdit(editBtn.dataset.userId);
+  });
+}
+
 async function loadGroupsTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/groups');
   const data = await parseJsonResponse(res);
-  cachedGroups = data.items || [];
+  cachedGroups = (data.items || []).map(normalizeEntityId);
   renderGroupsTableBody();
   const editUser = editingUserId
     ? cachedUsers.find((u) => String(u.id) === String(editingUserId))
@@ -2381,18 +2432,6 @@ function renderGroupsTableBody() {
     `;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
-    btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
-  });
-  tbody.querySelectorAll('.btn-save-group').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      try {
-        await saveGroupFromForm();
-      } catch (e) {
-        alert(e.message);
-      }
-    });
-  });
 }
 
 function openGroupEdit(groupId) {
@@ -2407,7 +2446,9 @@ function openGroupEdit(groupId) {
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   updateUserGroupPermsTriggerLabel();
+  syncGroupFormActions();
   renderGroupsTableBody();
+  document.querySelector('.user-groups-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function resetGroupForm() {
@@ -2420,6 +2461,7 @@ function resetGroupForm() {
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   updateUserGroupPermsTriggerLabel();
+  syncGroupFormActions();
   renderGroupsTableBody();
 }
 
@@ -2619,6 +2661,7 @@ function openUserEdit(userId) {
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
   renderUserGroupsPickerMenu('editUserGroupsMenu', 'editUserGroupsTriggerLabel', user.groupIds || []);
   setDirectPermissionsOnForm('editUserDirect', user.directPermissions);
+  panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeUserEdit() {
@@ -2966,8 +3009,11 @@ async function init() {
   if (canManageUsers()) {
     setupUserGroupPermsDropdown();
     setupUserManagementPickers();
+    setupGroupsTableActions();
+    setupUsersTableActions();
     syncAdminCheckboxDirectPermissions('newUserIsAdmin', 'newUserDirect');
     syncAdminCheckboxDirectPermissions('editUserIsAdmin', 'editUserDirect');
+    syncGroupFormActions();
     await loadGroupsTable();
     await loadUsersTable();
   }
@@ -3591,11 +3637,12 @@ function setupAuthAndAdminHandlers() {
   });
   bindClick('btnCreateGroup', async () => {
     try {
-      await saveGroupFromForm({ forceCreate: true });
+      await saveGroupFromForm();
     } catch (e) {
       alert(e.message);
     }
   });
+  bindClick('btnCancelGroupEdit', () => resetGroupForm());
   bindClick('btnRefreshGroups', loadGroupsTable);
   bindClick('btnSaveUserEdit', async () => {
     try {
