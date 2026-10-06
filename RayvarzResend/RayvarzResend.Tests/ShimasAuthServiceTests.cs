@@ -141,7 +141,8 @@ public class ShimasAuthServiceTests
         {
             Enabled = true,
             LKey = "abc",
-            AllowLocalLoginFallback = true
+            AllowLocalLoginFallback = true,
+            AllowHybridLocalLogin = false
         });
 
         Assert.Equal("/auth/login", service.ResolveLoginRedirectPath());
@@ -156,6 +157,7 @@ public class ShimasAuthServiceTests
             ClientId = "19cf3C33",
             ClientSecret = "D2fbf",
             AllowLocalLoginFallback = true,
+            AllowHybridLocalLogin = true,
             PublicBaseUrl = "https://city.mashhad.ir:5065"
         };
 
@@ -178,7 +180,7 @@ public class ShimasAuthServiceTests
 
         var server = new DefaultHttpContext();
         server.Request.Host = new HostString("city.mashhad.ir", 5065);
-        Assert.Equal("/auth/login", service.ResolveLoginRedirectPath(server.Request));
+        Assert.Equal("/login.html", service.ResolveLoginRedirectPath(server.Request));
         Assert.True(service.GetStatus(server.Request).PreferSsoLogin);
         Assert.True(service.GetStatus(server.Request).AllowAdminLocalLoginOnPublicHost);
     }

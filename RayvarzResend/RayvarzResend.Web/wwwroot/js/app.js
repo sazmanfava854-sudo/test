@@ -978,81 +978,174 @@ async function searchFicheDateAccountGroups(query, limit = 20) {
 
 let accountGroupSearchTimer = null;
 let accountGroupSearchSeq = 0;
+const ficheDateSelectedAccountGroups = new Set();
 
-function closeFicheDateAccountGroupMenu() {
-  const input = $('ficheDateAccountGroup');
-  const menu = $('ficheDateAccountGroupMenu');
-  if (!input || !menu) return;
-  menu.hidden = true;
-  input.setAttribute('aria-expanded', 'false');
-}
-
-function renderFicheDateAccountGroupMenu(titles) {
-  const input = $('ficheDateAccountGroup');
-  const menu = $('ficheDateAccountGroupMenu');
-  if (!input || !menu) return;
-
-  menu.innerHTML = '';
-  if (!titles.length) {
-    const empty = document.createElement('div');
-    empty.className = 'account-group-combobox-empty';
-    empty.textContent = 'موردی یافت نشد';
-    menu.appendChild(empty);
-    menu.hidden = false;
-    input.setAttribute('aria-expanded', 'true');
+function updateFicheDateAccountGroupTriggerLabel() {
+  const labelEl = $('ficheDateAccountGroupTriggerLabel');
+  if (!labelEl) return;
+  const selected = Array.from(ficheDateSelectedAccountGroups);
+  if (selected.length === 0) {
+    labelEl.textContent = 'انتخاب عنوان مالکیت…';
     return;
   }
-
-  titles.forEach((title) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'account-group-combobox-option';
-    btn.textContent = title;
-    btn.addEventListener('click', () => {
-      input.value = title;
-      closeFicheDateAccountGroupMenu();
-    });
-    menu.appendChild(btn);
-  });
-  menu.hidden = false;
-  input.setAttribute('aria-expanded', 'true');
+  if (selected.length === 1) {
+    labelEl.textContent = selected[0];
+    return;
+  }
+  labelEl.textContent = `${selected.length.toLocaleString('fa-IR')} عنوان انتخاب‌شده`;
 }
 
-async function fetchFicheDateAccountGroupSuggestions(query) {
+function getSelectedFicheDateAccountGroups() {
+  return Array.from(ficheDateSelectedAccountGroups);
+}
+
+function closeFicheDateAccountGroupMenu() {
+  const menu = $('ficheDateAccountGroupMenu');
+  const trigger = $('ficheDateAccountGroupTrigger');
+  if (menu) menu.hidden = true;
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleFicheDateAccountGroupMenu() {
+  const menu = $('ficheDateAccountGroupMenu');
+  const trigger = $('ficheDateAccountGroupTrigger');
+  if (!menu || !trigger) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) fetchFicheDateAccountGroupOptions($('ficheDateAccountGroupSearch')?.value || '');
+}
+
+function renderFicheDateAccountGroupOptions(titles) {
+  const host = $('ficheDateAccountGroupOptions');
+  if (!host) return;
+  host.innerHTML = '';
+  if (!titles.length) {
+    const empty = document.createElement('div');
+    empty.className = 'fiche-date-account-group-empty';
+    empty.textContent = 'موردی یافت نشد';
+    host.appendChild(empty);
+    return;
+  }
+  titles.forEach((title) => {
+    const labelEl = document.createElement('label');
+    labelEl.className = 'fiche-date-ms-option';
+    labelEl.setAttribute('role', 'option');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'fiche-date-account-group-filter';
+    input.value = title;
+    input.checked = ficheDateSelectedAccountGroups.has(title);
+    input.addEventListener('change', () => {
+      if (input.checked) ficheDateSelectedAccountGroups.add(title);
+      else ficheDateSelectedAccountGroups.delete(title);
+      updateFicheDateAccountGroupTriggerLabel();
+    });
+    const text = document.createElement('span');
+    text.className = 'fiche-date-ms-option-text';
+    text.textContent = title;
+    labelEl.appendChild(input);
+    labelEl.appendChild(text);
+    host.appendChild(labelEl);
+  });
+}
+
+async function fetchFicheDateAccountGroupOptions(query) {
   const seq = ++accountGroupSearchSeq;
   try {
-    const titles = await searchFicheDateAccountGroups(query);
+    const titles = await searchFicheDateAccountGroups(query, 50);
     if (seq !== accountGroupSearchSeq) return;
-    renderFicheDateAccountGroupMenu(titles);
+    const merged = [...new Set([...titles, ...ficheDateSelectedAccountGroups])]
+      .sort((a, b) => a.localeCompare(b, 'fa'));
+    renderFicheDateAccountGroupOptions(merged);
   } catch {
     if (seq !== accountGroupSearchSeq) return;
-    closeFicheDateAccountGroupMenu();
+    renderFicheDateAccountGroupOptions(Array.from(ficheDateSelectedAccountGroups));
   }
 }
 
 function setupFicheDateAccountGroupLazyLoad() {
   if (!canAccessFicheDateChange()) return;
-  const input = $('ficheDateAccountGroup');
+  const trigger = $('ficheDateAccountGroupTrigger');
   const menu = $('ficheDateAccountGroupMenu');
-  if (!input || !menu || input.dataset.lazyBound === '1') return;
-  input.dataset.lazyBound = '1';
+  const search = $('ficheDateAccountGroupSearch');
+  if (!trigger || !menu || trigger.dataset.lazyBound === '1') return;
+  trigger.dataset.lazyBound = '1';
 
-  const scheduleSearch = () => {
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFicheDateAccountGroupMenu();
+  });
+
+  search?.addEventListener('input', () => {
     clearTimeout(accountGroupSearchTimer);
     accountGroupSearchTimer = setTimeout(() => {
-      fetchFicheDateAccountGroupSuggestions(input.value);
+      fetchFicheDateAccountGroupOptions(search.value);
     }, 300);
-  };
-
-  input.addEventListener('input', scheduleSearch);
-  input.addEventListener('focus', () => {
-    if (menu.hidden) scheduleSearch();
   });
 
   document.addEventListener('click', (e) => {
-    if (e.target === input || menu.contains(e.target)) return;
+    const wrap = $('ficheDateAccountGroupMulti');
+    if (!wrap || wrap.contains(e.target)) return;
     closeFicheDateAccountGroupMenu();
   });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeFicheDateAccountGroupMenu();
+  });
+
+  updateFicheDateAccountGroupTriggerLabel();
+}
+
+function updateUserGroupPermsTriggerLabel() {
+  const labelEl = $('userGroupPermsTriggerLabel');
+  if (!labelEl) return;
+  const labels = Array.from(document.querySelectorAll('.user-group-perm-check:checked'))
+    .map((el) => (el.dataset.permLabel || '').trim())
+    .filter(Boolean);
+  if (labels.length === 0) {
+    labelEl.textContent = 'انتخاب دسترسی…';
+    return;
+  }
+  if (labels.length === 1) {
+    labelEl.textContent = labels[0];
+    return;
+  }
+  labelEl.textContent = `${labels.length.toLocaleString('fa-IR')} دسترسی انتخاب‌شده`;
+}
+
+function setupUserGroupPermsDropdown() {
+  const trigger = $('userGroupPermsTrigger');
+  const menu = $('userGroupPermsMenu');
+  if (!trigger || !menu || trigger.dataset.bound === '1') return;
+  trigger.dataset.bound = '1';
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  menu.querySelectorAll('.user-group-perm-check').forEach((input) => {
+    input.addEventListener('change', updateUserGroupPermsTriggerLabel);
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = $('userGroupPermsMulti');
+    if (!wrap || wrap.contains(e.target)) return;
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  updateUserGroupPermsTriggerLabel();
 }
 
 function getSelectedFicheDateStatuses() {
@@ -1070,7 +1163,7 @@ function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
     permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
     temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
     temporaryToDate: ($('ficheDateTemporaryTo')?.value || '').trim(),
-    accountGroupTitle: ($('ficheDateAccountGroup')?.value || '').trim(),
+    accountGroupTitles: getSelectedFicheDateAccountGroups(),
     eumFicheStatuses: getSelectedFicheDateStatuses(),
     page,
     pageSize
@@ -1081,7 +1174,7 @@ function hasFicheDateSearchFilter(payload = getFicheDateSearchPayload()) {
   return !!(payload.identifierValue
     || payload.permanentFromDate || payload.permanentToDate
     || payload.temporaryFromDate || payload.temporaryToDate
-    || payload.accountGroupTitle
+    || (payload.accountGroupTitles && payload.accountGroupTitles.length > 0)
     || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0));
 }
 
@@ -2016,7 +2109,9 @@ async function loadAuthMode() {
 
 async function redirectToLogin() {
   const mode = await loadAuthMode();
-  const path = mode?.preferSsoLogin ? (mode.loginPath || '/auth/login') : '/login.html';
+  const path = mode?.allowHybridLocalLogin || !mode?.preferSsoLogin
+    ? '/login.html'
+    : (mode.loginPath || '/auth/login');
   window.location.href = path;
 }
 
@@ -2264,6 +2359,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
+  updateUserGroupPermsTriggerLabel();
   renderGroupsTableBody();
 }
 
@@ -2276,6 +2372,7 @@ function resetGroupForm() {
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
+  updateUserGroupPermsTriggerLabel();
   renderGroupsTableBody();
 }
 
@@ -2685,6 +2782,7 @@ async function init() {
   }
   window.addEventListener('load', initDatePickers);
   if (canManageUsers()) {
+    setupUserGroupPermsDropdown();
     await loadGroupsTable();
     await loadUsersTable();
   }

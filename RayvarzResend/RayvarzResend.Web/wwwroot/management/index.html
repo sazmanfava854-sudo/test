@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../css/style.css?v=43" />
-  <link rel="stylesheet" href="management.css?v=1" />
+  <link rel="stylesheet" href="management.css?v=2" />
   <style>
     body:not(.hub-authenticated) .container,
     body:not(.hub-authenticated) .page-bg {
@@ -22,8 +22,7 @@
     <header class="hero">
       <div class="hero-top">
         <div class="hero-brand">
-          <p class="brand-name">مدیریت دستیار مالی</p>
-          <p class="hub-subtitle">فرم‌هایی که برای شما فعال است در این صفحه نمایش داده می‌شود.</p>
+          <p class="brand-name">دستیار مالی</p>
         </div>
         <div class="hero-user" id="heroUser" hidden>
           <div class="user-meta">
@@ -35,12 +34,14 @@
       </div>
     </header>
 
+    <nav class="main-tabs hub-module-tabs" id="hubModuleTabs" role="tablist" aria-label="ماژول‌ها" hidden></nav>
+
     <div id="hubEmpty" class="card hub-empty" hidden>
       <p>برای حساب شما هیچ فرمی تعریف نشده است. با ادمین تماس بگیرید.</p>
     </div>
 
     <div id="hubGrid" class="hub-grid" role="list" hidden></div>
   </div>
-  <script src="management.js?v=2" type="module"></script>
+  <script src="management.js?v=3" type="module"></script>
 </body>
 </html>

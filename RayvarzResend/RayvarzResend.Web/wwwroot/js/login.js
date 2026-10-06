@@ -28,6 +28,7 @@ function canShowLocalLoginForm(mode) {
 }
 
 function shouldForceSsoRedirect(mode) {
+  if (mode?.allowHybridLocalLogin) return false;
   if (!mode?.preferSsoLogin) return false;
   return !canShowLocalLoginForm(mode);
 }

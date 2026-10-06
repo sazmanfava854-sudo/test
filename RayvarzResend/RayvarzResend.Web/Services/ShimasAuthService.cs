@@ -93,6 +93,12 @@ public sealed class ShimasAuthService
 
     public string ResolveLoginRedirectPath(HttpRequest? request = null)
     {
+        // ورود هیبرید: ابتدا login.html؛ SSO فقط با دکمه «ورود سازمانی»
+        if (_options.AllowHybridLocalLogin
+            || _options.IsPreferLocalLoginHost(request?.Host.Host)
+            || ShimasAuthOptions.IsLoopbackHost(request?.Host.Host))
+            return "/login.html";
+
         if (_options.PreferSsoLoginForHost(request?.Host.Host))
             return "/auth/login";
         return "/login.html";

@@ -1504,6 +1504,45 @@ tbody tr:last-child td {
   width: 100%;
 }
 
+.user-groups-perms-field {
+  max-width: 420px;
+}
+
+.user-groups-perms-ms .fiche-date-ms-menu {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.fiche-date-account-group-menu {
+  min-width: min(100%, 360px);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.fiche-date-account-group-search {
+  display: block;
+  padding: 8px 10px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fiche-date-account-group-search input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.fiche-date-account-group-options {
+  padding: 4px 0;
+}
+
+.fiche-date-account-group-empty {
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 .user-groups-perms {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

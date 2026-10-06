@@ -9,6 +9,16 @@
   font-weight: 500;
 }
 
+.hub-module-tabs {
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.hub-module-tab {
+  text-decoration: none;
+  color: inherit;
+}
+
 .hub-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

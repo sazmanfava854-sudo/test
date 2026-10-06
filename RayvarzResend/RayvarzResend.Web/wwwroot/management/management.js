@@ -2,7 +2,7 @@ const MODULES = [
   {
     key: 'unsent',
     title: 'ارسال به رایورز',
-    description: 'ارسال تکی یا جمعی فیش به رایورز',
+    description: '',
     icon: '📤',
     href: '/?tab=unsent',
     can: (user) => canAccessRayvarzModule(user)
@@ -10,7 +10,7 @@ const MODULES = [
   {
     key: 'installment',
     title: 'چک خزانه',
-    description: 'بررسی و ارسال چک‌های خزانه',
+    description: '',
     icon: '🏦',
     href: '/?tab=installment',
     can: (user) => isAdminUser(user) || !!user?.canAccessInstallment
@@ -18,7 +18,7 @@ const MODULES = [
   {
     key: 'ficheDate',
     title: 'تغییر تاریخ فیش',
-    description: 'تغییر تاریخ فیش‌های ثبت‌شده',
+    description: '',
     icon: '📅',
     href: '/?tab=ficheDate',
     can: (user) => isAdminUser(user) || !!user?.canAccessFicheDateChange
@@ -26,7 +26,7 @@ const MODULES = [
   {
     key: 'bankInquiry',
     title: 'خدمات الکترونیک',
-    description: 'تأیید استعلام بانکی و خدمات الکترونیک',
+    description: '',
     icon: '💳',
     href: '/?tab=bankInquiry',
     can: (user) => isAdminUser(user) || !!user?.canAccessBankInquiryConfirm
@@ -34,7 +34,7 @@ const MODULES = [
   {
     key: 'shahkar',
     title: 'شاهکار',
-    description: 'جستجو و ثبت ShahkarOk در Users',
+    description: '',
     icon: '✓',
     href: '/?tab=shahkar',
     can: (user) => isAdminUser(user) || !!user?.canAccessShahkar
@@ -42,7 +42,7 @@ const MODULES = [
   {
     key: 'users',
     title: 'مدیریت کاربران',
-    description: 'کاربران، گروه‌ها و دسترسی‌ها',
+    description: '',
     icon: '👥',
     href: '/?tab=users',
     can: (user) => isAdminUser(user) || !!user?.canManageUsers
@@ -91,7 +91,9 @@ async function loadAuthMode() {
 
 async function redirectToLogin() {
   const mode = await loadAuthMode();
-  const base = mode?.preferSsoLogin ? (mode.loginPath || '/auth/login') : '/login.html';
+  const base = mode?.allowHybridLocalLogin || !mode?.preferSsoLogin
+    ? '/login.html'
+    : (mode.loginPath || '/auth/login');
   const returnUrl = encodeURIComponent('/management/');
   window.location.href = base.includes('?')
     ? `${base}&returnUrl=${returnUrl}`
@@ -120,6 +122,26 @@ function applyUserHeader(user) {
   badge.className = `user-badge ${isAdminUser(user) ? 'badge-admin' : 'badge-user'}`;
 }
 
+function renderHubModuleTabs(user) {
+  const nav = document.getElementById('hubModuleTabs');
+  if (!nav) return;
+  const visible = MODULES.filter((m) => m.can(user));
+  nav.innerHTML = '';
+  if (visible.length === 0) {
+    nav.hidden = true;
+    return;
+  }
+  nav.hidden = false;
+  visible.forEach((mod) => {
+    const link = document.createElement('a');
+    link.className = 'main-tab hub-module-tab';
+    link.href = mod.href;
+    link.setAttribute('role', 'tab');
+    link.textContent = mod.title;
+    nav.appendChild(link);
+  });
+}
+
 function renderModuleCards(user) {
   const grid = document.getElementById('hubGrid');
   const empty = document.getElementById('hubEmpty');
@@ -129,21 +151,24 @@ function renderModuleCards(user) {
   if (visible.length === 0) {
     grid.hidden = true;
     empty.hidden = false;
+    renderHubModuleTabs(user);
     return;
   }
 
   empty.hidden = true;
   grid.hidden = false;
+  renderHubModuleTabs(user);
 
   visible.forEach((mod) => {
     const link = document.createElement('a');
     link.className = 'hub-card';
     link.href = mod.href;
     link.setAttribute('role', 'listitem');
+    const desc = (mod.description || '').trim();
     link.innerHTML = `
       <span class="hub-card-icon" aria-hidden="true">${mod.icon}</span>
       <h2 class="hub-card-title">${mod.title}</h2>
-      <p class="hub-card-desc">${mod.description}</p>
+      ${desc ? `<p class="hub-card-desc">${desc}</p>` : ''}
       <span class="hub-card-cta">ورود به فرم →</span>
     `;
     grid.appendChild(link);

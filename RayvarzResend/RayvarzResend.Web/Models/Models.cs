@@ -577,8 +577,10 @@ public class FicheDateChangeSearchRequest
     public string? PermanentToDate { get; set; }
     public string? TemporaryFromDate { get; set; }
     public string? TemporaryToDate { get; set; }
-    /// <summary>LIKE روی CI_IncomeAccountGroup.Title</summary>
+    /// <summary>LIKE روی CI_IncomeAccountGroup.Title (تک‌مقدار — سازگاری)</summary>
     public string? AccountGroupTitle { get; set; }
+    /// <summary>چند عنوان مالکیت — OR با LIKE برای هر مورد</summary>
+    public List<string>? AccountGroupTitles { get; set; }
     /// <summary>شماره فیش یا BillID+PaymentID — همان منطق ارسال تکی.</summary>
     public string? IdentifierValue { get; set; }
     public List<int>? EumFicheStatuses { get; set; }
