@@ -34,6 +34,7 @@ public class AppPermissionServiceTests
         Assert.True(resolved.CanAccessInstallment);
         Assert.True(resolved.CanAccessFicheDateChange);
         Assert.True(resolved.CanAccessBankInquiryConfirm);
+        Assert.True(resolved.CanAccessShahkar);
         Assert.True(resolved.CanManageUsers);
     }
 

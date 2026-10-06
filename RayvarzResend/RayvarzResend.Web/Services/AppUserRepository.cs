@@ -601,7 +601,9 @@ public sealed class AppUserRepository
             user.Domain = domain;
         }
 
-        if (req.DirectPermissions != null)
+        if (user.IsAdmin)
+            user.DirectPermissions = AppUserDirectPermissions.AllGranted();
+        else if (req.DirectPermissions != null)
             user.DirectPermissions = req.DirectPermissions;
 
         const string sql = """
@@ -775,7 +777,9 @@ public sealed class AppUserRepository
             IsAdmin = req.IsAdmin,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow,
-            DirectPermissions = req.DirectPermissions ?? new AppUserDirectPermissions()
+            DirectPermissions = req.IsAdmin
+                ? AppUserDirectPermissions.AllGranted()
+                : req.DirectPermissions ?? new AppUserDirectPermissions()
         };
 
         const string sql = """

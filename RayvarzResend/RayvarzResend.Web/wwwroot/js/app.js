@@ -2142,8 +2142,28 @@ async function apiFetch(url, options = {}) {
   return res;
 }
 
+function readIsAdminFlag(user) {
+  if (!user) return false;
+  const raw = user.isAdmin ?? user.IsAdmin;
+  return raw === true || raw === 1 || raw === '1' || raw === 'true';
+}
+
+function normalizeAuthSession(user) {
+  if (!user) return user;
+  if (readIsAdminFlag(user)) {
+    user.isAdmin = true;
+    user.canAccessUnsentFiches = true;
+    user.canAccessInstallment = true;
+    user.canAccessFicheDateChange = true;
+    user.canAccessBankInquiryConfirm = true;
+    user.canAccessShahkar = true;
+    user.canManageUsers = true;
+  }
+  return user;
+}
+
 function isAdminUser() {
-  return !!currentUser?.isAdmin;
+  return readIsAdminFlag(currentUser);
 }
 
 function canAccessUnsent() {
@@ -2271,7 +2291,7 @@ async function ensureAuthenticated() {
     redirectToLogin();
     return false;
   }
-  currentUser = await res.json();
+  currentUser = normalizeAuthSession(await res.json());
   document.body.classList.add('app-authenticated');
   applyAuthUi();
   return true;
@@ -2511,6 +2531,27 @@ function readDirectPermissionsFromForm(prefix) {
     canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
     canManageUsers: !!$(`${prefix}Users`)?.checked
   };
+}
+
+function allDirectPermissionsGranted() {
+  return {
+    canAccessUnsentFiches: true,
+    canAccessInstallment: true,
+    canAccessFicheDateChange: true,
+    canAccessBankInquiryConfirm: true,
+    canAccessShahkar: true,
+    canManageUsers: true
+  };
+}
+
+function syncAdminCheckboxDirectPermissions(adminCheckboxId, directPrefix) {
+  const adminEl = $(adminCheckboxId);
+  if (!adminEl) return;
+  const sync = () => {
+    if (adminEl.checked) setDirectPermissionsOnForm(directPrefix, allDirectPermissionsGranted());
+  };
+  adminEl.addEventListener('change', sync);
+  sync();
 }
 
 function setDirectPermissionsOnForm(prefix, perms) {
@@ -2925,6 +2966,8 @@ async function init() {
   if (canManageUsers()) {
     setupUserGroupPermsDropdown();
     setupUserManagementPickers();
+    syncAdminCheckboxDirectPermissions('newUserIsAdmin', 'newUserDirect');
+    syncAdminCheckboxDirectPermissions('editUserIsAdmin', 'editUserDirect');
     await loadGroupsTable();
     await loadUsersTable();
   }
