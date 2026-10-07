@@ -18,6 +18,10 @@ _spec = importlib.util.spec_from_file_location("brief", _DIR / "build_code_laws_
 B = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(B)
 
+_form = importlib.util.spec_from_file_location("form_checks", _DIR / "form_checks.py")
+F = importlib.util.module_from_spec(_form)
+_form.loader.exec_module(F)
+
 NAVY = B.NAVY
 TEAL = B.TEAL
 DARK = B.DARK
@@ -723,11 +727,22 @@ def add_toc(doc: Document, text: str, *, bold: bool, size: int, space_before: in
     return p
 
 
+def manual_pack(filename: str):
+    if "01-formula-run" in filename:
+        return RUN_INTRO, RUN_CHECKS
+    if "02-barokaf" in filename:
+        return BAROKAF_INTRO, BAROKAF_CHECKS
+    if "04-parvandeh-apartment" in filename:
+        return F.APT_INTRO, F.APT_CHECKS
+    if "05-request" in filename:
+        return F.REQ_INTRO, F.REQ_CHECKS
+    return None
+
+
 def section_subtitles(sec: dict) -> list[str]:
-    if "01-formula-run" in sec["file"]:
-        return [h for h, _ in RUN_CHECKS]
-    if "02-barokaf" in sec["file"]:
-        return [h for h, _ in BAROKAF_CHECKS]
+    pack = manual_pack(sec["file"])
+    if pack:
+        return [h for h, _ in pack[1]]
     return [law_title(law) for law in sec["laws"]]
 
 
@@ -810,9 +825,9 @@ def build():
     for i, sec in enumerate(parsed, start=1):
         title = SECTION_TITLE.get(sec["file"], sec["title"])
         add_heading(doc, toc_line(i, title), 1)
-        if "01-formula-run" in sec["file"] or "02-barokaf" in sec["file"]:
-            intro = RUN_INTRO if "01-formula-run" in sec["file"] else BAROKAF_INTRO
-            checks = RUN_CHECKS if "01-formula-run" in sec["file"] else BAROKAF_CHECKS
+        pack = manual_pack(sec["file"])
+        if pack:
+            intro, checks = pack
             add_p(doc, finish_run(intro), first_line=0.5)
             for j, (heading, paras) in enumerate(checks, start=1):
                 add_heading(doc, toc_line(i, heading, j), 2)
@@ -852,10 +867,8 @@ def build():
             [
                 SECTION_TITLE.get(s["file"], s["title"]),
                 str(
-                    len(RUN_CHECKS)
-                    if "01-formula-run" in s["file"]
-                    else len(BAROKAF_CHECKS)
-                    if "02-barokaf" in s["file"]
+                    len(manual_pack(s["file"])[1])
+                    if manual_pack(s["file"])
                     else len(s["laws"])
                 ),
             ]
