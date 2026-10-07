@@ -206,7 +206,7 @@ def add_heading(doc: Document, text: str, level: int):
         p.runs[0].text = ""
     color = NAVY if level <= 1 else TEAL
     shown = text if "\u200c" in text else half_space(text)
-    fill_mixed(
+    fill_numbered(
         p,
         shown,
         size={1: 16, 2: 14, 3: 12.5}[min(level, 3)],
@@ -713,17 +713,40 @@ BAROKAF_FEE_ROWS = [
 
 
 def toc_line(i: int, title: str, j: int | None = None) -> str:
-    """شماره چسبیده به عنوان. نشانه راست‌به‌چپ را خود چینش متن می‌گذارد."""
+    """شماره چسبیده به عنوان: 1-بخش و 1-1زیربخش."""
     title = title.strip().rstrip(".")
     if j is None:
         return f"{i}-{title}"
     return f"{i}-{j}{title}"
 
 
+_SECTION_NO = re.compile(r"^(\d+-\d*)")
+
+
+def fill_numbered(paragraph, text: str, *, size: int, bold: bool, color, font):
+    """شماره بخش در همان قطعه راست‌به‌چپ عنوان بماند تا کنار عنوان، سمت راست، دیده شود."""
+    m = _SECTION_NO.match(text or "")
+    if not m:
+        fill_mixed(paragraph, text, size=size, bold=bold, color=color, font=font)
+        return
+    rest = text[m.end() :]
+    island = B.ASCII_ISLAND.search(rest) if rest else None
+    if island is None:
+        head, tail = text, ""
+    elif island.start() == 0:
+        head, tail = m.group(1) + "\u200f", rest
+    else:
+        head, tail = text[: m.end() + island.start()], rest[island.start() :]
+    run = paragraph.add_run()
+    set_run(run, head, font=font, size=size, bold=bold, color=color)
+    if tail:
+        fill_mixed(paragraph, tail, size=size, bold=bold, color=color, font=font)
+
+
 def add_toc(doc: Document, text: str, *, bold: bool, size: int, space_before: int, space_after: int):
     p = doc.add_paragraph()
     set_paragraph_rtl(p, align="right", space_after=space_after, space_before=space_before, line=1.15)
-    fill_mixed(p, text, size=size, bold=bold, color=DARK, font=BODY_FONT)
+    fill_numbered(p, text, size=size, bold=bold, color=DARK, font=BODY_FONT)
     return p
 
 
@@ -736,6 +759,8 @@ def manual_pack(filename: str):
         return F.APT_INTRO, F.APT_CHECKS
     if "05-request" in filename:
         return F.REQ_INTRO, F.REQ_CHECKS
+    if "10-manager-confirm" in filename:
+        return F.MC_INTRO, F.MC_CHECKS
     return None
 
 
