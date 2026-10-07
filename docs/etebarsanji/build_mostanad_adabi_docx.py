@@ -743,11 +743,30 @@ def fill_numbered(paragraph, text: str, *, size: int, bold: bool, color, font):
         fill_mixed(paragraph, tail, size=size, bold=bold, color=color, font=font)
 
 
-def add_toc(doc: Document, text: str, *, bold: bool, size: int, space_before: int, space_after: int):
+def add_dot_tab(paragraph, pos: str = "9000"):
+    """نقطه‌چین تا حاشیه چپ، تا شماره صفحه همان‌جا بنشیند."""
+    pPr = paragraph._p.get_or_add_pPr()
+    tabs = OxmlElement("w:tabs")
+    tab = OxmlElement("w:tab")
+    tab.set(qn("w:val"), "left")
+    tab.set(qn("w:leader"), "dot")
+    tab.set(qn("w:pos"), pos)
+    tabs.append(tab)
+    pPr.append(tabs)
+
+
+def add_toc(doc: Document, text: str, *, bold: bool, size: int, space_before: int, space_after: int, level: int = 1):
     p = doc.add_paragraph()
     set_paragraph_rtl(p, align="right", space_after=space_after, space_before=space_before, line=1.15)
+    if level > 1:
+        p.paragraph_format.right_indent = Cm(0.75)
+    add_dot_tab(p)
     fill_numbered(p, text, size=size, bold=bold, color=DARK, font=BODY_FONT)
-    return p
+    tab_run = p.add_run()
+    tab_run._r.append(OxmlElement("w:tab"))
+    num_run = p.add_run()
+    set_run(num_run, "1", font=BODY_FONT, size=size, bold=bold, color=DARK)
+    return num_run
 
 
 def manual_pack(filename: str):
@@ -769,6 +788,79 @@ def section_subtitles(sec: dict) -> list[str]:
     if pack:
         return [h for h, _ in pack[1]]
     return [law_title(law) for law in sec["laws"]]
+
+
+def shown_title(text: str) -> str:
+    return text if "\u200c" in text else half_space(text)
+
+
+def norm_title(text: str) -> str:
+    return re.sub(r"[\s\u200c\u200e\u200f\u200b]+", "", text or "")
+
+
+def outline_pages(docx_path: Path) -> list[tuple[str, int]]:
+    """شماره صفحه هر سرفصل، از روی طرح فهرست پی‌دی‌اف."""
+    import os
+    import subprocess
+    import tempfile
+
+    from pypdf import PdfReader
+
+    tmp = Path(tempfile.mkdtemp())
+    profile = tmp / "lo-profile"
+    subprocess.run(
+        [
+            "soffice",
+            f"-env:UserInstallation=file://{profile}",
+            "--headless",
+            "--norestore",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(tmp),
+            str(docx_path),
+        ],
+        check=True,
+        timeout=300,
+        env=os.environ.copy(),
+        capture_output=True,
+    )
+    pdf = next(tmp.glob("*.pdf"))
+    reader = PdfReader(str(pdf))
+    found: list[tuple[str, int]] = []
+
+    def walk(items):
+        for item in items or []:
+            if isinstance(item, list):
+                walk(item)
+                continue
+            found.append((item.title or "", reader.get_destination_page_number(item) + 1))
+
+    walk(reader.outline)
+    return found
+
+
+def stamp_page_numbers(docx_path: Path, titles: list[str], runs: list) -> list[int]:
+    outline = outline_pages(docx_path)
+    keys = [(norm_title(title), page) for title, page in outline]
+    pages: list[int] = []
+    cursor = 0
+    for title in titles:
+        key = norm_title(title)
+        page = None
+        while cursor < len(keys):
+            if keys[cursor][0] == key and keys[cursor][1]:
+                page = keys[cursor][1]
+                cursor += 1
+                break
+            cursor += 1
+        if page is None:
+            near = [t for t, _ in outline[max(0, cursor - 3): cursor + 3]]
+            raise SystemExit(f"شماره صفحه برای «{title}» پیدا نشد. نزدیک: {near}")
+        pages.append(page)
+    for run, page in zip(runs, pages):
+        run.text = str(page)
+    return pages
 
 
 def finish_run(text: str) -> str:
@@ -812,11 +904,18 @@ def build():
     )
 
     add_heading(doc, "فهرست", 1)
+    toc_titles: list[str] = []
+    toc_runs = []
     for i, sec in enumerate(parsed, start=1):
-        title = SECTION_TITLE.get(sec["file"], sec["title"])
-        add_toc(doc, toc_line(i, title), bold=True, size=13, space_before=8, space_after=2)
+        title = shown_title(toc_line(i, SECTION_TITLE.get(sec["file"], sec["title"])))
+        toc_titles.append(title)
+        toc_runs.append(add_toc(doc, title, bold=True, size=13, space_before=8, space_after=2, level=1))
         for j, sub in enumerate(section_subtitles(sec), start=1):
-            add_toc(doc, toc_line(i, sub, j), bold=False, size=12, space_before=0, space_after=1)
+            sub_title = shown_title(toc_line(i, sub, j))
+            toc_titles.append(sub_title)
+            toc_runs.append(
+                add_toc(doc, sub_title, bold=False, size=12, space_before=0, space_after=1, level=2)
+            )
 
     add_heading(doc, "نام فرم‌ها", 1)
     add_table(
@@ -848,14 +947,14 @@ def build():
     seen: set[str] = set()
     total = 0
     for i, sec in enumerate(parsed, start=1):
-        title = SECTION_TITLE.get(sec["file"], sec["title"])
-        add_heading(doc, toc_line(i, title), 1)
+        title = shown_title(toc_line(i, SECTION_TITLE.get(sec["file"], sec["title"])))
+        add_heading(doc, title, 1)
         pack = manual_pack(sec["file"])
         if pack:
             intro, checks = pack
             add_p(doc, finish_run(intro), first_line=0.5)
             for j, (heading, paras) in enumerate(checks, start=1):
-                add_heading(doc, toc_line(i, heading, j), 2)
+                add_heading(doc, shown_title(toc_line(i, heading, j)), 2)
                 for para in paras:
                     add_p(doc, finish_run(para), size=12, first_line=0.45, space_after=6)
                 if heading == "مبلغ خدمات نقشه‌برداری":
@@ -868,7 +967,7 @@ def build():
             add_p(doc, "برای این فرم اعتبارسنجی استخراج نشد.", color=GRAY)
             continue
         for j, law in enumerate(sec["laws"], start=1):
-            add_heading(doc, toc_line(i, law_title(law), j), 2)
+            add_heading(doc, shown_title(toc_line(i, law_title(law), j)), 2)
             for para in literary_body(law, seen):
                 add_p(doc, para, size=12, first_line=0.45, space_after=6)
             for tbl in law.get("extra_tables") or []:
@@ -912,6 +1011,9 @@ def build():
     first = OUTS[0]
     first.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(first))
+    pages = stamp_page_numbers(first, toc_titles, toc_runs)
+    doc.save(str(first))
+    print("toc", len(pages), "first", pages[0], "last", pages[-1])
     blob = first.read_bytes()
     for p in OUTS[1:]:
         p.parent.mkdir(parents=True, exist_ok=True)
