@@ -259,6 +259,40 @@ def add_toc_field(doc: Document):
     p._p.append(r5)
 
 
+def _field_run(paragraph, *, kind: str | None = None, instr: str | None = None, result: str | None = None):
+    run = paragraph.add_run()
+    set_run(run, result or "", font=BODY_FONT, size=12, color=DARK)
+    if result is None:
+        for child in list(run._r):
+            if child.tag == qn("w:t"):
+                run._r.remove(child)
+    if kind:
+        fld = OxmlElement("w:fldChar")
+        fld.set(qn("w:fldCharType"), kind)
+        run._r.append(fld)
+    if instr is not None:
+        it = OxmlElement("w:instrText")
+        it.set(qn("xml:space"), "preserve")
+        it.text = instr
+        run._r.append(it)
+    return run
+
+
+def add_page_footer(section):
+    """فقط شماره صفحه، پایین و وسط هر صفحه."""
+    section.footer_distance = Cm(0.7)
+    footer = section.footer
+    footer.is_linked_to_previous = False
+    p = footer.paragraphs[0]
+    p.clear()
+    set_paragraph_rtl(p, align="center", space_after=0, space_before=0)
+    _field_run(p, kind="begin")
+    _field_run(p, instr=" PAGE ")
+    _field_run(p, kind="separate")
+    _field_run(p, result="1")
+    _field_run(p, kind="end")
+
+
 def setup(doc: Document):
     for section in doc.sections:
         section.page_width = Cm(21.0)
@@ -274,6 +308,13 @@ def setup(doc: Document):
         for child in list(sectPr):
             if child.tag in (qn("w:headerReference"), qn("w:footerReference")):
                 sectPr.remove(child)
+        add_page_footer(section)
+    settings = doc.settings.element
+    update = settings.find(qn("w:updateFields"))
+    if update is None:
+        update = OxmlElement("w:updateFields")
+        settings.append(update)
+    update.set(qn("w:val"), "true")
     normal = doc.styles["Normal"]
     normal.font.name = BODY_FONT
     normal.font.size = Pt(12)
