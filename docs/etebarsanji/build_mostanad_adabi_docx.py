@@ -65,6 +65,15 @@ SHARED = (
 )
 
 
+def spell_fix(text: str) -> str:
+    return (
+        text.replace("لایه‌های", "لایه ها")
+        .replace("لایههای", "لایه ها")
+        .replace("پایهٔ", "پایه")
+        .replace("پایه‌ی", "پایه")
+    )
+
+
 def polish(text: str) -> str:
     if not text:
         return ""
@@ -75,7 +84,14 @@ def polish(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip(" —-؛،")
     if text and text[-1] not in ".؟!":
         text += "."
-    return half_space(text)
+    text = spell_fix(half_space(text))
+    if "سرویس املاک" in text and ("1=2" in text or "۱=۲" in text or "خاموش" in text):
+        text = (
+            "در فرم بروکف، کدی برای فرستادن اطلاعات به سرویس املاک نوشته شده است. "
+            "این کد اکنون اجرا نمی‌شود، چون شرط آن هیچ‌گاه درست نمی‌شود. "
+            "اگر آن شرط برداشته شود، هنگام ذخیره، سامانه به سرویس املاک وصل می‌شود."
+        )
+    return text
 
 
 def informative(extra: str, base: str) -> bool:
@@ -103,7 +119,7 @@ def literary_body(law: dict, seen: set[str]) -> list[str]:
     if repeated and simple:
         paragraphs.append(
             polish(
-                f"کارکرد پایهٔ «{repeated[0]}» در بخش ابزار مشترک آمده است. "
+                f"کارکرد پایه «{repeated[0]}» در بخش ابزار مشترک آمده است. "
                 f"در این فرم، تفاوت از این قرار است: {simple}"
             )
         )
@@ -146,7 +162,7 @@ def law_title(law: dict) -> str:
         ("Stop + Exit", "توقف و پایان کنترل‌های فرم"),
         ("Stop", "توقف"),
         ("Exit Function", ""),
-        ("dead code", "شاخهٔ غیرفعال"),
+        ("dead code", "شاخه غیرفعال"),
         ("FormName → زیرروال", "هدایت هر فرم به تابع خودش"),
         ("tmpStr، NidProc، Check_com از منبع ۱ لایحه", "شناسهٔ پرونده و خواندن تأیید لایحه"),
         ("khanbare", "محاسب"),
@@ -161,7 +177,7 @@ def law_title(law: dict) -> str:
     title = title.replace("بیشرط", "خروج بی‌شرط")
     title = re.sub(r"\s+", " ", title).strip(" —-،/")
     title = title.replace("سایهاندازی", "سایه‌اندازی")
-    return half_space(title) or "کنترل ذخیره"
+    return spell_fix(half_space(title)) or "کنترل ذخیره"
 
 
 def keep_table(tbl: list[list[str]]) -> bool:
@@ -243,15 +259,10 @@ def setup(doc: Document):
         bidi = OxmlElement("w:bidi")
         bidi.set(qn("w:val"), "1")
         section._sectPr.append(bidi)
-        hp = section.header.paragraphs[0]
-        hp.clear()
-        set_paragraph_rtl(hp, align="center", space_after=0)
-        fill_mixed(hp, "سامانه شهرسازی مشهد  |  مستند اعتبارسنجی", size=9, color=NAVY, font=HEAD_FONT)
-        fp = section.footer.paragraphs[0]
-        fp.clear()
-        set_paragraph_rtl(fp, align="center", space_after=0)
-        fill_mixed(fp, "هر اعتبارسنجی از روی شرط برنامه نوشته شده است.  ·  ", size=9, color=GRAY)
-        B.add_page_number(fp)
+        sectPr = section._sectPr
+        for child in list(sectPr):
+            if child.tag in (qn("w:headerReference"), qn("w:footerReference")):
+                sectPr.remove(child)
     normal = doc.styles["Normal"]
     normal.font.name = BODY_FONT
     normal.font.size = Pt(12)
@@ -296,17 +307,9 @@ def build():
     )
 
     add_heading(doc, "فهرست", 1)
-    toc_rows = []
-    for sec in parsed:
+    for i, sec in enumerate(parsed, start=1):
         title = SECTION_TITLE.get(sec["file"], sec["title"])
-        toc_rows.append([title, f"{len(sec['laws'])} اعتبارسنجی"])
-    add_table(doc, ["بخش", "شمار اعتبارسنجی"], toc_rows)
-    add_p(
-        doc,
-        "اگر این پرونده در واژه‌پرداز باز شود، با به‌روزرسانی فهرست خودکار نیز می‌توان به سرفصل‌ها پرید.",
-        size=10.5,
-        color=GRAY,
-    )
+        add_p(doc, f"{i}-{title}", size=13, bold=True, align="right", space_after=4, space_before=2)
 
     add_heading(doc, "نام فرم‌ها", 1)
     add_table(
@@ -337,27 +340,26 @@ def build():
 
     seen: set[str] = set()
     total = 0
-    for sec in parsed:
+    for i, sec in enumerate(parsed, start=1):
         title = SECTION_TITLE.get(sec["file"], sec["title"])
-        add_heading(doc, title, 1)
+        add_heading(doc, f"{i}-{title}", 1)
         for blurb in SECTION_BLURB.get(sec["file"], []):
             add_p(doc, polish(blurb), first_line=0.5)
-        add_heading(doc, "اعتبارسنجی‌های هنگام ذخیره", 2)
         if not sec["laws"]:
             add_p(doc, "برای این فرم اعتبارسنجی استخراج نشد.", color=GRAY)
             continue
-        for law in sec["laws"]:
-            add_heading(doc, law_title(law), 3)
+        for j, law in enumerate(sec["laws"], start=1):
+            add_heading(doc, f"{i}-{j} {law_title(law)}", 2)
             for para in literary_body(law, seen):
                 add_p(doc, para, size=12, first_line=0.45, space_after=6)
             for tbl in law.get("extra_tables") or []:
                 if keep_table(tbl):
                     width = max(len(r) for r in tbl)
-                    headers = [half_space(c)[:80] for c in tbl[0]]
+                    headers = [spell_fix(half_space(c))[:80] for c in tbl[0]]
                     headers += [""] * (width - len(headers))
                     body = []
                     for r in tbl[1:]:
-                        row = [half_space(c)[:180] for c in r]
+                        row = [spell_fix(half_space(c))[:180] for c in r]
                         row += [""] * (width - len(row))
                         body.append(row)
                     add_table(doc, headers, body)
