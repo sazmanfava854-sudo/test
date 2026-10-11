@@ -12,19 +12,22 @@ public class FicheSendService
     private readonly RayvarzClient _client;
     private readonly AccountingDocWriter _accountingDoc;
     private readonly IConfiguration _config;
+    private readonly EpayFichePresenceChecker _epay;
 
     public FicheSendService(
         FicheRepository repo,
         RayvarzPayloadBuilder payload,
         RayvarzClient client,
         AccountingDocWriter accountingDoc,
-        IConfiguration config)
+        IConfiguration config,
+        EpayFichePresenceChecker epay)
     {
         _repo = repo;
         _payload = payload;
         _client = client;
         _accountingDoc = accountingDoc;
         _config = config;
+        _epay = epay;
     }
 
     public async Task<SendResultDto> SendAsync(SendFicheRequest req, CancellationToken ct = default)
@@ -60,6 +63,9 @@ public class FicheSendService
 
         if (existsInRayvarz)
             throw new InvalidOperationException("فیش در رایورز موجود است — ارسال نشد");
+
+        var epayIds = EpayFichePresenceChecker.ResolveIds(fiche);
+        await _epay.EnsurePresentOrThrowAsync(epayIds.BillId, epayIds.PaymentId, ct);
 
         var built = await _payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
         var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");

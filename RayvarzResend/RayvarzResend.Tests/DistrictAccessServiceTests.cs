@@ -17,6 +17,14 @@ public class DistrictAccessServiceTests
         Assert.Equal(expected, DistrictAccessService.NormalizeDistrict(input));
 
     [Fact]
+    public void CanAccessFiche_fava_user_can_access_any_district()
+    {
+        var user = RegionalUser(DistrictAccessService.FavaDistrictCode);
+        var fiche = new FicheHeaderDto { IncomeRegion = "3" };
+        Assert.True(DistrictAccessService.CanAccessFiche(user, fiche));
+    }
+
+    [Fact]
     public void CanAccessFiche_admin_always_allowed()
     {
         var admin = new ClaimsPrincipal(new ClaimsIdentity(new[]

@@ -20,6 +20,42 @@ public static class AppUserDomainNormalizer
         return s.Trim();
     }
 
+    /// <summary>
+    /// ستون Domain می‌تواند چند دامین با کاما داشته باشد (مثلاً hoseine-sh,sadathoseini-sh)؛
+    /// ورود SSO با هر کدام به همان کاربر می‌رسد.
+    /// </summary>
+    public static string NormalizeList(string? value)
+    {
+        var parts = SplitList(value);
+        return string.Join(",", parts);
+    }
+
+    public static bool IsValidList(string? value)
+    {
+        var parts = SplitList(value);
+        return parts.Count > 0 && parts.All(IsValid);
+    }
+
+    public static bool ListContains(string? list, string? domain)
+    {
+        var target = Normalize(domain);
+        return target.Length > 0
+            && SplitList(list).Any(d => d.Equals(target, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<string> SplitList(string? value)
+    {
+        var result = new List<string>();
+        foreach (var raw in (value ?? "").Split([',', ';', '،'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var item = Normalize(raw);
+            if (item.Length > 0 && !result.Contains(item, StringComparer.OrdinalIgnoreCase))
+                result.Add(item);
+        }
+
+        return result;
+    }
+
     public static bool IsValid(string? value)
     {
         var s = Normalize(value);

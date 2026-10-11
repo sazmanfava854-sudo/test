@@ -18,5 +18,13 @@ public class AuthTests
     {
         Assert.False(PasswordHasherUtil.Verify("x", ""));
         Assert.False(PasswordHasherUtil.Verify("x", "not-valid"));
+        Assert.False(PasswordHasherUtil.IsStoredHashFormat("not-valid"));
+    }
+
+    [Fact]
+    public void PasswordHasher_recognizes_app_hash_format()
+    {
+        var hash = PasswordHasherUtil.Hash("x");
+        Assert.True(PasswordHasherUtil.IsStoredHashFormat(hash));
     }
 }

@@ -138,16 +138,7 @@ public sealed class BankInquiryApiClient
             return BankInquiryApiResult.Failed(
                 "پیکربندی سرویس استعلام بانک ناقص است (FicheLookupServiceUrl / ServiceUrl / UserName / Password)");
 
-        var userName = _options.UserName.Trim();
-        var password = _options.Password;
-
-        var lookupStep = await CallWithJsonFormatFallbackAsync(
-            usePascalCase => BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId, usePascalCase),
-            _options.EffectiveFicheLookupServiceUrl,
-            billId,
-            BankInquiryResponseParser.ParseFicheLookupStep,
-            BankInquiryResponseParser.FicheLookupSourceLabel,
-            ct);
+        var lookupStep = await LookupFicheStepAsync(billId, payId, ct);
 
         switch (lookupStep.Kind)
         {
@@ -172,6 +163,8 @@ public sealed class BankInquiryApiClient
                 ? "در استعلام قبوض ثبت نشد"
                 : $"استعلام قبوض: {lookupStep.Message}");
 
+        var userName = _options.UserName.Trim();
+        var password = _options.Password;
         var onlineUrls = BuildOnlineServiceUrls();
         BankInquiryParsedStep? onlineStep = null;
         foreach (var serviceUrl in onlineUrls)
@@ -262,6 +255,51 @@ public sealed class BankInquiryApiClient
         }
 
         return lastStep ?? ServiceUnavailableStep(serviceLabel, $"خطا در ارتباط با {serviceLabel}");
+    }
+
+    /// <summary>
+    /// فقط epay_FindFichesByBillIDPayID — Paid/NotPaid یعنی فیش در سامانه هست.
+    /// </summary>
+    public async Task<BankInquiryParsedStep> CheckFichePresenceAsync(
+        string billId,
+        string payId,
+        CancellationToken ct = default)
+    {
+        billId = BankInquiryConfirmHelper.NormalizeBillOrPayId(billId);
+        payId = BankInquiryConfirmHelper.NormalizeBillOrPayId(payId);
+
+        if (string.IsNullOrWhiteSpace(billId) || string.IsNullOrWhiteSpace(payId))
+        {
+            return new BankInquiryParsedStep
+            {
+                Kind = BankInquiryStepKind.RecordNotFound,
+                Message = EpayFichePresenceChecker.MissingIdsMessage
+            };
+        }
+
+        if (!IsConfigured)
+        {
+            return new BankInquiryParsedStep
+            {
+                Kind = BankInquiryStepKind.ServiceError,
+                Message = "پیکربندی سرویس استعلام بانک ناقص است (FicheLookupServiceUrl / ServiceUrl / UserName / Password)"
+            };
+        }
+
+        return await LookupFicheStepAsync(billId, payId, ct);
+    }
+
+    private Task<BankInquiryParsedStep> LookupFicheStepAsync(string billId, string payId, CancellationToken ct)
+    {
+        var userName = _options.UserName.Trim();
+        var password = _options.Password;
+        return CallWithJsonFormatFallbackAsync(
+            usePascalCase => BankInquiryRequestBuilder.BuildBillPayEnvelope(userName, password, billId, payId, usePascalCase),
+            _options.EffectiveFicheLookupServiceUrl,
+            billId,
+            BankInquiryResponseParser.ParseFicheLookupStep,
+            BankInquiryResponseParser.FicheLookupSourceLabel,
+            ct);
     }
 
     private static bool ShouldTryAlternateJsonFormat(BankInquiryParsedStep step, bool usedPascalCase) =>

@@ -17,14 +17,16 @@ public sealed class AppPermissionService
         var groups = await _users.ListGroupsAsync(ct);
         var memberGroups = groups.Where(g => groupIds.Contains(g.Id)).ToList();
 
+        var direct = user.DirectPermissions;
         return new UserPermissionsDto
         {
             IsAdmin = false,
-            CanAccessUnsentFiches = memberGroups.Any(g => g.CanAccessUnsentFiches),
-            CanAccessInstallment = memberGroups.Any(g => g.CanAccessInstallment),
-            CanAccessFicheDateChange = memberGroups.Any(g => g.CanAccessFicheDateChange),
-            CanAccessBankInquiryConfirm = memberGroups.Any(g => g.CanAccessBankInquiryConfirm),
-            CanManageUsers = memberGroups.Any(g => g.CanManageUsers),
+            CanAccessUnsentFiches = direct.CanAccessUnsentFiches || memberGroups.Any(g => g.CanAccessUnsentFiches),
+            CanAccessInstallment = direct.CanAccessInstallment || memberGroups.Any(g => g.CanAccessInstallment),
+            CanAccessFicheDateChange = direct.CanAccessFicheDateChange || memberGroups.Any(g => g.CanAccessFicheDateChange),
+            CanAccessBankInquiryConfirm = direct.CanAccessBankInquiryConfirm || memberGroups.Any(g => g.CanAccessBankInquiryConfirm),
+            CanAccessShahkar = direct.CanAccessShahkar || memberGroups.Any(g => g.CanAccessShahkar),
+            CanManageUsers = direct.CanManageUsers || memberGroups.Any(g => g.CanManageUsers),
             GroupIds = groupIds
         };
     }

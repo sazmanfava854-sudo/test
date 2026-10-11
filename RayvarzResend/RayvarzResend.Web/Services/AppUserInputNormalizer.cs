@@ -14,7 +14,7 @@ public static class AppUserInputNormalizer
         req.NationalId = (req.NationalId ?? "").Trim();
         req.Position = (req.Position ?? "").Trim();
         req.District = (req.District ?? "").Trim();
-        req.Domain = AppUserDomainNormalizer.Normalize(req.Domain);
+        req.Domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
         req.Username = ResolveLoginUsername(req);
 
         if (string.IsNullOrWhiteSpace(req.FirstName))
@@ -23,12 +23,15 @@ public static class AppUserInputNormalizer
             throw new ArgumentException("نام خانوادگی الزامی است");
         if (!IsValidNationalId(req.NationalId))
             throw new ArgumentException("کد ملی باید ۱۰ رقم باشد");
-        if (!AppUserDomainNormalizer.IsValid(req.Domain))
+        if (!AppUserDomainNormalizer.IsValidList(req.Domain))
             throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
         if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
             throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
         if (!req.IsAdmin && string.IsNullOrWhiteSpace(req.District))
-            throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه یا شعبه مرکز الزامی است");
+            throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه، شعبه مرکز یا فاوا الزامی است");
+        if (string.Equals(req.District, DistrictAccessService.FavaDistrictCode, StringComparison.OrdinalIgnoreCase)
+            || req.District == "فاوا")
+            req.District = DistrictAccessService.FavaDistrictCode;
     }
 
     /// <summary>ورود با کد ملی — اگر Username خالی باشد همان کد ملی ذخیره می‌شود.</summary>

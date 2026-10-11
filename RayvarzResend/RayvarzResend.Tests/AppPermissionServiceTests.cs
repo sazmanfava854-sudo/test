@@ -38,6 +38,33 @@ public class AppPermissionServiceTests
     }
 
     [Fact]
+    public async Task Direct_permissions_apply_without_group()
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationManager();
+        config["Auth:UseInMemoryStore"] = "true";
+        var memory = new InMemoryAppUserStore();
+        var repo = new AppUserRepository(config, memory, Microsoft.Extensions.Logging.Abstractions.NullLogger<AppUserRepository>.Instance);
+        var perms = new AppPermissionService(repo);
+
+        var user = await repo.CreateUserAsync(new CreateAppUserRequest
+        {
+            Username = "3345678901",
+            Password = "Secret@123",
+            FirstName = "کاربر",
+            LastName = "خصوصی",
+            NationalId = "3345678901",
+            Domain = "direct-user",
+            District = "1",
+            IsAdmin = false,
+            DirectPermissions = new AppUserDirectPermissions { CanAccessShahkar = true }
+        });
+
+        var resolved = await perms.ResolveAsync(user);
+        Assert.True(resolved.CanAccessShahkar);
+        Assert.False(resolved.CanAccessInstallment);
+    }
+
+    [Fact]
     public async Task Group_membership_grants_fiche_date_only()
     {
         var config = new Microsoft.Extensions.Configuration.ConfigurationManager();

@@ -25,10 +25,14 @@ BEGIN
     );
 END
 
-IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
+IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+   AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessFicheDateChange') IS NULL
     ALTER TABLE dbo.AppUserGroup ADD CanAccessFicheDateChange BIT NOT NULL
         CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0);
 
-IF COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
+IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+   AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
     ALTER TABLE dbo.AppUserGroup ADD CanAccessBankInquiryConfirm BIT NOT NULL
         CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0);
+
+-- ستون شاهکار: database/09_AppUserGroup_Shahkar.sql

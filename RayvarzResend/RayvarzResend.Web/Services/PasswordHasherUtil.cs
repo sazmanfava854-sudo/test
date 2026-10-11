@@ -21,6 +21,27 @@ public static class PasswordHasherUtil
         return $"{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
 
+    public static bool IsStoredHashFormat(string? stored)
+    {
+        if (string.IsNullOrWhiteSpace(stored))
+            return false;
+
+        var parts = stored.Split('.', 2);
+        if (parts.Length != 2)
+            return false;
+
+        try
+        {
+            var salt = Convert.FromBase64String(parts[0]);
+            var hash = Convert.FromBase64String(parts[1]);
+            return salt.Length > 0 && hash.Length > 0;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
     public static bool Verify(string password, string stored)
     {
         if (string.IsNullOrWhiteSpace(stored))

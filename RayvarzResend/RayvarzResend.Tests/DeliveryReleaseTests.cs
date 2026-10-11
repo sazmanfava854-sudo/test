@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v25_noskhe_akhar()
+    public void ReleaseInfo_is_v26_unified_excel_epay()
     {
-        Assert.Equal(25, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-noskhe-akhar", ReleaseInfo.Tag);
+        Assert.Equal(26, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-unified-excel-epay-v26", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v25_doc_lists_noskhe_akhar()
+    public void DELIVERY_v26_doc_lists_unified_excel_epay()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v25.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v26.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
         Assert.Contains("نسخه آخر", doc);
-        Assert.Contains("Accounting_Doc", doc);
-        Assert.Contains("411", doc);
+        Assert.Contains("unified-excel-epay-release-ffcb", doc);
+        Assert.Contains("epay", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("mixed Income", doc);
     }
 
     [Fact]
@@ -63,8 +64,19 @@ public class DeliveryReleaseTests
         Assert.Contains("\"DryRun\": false", json);
         Assert.Contains("\"AccountingDoc\"", json);
         Assert.Contains("\"Tahator\"", json);
-        Assert.Contains("FinancialAssistant", json);
         Assert.Contains("https://city.mashhad.ir:5065", json);
+        Assert.Contains("\"AllowAdminLocalLoginOnPublicHost\": true", json);
+        Assert.Contains("\"AllowHybridLocalLogin\": true", json);
+        Assert.Contains("\"PreferLocalLoginHosts\"", json);
+        Assert.Contains("5.252.216.140", json);
+        Assert.Contains("\"ApiBaseUrl\": \"https://login.mashhad.ir\"", json);
+        Assert.Contains("\"SSOUserName\"", json);
+        Assert.Contains("\"UseLoginKeyOnRedirect\": true", json);
+        Assert.Contains("\"IncludeReturnUrlInLoginKey\": false", json);
+        Assert.Contains("\"AllowLegacyLoginUrlWithoutLoginKey\": true", json);
+        Assert.Contains("FinancialAssistant", json);
+        Assert.Contains("19cf3C33", json);
+        Assert.Contains("\"LoginState\": \"test\"", json);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.True(doc.RootElement.TryGetProperty("ConnectionStrings", out _));
         Assert.True(doc.RootElement.TryGetProperty("Auth", out _));
@@ -80,6 +92,24 @@ public class DeliveryReleaseTests
         var program = File.ReadAllText(path);
         Assert.Contains("AddSingleton<RayvarzPayloadBuilder>", program);
         Assert.Contains("[FromServices] RayvarzPayloadBuilder", program);
+        Assert.Contains("KnownNetworks.Clear()", program);
+        Assert.Contains("CookieSecurePolicy.SameAsRequest", program);
+        Assert.DoesNotContain(
+            "if (!shimas.Options.LocalLoginAvailableForHost(http.Request.Host.Host))\n        return Results.Json(new { error = \"ورود محلی غیرفعال است",
+            program);
+    }
+
+    [Fact]
+    public void Login_page_supports_admin_local_and_sso_link()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
+        Assert.Contains("loginSsoBlock", html);
+        Assert.Contains("ورود سازمانی (SSO)", html);
+        Assert.Contains("login.js?v=7", html);
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
+        Assert.Contains("allowHybridLocalLogin", js);
+        Assert.Contains("allowAdminLocalLoginOnPublicHost", js);
+        Assert.DoesNotContain("if (mode.preferSsoLogin) {\n        window.location.href = mode.loginPath", js);
     }
 
     [Fact]
@@ -166,6 +196,56 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("جفت تهاتر قبلاً در همین دسته پردازش می‌شود", src);
         Assert.DoesNotContain("جفت ۱۵۷+۱۵۸ کامل نیست", src);
         Assert.Contains("فقط همین فیش", src);
+    }
+
+    [Fact]
+    public void Bulk_excel_import_and_epay_gate_are_wired()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
+        Assert.Contains("id=\"unsentExcelFile\"", html);
+        Assert.Contains("id=\"unsentExcelStatus\"", html);
+        Assert.Contains("id=\"unsentTemplateDownload\"", html);
+        Assert.Contains("ورود از اکسل", html);
+        Assert.Contains("دانلود تمپلیت", html);
+        Assert.DoesNotContain("btnUnsentPlan", html);
+        Assert.DoesNotContain("بررسی مسیر ارسال", html);
+        Assert.DoesNotContain("قالب فایل اکسل — ۲ ستون الزامی", html);
+        Assert.Contains("templates/unsent-bill-pay-template.xlsx", html);
+        Assert.DoesNotContain("نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh", html);
+        Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
+        Assert.DoesNotContain("cdn.sheetjs.com", html);
+        Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
+        Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
+        Assert.Contains("result-log", html);
+        Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
+        Assert.Contains("js/app.js?v=94", html);
+        Assert.Contains("perm-rayvarz", html);
+        Assert.Contains("col-unsent-fill", html);
+        Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);
+        Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
+
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        Assert.Contains("function parseUnsentExcelFile(", js);
+        Assert.Contains("function mapUnsentExcelHeaderIndex(", js);
+        Assert.Contains("function setUnsentExcelStatus(", js);
+        Assert.Contains("function getSelectedUnsentBatchTargets(", js);
+        Assert.Contains("function appendUnsentItems(", js);
+        Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
+        Assert.Contains("BuildMixedLookupResult", File.ReadAllText(WebFile("Services", "UnsentBillPayLookupHelper.cs")));
+        Assert.Contains("function canAccessRayvarzModule(", js);
+        Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);
+        Assert.Contains("function formatUnsentBatchSendResult(", js);
+        Assert.Contains("<th>شناسه قبض</th>", html);
+        Assert.Contains("<th>شناسه پرداخت</th>", html);
+
+        var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.Contains("/api/unsent/lookup-by-bill-pay", program);
+        Assert.Contains("EpayFichePresenceChecker", program);
+
+        var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
+        Assert.Contains("EnsurePresentOrThrowAsync", send);
+        Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
+        Assert.Contains("CheckAsync", File.ReadAllText(WebFile("Services", "TahatorResendService.cs")));
     }
 
     [Fact]

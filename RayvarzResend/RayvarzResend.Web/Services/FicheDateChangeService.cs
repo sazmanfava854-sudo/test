@@ -293,7 +293,23 @@ public sealed class FicheDateChangeService
         AddDateRange(clauses, parameters, "f.ExportPermanentDate", req.PermanentFromDate, req.PermanentToDate, "pf", "pt");
         AddDateRange(clauses, parameters, "f.ExportTemporaryDate", req.TemporaryFromDate, req.TemporaryToDate, "tf", "tt");
 
-        if (!string.IsNullOrWhiteSpace(req.AccountGroupTitle))
+        var accountTitles = req.AccountGroupTitles?
+            .Select(t => (t ?? "").Trim())
+            .Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (accountTitles is { Count: > 0 })
+        {
+            var parts = new List<string>();
+            for (var i = 0; i < accountTitles.Count; i++)
+            {
+                var param = $"@agt{i}";
+                parts.Add($"g.Title LIKE {param}");
+                parameters.Add((param, $"%{accountTitles[i]}%"));
+            }
+            clauses.Add("(" + string.Join(" OR ", parts) + ")");
+        }
+        else if (!string.IsNullOrWhiteSpace(req.AccountGroupTitle))
         {
             clauses.Add("g.Title LIKE @title");
             parameters.Add(("@title", $"%{req.AccountGroupTitle.Trim()}%"));

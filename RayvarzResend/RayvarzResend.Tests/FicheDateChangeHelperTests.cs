@@ -41,6 +41,10 @@ public class FicheDateChangeHelperTests
         {
             AccountGroupTitle = "شهردار"
         }));
+        Assert.True(FicheDateChangeHelper.HasAnySearchFilter(new FicheDateChangeSearchRequest
+        {
+            AccountGroupTitles = ["شهردار", "معاون"]
+        }));
     }
 
     [Fact]

@@ -4,6 +4,8 @@ let currentUser = null;
 let authMode = null;
 let unsentItems = [];
 const selectedUnsentFicheNos = new Set();
+/** @type {Map<string, string>} ficheNo → Income | Duty */
+const unsentSourceKindByFicheNo = new Map();
 const unsentSearchState = {
   page: 1,
   pageSize: 25,
@@ -90,8 +92,12 @@ function branchFromRegion(regionStr) {
 }
 
 /** همان منطق تب تکی: branch ۲۰۱–۲۱۲ / ۲۱۸ → منطقه ۱–۱۲ / ۲۱۸ برای فیلتر SQL */
+const FAVA_DISTRICT_VALUE = 'fava';
+
 function branchIdToDistrict(branchId) {
-  const id = parseInt(branchId, 10);
+  const raw = String(branchId ?? '').trim();
+  if (raw === FAVA_DISTRICT_VALUE) return FAVA_DISTRICT_VALUE;
+  const id = parseInt(raw, 10);
   if (!id) return '';
   if (id === 102) return '102';
   if (id === 218) return '218';
@@ -111,6 +117,12 @@ function fillBranchSelect(selectEl, { includeAll = false, allLabel = 'همه م�
     selectEl.appendChild(all);
   }
   const restrict = restrictToDistrict ? String(restrictToDistrict) : '';
+  if (includeAll || selectEl.id === 'newUserDistrict') {
+    const fava = document.createElement('option');
+    fava.value = FAVA_DISTRICT_VALUE;
+    fava.textContent = 'فاوا (پشتیبانی — همه شعب)';
+    selectEl.appendChild(fava);
+  }
   config.branches.forEach((b) => {
     if (restrict) {
       const dist = branchIdToDistrict(String(b.id));
@@ -130,6 +142,14 @@ function getUserDistrict() {
 
 function applyRegionalUserRestrictions() {
   if (isAdminUser()) {
+    fillBranchSelect($('branch'));
+    $('branch')?.removeAttribute('disabled');
+    $('fund')?.removeAttribute('disabled');
+    syncFundFromBranch();
+    return;
+  }
+
+  if (getUserDistrict() === FAVA_DISTRICT_VALUE) {
     fillBranchSelect($('branch'));
     $('branch')?.removeAttribute('disabled');
     $('fund')?.removeAttribute('disabled');
@@ -235,8 +255,14 @@ function syncBranchFromFund() {
 function formatShamsiDisplay(yyyymmdd) {
   if (!yyyymmdd) return '-';
   const d = String(yyyymmdd).replace(/\D/g, '');
-  if (d.length < 8) return String(yyyymmdd);
-  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`;
+  if (d.length < 8) return toPersianDigits(String(yyyymmdd));
+  return toPersianDigits(`${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}`);
+}
+
+function formatBillPayDisplay(value) {
+  const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
+  if (!digits) return '-';
+  return toPersianDigits(digits);
 }
 
 function clearGridSelection(selectionSet, cacheMap) {
@@ -262,6 +288,7 @@ function setupMainTabs() {
     installment: $('tabInstallment'),
     ficheDate: $('tabFicheDate'),
     bankInquiry: $('tabBankInquiry'),
+    shahkar: $('tabShahkar'),
     users: $('tabUsers')
   };
 
@@ -279,6 +306,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
   installment: $('tabInstallment'),
   ficheDate: $('tabFicheDate'),
   bankInquiry: $('tabBankInquiry'),
+  shahkar: $('tabShahkar'),
   users: $('tabUsers')
 }) {
   tabs.forEach((t) => {
@@ -407,6 +435,20 @@ function mapExcelHeaderIndex(headers) {
   return map;
 }
 
+function mapUnsentExcelHeaderIndex(headers) {
+  const map = {};
+  headers.forEach((h, idx) => {
+    const key = normalizeExcelHeader(h);
+    if (key === 'شناسهقبض' || key === 'billid' || key === 'billid' || key === 'شناسهقبص') {
+      map.billId = idx;
+    }
+    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
+      map.paymentId = idx;
+    }
+  });
+  return map;
+}
+
 function hasScientificNotation(text) {
   return /e[+-]?\d+/i.test(String(text ?? '').trim());
 }
@@ -415,14 +457,28 @@ function parseExcelCellValue(sheet, rowIdx, colIdx) {
   const ref = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
   const cell = sheet[ref];
   if (!cell) return '';
-  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
-  if (cell.t === 's') return String(cell.v ?? '').trim();
   if (cell.t === 'n' && Number.isFinite(cell.v)) {
     const n = cell.v;
     if (Number.isInteger(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER) return String(Math.trunc(n));
     return String(n);
   }
+  if (cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
+  if (cell.t === 's') return String(cell.v ?? '').trim();
   return String(cell.v ?? '').trim();
+}
+
+function normalizeDigits(value) {
+  return String(value ?? '').replace(/[\u06F0-\u06F9\u0660-\u0669]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0);
+    return String(code - 0x0660);
+  });
+}
+
+function normalizeBillOrPayIdDigits(value) {
+  const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length < 13 ? digits.padStart(13, '0') : digits;
 }
 
 function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
@@ -508,6 +564,170 @@ function parseInstallmentExcelFile(file) {
     reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+function parseUnsentExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof XLSX === 'undefined') {
+      reject(new Error('کتابخانه خواندن اکسل بارگذاری نشد'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellText: true, cellDates: false });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          reject(new Error('برگه‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        const sheet = workbook.Sheets[sheetName];
+        const range = sheet?.['!ref']
+          ? XLSX.utils.decode_range(sheet['!ref'])
+          : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+
+        const headerRow = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          headerRow.push(parseExcelCellValue(sheet, range.s.r, c));
+        }
+        if (!headerRow.length) {
+          reject(new Error('فایل اکسل خالی است'));
+          return;
+        }
+
+        const col = mapUnsentExcelHeaderIndex(headerRow);
+        if (col.billId == null || col.paymentId == null) {
+          reject(new Error('ستون‌های الزامی اکسل: شناسه قبض و شناسه پرداخت'));
+          return;
+        }
+
+        const parsed = [];
+        const seen = new Set();
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const billId = parseExcelCellValue(sheet, r, col.billId);
+          const paymentId = parseExcelCellValue(sheet, r, col.paymentId);
+          if (!billId && !paymentId) continue;
+          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)) {
+            reject(new Error(
+              `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
+            ));
+            return;
+          }
+          const item = {
+            billId: billId.trim(),
+            paymentId: paymentId.trim()
+          };
+          if (!item.billId || !item.paymentId) {
+            reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
+            return;
+          }
+          const key = `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          parsed.push(item);
+        }
+
+        if (!parsed.length) {
+          reject(new Error('هیچ ردیف داده‌ای در فایل اکسل یافت نشد'));
+          return;
+        }
+        resolve(parsed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('خطا در خواندن فایل'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function setUnsentExcelStatus(message, loading = false) {
+  const el = document.querySelector('.unsent-excel-status-row .installment-excel-status')
+    || $('unsentExcelStatus');
+  if (!el) return;
+  el.hidden = false;
+  el.removeAttribute('aria-hidden');
+  el.textContent = message;
+  el.classList.toggle('is-loading', loading);
+}
+
+function formatUnsentBatchSendResult(data) {
+  const total = data.total ?? 0;
+  const ok = data.succeeded ?? 0;
+  const fail = data.failed ?? 0;
+  const skip = data.skipped ?? 0;
+  const headerLines = [
+    `خلاصه ارسال: ${toPersianDigits(String(total))} فیش — موفق: ${toPersianDigits(String(ok))}، ناموفق: ${toPersianDigits(String(fail))}، رد: ${toPersianDigits(String(skip))}`
+  ];
+  if (data.dryRun) {
+    headerLines.push('حالت آزمایشی (DryRun) — ارسال واقعی به رایورز انجام نشد.');
+  }
+
+  const detailBlocks = (data.results || []).map((r) => {
+    const fiche = toPersianDigits(r.ficheNo || '—');
+    const status = r.skipped ? 'رد شده' : (r.success ? 'موفق' : 'ناموفق');
+    const parts = [`فیش ${fiche} — ${status}`];
+    const msg = (r.message || '').trim();
+    if (msg) parts.push(toPersianDigits(msg));
+    const bill = formatBillPayDisplay(r.billId);
+    const pay = formatBillPayDisplay(r.paymentId);
+    if (bill && bill !== '-' && bill !== '—') parts.push(`شناسه قبض: ${bill}`);
+    if (pay && pay !== '-' && pay !== '—') parts.push(`شناسه پرداخت: ${pay}`);
+    if (r.docNotSentError) parts.push(`DocNotSent: ${toPersianDigits(r.docNotSentError)}`);
+    return parts.join('\n');
+  });
+
+  const header = headerLines.join('\n');
+  if (!detailBlocks.length) return header;
+  // یک خط بین خلاصه و اولین فیش — بدون lines.push('') و بدون join('\n\n') روی header
+  return `${header}\n${detailBlocks.join('\n\n')}`;
+}
+
+function rememberUnsentSourceKind(item, fallbackKind) {
+  if (!item?.ficheNo) return;
+  const kind = item.sourceKind || fallbackKind;
+  if (kind) unsentSourceKindByFicheNo.set(item.ficheNo, kind);
+}
+
+function syncUnsentSourceKindsFromItems(items, fallbackKind) {
+  (items || []).forEach((item) => rememberUnsentSourceKind(item, fallbackKind));
+}
+
+function getSelectedUnsentBatchTargets() {
+  return getSelectedUnsentFicheNos().map((ficheNo) => ({
+    ficheNo,
+    sourceKind: unsentSourceKindByFicheNo.get(ficheNo)
+      || $('unsentFicheKind')?.value
+      || 'Income'
+  }));
+}
+
+function appendUnsentItems(items, { autoSelect = false } = {}) {
+  const incoming = items || [];
+  const existing = new Set(unsentItems.map((row) => row.ficheNo));
+  let added = 0;
+  let duplicate = 0;
+  const next = unsentItems.slice();
+  incoming.forEach((item) => {
+    if (!item?.ficheNo) return;
+    if (existing.has(item.ficheNo)) {
+      duplicate += 1;
+      return;
+    }
+    existing.add(item.ficheNo);
+    rememberUnsentSourceKind(item, null);
+    next.push(item);
+    if (autoSelect) selectedUnsentFicheNos.add(item.ficheNo);
+    added += 1;
+  });
+  renderUnsentTable(next, {
+    page: 1,
+    totalPages: 1,
+    totalCount: next.length,
+    pageSize: unsentSearchState.pageSize
+  });
+  return { added, duplicate };
 }
 
 function getInstallmentPayload() {
@@ -776,81 +996,174 @@ async function searchFicheDateAccountGroups(query, limit = 20) {
 
 let accountGroupSearchTimer = null;
 let accountGroupSearchSeq = 0;
+const ficheDateSelectedAccountGroups = new Set();
 
-function closeFicheDateAccountGroupMenu() {
-  const input = $('ficheDateAccountGroup');
-  const menu = $('ficheDateAccountGroupMenu');
-  if (!input || !menu) return;
-  menu.hidden = true;
-  input.setAttribute('aria-expanded', 'false');
-}
-
-function renderFicheDateAccountGroupMenu(titles) {
-  const input = $('ficheDateAccountGroup');
-  const menu = $('ficheDateAccountGroupMenu');
-  if (!input || !menu) return;
-
-  menu.innerHTML = '';
-  if (!titles.length) {
-    const empty = document.createElement('div');
-    empty.className = 'account-group-combobox-empty';
-    empty.textContent = 'موردی یافت نشد';
-    menu.appendChild(empty);
-    menu.hidden = false;
-    input.setAttribute('aria-expanded', 'true');
+function updateFicheDateAccountGroupTriggerLabel() {
+  const labelEl = $('ficheDateAccountGroupTriggerLabel');
+  if (!labelEl) return;
+  const selected = Array.from(ficheDateSelectedAccountGroups);
+  if (selected.length === 0) {
+    labelEl.textContent = 'انتخاب عنوان مالکیت…';
     return;
   }
-
-  titles.forEach((title) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'account-group-combobox-option';
-    btn.textContent = title;
-    btn.addEventListener('click', () => {
-      input.value = title;
-      closeFicheDateAccountGroupMenu();
-    });
-    menu.appendChild(btn);
-  });
-  menu.hidden = false;
-  input.setAttribute('aria-expanded', 'true');
+  if (selected.length === 1) {
+    labelEl.textContent = selected[0];
+    return;
+  }
+  labelEl.textContent = `${selected.length.toLocaleString('fa-IR')} عنوان انتخاب‌شده`;
 }
 
-async function fetchFicheDateAccountGroupSuggestions(query) {
+function getSelectedFicheDateAccountGroups() {
+  return Array.from(ficheDateSelectedAccountGroups);
+}
+
+function closeFicheDateAccountGroupMenu() {
+  const menu = $('ficheDateAccountGroupMenu');
+  const trigger = $('ficheDateAccountGroupTrigger');
+  if (menu) menu.hidden = true;
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleFicheDateAccountGroupMenu() {
+  const menu = $('ficheDateAccountGroupMenu');
+  const trigger = $('ficheDateAccountGroupTrigger');
+  if (!menu || !trigger) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) fetchFicheDateAccountGroupOptions($('ficheDateAccountGroupSearch')?.value || '');
+}
+
+function renderFicheDateAccountGroupOptions(titles) {
+  const host = $('ficheDateAccountGroupOptions');
+  if (!host) return;
+  host.innerHTML = '';
+  if (!titles.length) {
+    const empty = document.createElement('div');
+    empty.className = 'fiche-date-account-group-empty';
+    empty.textContent = 'موردی یافت نشد';
+    host.appendChild(empty);
+    return;
+  }
+  titles.forEach((title) => {
+    const labelEl = document.createElement('label');
+    labelEl.className = 'fiche-date-ms-option';
+    labelEl.setAttribute('role', 'option');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'fiche-date-account-group-filter';
+    input.value = title;
+    input.checked = ficheDateSelectedAccountGroups.has(title);
+    input.addEventListener('change', () => {
+      if (input.checked) ficheDateSelectedAccountGroups.add(title);
+      else ficheDateSelectedAccountGroups.delete(title);
+      updateFicheDateAccountGroupTriggerLabel();
+    });
+    const text = document.createElement('span');
+    text.className = 'fiche-date-ms-option-text';
+    text.textContent = title;
+    labelEl.appendChild(input);
+    labelEl.appendChild(text);
+    host.appendChild(labelEl);
+  });
+}
+
+async function fetchFicheDateAccountGroupOptions(query) {
   const seq = ++accountGroupSearchSeq;
   try {
-    const titles = await searchFicheDateAccountGroups(query);
+    const titles = await searchFicheDateAccountGroups(query, 50);
     if (seq !== accountGroupSearchSeq) return;
-    renderFicheDateAccountGroupMenu(titles);
+    const merged = [...new Set([...titles, ...ficheDateSelectedAccountGroups])]
+      .sort((a, b) => a.localeCompare(b, 'fa'));
+    renderFicheDateAccountGroupOptions(merged);
   } catch {
     if (seq !== accountGroupSearchSeq) return;
-    closeFicheDateAccountGroupMenu();
+    renderFicheDateAccountGroupOptions(Array.from(ficheDateSelectedAccountGroups));
   }
 }
 
 function setupFicheDateAccountGroupLazyLoad() {
   if (!canAccessFicheDateChange()) return;
-  const input = $('ficheDateAccountGroup');
+  const trigger = $('ficheDateAccountGroupTrigger');
   const menu = $('ficheDateAccountGroupMenu');
-  if (!input || !menu || input.dataset.lazyBound === '1') return;
-  input.dataset.lazyBound = '1';
+  const search = $('ficheDateAccountGroupSearch');
+  if (!trigger || !menu || trigger.dataset.lazyBound === '1') return;
+  trigger.dataset.lazyBound = '1';
 
-  const scheduleSearch = () => {
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFicheDateAccountGroupMenu();
+  });
+
+  search?.addEventListener('input', () => {
     clearTimeout(accountGroupSearchTimer);
     accountGroupSearchTimer = setTimeout(() => {
-      fetchFicheDateAccountGroupSuggestions(input.value);
+      fetchFicheDateAccountGroupOptions(search.value);
     }, 300);
-  };
-
-  input.addEventListener('input', scheduleSearch);
-  input.addEventListener('focus', () => {
-    if (menu.hidden) scheduleSearch();
   });
 
   document.addEventListener('click', (e) => {
-    if (e.target === input || menu.contains(e.target)) return;
+    const wrap = $('ficheDateAccountGroupMulti');
+    if (!wrap || wrap.contains(e.target)) return;
     closeFicheDateAccountGroupMenu();
   });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeFicheDateAccountGroupMenu();
+  });
+
+  updateFicheDateAccountGroupTriggerLabel();
+}
+
+function updateUserGroupPermsTriggerLabel() {
+  const labelEl = $('userGroupPermsTriggerLabel');
+  if (!labelEl) return;
+  const labels = Array.from(document.querySelectorAll('.user-group-perm-check:checked'))
+    .map((el) => (el.dataset.permLabel || '').trim())
+    .filter(Boolean);
+  if (labels.length === 0) {
+    labelEl.textContent = 'انتخاب دسترسی…';
+    return;
+  }
+  if (labels.length === 1) {
+    labelEl.textContent = labels[0];
+    return;
+  }
+  labelEl.textContent = `${labels.length.toLocaleString('fa-IR')} دسترسی انتخاب‌شده`;
+}
+
+function setupUserGroupPermsDropdown() {
+  const trigger = $('userGroupPermsTrigger');
+  const menu = $('userGroupPermsMenu');
+  if (!trigger || !menu || trigger.dataset.bound === '1') return;
+  trigger.dataset.bound = '1';
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  menu.querySelectorAll('.user-group-perm-check').forEach((input) => {
+    input.addEventListener('change', updateUserGroupPermsTriggerLabel);
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = $('userGroupPermsMulti');
+    if (!wrap || wrap.contains(e.target)) return;
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  updateUserGroupPermsTriggerLabel();
 }
 
 function getSelectedFicheDateStatuses() {
@@ -868,7 +1181,7 @@ function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
     permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
     temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
     temporaryToDate: ($('ficheDateTemporaryTo')?.value || '').trim(),
-    accountGroupTitle: ($('ficheDateAccountGroup')?.value || '').trim(),
+    accountGroupTitles: getSelectedFicheDateAccountGroups(),
     eumFicheStatuses: getSelectedFicheDateStatuses(),
     page,
     pageSize
@@ -879,7 +1192,7 @@ function hasFicheDateSearchFilter(payload = getFicheDateSearchPayload()) {
   return !!(payload.identifierValue
     || payload.permanentFromDate || payload.permanentToDate
     || payload.temporaryFromDate || payload.temporaryToDate
-    || payload.accountGroupTitle
+    || (payload.accountGroupTitles && payload.accountGroupTitles.length > 0)
     || (payload.eumFicheStatuses && payload.eumFicheStatuses.length > 0));
 }
 
@@ -1077,6 +1390,9 @@ function formatFicheDateUpdateResult(data) {
 
 let bankInquiryItems = [];
 const selectedBankInquiryNos = new Set();
+let shahkarItems = [];
+const selectedShahkarUserNames = new Set();
+const shahkarSelectedItems = new Map();
 const bankInquirySelectedItems = new Map();
 const bankInquirySearchState = {
   page: 1,
@@ -1204,6 +1520,120 @@ function renderBankInquiryTable(items, meta = {}) {
   }
   updateBankInquiryPaginationUi();
   syncBankInquiryConfirmButton();
+}
+
+function setShahkarRowSelected(selectionSet, cacheMap, item, selected) {
+  const key = (item?.userName || '').trim();
+  if (!key) return;
+  if (selected) {
+    selectionSet.add(key);
+    if (cacheMap) cacheMap.set(key, item);
+  } else {
+    selectionSet.delete(key);
+    if (cacheMap) cacheMap.delete(key);
+  }
+}
+
+function syncShahkarConfirmButton() {
+  const btn = $('btnShahkarConfirm');
+  if (btn) btn.disabled = selectedShahkarUserNames.size === 0;
+}
+
+function updateShahkarCountLabel() {
+  const countLabel = $('shahkarCountLabel');
+  if (!countLabel) return;
+  const total = shahkarItems.length;
+  const selectedTotal = selectedShahkarUserNames.size;
+  countLabel.textContent = selectedTotal > 0
+    ? `${total.toLocaleString('fa-IR')} مورد — ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+    : `${total.toLocaleString('fa-IR')} مورد`;
+}
+
+function formatShahkarOkLabel(value, isOk) {
+  if (isOk) return 'تأیید (1)';
+  const v = (value || '').trim();
+  return v ? v : 'خیر';
+}
+
+function renderShahkarTable(items) {
+  shahkarItems = items || [];
+  const section = $('shahkarResultsSection');
+  const tbody = $('shahkarTable')?.querySelector('tbody');
+  const selectAll = $('shahkarSelectAll');
+  if (!section || !tbody) return;
+
+  section.hidden = false;
+
+  if (shahkarItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">موردی یافت نشد</td></tr>';
+    updateShahkarCountLabel();
+    syncShahkarConfirmButton();
+    return;
+  }
+
+  tbody.innerHTML = shahkarItems.map((item) => {
+    const userName = (item.userName || '').trim();
+    const checked = selectedShahkarUserNames.has(userName) ? ' checked' : '';
+    const okLabel = formatShahkarOkLabel(item.shahkarOk, item.isShahkarOk);
+    return `<tr>
+      <td class="col-check"><input type="checkbox" class="shahkar-row-check" data-user-name="${userName}"${checked} /></td>
+      <td>${userName || '-'}</td>
+      <td>${toPersianDigits(item.nationalCode || '-')}</td>
+      <td>${okLabel}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.shahkar-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const userName = (cb.dataset.userName || '').trim();
+      const item = shahkarItems.find((row) => (row.userName || '').trim() === userName);
+      setShahkarRowSelected(selectedShahkarUserNames, shahkarSelectedItems, item || { userName }, cb.checked);
+      syncShahkarConfirmButton();
+      if (selectAll) {
+        const all = tbody.querySelectorAll('.shahkar-row-check');
+        selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
+      }
+      updateShahkarCountLabel();
+    });
+  });
+
+  updateShahkarCountLabel();
+  if (selectAll) {
+    const selectedOnPage = shahkarItems.filter((item) => selectedShahkarUserNames.has((item.userName || '').trim())).length;
+    selectAll.checked = shahkarItems.length > 0 && selectedOnPage === shahkarItems.length;
+  }
+  syncShahkarConfirmButton();
+}
+
+async function fetchShahkarResults({ clearSelection = false } = {}) {
+  const userName = ($('shahkarUserName')?.value || '').trim();
+  const nationalCode = ($('shahkarNationalCode')?.value || '').trim();
+  if (!userName && !nationalCode) {
+    return showAppWarning('نام کاربری یا کد ملی را وارد کنید');
+  }
+
+  if (clearSelection) {
+    clearGridSelection(selectedShahkarUserNames, shahkarSelectedItems);
+  }
+
+  const box = $('shahkarResultBox');
+  try {
+    const res = await apiFetch('/api/shahkar/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName, nationalCode })
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    renderShahkarTable(data.items || []);
+    if (box) box.hidden = true;
+  } catch (e) {
+    if (box) {
+      box.hidden = false;
+      box.textContent = e.message;
+    }
+    showAppError(e.message);
+  }
 }
 
 async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}) {
@@ -1496,11 +1926,9 @@ function updateUnsentPaginationUi() {
 
 function updateUnsentSendButton() {
   const btn = $('btnUnsentSend');
-  const planBtn = $('btnUnsentPlan');
   if (!btn) return;
   const selected = getSelectedUnsentFicheNos().length;
   btn.disabled = selected === 0;
-  if (planBtn) planBtn.disabled = selected === 0;
   btn.textContent = selected > 0
     ? `ارسال ${selected} فیش انتخاب‌شده`
     : 'ارسال انتخاب‌شده‌ها';
@@ -1521,7 +1949,7 @@ function renderUnsentTable(items, meta = {}) {
 
   if (!unsentItems.length) {
     section.hidden = false;
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">موردی یافت نشد</td></tr>';
     if (countLabel) {
       countLabel.textContent = unsentSearchState.totalCount > 0
         ? `۰ مورد در این صفحه — ${unsentSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`
@@ -1540,14 +1968,11 @@ function renderUnsentTable(items, meta = {}) {
     <tr>
       <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
       <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
-      <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
-      <td>${formatNosaziCode(item.bnkAcntNo)}</td>
-      <td>${item.billId || '-'}</td>
-      <td>${item.paymentId || '-'}</td>
-      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${item.ficheNo}</td>
-      <td>${Number(item.payable || 0).toLocaleString()}</td>
+      <td class="num-cell col-unsent-bill">${formatBillPayDisplay(item.billId)}</td>
+      <td class="num-cell col-unsent-pay">${formatBillPayDisplay(item.paymentId)}</td>
+      <td class="num-cell col-unsent-fiche">${formatBillPayDisplay(item.ficheNo)}</td>
+      <td class="col-installment-cost">${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
+      <td class="col-unsent-fill" aria-hidden="true"></td>
     </tr>
   `;
   }).join('');
@@ -1600,7 +2025,10 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
   const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
   unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
-  if (clearSelection) selectedUnsentFicheNos.clear();
+  if (clearSelection) {
+    selectedUnsentFicheNos.clear();
+    unsentSourceKindByFicheNo.clear();
+  }
 
   const btn = $('btnUnsentSearch');
   const prevBtn = $('btnUnsentPrevPage');
@@ -1627,7 +2055,9 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
 
     const totalCount = data.totalCount ?? data.count ?? 0;
     const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
-    renderUnsentTable(data.items || [], {
+    const items = data.items || [];
+    syncUnsentSourceKindsFromItems(items, filters.ficheKind);
+    renderUnsentTable(items, {
       page: data.page ?? page,
       pageSize: data.pageSize ?? pageSize,
       totalCount,
@@ -1697,7 +2127,9 @@ async function loadAuthMode() {
 
 async function redirectToLogin() {
   const mode = await loadAuthMode();
-  const path = mode?.preferSsoLogin ? (mode.loginPath || '/auth/login') : '/login.html';
+  const path = mode?.allowHybridLocalLogin || !mode?.preferSsoLogin
+    ? '/login.html'
+    : (mode.loginPath || '/auth/login');
   window.location.href = path;
 }
 
@@ -1718,6 +2150,34 @@ function canAccessUnsent() {
   return isAdminUser() || !!currentUser?.canAccessUnsentFiches;
 }
 
+function hasAnyModulePermission() {
+  if (isAdminUser()) return true;
+  return !!(
+    currentUser?.canAccessUnsentFiches
+    || currentUser?.canAccessInstallment
+    || currentUser?.canAccessFicheDateChange
+    || currentUser?.canAccessBankInquiryConfirm
+    || currentUser?.canAccessShahkar
+    || currentUser?.canManageUsers
+  );
+}
+
+/** تب رایورز: ارسال جمعی، یا ارسال تکی وقتی هیچ ماژول دیگری تعریف نشده */
+function canAccessRayvarzModule() {
+  if (isAdminUser()) return true;
+  if (canAccessUnsent()) return true;
+  return !hasAnyModulePermission();
+}
+
+const MAIN_TAB_ACCESS_ORDER = [
+  { key: 'unsent', can: () => canAccessRayvarzModule() },
+  { key: 'installment', can: () => canAccessInstallment() },
+  { key: 'ficheDate', can: () => canAccessFicheDateChange() },
+  { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
+  { key: 'shahkar', can: () => canAccessShahkar() },
+  { key: 'users', can: () => canManageUsers() }
+];
+
 function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
 }
@@ -1730,6 +2190,10 @@ function canAccessBankInquiryConfirm() {
   return isAdminUser() || !!currentUser?.canAccessBankInquiryConfirm;
 }
 
+function canAccessShahkar() {
+  return isAdminUser() || !!currentUser?.canAccessShahkar;
+}
+
 function canManageUsers() {
   return isAdminUser() || !!currentUser?.canManageUsers;
 }
@@ -1739,6 +2203,9 @@ function isCenterUser() {
 }
 
 function applyPermissionUi() {
+  document.querySelectorAll('.perm-rayvarz').forEach((el) => {
+    el.hidden = !canAccessRayvarzModule();
+  });
   document.querySelectorAll('.perm-unsent').forEach((el) => {
     el.hidden = !canAccessUnsent();
   });
@@ -1751,6 +2218,9 @@ function applyPermissionUi() {
   document.querySelectorAll('.perm-bank-inquiry').forEach((el) => {
     el.hidden = !canAccessBankInquiryConfirm();
   });
+  document.querySelectorAll('.perm-shahkar').forEach((el) => {
+    el.hidden = !canAccessShahkar();
+  });
   document.querySelectorAll('.perm-users').forEach((el) => {
     el.hidden = !canManageUsers();
   });
@@ -1760,7 +2230,15 @@ function applyPermissionUi() {
 }
 
 function defaultMainTabKey() {
-  return 'unsent';
+  const first = MAIN_TAB_ACCESS_ORDER.find((t) => t.can());
+  return first?.key ?? 'unsent';
+}
+
+function readInitialMainTabKey() {
+  const tab = (new URLSearchParams(window.location.search).get('tab') || '').trim();
+  if (!tab) return defaultMainTabKey();
+  const match = MAIN_TAB_ACCESS_ORDER.find((t) => t.key === tab && t.can());
+  return match?.key ?? defaultMainTabKey();
 }
 
 function defaultRayvarzSendMode() {
@@ -1783,7 +2261,7 @@ function applyAuthUi() {
     $('userRoleBadge').className = `user-badge ${isAdminUser() ? 'badge-admin' : 'badge-user'}`;
   }
 
-  activateMainTab(defaultMainTabKey());
+  activateMainTab(readInitialMainTabKey());
   setRayvarzSendMode(defaultRayvarzSendMode());
 }
 
@@ -1802,6 +2280,7 @@ async function ensureAuthenticated() {
 function districtLabelFromValue(value) {
   if (!value) return '—';
   if (String(value) === '102') return 'شعبه مرکز (۱۰۲)';
+  if (String(value) === FAVA_DISTRICT_VALUE) return 'فاوا';
   const branch = config?.branches?.find((b) => branchIdToDistrict(String(b.id)) === String(value));
   return branch ? branch.name : value;
 }
@@ -1850,7 +2329,15 @@ async function loadGroupsTable() {
   const data = await parseJsonResponse(res);
   cachedGroups = data.items || [];
   renderGroupsTableBody();
-  renderUserGroupSelect();
+  const editUser = editingUserId
+    ? cachedUsers.find((u) => String(u.id) === String(editingUserId))
+    : null;
+  renderUserGroupsPickerMenu('newUserGroupsMenu', 'newUserGroupsTriggerLabel', []);
+  renderUserGroupsPickerMenu(
+    'editUserGroupsMenu',
+    'editUserGroupsTriggerLabel',
+    editUser?.groupIds || []
+  );
 }
 
 function renderGroupsTableBody() {
@@ -1867,6 +2354,7 @@ function renderGroupsTableBody() {
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessShahkar ? 'بله' : 'خیر'}</td>
       <td class="group-actions-cell">
         <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${g.id}">ذخیره</button>` : ''}
       </td>
@@ -1896,7 +2384,9 @@ function openGroupEdit(groupId) {
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
+  if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
+  updateUserGroupPermsTriggerLabel();
   renderGroupsTableBody();
 }
 
@@ -1907,7 +2397,9 @@ function resetGroupForm() {
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
+  if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
+  updateUserGroupPermsTriggerLabel();
   renderGroupsTableBody();
 }
 
@@ -1918,6 +2410,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
+    canAccessShahkar: !!$('newGroupShahkar')?.checked,
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
@@ -1925,7 +2418,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
   const url = isUpdate
     ? `/api/admin/groups/${editingGroupId}`
     : '/api/admin/groups';
-  const method = isUpdate ? 'PUT' : 'POST';
+  const method = 'POST';
   const res = await apiFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -1938,20 +2431,136 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
   await loadUsersTable();
 }
 
-function renderUserGroupSelect() {
-  const select = $('editUserGroupSelect');
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = '<option value="">— انتخاب گروه —</option>';
-  cachedGroups.forEach((g) => {
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = g.name;
-    select.appendChild(opt);
-  });
-  if (current && cachedGroups.some((g) => String(g.id) === String(current))) {
-    select.value = current;
+function updatePickerTriggerLabel(menuEl, labelEl, fallbackText) {
+  if (!menuEl || !labelEl) return;
+  const labels = Array.from(menuEl.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((el) => (el.dataset.groupName || el.dataset.permLabel || '').trim())
+    .filter(Boolean);
+  if (labels.length === 0) {
+    labelEl.textContent = fallbackText;
+    return;
   }
+  if (labels.length === 1) {
+    labelEl.textContent = labels[0];
+    return;
+  }
+  labelEl.textContent = `${labels.length.toLocaleString('fa-IR')} مورد انتخاب‌شده`;
+}
+
+function renderUserGroupsPickerMenu(menuId, labelId, selectedIds = []) {
+  const menu = $(menuId);
+  const labelEl = $(labelId);
+  if (!menu) return;
+  menu.innerHTML = '';
+  cachedGroups.forEach((g) => {
+    const row = document.createElement('label');
+    row.className = 'fiche-date-ms-option user-group-perm-option';
+    row.setAttribute('role', 'option');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'user-group-membership-check';
+    input.value = g.id;
+    input.dataset.groupName = g.name;
+    input.checked = (selectedIds || []).some((id) => String(id) === String(g.id));
+    input.addEventListener('change', () => updatePickerTriggerLabel(menu, labelEl, 'انتخاب گروه…'));
+    const text = document.createElement('span');
+    text.className = 'fiche-date-ms-option-text';
+    text.textContent = g.name;
+    row.appendChild(input);
+    row.appendChild(text);
+    menu.appendChild(row);
+  });
+  updatePickerTriggerLabel(menu, labelEl, 'انتخاب گروه…');
+}
+
+function readSelectedGroupIdsFromMenu(menuId) {
+  const menu = $(menuId);
+  if (!menu) return [];
+  return Array.from(menu.querySelectorAll('.user-group-membership-check:checked')).map((el) => el.value);
+}
+
+function setupPickerDropdown({ wrapId, triggerId, menuId, labelId, fallbackLabel }) {
+  const wrap = $(wrapId);
+  const trigger = $(triggerId);
+  const menu = $(menuId);
+  const labelEl = $(labelId);
+  if (!wrap || !trigger || !menu || trigger.dataset.bound === '1') return;
+  trigger.dataset.bound = '1';
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  menu.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    input.addEventListener('change', () => updatePickerTriggerLabel(menu, labelEl, fallbackLabel));
+  });
+  document.addEventListener('click', (e) => {
+    if (wrap.contains(e.target)) return;
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function readDirectPermissionsFromForm(prefix) {
+  return {
+    canAccessUnsentFiches: !!$(`${prefix}Unsent`)?.checked,
+    canAccessInstallment: !!$(`${prefix}Installment`)?.checked,
+    canAccessFicheDateChange: !!$(`${prefix}FicheDate`)?.checked,
+    canAccessBankInquiryConfirm: !!$(`${prefix}BankInquiry`)?.checked,
+    canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
+    canManageUsers: !!$(`${prefix}Users`)?.checked
+  };
+}
+
+function setDirectPermissionsOnForm(prefix, perms) {
+  const p = perms || {};
+  if ($(`${prefix}Unsent`)) $(`${prefix}Unsent`).checked = !!p.canAccessUnsentFiches;
+  if ($(`${prefix}Installment`)) $(`${prefix}Installment`).checked = !!p.canAccessInstallment;
+  if ($(`${prefix}FicheDate`)) $(`${prefix}FicheDate`).checked = !!p.canAccessFicheDateChange;
+  if ($(`${prefix}BankInquiry`)) $(`${prefix}BankInquiry`).checked = !!p.canAccessBankInquiryConfirm;
+  if ($(`${prefix}Shahkar`)) $(`${prefix}Shahkar`).checked = !!p.canAccessShahkar;
+  if ($(`${prefix}Users`)) $(`${prefix}Users`).checked = !!p.canManageUsers;
+  const menu = $(`${prefix}PermsMenu`);
+  const labelEl = $(`${prefix}PermsTriggerLabel`);
+  if (menu && labelEl) updatePickerTriggerLabel(menu, labelEl, 'انتخاب دسترسی…');
+}
+
+function setupUserManagementPickers() {
+  setupPickerDropdown({
+    wrapId: 'newUserGroupsMulti',
+    triggerId: 'newUserGroupsTrigger',
+    menuId: 'newUserGroupsMenu',
+    labelId: 'newUserGroupsTriggerLabel',
+    fallbackLabel: 'انتخاب گروه…'
+  });
+  setupPickerDropdown({
+    wrapId: 'editUserGroupsMulti',
+    triggerId: 'editUserGroupsTrigger',
+    menuId: 'editUserGroupsMenu',
+    labelId: 'editUserGroupsTriggerLabel',
+    fallbackLabel: 'انتخاب گروه…'
+  });
+  setupPickerDropdown({
+    wrapId: 'newUserDirectPermsMulti',
+    triggerId: 'newUserDirectPermsTrigger',
+    menuId: 'newUserDirectPermsMenu',
+    labelId: 'newUserDirectPermsTriggerLabel',
+    fallbackLabel: 'انتخاب دسترسی…'
+  });
+  setupPickerDropdown({
+    wrapId: 'editUserDirectPermsMulti',
+    triggerId: 'editUserDirectPermsTrigger',
+    menuId: 'editUserDirectPermsMenu',
+    labelId: 'editUserDirectPermsTriggerLabel',
+    fallbackLabel: 'انتخاب دسترسی…'
+  });
+}
+
+function resolveNewUserDistrict() {
+  const raw = ($('newUserDistrict')?.value || '').trim();
+  if (raw === FAVA_DISTRICT_VALUE) return FAVA_DISTRICT_VALUE;
+  return branchIdToDistrict(raw);
 }
 
 function openUserEdit(userId) {
@@ -1967,11 +2576,8 @@ function openUserEdit(userId) {
   if ($('editUserIsAdmin')) $('editUserIsAdmin').checked = !!user.isAdmin;
   if ($('editUserDomain')) $('editUserDomain').value = user.domain || '';
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  renderUserGroupSelect();
-  const primaryGroupId = (user.groupIds || [])[0];
-  if ($('editUserGroupSelect')) {
-    $('editUserGroupSelect').value = primaryGroupId ? String(primaryGroupId) : '';
-  }
+  renderUserGroupsPickerMenu('editUserGroupsMenu', 'editUserGroupsTriggerLabel', user.groupIds || []);
+  setDirectPermissionsOnForm('editUserDirect', user.directPermissions);
 }
 
 function closeUserEdit() {
@@ -1982,16 +2588,15 @@ function closeUserEdit() {
 
 async function saveUserEdit() {
   if (!editingUserId) return;
-  const groupId = ($('editUserGroupSelect')?.value || '').trim();
-  const groupIds = groupId ? [groupId] : [];
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
     domain: ($('editUserDomain')?.value || '').trim(),
-    groupIds
+    groupIds: readSelectedGroupIdsFromMenu('editUserGroupsMenu'),
+    directPermissions: readDirectPermissionsFromForm('editUserDirect')
   };
   const res = await apiFetch(`/api/admin/users/${editingUserId}`, {
-    method: 'PUT',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
@@ -2027,8 +2632,10 @@ async function createUserFromForm() {
     nationalId,
     domain,
     position: ($('newUserPosition')?.value || '').trim(),
-    district: branchIdToDistrict($('newUserDistrict')?.value || ''),
-    isAdmin: !!$('newUserIsAdmin')?.checked
+    district: resolveNewUserDistrict(),
+    isAdmin: !!$('newUserIsAdmin')?.checked,
+    groupIds: readSelectedGroupIdsFromMenu('newUserGroupsMenu'),
+    directPermissions: readDirectPermissionsFromForm('newUserDirect')
   };
   if (!payload.firstName || !payload.lastName || !payload.nationalId || !payload.password) {
     return alert('نام، نام خانوادگی، کد ملی و رمز عبور الزامی است');
@@ -2316,6 +2923,8 @@ async function init() {
   }
   window.addEventListener('load', initDatePickers);
   if (canManageUsers()) {
+    setupUserGroupPermsDropdown();
+    setupUserManagementPickers();
     await loadGroupsTable();
     await loadUsersTable();
   }
@@ -2466,6 +3075,90 @@ function setupEventHandlers() {
     });
   }
 
+  let unsentExcelBusy = false;
+  $('unsentExcelFile')?.addEventListener('change', async () => {
+    const input = $('unsentExcelFile');
+    const excelBtn = $('btnUnsentExcel');
+    const box = $('unsentResultBox');
+    const file = input?.files?.[0];
+
+    if (!file) {
+      setUnsentExcelStatus('فایل اکسل انتخاب نشده', false);
+      return;
+    }
+    if (unsentExcelBusy) return;
+
+    unsentExcelBusy = true;
+    if (excelBtn) excelBtn.disabled = true;
+    setUnsentExcelStatus('فایل در حال بررسی است…', true);
+    if (box) box.hidden = true;
+
+    try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const pairs = await parseUnsentExcelFile(file);
+      setUnsentExcelStatus('فایل در حال بررسی است…', true);
+      await new Promise((r) => requestAnimationFrame(r));
+
+      const res = await apiFetch('/api/unsent/lookup-by-bill-pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pairs })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+
+      const { added, duplicate } = appendUnsentItems(data.items || [], { autoSelect: true });
+      const conflictLines = (data.conflicts || []).map((c) =>
+        toPersianDigits(`شناسه قبض: ${c.billId || '-'} | شناسه پرداخت: ${c.paymentId || '-'} — ${c.reason || ''}`)
+      );
+      const missLines = (data.misses || [])
+        .map((m) => toPersianDigits((m.reason || '').trim()))
+        .filter(Boolean);
+      const conflictCount = data.conflictCount ?? conflictLines.length;
+
+      if (box) {
+        const showLog = conflictLines.length > 0 || missLines.length > 0;
+        box.hidden = !showLog;
+        if (showLog) {
+          box.className = 'result-log';
+          box.textContent = [
+            ...(conflictLines.length ? ['--- تعارض درآمد و نوسازی (به گرید اضافه نشد) ---', ...conflictLines, ''] : []),
+            ...missLines
+          ].join('\n');
+        } else {
+          box.textContent = '';
+        }
+      }
+
+      setUnsentExcelStatus(
+        `${file.name} — افزوده: ${added.toLocaleString('fa-IR')} | تکراری: ${duplicate.toLocaleString('fa-IR')} | تعارض: ${conflictCount.toLocaleString('fa-IR')} | یافت‌نشده: ${(data.notFound || 0).toLocaleString('fa-IR')}`,
+        false
+      );
+
+      if (added > 0 && missLines.length === 0 && conflictCount === 0) {
+        showAppSuccess(`${added} فیش به گرید اضافه شد`);
+      } else if (added > 0) {
+        showAppWarning(`${added} فیش اضافه شد؛ ${missLines.length + conflictCount} ردیف قابل افزودن نبود`);
+      } else if (conflictCount > 0 || missLines.length > 0) {
+        showAppWarning('هیچ فیشی به گرید اضافه نشد');
+      } else {
+        showAppInfo('فیش‌های انتخاب‌شده قبلاً در گرید بودند');
+      }
+    } catch (e) {
+      setUnsentExcelStatus(e.message, false);
+      if (box) {
+        box.hidden = false;
+        box.className = 'result-log';
+        box.textContent = e.message;
+      }
+      showAppError(e.message);
+    } finally {
+      unsentExcelBusy = false;
+      if (input) input.value = '';
+      if (excelBtn) excelBtn.disabled = false;
+    }
+  });
+
   bindClick('btnUnsentSearch', async () => {
     await fetchUnsentResults(1, { clearSelection: true });
   });
@@ -2488,85 +3181,32 @@ function setupEventHandlers() {
     });
   }
 
-  bindClick('btnUnsentPlan', async () => {
-    const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
-
-    const btn = $('btnUnsentPlan');
-    btn.disabled = true;
-    const box = $('unsentResultBox');
-    box.hidden = false;
-    box.textContent = 'در حال بررسی مسیر ارسال هر فیش…';
-
-    try {
-      const res = await apiFetch('/api/unsent/plan-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: $('unsentFicheKind').value,
-          ficheNos: selected,
-          resetStatus: true
-        })
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-
-      const lines = (data.items || []).map((p) =>
-        `${p.ficheNo} → ${p.sendPath}${p.canSend ? ' ✓' : ' ✗'} | ${p.detail || ''}${p.blockReason ? ' — ' + p.blockReason : ''}${p.tahatorPairFicheNo ? ' | جفت: ' + p.tahatorPairFicheNo : ''}`
-      );
-      box.textContent = [
-        '=== برنامه ارسال دسته‌ای (بدون ارسال واقعی) ===',
-        'برای هر فیش: Income=درآمدی | Tahator=تهاتر ۱۵۷+۱۵۸ | Duty=نوسازی/صنفی',
-        '',
-        ...lines
-      ].join('\n');
-    } catch (e) {
-      box.textContent = e.message;
-      showAppError(e.message);
-    } finally {
-      updateUnsentSendButton();
-    }
-  });
-
   bindClick('btnUnsentSend', async () => {
-    const selected = getSelectedUnsentFicheNos();
-    if (!selected.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
+    const targets = getSelectedUnsentBatchTargets();
+    if (!targets.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const dry = config?.dryRun;
-    const kind = $('unsentFicheKind').value;
-    const kindLabel = kind === 'Duty' ? 'نوسازی/صنفی' : 'شهرسازی';
     showAppInfo(dry
-      ? `در حال ارسال آزمایشی ${selected.length} فیش ${kindLabel}…`
-      : `در حال ارسال ${selected.length} فیش ${kindLabel} به رایورز…`);
+      ? `در حال ارسال آزمایشی ${targets.length} فیش انتخاب‌شده…`
+      : `در حال ارسال ${targets.length} فیش انتخاب‌شده به رایورز…`);
 
     const btn = $('btnUnsentSend');
     btn.disabled = true;
     const box = $('unsentResultBox');
     box.hidden = false;
-    box.textContent = `در حال ارسال ${selected.length} فیش…\n\nصبر کنید…`;
+    box.className = 'result-log';
+    box.textContent = `در حال ارسال ${targets.length} فیش…`;
 
     try {
       const res = await apiFetch('/api/unsent/send-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ficheKind: kind,
-          ficheNos: selected
-        })
+        body: JSON.stringify({ targets })
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      const lines = (data.results || []).map((r) =>
-        `${r.ficheNo} [${r.sendPath || '-'}]: ${r.skipped ? 'SKIP' : (r.success ? 'OK' : 'FAIL')} — ${r.message || ''}${r.docNotSentError ? ' | DocNotSent: ' + r.docNotSentError : ''}`
-      );
-      box.textContent = [
-        '=== نتیجه ارسال دسته‌ای ===',
-        `کل: ${data.total} | موفق: ${data.succeeded} | رد: ${data.skipped} | ناموفق: ${data.failed}`,
-        `DryRun: ${data.dryRun}`,
-        '',
-        ...lines
-      ].join('\n');
+      box.textContent = formatUnsentBatchSendResult(data);
 
       if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
       else if (data.failed > 0) {
@@ -2778,6 +3418,69 @@ function setupEventHandlers() {
     syncBankInquiryConfirmButton();
   });
 
+  bindClick('btnShahkarSearch', async () => {
+    await fetchShahkarResults({ clearSelection: true });
+  });
+
+  $('shahkarSelectAll')?.addEventListener('change', (e) => {
+    const tbody = $('shahkarTable')?.querySelector('tbody');
+    const selectAll = e.target;
+    if (!tbody || !selectAll) return;
+    shahkarItems.forEach((item) => {
+      setShahkarRowSelected(selectedShahkarUserNames, shahkarSelectedItems, item, selectAll.checked);
+    });
+    tbody.querySelectorAll('.shahkar-row-check').forEach((cb) => {
+      cb.checked = selectAll.checked;
+    });
+    updateShahkarCountLabel();
+    syncShahkarConfirmButton();
+  });
+
+  bindClick('btnShahkarConfirm', async () => {
+    const userNames = Array.from(selectedShahkarUserNames);
+    if (userNames.length === 0) return showAppWarning('حداقل یک کاربر انتخاب کنید');
+
+    const dry = config?.shahkar?.dryRun ?? config?.dryRun ?? false;
+    const warn = dry
+      ? `DryRun فعال — ShahkarOk برای ${userNames.length} کاربر فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `ShahkarOk = 1 برای ${userNames.length} کاربر ثبت شود؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnShahkarConfirm');
+    const box = $('shahkarResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال ثبت…';
+    }
+    try {
+      const res = await apiFetch('/api/shahkar/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userNames })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      const lines = (data.results || []).map((r) => `${r.userName}: ${r.success ? 'OK' : 'خطا'} — ${r.message || ''}`);
+      if (box) box.textContent = [data.message || '', ...lines].filter(Boolean).join('\n');
+      if (data.dryRun) {
+        showAppInfo('شاهکار — DryRun؛ تغییری در دیتابیس اعمال نشد.');
+      } else if (data.success && (data.updated || 0) > 0) {
+        showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
+        clearGridSelection(selectedShahkarUserNames, shahkarSelectedItems);
+        await fetchShahkarResults();
+      } else {
+        showAppError(data.message || 'به‌روزرسانی ناموفق بود');
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+      syncShahkarConfirmButton();
+    }
+  });
+
   bindClick('btnBankInquiryConfirm', async () => {
     const payload = getBankInquiryConfirmPayload();
     const validationError = validateBankInquiryConfirmPayload(payload);
@@ -2834,7 +3537,8 @@ function setupAuthAndAdminHandlers() {
     } catch {
       // ignore
     }
-    redirectToLogin();
+    // نه /auth/login — نشست SSO فعال کاربر را بلافاصله دوباره وارد می‌کند
+    window.location.href = '/login.html';
   });
 
   bindClick('btnCreateUser', createUserFromForm);

@@ -77,6 +77,7 @@ public static class FicheDateChangeHelper
         || !string.IsNullOrWhiteSpace(req.TemporaryFromDate)
         || !string.IsNullOrWhiteSpace(req.TemporaryToDate)
         || !string.IsNullOrWhiteSpace(req.AccountGroupTitle)
+        || req.AccountGroupTitles is { Count: > 0 }
         || !string.IsNullOrWhiteSpace(req.IdentifierValue)
         || req.EumFicheStatuses is { Count: > 0 };
 
