@@ -52,8 +52,28 @@ const MODULES = [
 let currentUser = null;
 let authMode = null;
 
+function readIsAdminFlag(user) {
+  if (!user) return false;
+  const raw = user.isAdmin ?? user.IsAdmin;
+  return raw === true || raw === 1 || raw === '1' || raw === 'true';
+}
+
+function normalizeAuthSession(user) {
+  if (!user) return user;
+  if (readIsAdminFlag(user)) {
+    user.isAdmin = true;
+    user.canAccessUnsentFiches = true;
+    user.canAccessInstallment = true;
+    user.canAccessFicheDateChange = true;
+    user.canAccessBankInquiryConfirm = true;
+    user.canAccessShahkar = true;
+    user.canManageUsers = true;
+  }
+  return user;
+}
+
 function isAdminUser(user) {
-  return !!user?.isAdmin;
+  return readIsAdminFlag(user ?? currentUser);
 }
 
 function hasAnyModulePermission(user) {
@@ -169,7 +189,7 @@ async function ensureAuthenticated() {
     await redirectToLogin();
     return false;
   }
-  currentUser = await res.json();
+  currentUser = normalizeAuthSession(await res.json());
   document.body.classList.add('hub-authenticated');
   applyUserHeader(currentUser);
   renderModuleCards(currentUser);
