@@ -137,6 +137,21 @@ public class RuleSendGateTests
         Assert.Equal(3, store.Reads);
     }
 
+    [Theory]
+    [InlineData("/api/fiche/send")]
+    [InlineData("/api/tahator/send")]
+    [InlineData("/api/unsent/send-batch")]
+    public void SendEndpoints_CheckGate_BeforeAnyOtherValidation(string route)
+    {
+        var program = File.ReadAllText(Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "RayvarzResend.Web", "Program.cs")));
+        var start = program.IndexOf($"app.MapPost(\"{route}\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, route);
+        var bodyStart = program.IndexOf("=>\n{\n", start, StringComparison.Ordinal) + "=>\n{\n".Length;
+        var firstStatement = program[bodyStart..program.IndexOf('\n', bodyStart)].Trim();
+        Assert.Equal("if (await sendGate.IsBlockedAsync(ct))", firstStatement);
+    }
+
     private static RuleEngineSyncOptions Options(Action<RuleEngineSyncOptions>? configure = null)
     {
         var options = new RuleEngineSyncOptions { Enabled = true, SendGateEnabled = true, SendGateCacheSeconds = 0 };

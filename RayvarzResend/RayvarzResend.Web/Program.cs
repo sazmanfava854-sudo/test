@@ -1052,8 +1052,13 @@ app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResend
     }
 }).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, HttpContext http, CancellationToken ct) =>
+static IResult RuleSendGateBlocked() =>
+    Results.Json(new { error = RuleSendGate.BlockedMessage }, statusCode: 409);
+
+app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
 {
+    if (await sendGate.IsBlockedAsync(ct))
+        return RuleSendGateBlocked();
     if (string.IsNullOrWhiteSpace(req?.FicheNo))
         return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
     try
@@ -1078,8 +1083,10 @@ app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendS
     }
 }).RequireAuthorization(authenticated);
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
 {
+    if (await sendGate.IsBlockedAsync(ct))
+        return RuleSendGateBlocked();
     if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
         return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
 
@@ -1165,9 +1172,12 @@ app.MapPost("/api/unsent/send-batch", async (
     UnsentBatchSendRequest? req,
     UnsentFicheService unsent,
     AppPermissionService perms,
+    RuleSendGate sendGate,
     HttpContext http,
     CancellationToken ct) =>
 {
+    if (await sendGate.IsBlockedAsync(ct))
+        return RuleSendGateBlocked();
     var denied = await DenyUnlessUnsent(http, perms, ct);
     if (denied != null) return denied;
     if (req == null || ((req.Targets == null || req.Targets.Count == 0) && (req.FicheNos == null || req.FicheNos.Count == 0)))
