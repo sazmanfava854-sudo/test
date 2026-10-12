@@ -7,6 +7,7 @@ using Microsoft.Data.SqlClient;
 using RayvarzResend.Web;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Sync;
 using RayvarzResend.Web.Services;
 
 WebApplicationBuilder builder;
@@ -38,6 +39,7 @@ builder.Services.PostConfigure<ShimasAuthOptions>(o =>
     ShimasAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.Configure<ShahkarOptions>(builder.Configuration.GetSection(ShahkarOptions.SectionName));
+builder.Services.Configure<RuleEngineSyncOptions>(builder.Configuration.GetSection(RuleEngineSyncOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>
     {
@@ -108,6 +110,11 @@ builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 builder.Services.AddSingleton<ShahkarService>();
+builder.Services.AddSingleton<RuleEngineStateRepository>();
+builder.Services.AddSingleton<RuleHistoryChecker>();
+builder.Services.AddSingleton<RuleGoldenDryRunService>();
+builder.Services.AddSingleton<RuleVersionManager>();
+builder.Services.AddHostedService<RuleEngineSyncHostedService>();
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -940,6 +947,30 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
     {
         return Results.Json(new { error = ex.Message }, statusCode: 500);
     }
+}).RequireAuthorization(adminOnly);
+
+app.MapGet("/api/rule/sync/status", async (RuleEngineStateRepository state, RuleVersionManager sync, IConfiguration config, CancellationToken ct) =>
+{
+    var nid = config.GetValue($"{RuleEngineSyncOptions.SectionName}:NidMember", 1388);
+    var row = state.IsConfigured ? await state.GetStateAsync(nid, ct) : null;
+    var open = state.IsConfigured ? await state.GetOpenCandidateAsync(nid, ct) : null;
+    return Results.Ok(new
+    {
+        enabled = config.GetValue($"{RuleEngineSyncOptions.SectionName}:Enabled", false),
+        configured = state.IsConfigured,
+        nidMember = nid,
+        state = row,
+        openCandidate = open,
+        pollIntervalMinutes = config.GetValue($"{RuleEngineSyncOptions.SectionName}:PollIntervalMinutes", 15),
+        stabilityHours = config.GetValue($"{RuleEngineSyncOptions.SectionName}:StabilityHours", 72),
+        autoPromoteDynamic = config.GetValue($"{RuleEngineSyncOptions.SectionName}:AutoPromoteDynamic", false)
+    });
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/sync/run", async (RuleVersionManager sync, CancellationToken ct) =>
+{
+    var result = await sync.RunCycleAsync(ct);
+    return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
 }).RequireAuthorization(adminOnly);
 
 app.MapGet("/api/rule/bridge/health", (IConfiguration config) => Results.Ok(new

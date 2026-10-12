@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.RuleEngine;
 
@@ -65,6 +66,95 @@ public sealed class MemberRuleRepository
                 : reader.GetDateTime(reader.GetOrdinal("VersionDateTime")),
             Source = "DbRuleEngein"
         };
+    }
+
+    public async Task<MemberHistoryHead?> LoadLatestHistoryAsync(int nidMember, CancellationToken ct = default)
+    {
+        var cs = _config.GetConnectionString("RuleEngine") ?? _config["RuleEngine:ConnectionString"];
+        if (string.IsNullOrWhiteSpace(cs))
+            return null;
+
+        const string sql = """
+            SELECT TOP 1 NidHistory, NidMember, XmlBody, Body, ModifyDate, ModifyTime, Modifyer, ModifyDesc
+            FROM dbo.MemberHistory
+            WHERE NidMember = @nid
+            ORDER BY NidHistory DESC
+            """;
+
+        try
+        {
+            await using var conn = new SqlConnection(cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@nid", nidMember);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                return null;
+
+            var xmlBody = ReadOptionalString(reader, "XmlBody");
+            if (string.IsNullOrWhiteSpace(xmlBody))
+                xmlBody = ReadOptionalString(reader, "Body");
+
+            return new MemberHistoryHead
+            {
+                NidHistory = Convert.ToInt64(reader.GetValue(reader.GetOrdinal("NidHistory"))),
+                NidMember = reader.GetInt32(reader.GetOrdinal("NidMember")),
+                XmlBody = xmlBody ?? "",
+                ModifyUtc = TryReadModifyUtc(reader),
+                Modifyer = ReadOptionalString(reader, "Modifyer"),
+                ModifyDesc = ReadOptionalString(reader, "ModifyDesc")
+            };
+        }
+        catch (SqlException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadOptionalString(SqlDataReader reader, string column)
+    {
+        try
+        {
+            var ord = reader.GetOrdinal(column);
+            return reader.IsDBNull(ord) ? null : reader.GetString(ord);
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static DateTime? TryReadModifyUtc(SqlDataReader reader)
+    {
+        try
+        {
+            var dateOrd = reader.GetOrdinal("ModifyDate");
+            if (reader.IsDBNull(dateOrd))
+                return null;
+            var date = reader.GetDateTime(dateOrd);
+            try
+            {
+                var timeOrd = reader.GetOrdinal("ModifyTime");
+                if (!reader.IsDBNull(timeOrd))
+                {
+                    var timeVal = reader.GetValue(timeOrd);
+                    if (timeVal is TimeSpan ts)
+                        return date.Date.Add(ts);
+                    if (timeVal is DateTime dt)
+                        return date.Date.Add(dt.TimeOfDay);
+                }
+            }
+            catch (IndexOutOfRangeException)
+            {
+                // ignore missing ModifyTime
+            }
+
+            return date;
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return null;
+        }
     }
 }
 
