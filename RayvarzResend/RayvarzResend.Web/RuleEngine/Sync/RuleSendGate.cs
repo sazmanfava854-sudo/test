@@ -21,7 +21,7 @@ public sealed class RuleSendGateBlockedException : InvalidOperationException
 /// </summary>
 public sealed class RuleSendGate
 {
-    public const string BlockedMessage = "نیاز به به روز رسانی هست";
+    public const string BlockedMessage = "تغییر ایجاد شده";
 
     private readonly IRuleSendGateStore _store;
     private readonly RuleEngineSyncOptions _options;

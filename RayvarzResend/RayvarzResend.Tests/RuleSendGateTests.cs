@@ -10,10 +10,10 @@ public class RuleSendGateTests
     private const string Changed = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     [Fact]
-    public void BlockedMessage_IsExactUserText()
+    public void BlockedMessage_IsShortUserText()
     {
-        Assert.Equal("نیاز به به روز رسانی هست", RuleSendGate.BlockedMessage);
-        Assert.Equal("نیاز به به روز رسانی هست", new RuleSendGateBlockedException().Message);
+        Assert.Equal("تغییر ایجاد شده", RuleSendGate.BlockedMessage);
+        Assert.Equal("تغییر ایجاد شده", new RuleSendGateBlockedException().Message);
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class RuleSendGateTests
         var gate = CreateGate(new FakeStore { Gate = "Blocked" });
         Assert.True(await gate.IsBlockedAsync());
         var ex = await Assert.ThrowsAsync<RuleSendGateBlockedException>(() => gate.EnsureOpenAsync());
-        Assert.Equal("نیاز به به روز رسانی هست", ex.Message);
+        Assert.Equal("تغییر ایجاد شده", ex.Message);
     }
 
     [Theory]
