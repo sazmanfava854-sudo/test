@@ -1070,8 +1070,6 @@ app.MapPost("/api/unsent/search", async (
         return Results.BadRequest(new { error = "درخواست جستجو خالی است" });
     if (req.HasPartialDateRange)
         return Results.BadRequest(new { error = "هر دو تاریخ از و تا را وارد کنید" });
-    if (!req.HasDateRange)
-        return Results.BadRequest(new { error = "بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است" });
     if (!req.HasAnyFilter)
         return Results.BadRequest(new { error = "حداقل یک فیلتر (تاریخ، فیش، قبض، پرداخت، منطقه) لازم است" });
     try

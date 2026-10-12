@@ -218,7 +218,9 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=94", html);
+        Assert.Contains("js/app.js?v=95", html);
+        Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
+        Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);
         Assert.Contains("col-unsent-fill", html);
         Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);
@@ -239,6 +241,10 @@ public class DeliveryReleaseTests
         Assert.Contains("<th>شناسه پرداخت</th>", html);
 
         var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", program);
+        Assert.Contains("حداقل یک فیلتر (تاریخ، فیش، قبض، پرداخت، منطقه) لازم است", program);
+        Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", js);
+        Assert.Contains("حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", program);
         Assert.Contains("EpayFichePresenceChecker", program);
 
