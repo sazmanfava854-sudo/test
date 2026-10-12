@@ -964,6 +964,8 @@ app.MapGet("/api/rule/sync/status", async (RuleEngineStateRepository state, Rule
         nidMember = nid,
         sendGateActive = sendGate.IsActive,
         sendBlocked = await sendGate.IsBlockedAsync(ct),
+        sendBlockedUserMessage = RuleSendGate.UserBlockedMessage,
+        sendBlockedAdminMessage = RuleSendGate.AdminBlockedMessage,
         state = row,
         openCandidate = open,
         pollIntervalMinutes = config.GetValue($"{RuleEngineSyncOptions.SectionName}:PollIntervalMinutes", 15),
@@ -1053,7 +1055,7 @@ app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResend
 }).RequireAuthorization(adminOnly);
 
 static IResult RuleSendGateBlocked() =>
-    Results.Json(new { error = RuleSendGate.BlockedMessage }, statusCode: 409);
+    Results.Json(new { error = RuleSendGate.UserBlockedMessage }, statusCode: 409);
 
 app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
 {

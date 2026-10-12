@@ -200,7 +200,7 @@ function renderRuleGate(data) {
   panel.classList.toggle('is-blocked', blocked);
   panel.classList.toggle('is-open', !blocked);
   status.textContent = blocked
-    ? 'ارسال به رایورز بسته است — تغییر قانون شناسایی شده؛ پس از اعمال در کد، تأیید کنید.'
+    ? (data.sendBlockedAdminMessage || 'نیاز به به روز رسانی هست')
     : 'ارسال به رایورز باز است.';
   approve.hidden = !blocked;
 

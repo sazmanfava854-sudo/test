@@ -10,7 +10,7 @@ public interface IRuleSendGateStore
 
 public sealed class RuleSendGateBlockedException : InvalidOperationException
 {
-    public RuleSendGateBlockedException() : base(RuleSendGate.BlockedMessage)
+    public RuleSendGateBlockedException() : base(RuleSendGate.UserBlockedMessage)
     {
     }
 }
@@ -21,7 +21,11 @@ public sealed class RuleSendGateBlockedException : InvalidOperationException
 /// </summary>
 public sealed class RuleSendGate
 {
-    public const string BlockedMessage = "تغییر ایجاد شده";
+    /// <summary>پیام خطا برای کاربر غیرادمین هنگام بسته بودن SendGate.</summary>
+    public const string UserBlockedMessage = "باید برنامه به‌روزرسانی شود";
+
+    /// <summary>پیام کارتابل مدیر در /management/.</summary>
+    public const string AdminBlockedMessage = "نیاز به به روز رسانی هست";
 
     private readonly IRuleSendGateStore _store;
     private readonly RuleEngineSyncOptions _options;

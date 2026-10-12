@@ -58,9 +58,8 @@
 
 وقتی `Blocked` است، `/api/fiche/send`، `/api/tahator/send` و `/api/unsent/send-batch` با HTTP 409 و فقط این پیام رد می‌شوند:
 
-```
-تغییر ایجاد شده
-```
+- کاربر عادی (API ارسال): `باید برنامه به‌روزرسانی شود`
+- کارتابل مدیر (`/management/`): `نیاز به به روز رسانی هست`
 
 روال مدیر: لاگ هشدار `sending to Rayvarz is BLOCKED` یا کارت «به‌روزرسانی قوانین» در `/management/` → اعمال تغییر در کد و deploy → دکمه «تأیید به‌روزرسانی و باز کردن ارسال». (`POST /api/rule/send-gate/block` بستن دستی.)
 
