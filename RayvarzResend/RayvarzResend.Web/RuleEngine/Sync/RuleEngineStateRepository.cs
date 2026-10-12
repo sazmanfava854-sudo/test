@@ -6,13 +6,15 @@ namespace RayvarzResend.Web.RuleEngine.Sync;
 public sealed class RuleEngineStateRepository
 {
     private readonly string? _cs;
+    private readonly RuleEngineSyncOptions _options;
     private readonly ILogger<RuleEngineStateRepository> _logger;
-    private bool _schemaEnsured;
+    private bool _schemaVerified;
 
     public RuleEngineStateRepository(IConfiguration config, IOptions<RuleEngineSyncOptions> options, ILogger<RuleEngineStateRepository> logger)
     {
         _logger = logger;
-        var name = options.Value.StateConnectionStringName;
+        _options = options.Value;
+        var name = _options.StateConnectionStringName;
         _cs = config.GetConnectionString(name)
             ?? config.GetConnectionString("AppAuth")
             ?? config.GetConnectionString("RayvarzRuleEngine");
@@ -22,89 +24,23 @@ public sealed class RuleEngineStateRepository
 
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
-        if (!IsConfigured || _schemaEnsured)
+        if (!IsConfigured || _schemaVerified)
             return;
 
-        const string sql = """
-            IF OBJECT_ID(N'dbo.RuleSyncState', N'U') IS NULL
-            BEGIN
-                CREATE TABLE dbo.RuleSyncState (
-                    NidMember INT NOT NULL CONSTRAINT PK_RuleSyncState PRIMARY KEY,
-                    ActiveEngine NVARCHAR(32) NOT NULL CONSTRAINT DF_RuleSyncState_Engine DEFAULT (N'Legacy'),
-                    ActiveXmlBodyHash NVARCHAR(64) NOT NULL CONSTRAINT DF_RuleSyncState_Hash DEFAULT (N''),
-                    ActiveMemberVersion INT NOT NULL CONSTRAINT DF_RuleSyncState_Version DEFAULT (0),
-                    LastSeenNidHistory BIGINT NULL,
-                    LastHistoryModifyUtc DATETIME2(3) NULL,
-                    LastMemberXmlBodyHash NVARCHAR(64) NOT NULL CONSTRAINT DF_RuleSyncState_MemberHash DEFAULT (N''),
-                    LastCheckAtUtc DATETIME2(3) NULL,
-                    LastChangeDetectedAtUtc DATETIME2(3) NULL,
-                    LastPromotedAtUtc DATETIME2(3) NULL,
-                    LastError NVARCHAR(2000) NULL,
-                    UpdatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_RuleSyncState_Updated DEFAULT (SYSUTCDATETIME())
-                );
-            END
-
-            IF OBJECT_ID(N'dbo.RuleCandidate', N'U') IS NULL
-            BEGIN
-                CREATE TABLE dbo.RuleCandidate (
-                    Id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RuleCandidate PRIMARY KEY,
-                    NidMember INT NOT NULL,
-                    NidHistory BIGINT NULL,
-                    XmlBodyHash NVARCHAR(64) NOT NULL,
-                    MemberVersion INT NOT NULL CONSTRAINT DF_RuleCandidate_Version DEFAULT (0),
-                    State NVARCHAR(32) NOT NULL,
-                    DetectedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_RuleCandidate_Detected DEFAULT (SYSUTCDATETIME()),
-                    StableSinceUtc DATETIME2(3) NULL,
-                    ParseOk BIT NOT NULL CONSTRAINT DF_RuleCandidate_Parse DEFAULT (0),
-                    ValidationOk BIT NOT NULL CONSTRAINT DF_RuleCandidate_Val DEFAULT (0),
-                    DryRunOk BIT NOT NULL CONSTRAINT DF_RuleCandidate_Dry DEFAULT (0),
-                    Notes NVARCHAR(2000) NULL,
-                    UpdatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_RuleCandidate_Updated DEFAULT (SYSUTCDATETIME())
-                );
-                CREATE INDEX IX_RuleCandidate_Member_State ON dbo.RuleCandidate (NidMember, State, DetectedAtUtc DESC);
-            END
-
-            IF OBJECT_ID(N'dbo.RulePromotionLog', N'U') IS NULL
-            BEGIN
-                CREATE TABLE dbo.RulePromotionLog (
-                    Id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RulePromotionLog PRIMARY KEY,
-                    NidMember INT NOT NULL,
-                    CandidateId UNIQUEIDENTIFIER NULL,
-                    FromEngine NVARCHAR(32) NOT NULL,
-                    ToEngine NVARCHAR(32) NOT NULL,
-                    XmlBodyHash NVARCHAR(64) NOT NULL,
-                    NidHistory BIGINT NULL,
-                    Outcome NVARCHAR(32) NOT NULL,
-                    Detail NVARCHAR(2000) NULL,
-                    CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_RulePromotionLog_Created DEFAULT (SYSUTCDATETIME())
-                );
-            END
-
-            IF OBJECT_ID(N'dbo.RuleDryRunResult', N'U') IS NULL
-            BEGIN
-                CREATE TABLE dbo.RuleDryRunResult (
-                    Id UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_RuleDryRunResult PRIMARY KEY,
-                    CandidateId UNIQUEIDENTIFIER NULL,
-                    NidMember INT NOT NULL,
-                    GoldenFicheId INT NULL,
-                    Passed BIT NOT NULL,
-                    Summary NVARCHAR(2000) NULL,
-                    CreatedAtUtc DATETIME2(3) NOT NULL CONSTRAINT DF_RuleDryRunResult_Created DEFAULT (SYSUTCDATETIME())
-                );
-            END
-            """;
-
+        const string probe = "SELECT TOP 0 LastStableXmlHash, LastSeenNidHistory FROM dbo.RuleSyncState";
         try
         {
             await using var conn = new SqlConnection(_cs);
             await conn.OpenAsync(ct);
-            await using var cmd = new SqlCommand(sql, conn);
+            await using var cmd = new SqlCommand(probe, conn);
             await cmd.ExecuteNonQueryAsync(ct);
-            _schemaEnsured = true;
+            _schemaVerified = true;
         }
         catch (SqlException ex)
         {
-            _logger.LogWarning(ex, "RuleEngine sync schema ensure failed — run database/11_RuleEngine_Sync_Schema.sql on RayvarzRuleEngine");
+            _logger.LogError(ex,
+                "RuleSyncState schema mismatch — use existing RayvarzRuleEngine tables (LastStableXmlHash, RuleCandidate.CandidateId, …)");
+            throw;
         }
     }
 
@@ -116,17 +52,19 @@ public sealed class RuleEngineStateRepository
             return existing;
 
         const string insert = """
-            INSERT INTO dbo.RuleSyncState (NidMember) VALUES (@nid)
+            INSERT INTO dbo.RuleSyncState
+                (NidMember, NidClass, ActiveEngine, LastStableXmlHash, ActiveDslVersion, ConsecutiveDynamicFailures, UpdatedAtUtc)
+            VALUES
+                (@nid, @class, N'Legacy', N'', NULL, 0, SYSUTCDATETIME())
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
-        await using (var ins = new SqlCommand(insert, conn))
-        {
-            ins.Parameters.AddWithValue("@nid", nidMember);
-            await ins.ExecuteNonQueryAsync(ct);
-        }
+        await using var ins = new SqlCommand(insert, conn);
+        ins.Parameters.AddWithValue("@nid", nidMember);
+        ins.Parameters.AddWithValue("@class", _options.NidClass);
+        await ins.ExecuteNonQueryAsync(ct);
 
-        return await GetStateAsync(nidMember, ct) ?? new RuleSyncStateRow { NidMember = nidMember };
+        return await GetStateAsync(nidMember, ct) ?? new RuleSyncStateRow { NidMember = nidMember, NidClass = _options.NidClass };
     }
 
     public async Task<RuleSyncStateRow?> GetStateAsync(int nidMember, CancellationToken ct = default)
@@ -135,9 +73,10 @@ public sealed class RuleEngineStateRepository
             return null;
         await EnsureSchemaAsync(ct);
         const string sql = """
-            SELECT NidMember, ActiveEngine, ActiveXmlBodyHash, ActiveMemberVersion,
-                   LastSeenNidHistory, LastHistoryModifyUtc, LastMemberXmlBodyHash,
-                   LastCheckAtUtc, LastChangeDetectedAtUtc, LastPromotedAtUtc, LastError, UpdatedAtUtc
+            SELECT NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
+                   LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
+                   ActiveDslVersion, ActiveEngine, ActiveSnapshotId, UpdatedAtUtc,
+                   ConsecutiveDynamicFailures, CircuitBreakerOpenUntilUtc
             FROM dbo.RuleSyncState WHERE NidMember = @nid
             """;
         await using var conn = new SqlConnection(_cs);
@@ -156,16 +95,17 @@ public sealed class RuleEngineStateRepository
             return;
         const string sql = """
             UPDATE dbo.RuleSyncState SET
+                NidClass = @class,
+                LastSeenNidHistory = @seenHist,
+                LastSeenModifyAt = @seenMod,
+                LastStableNidHistory = @stableHist,
+                LastStableModifyAt = @stableMod,
+                LastStableXmlHash = @stableHash,
+                ActiveDslVersion = @dslVer,
                 ActiveEngine = @engine,
-                ActiveXmlBodyHash = @activeHash,
-                ActiveMemberVersion = @version,
-                LastSeenNidHistory = @nidHist,
-                LastHistoryModifyUtc = @histUtc,
-                LastMemberXmlBodyHash = @memberHash,
-                LastCheckAtUtc = @checkUtc,
-                LastChangeDetectedAtUtc = @changeUtc,
-                LastPromotedAtUtc = @promotedUtc,
-                LastError = @err,
+                ActiveSnapshotId = @snapshot,
+                ConsecutiveDynamicFailures = @failures,
+                CircuitBreakerOpenUntilUtc = @breaker,
                 UpdatedAtUtc = SYSUTCDATETIME()
             WHERE NidMember = @nid
             """;
@@ -173,16 +113,17 @@ public sealed class RuleEngineStateRepository
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@nid", row.NidMember);
+        cmd.Parameters.AddWithValue("@class", row.NidClass);
+        cmd.Parameters.AddWithValue("@seenHist", (object?)row.LastSeenNidHistory ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@seenMod", (object?)row.LastSeenModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableHist", (object?)row.LastStableNidHistory ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableMod", (object?)row.LastStableModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableHash", row.LastStableXmlHash ?? "");
+        cmd.Parameters.AddWithValue("@dslVer", (object?)row.ActiveDslVersion ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@engine", row.ActiveEngine);
-        cmd.Parameters.AddWithValue("@activeHash", row.ActiveXmlBodyHash ?? "");
-        cmd.Parameters.AddWithValue("@version", row.ActiveMemberVersion);
-        cmd.Parameters.AddWithValue("@nidHist", (object?)row.LastSeenNidHistory ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@histUtc", (object?)row.LastHistoryModifyUtc ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@memberHash", row.LastMemberXmlBodyHash ?? "");
-        cmd.Parameters.AddWithValue("@checkUtc", (object?)row.LastCheckAtUtc ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@changeUtc", (object?)row.LastChangeDetectedAtUtc ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@promotedUtc", (object?)row.LastPromotedAtUtc ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@err", (object?)row.LastError ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@snapshot", (object?)row.ActiveSnapshotId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@failures", row.ConsecutiveDynamicFailures);
+        cmd.Parameters.AddWithValue("@breaker", (object?)row.CircuitBreakerOpenUntilUtc ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -191,11 +132,11 @@ public sealed class RuleEngineStateRepository
         if (!IsConfigured)
             return null;
         const string sql = """
-            SELECT TOP 1 Id, NidMember, NidHistory, XmlBodyHash, MemberVersion, State,
-                   DetectedAtUtc, StableSinceUtc, ParseOk, ValidationOk, DryRunOk, Notes
+            SELECT TOP 1 CandidateId, NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash, XmlBody,
+                   Modifyer, ModifyDesc, Status, RejectReason, StableEligibleAtUtc, FirstSeenAtUtc, LastCheckedAtUtc
             FROM dbo.RuleCandidate
-            WHERE NidMember = @nid AND State NOT IN (N'Promoted', N'Rejected')
-            ORDER BY DetectedAtUtc DESC
+            WHERE NidMember = @nid AND Status NOT IN (N'Promoted', N'Rejected')
+            ORDER BY FirstSeenAtUtc DESC
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -205,106 +146,156 @@ public sealed class RuleEngineStateRepository
         return await reader.ReadAsync(ct) ? ReadCandidate(reader) : null;
     }
 
-    public async Task InsertCandidateAsync(RuleCandidateRow row, CancellationToken ct = default)
+    public async Task<RuleCandidateRow?> GetCandidateByIdAsync(long candidateId, CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+            return null;
+        const string sql = """
+            SELECT CandidateId, NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash, XmlBody,
+                   Modifyer, ModifyDesc, Status, RejectReason, StableEligibleAtUtc, FirstSeenAtUtc, LastCheckedAtUtc
+            FROM dbo.RuleCandidate WHERE CandidateId = @id
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", candidateId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadCandidate(reader) : null;
+    }
+
+    public async Task<RuleCandidateRow?> GetStableEligibleCandidateAsync(int nidMember, int stabilityHours, CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+            return null;
+        const string sql = """
+            SELECT TOP 1 CandidateId, NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash, XmlBody,
+                   Modifyer, ModifyDesc, Status, RejectReason, StableEligibleAtUtc, FirstSeenAtUtc, LastCheckedAtUtc
+            FROM dbo.RuleCandidate
+            WHERE NidMember = @nid
+              AND Status = N'PendingStability'
+              AND StableEligibleAtUtc IS NOT NULL
+              AND StableEligibleAtUtc <= SYSUTCDATETIME()
+            ORDER BY StableEligibleAtUtc ASC
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadCandidate(reader) : null;
+    }
+
+    public async Task<long> InsertCandidateAsync(
+        int nidMember,
+        long sourceNidHistory,
+        DateTime? sourceModifyAt,
+        string canonicalXmlHash,
+        string xmlBody,
+        string? modifyer,
+        string? modifyDesc,
+        DateTime stableEligibleAtUtc,
+        CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO dbo.RuleCandidate
-                (Id, NidMember, NidHistory, XmlBodyHash, MemberVersion, State, DetectedAtUtc, StableSinceUtc,
-                 ParseOk, ValidationOk, DryRunOk, Notes)
+                (NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash, XmlBody,
+                 Modifyer, ModifyDesc, Status, RejectReason, StableEligibleAtUtc, FirstSeenAtUtc, LastCheckedAtUtc)
+            OUTPUT INSERTED.CandidateId
             VALUES
-                (@id, @nid, @hist, @hash, @ver, @state, @detected, @stable, @parse, @val, @dry, @notes)
+                (@nid, @hist, @modAt, @hash, @xml, @modBy, @modDesc, @status, NULL, @stable, SYSUTCDATETIME(), SYSUTCDATETIME())
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", row.Id);
-        cmd.Parameters.AddWithValue("@nid", row.NidMember);
-        cmd.Parameters.AddWithValue("@hist", (object?)row.NidHistory ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@hash", row.XmlBodyHash);
-        cmd.Parameters.AddWithValue("@ver", row.MemberVersion);
-        cmd.Parameters.AddWithValue("@state", row.State.ToString());
-        cmd.Parameters.AddWithValue("@detected", row.DetectedAtUtc);
-        cmd.Parameters.AddWithValue("@stable", (object?)row.StableSinceUtc ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@parse", row.ParseOk);
-        cmd.Parameters.AddWithValue("@val", row.ValidationOk);
-        cmd.Parameters.AddWithValue("@dry", row.DryRunOk);
-        cmd.Parameters.AddWithValue("@notes", (object?)row.Notes ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@hist", sourceNidHistory);
+        cmd.Parameters.AddWithValue("@modAt", (object?)sourceModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@hash", canonicalXmlHash);
+        cmd.Parameters.AddWithValue("@xml", xmlBody ?? "");
+        cmd.Parameters.AddWithValue("@modBy", (object?)modifyer ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@modDesc", (object?)modifyDesc ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@status", RuleCandidateStatuses.PendingStability);
+        cmd.Parameters.AddWithValue("@stable", stableEligibleAtUtc);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt64(scalar);
+    }
+
+    public async Task TouchCandidateCheckedAsync(long candidateId, CancellationToken ct = default)
+    {
+        const string sql = "UPDATE dbo.RuleCandidate SET LastCheckedAtUtc = SYSUTCDATETIME() WHERE CandidateId = @id";
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@id", candidateId);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task UpdateCandidateAsync(RuleCandidateRow row, CancellationToken ct = default)
+    public async Task UpdateCandidateStatusAsync(long candidateId, string status, string? rejectReason, CancellationToken ct = default)
     {
         const string sql = """
             UPDATE dbo.RuleCandidate SET
-                State = @state, StableSinceUtc = @stable, ParseOk = @parse, ValidationOk = @val,
-                DryRunOk = @dry, Notes = @notes, UpdatedAtUtc = SYSUTCDATETIME()
-            WHERE Id = @id
+                Status = @status,
+                RejectReason = @reject,
+                LastCheckedAtUtc = SYSUTCDATETIME()
+            WHERE CandidateId = @id
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", row.Id);
-        cmd.Parameters.AddWithValue("@state", row.State.ToString());
-        cmd.Parameters.AddWithValue("@stable", (object?)row.StableSinceUtc ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@parse", row.ParseOk);
-        cmd.Parameters.AddWithValue("@val", row.ValidationOk);
-        cmd.Parameters.AddWithValue("@dry", row.DryRunOk);
-        cmd.Parameters.AddWithValue("@notes", (object?)row.Notes ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@id", candidateId);
+        cmd.Parameters.AddWithValue("@status", status);
+        cmd.Parameters.AddWithValue("@reject", (object?)rejectReason ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task InsertPromotionLogAsync(
         int nidMember,
-        Guid? candidateId,
-        string fromEngine,
-        string toEngine,
-        string xmlBodyHash,
-        long? nidHistory,
-        string outcome,
-        string? detail,
+        long? candidateId,
+        long? snapshotId,
+        string action,
+        string? reason,
         CancellationToken ct = default)
     {
         const string sql = """
-            INSERT INTO dbo.RulePromotionLog
-                (Id, NidMember, CandidateId, FromEngine, ToEngine, XmlBodyHash, NidHistory, Outcome, Detail)
-            VALUES (@id, @nid, @cid, @from, @to, @hash, @hist, @outcome, @detail)
+            INSERT INTO dbo.RulePromotionLog (NidMember, CandidateId, SnapshotId, Action, Reason, CreatedAtUtc)
+            VALUES (@nid, @cid, @snap, @action, @reason, SYSUTCDATETIME())
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", Guid.NewGuid());
         cmd.Parameters.AddWithValue("@nid", nidMember);
         cmd.Parameters.AddWithValue("@cid", (object?)candidateId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@from", fromEngine);
-        cmd.Parameters.AddWithValue("@to", toEngine);
-        cmd.Parameters.AddWithValue("@hash", xmlBodyHash);
-        cmd.Parameters.AddWithValue("@hist", (object?)nidHistory ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@outcome", outcome);
-        cmd.Parameters.AddWithValue("@detail", (object?)detail ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@snap", (object?)snapshotId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@action", action);
+        cmd.Parameters.AddWithValue("@reason", (object?)reason ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task InsertDryRunResultAsync(
-        Guid? candidateId,
-        int nidMember,
+        long? candidateId,
+        long? snapshotId,
         int? goldenFicheId,
-        bool passed,
-        string? summary,
+        string engineName,
+        bool success,
+        string? errorMessage,
+        string? outputJson,
         CancellationToken ct = default)
     {
         const string sql = """
-            INSERT INTO dbo.RuleDryRunResult (Id, CandidateId, NidMember, GoldenFicheId, Passed, Summary)
-            VALUES (@id, @cid, @nid, @gf, @passed, @summary)
+            INSERT INTO dbo.RuleDryRunResult
+                (CandidateId, SnapshotId, GoldenFicheId, EngineName, Success, ErrorMessage, OutputJson, ExecutedAtUtc)
+            VALUES (@cid, @snap, @gf, @engine, @success, @err, @out, SYSUTCDATETIME())
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", Guid.NewGuid());
         cmd.Parameters.AddWithValue("@cid", (object?)candidateId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@snap", (object?)snapshotId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@gf", (object?)goldenFicheId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@passed", passed);
-        cmd.Parameters.AddWithValue("@summary", (object?)summary ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@engine", engineName);
+        cmd.Parameters.AddWithValue("@success", success);
+        cmd.Parameters.AddWithValue("@err", (object?)errorMessage ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@out", (object?)outputJson ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -329,32 +320,34 @@ public sealed class RuleEngineStateRepository
     private static RuleSyncStateRow ReadState(SqlDataReader reader) => new()
     {
         NidMember = reader.GetInt32(0),
-        ActiveEngine = reader.GetString(1),
-        ActiveXmlBodyHash = reader.GetString(2),
-        ActiveMemberVersion = reader.GetInt32(3),
-        LastSeenNidHistory = reader.IsDBNull(4) ? null : reader.GetInt64(4),
-        LastHistoryModifyUtc = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
-        LastMemberXmlBodyHash = reader.GetString(6),
-        LastCheckAtUtc = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
-        LastChangeDetectedAtUtc = reader.IsDBNull(8) ? null : reader.GetDateTime(8),
-        LastPromotedAtUtc = reader.IsDBNull(9) ? null : reader.GetDateTime(9),
-        LastError = reader.IsDBNull(10) ? null : reader.GetString(10),
-        UpdatedAtUtc = reader.GetDateTime(11)
+        NidClass = reader.GetInt32(1),
+        LastSeenNidHistory = reader.IsDBNull(2) ? null : reader.GetInt64(2),
+        LastSeenModifyAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+        LastStableNidHistory = reader.IsDBNull(4) ? null : reader.GetInt64(4),
+        LastStableModifyAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+        LastStableXmlHash = reader.IsDBNull(6) ? "" : reader.GetString(6),
+        ActiveDslVersion = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+        ActiveEngine = reader.IsDBNull(8) ? "Legacy" : reader.GetString(8),
+        ActiveSnapshotId = reader.IsDBNull(9) ? null : reader.GetInt64(9),
+        UpdatedAtUtc = reader.GetDateTime(10),
+        ConsecutiveDynamicFailures = reader.IsDBNull(11) ? 0 : reader.GetInt32(11),
+        CircuitBreakerOpenUntilUtc = reader.IsDBNull(12) ? null : reader.GetDateTime(12)
     };
 
     private static RuleCandidateRow ReadCandidate(SqlDataReader reader) => new()
     {
-        Id = reader.GetGuid(0),
+        CandidateId = reader.GetInt64(0),
         NidMember = reader.GetInt32(1),
-        NidHistory = reader.IsDBNull(2) ? null : reader.GetInt64(2),
-        XmlBodyHash = reader.GetString(3),
-        MemberVersion = reader.GetInt32(4),
-        State = Enum.TryParse<RuleCandidateState>(reader.GetString(5), out var st) ? st : RuleCandidateState.Detected,
-        DetectedAtUtc = reader.GetDateTime(6),
-        StableSinceUtc = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
-        ParseOk = reader.GetBoolean(8),
-        ValidationOk = reader.GetBoolean(9),
-        DryRunOk = reader.GetBoolean(10),
-        Notes = reader.IsDBNull(11) ? null : reader.GetString(11)
+        SourceNidHistory = reader.IsDBNull(2) ? null : reader.GetInt64(2),
+        SourceModifyAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+        CanonicalXmlHash = reader.IsDBNull(4) ? "" : reader.GetString(4),
+        XmlBody = reader.IsDBNull(5) ? "" : reader.GetString(5),
+        Modifyer = reader.IsDBNull(6) ? null : reader.GetString(6),
+        ModifyDesc = reader.IsDBNull(7) ? null : reader.GetString(7),
+        Status = reader.IsDBNull(8) ? RuleCandidateStatuses.PendingStability : reader.GetString(8),
+        RejectReason = reader.IsDBNull(9) ? null : reader.GetString(9),
+        StableEligibleAtUtc = reader.IsDBNull(10) ? null : reader.GetDateTime(10),
+        FirstSeenAtUtc = reader.GetDateTime(11),
+        LastCheckedAtUtc = reader.IsDBNull(12) ? null : reader.GetDateTime(12)
     };
 }

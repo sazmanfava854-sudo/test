@@ -14,6 +14,9 @@ public sealed class RuleEngineSyncOptions
 
     public int NidMember { get; set; } = 1388;
 
+    /// <summary>RuleSyncState.NidClass (پیش‌فرض 360).</summary>
+    public int NidClass { get; set; } = 360;
+
     /// <summary>اگر true باشد پس از شرط‌ها ActiveEngine به Dynamic تغییر می‌کند (پیش‌فرض false — فقط log).</summary>
     public bool AutoPromoteDynamic { get; set; }
 

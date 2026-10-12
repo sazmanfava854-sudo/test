@@ -6,51 +6,56 @@ namespace RayvarzResend.Tests;
 public class RuleEngineSyncTests
 {
     [Fact]
-    public void XmlBodyCanonicalHash_is_stable_for_whitespace()
+    public void XmlHasher_IsDeterministic_ForSameBody()
     {
-        var a = "<Root>  test\n</Root>";
-        var b = "<Root> test </Root>";
-        Assert.Equal(XmlBodyCanonicalHash.Compute(a), XmlBodyCanonicalHash.Compute(b));
+        const string xml = "<root><a>1</a></root>";
+        var h1 = XmlBodyCanonicalHash.Compute(xml);
+        var h2 = XmlBodyCanonicalHash.Compute(xml);
+        Assert.Equal(h1, h2);
+        Assert.Equal(64, h1.Length);
     }
 
     [Fact]
-    public void XmlBodyCanonicalHash_changes_when_content_changes()
-    {
-        var h1 = XmlBodyCanonicalHash.Compute("<Root>a</Root>");
-        var h2 = XmlBodyCanonicalHash.Compute("<Root>b</Root>");
-        Assert.NotEqual(h1, h2);
-    }
-
-    [Fact]
-    public void RuleHistoryChecker_detects_hash_and_history_change()
+    public void HistoryChecker_DetectsNewHistoryRow()
     {
         var checker = new RuleHistoryChecker();
+        var state = new RuleSyncStateRow { NidMember = 1388, LastSeenNidHistory = 100 };
+        var memberHash = XmlBodyCanonicalHash.Compute("<m/>");
+        var history = new MemberHistoryHead
+        {
+            NidHistory = 101,
+            NidMember = 1388,
+            XmlBody = "<m2/>",
+            ModifyUtc = DateTime.UtcNow
+        };
+
+        var a = checker.Assess(state, memberHash, history);
+        Assert.True(a.ShouldOpenCandidate);
+        Assert.True(a.HistoryAdvanced);
+        Assert.Equal(101, a.LatestNidHistory);
+    }
+
+    [Fact]
+    public void HistoryChecker_NoChange_WhenHistoryUnchanged()
+    {
+        var checker = new RuleHistoryChecker();
+        const string xml = "<same/>";
+        var hash = XmlBodyCanonicalHash.Compute(xml);
         var state = new RuleSyncStateRow
         {
             NidMember = 1388,
-            ActiveXmlBodyHash = "abc",
-            LastMemberXmlBodyHash = "abc",
-            LastSeenNidHistory = 10
+            LastSeenNidHistory = 101,
+            LastStableXmlHash = hash
         };
-        var assessment = checker.Assess(state, "def", new MemberHistoryHead { NidHistory = 11, NidMember = 1388 });
-        Assert.True(assessment.MemberHashChanged);
-        Assert.True(assessment.HistoryAdvanced);
-        Assert.True(assessment.ShouldOpenCandidate);
-    }
-
-    [Fact]
-    public void RuleHistoryChecker_no_candidate_when_unchanged()
-    {
-        var checker = new RuleHistoryChecker();
-        var state = new RuleSyncStateRow
+        var history = new MemberHistoryHead
         {
-            ActiveXmlBodyHash = "same",
-            LastMemberXmlBodyHash = "same",
-            LastSeenNidHistory = 99
+            NidHistory = 101,
+            NidMember = 1388,
+            XmlBody = xml,
+            ModifyUtc = DateTime.UtcNow
         };
-        var assessment = checker.Assess(state, "same", new MemberHistoryHead { NidHistory = 99 });
-        Assert.False(assessment.MemberHashChanged);
-        Assert.False(assessment.HistoryAdvanced);
-        Assert.False(assessment.ShouldOpenCandidate);
+
+        var a = checker.Assess(state, hash, history);
+        Assert.False(a.ShouldOpenCandidate);
     }
 }

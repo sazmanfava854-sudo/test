@@ -1,28 +1,46 @@
+using Microsoft.Extensions.Logging;
+
 namespace RayvarzResend.Web.RuleEngine.Sync;
 
-/// <summary>اسکلت Dry Run golden — فاز ۵ جزئیات assert را کامل می‌کند.</summary>
+/// <summary>Phase 0–2 placeholder: records dry-run row; extend with golden fiche execution later.</summary>
 public sealed class RuleGoldenDryRunService
 {
     private readonly RuleEngineStateRepository _state;
+    private readonly ILogger<RuleGoldenDryRunService> _logger;
 
-    public RuleGoldenDryRunService(RuleEngineStateRepository state) => _state = state;
-
-    public async Task<(bool AllPassed, string Summary)> RunStructuralPlaceholderAsync(
-        Guid? candidateId,
-        int nidMember,
-        CancellationToken ct = default)
+    public RuleGoldenDryRunService(
+        RuleEngineStateRepository state,
+        ILogger<RuleGoldenDryRunService> logger)
     {
-        var count = await _state.CountActiveGoldensAsync(ct);
-        if (count == 0)
+        _state = state;
+        _logger = logger;
+    }
+
+    public async Task<DryRunOutcome> RunForCandidateAsync(RuleCandidateRow candidate, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(candidate.XmlBody))
         {
-            await _state.InsertDryRunResultAsync(candidateId, nidMember, null, true,
-                "هیچ RuleGoldenFiche فعالی نیست — dry run ساختاری رد نشد.", ct);
-            return (true, "no golden rows — skipped");
+            var msg = "Empty XmlBody on candidate";
+            await _state.InsertDryRunResultAsync(candidate.CandidateId, null, null, "Placeholder", false, msg, null, ct);
+            return new DryRunOutcome(false, msg, null);
         }
 
-        var passed = true;
-        await _state.InsertDryRunResultAsync(candidateId, nidMember, null, passed,
-            $"placeholder: {count} golden fiche(s) registered; full Legacy vs Dynamic compare در فاز ۵.", ct);
-        return (passed, $"{count} golden(s) placeholder ok");
+        _logger.LogInformation(
+            "Dry-run placeholder OK for candidate {CandidateId} (golden execution not wired yet)",
+            candidate.CandidateId);
+
+        await _state.InsertDryRunResultAsync(
+            candidate.CandidateId,
+            null,
+            null,
+            "Placeholder",
+            true,
+            null,
+            """{"phase":"0-2","note":"schema-aligned stub"}""",
+            ct);
+
+        return new DryRunOutcome(true, null, null);
     }
 }
+
+public sealed record DryRunOutcome(bool Success, string? ErrorMessage, long? SnapshotId);

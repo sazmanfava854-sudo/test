@@ -1,6 +1,6 @@
 namespace RayvarzResend.Web.RuleEngine.Sync;
 
-/// <summary>مقایسه Member فعال و MemberHistory با state ذخیره‌شده.</summary>
+/// <summary>مقایسه Member فعال و MemberHistory با RuleSyncState (LastStableXmlHash / LastSeenNidHistory).</summary>
 public sealed class RuleHistoryChecker
 {
     public RuleChangeAssessment Assess(
@@ -8,15 +8,13 @@ public sealed class RuleHistoryChecker
         string currentMemberHash,
         MemberHistoryHead? latestHistory)
     {
+        var activeHash = state.LastStableXmlHash ?? "";
         var assessment = new RuleChangeAssessment
         {
             CurrentMemberHash = currentMemberHash,
-            StoredActiveHash = state.ActiveXmlBodyHash,
-            StoredLastMemberHash = state.LastMemberXmlBodyHash,
+            StoredActiveHash = activeHash,
             MemberHashChanged = !string.IsNullOrEmpty(currentMemberHash)
-                && !string.Equals(currentMemberHash, state.ActiveXmlBodyHash, StringComparison.OrdinalIgnoreCase),
-            MemberHashDrift = !string.IsNullOrEmpty(currentMemberHash)
-                && !string.Equals(currentMemberHash, state.LastMemberXmlBodyHash, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(currentMemberHash, activeHash, StringComparison.OrdinalIgnoreCase),
         };
 
         if (latestHistory != null)
@@ -32,9 +30,7 @@ public sealed class RuleHistoryChecker
                 && !string.Equals(historyHash, currentMemberHash, StringComparison.OrdinalIgnoreCase);
         }
 
-        assessment.ShouldOpenCandidate = assessment.MemberHashChanged
-            || assessment.HistoryAdvanced
-            || assessment.MemberHashDrift;
+        assessment.ShouldOpenCandidate = assessment.MemberHashChanged || assessment.HistoryAdvanced;
 
         return assessment;
     }
@@ -44,9 +40,7 @@ public sealed class RuleChangeAssessment
 {
     public string CurrentMemberHash { get; set; } = "";
     public string StoredActiveHash { get; set; } = "";
-    public string StoredLastMemberHash { get; set; } = "";
     public bool MemberHashChanged { get; set; }
-    public bool MemberHashDrift { get; set; }
     public long? LatestNidHistory { get; set; }
     public DateTime? LatestHistoryModifyUtc { get; set; }
     public string? LatestHistoryHash { get; set; }

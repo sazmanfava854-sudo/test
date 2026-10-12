@@ -4,7 +4,7 @@
 
 ## فعال‌سازی
 
-1. اسکریپت `database/11_RuleEngine_Sync_Schema.sql` را روی **RayvarzRuleEngine** اجرا کنید (یا اجازه دهید اپ جداول را در اولین sync بسازد).
+1. جداول `RuleSyncState`, `RuleCandidate`, … باید از قبل روی **RayvarzRuleEngine** با ستون‌های مرجع در `database/11_RuleEngine_Sync_Schema.sql` وجود داشته باشند. اپ جدول جدید با نام‌های متفاوت نمی‌سازد.
 2. در `appsettings.json`:
 
 ```json
@@ -26,10 +26,10 @@
 هر `PollIntervalMinutes` (پیش‌فرض ۱۵ دقیقه):
 
 1. خواندن `Member` فعال → **هش canonical** `XmlBody`.
-2. مقایسه با `RuleSyncState.ActiveXmlBodyHash` و `LastMemberXmlBodyHash`.
+2. مقایسه هش `XmlBody` عضو فعال با `RuleSyncState.LastStableXmlHash`.
 3. خواندن آخرین `MemberHistory` → مقایسه `NidHistory` با `LastSeenNidHistory`.
-4. در صورت تغییر → `RuleCandidate` با state `Detected` → parse (`ClsFunctionParser`) → `Validated`.
-5. پس از **StabilityHours** (۷۲h) بدون History جدیدتر → dry run golden (placeholder) → `PromoteReady`.
+4. در صورت تغییر → `RuleCandidate` با `Status=PendingStability` و `StableEligibleAtUtc = now + StabilityHours`.
+5. پس از رسیدن `StableEligibleAtUtc` → dry run golden (placeholder).
 6. اگر `AutoPromoteDynamic=true` → `ActiveEngine=Dynamic` و log در `RulePromotionLog`؛ در غیر این صورت فقط log و hash فعال به‌روز می‌شود و **ارسال تولید همچنان `LegacyCSharp`**.
 
 ## API (ادمین)
@@ -49,7 +49,7 @@
 3. یکی از این دو:
    - **ری‌استارت** سرویس (چرخه اول خودکار)، یا
    - بدون ری‌استارت: با کوکی ادمین → `POST /api/rule/sync/run`
-4. نتیجه: `GET /api/rule/sync/status` → `openCandidate` / `lastMemberXmlBodyHash`
+4. نتیجه: `GET /api/rule/sync/status` → `openCandidate` / `state.lastStableXmlHash`
 
 ## آنچه هنوز نیست (فاز ۲–۵)
 

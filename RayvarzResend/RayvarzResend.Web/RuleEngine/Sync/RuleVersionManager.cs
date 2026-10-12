@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RayvarzResend.Web.RuleEngine;
 
@@ -5,240 +6,209 @@ namespace RayvarzResend.Web.RuleEngine.Sync;
 
 public sealed class RuleVersionManager
 {
-    private readonly RuleEngineSyncOptions _options;
     private readonly RuleEngineStateRepository _state;
-    private readonly MemberRuleRepository _members;
-    private readonly RuleHistoryChecker _checker;
+    private readonly MemberRuleRepository _memberRules;
+    private readonly RuleHistoryChecker _historyChecker;
     private readonly RuleGoldenDryRunService _dryRun;
+    private readonly RuleEngineSyncOptions _options;
     private readonly ILogger<RuleVersionManager> _logger;
 
     public RuleVersionManager(
-        IOptions<RuleEngineSyncOptions> options,
         RuleEngineStateRepository state,
-        MemberRuleRepository members,
-        RuleHistoryChecker checker,
+        MemberRuleRepository memberRules,
+        RuleHistoryChecker historyChecker,
         RuleGoldenDryRunService dryRun,
+        IOptions<RuleEngineSyncOptions> options,
         ILogger<RuleVersionManager> logger)
     {
-        _options = options.Value;
         _state = state;
-        _members = members;
-        _checker = checker;
+        _memberRules = memberRules;
+        _historyChecker = historyChecker;
         _dryRun = dryRun;
+        _options = options.Value;
         _logger = logger;
     }
 
     public async Task<RuleSyncCycleResult> RunCycleAsync(CancellationToken ct = default)
     {
-        if (!_options.Enabled)
-            return new RuleSyncCycleResult { Ok = true, Summary = "RuleEngineSync غیرفعال است (RuleEngineSync:Enabled=false)." };
-
-        if (!_state.IsConfigured)
-            return new RuleSyncCycleResult { Ok = false, Error = "پایگاه RuleSyncState پیکربندی نشده (ConnectionStrings:AppAuth)." };
-
-        var nid = _options.NidMember;
         var result = new RuleSyncCycleResult();
         try
         {
-            var syncState = await _state.GetOrCreateStateAsync(nid, ct);
-            var member = await _members.LoadActiveMemberAsync(nid, ct: ct);
-            if (member == null || string.IsNullOrWhiteSpace(member.XmlBody))
+            if (!_state.IsConfigured)
             {
-                syncState.LastCheckAtUtc = DateTime.UtcNow;
-                syncState.LastError = "Member یا XmlBody از DbRuleEngein خوانده نشد.";
-                await _state.UpdateStateAsync(syncState, ct);
-                return new RuleSyncCycleResult { Ok = false, Error = syncState.LastError };
+                result.Ok = false;
+                result.Error = "Rule sync state DB not configured (AppAuth / RayvarzRuleEngine).";
+                return result;
             }
 
+            await _state.EnsureSchemaAsync(ct);
+
+            var nidMember = _options.NidMember;
+            var state = await _state.GetOrCreateStateAsync(nidMember, ct);
+
+            var member = await _memberRules.LoadActiveMemberAsync(nidMember, ct: ct);
+            if (member is null)
+            {
+                result.Ok = false;
+                result.Error = $"Member {nidMember} not found (RuleEngine connection or LocalXmlPath).";
+                return result;
+            }
+
+            var history = await _memberRules.LoadLatestHistoryAsync(nidMember, ct);
             var memberHash = XmlBodyCanonicalHash.Compute(member.XmlBody);
-            if (string.IsNullOrEmpty(syncState.ActiveXmlBodyHash) && !string.IsNullOrEmpty(memberHash))
-            {
-                syncState.ActiveXmlBodyHash = memberHash;
-                syncState.ActiveMemberVersion = member.Version;
-            }
-
-            var history = await _members.LoadLatestHistoryAsync(nid, ct);
-            var assessment = _checker.Assess(syncState, memberHash, history);
+            var assessment = _historyChecker.Assess(state, memberHash, history);
 
             result.MemberHash = memberHash;
-            result.ActiveHash = syncState.ActiveXmlBodyHash;
+            result.ActiveHash = state.LastStableXmlHash;
             result.MemberHashChanged = assessment.MemberHashChanged;
             result.LatestNidHistory = assessment.LatestNidHistory;
             result.HistoryAdvanced = assessment.HistoryAdvanced;
 
-            syncState.LastCheckAtUtc = DateTime.UtcNow;
-            syncState.LastMemberXmlBodyHash = memberHash;
-            syncState.LastError = null;
             if (history != null)
             {
-                syncState.LastSeenNidHistory = history.NidHistory;
-                syncState.LastHistoryModifyUtc = history.ModifyUtc;
+                state.LastSeenNidHistory = history.NidHistory;
+                state.LastSeenModifyAt = history.ModifyUtc;
             }
 
-            var candidate = await _state.GetOpenCandidateAsync(nid, ct);
-            if (assessment.ShouldOpenCandidate && (candidate == null || candidate.XmlBodyHash != memberHash))
+            await _state.UpdateStateAsync(state, ct);
+
+            if (!assessment.ShouldOpenCandidate)
             {
-                if (candidate != null)
-                {
-                    candidate.State = RuleCandidateState.Rejected;
-                    candidate.Notes = "نسخه جدید Member/History شناسایی شد.";
-                    await _state.UpdateCandidateAsync(candidate, ct);
-                }
-
-                candidate = new RuleCandidateRow
-                {
-                    Id = Guid.NewGuid(),
-                    NidMember = nid,
-                    NidHistory = history?.NidHistory,
-                    XmlBodyHash = memberHash,
-                    MemberVersion = member.Version,
-                    State = RuleCandidateState.Detected,
-                    DetectedAtUtc = DateTime.UtcNow,
-                    Notes = BuildDetectionNotes(assessment)
-                };
-                await _state.InsertCandidateAsync(candidate, ct);
-                syncState.LastChangeDetectedAtUtc = DateTime.UtcNow;
-                result.CandidateId = candidate.Id;
-                _logger.LogInformation("Rule sync: candidate {CandidateId} hash={Hash}", candidate.Id, memberHash);
+                result.Summary = "no change";
+                result.Promoted = await TryPromoteStableCandidateAsync(nidMember, state, ct);
+                return result;
             }
 
-            candidate = await _state.GetOpenCandidateAsync(nid, ct);
-            if (candidate != null)
-                await AdvanceCandidateAsync(candidate, member, memberHash, history, syncState, ct);
+            if (history is null || string.IsNullOrWhiteSpace(history.XmlBody))
+            {
+                result.Summary = "change detected but MemberHistory XmlBody missing";
+                return result;
+            }
 
-            await _state.UpdateStateAsync(syncState, ct);
+            var hash = XmlBodyCanonicalHash.Compute(history.XmlBody);
+            var open = await _state.GetOpenCandidateAsync(nidMember, ct);
+            if (open is not null && string.Equals(open.CanonicalXmlHash, hash, StringComparison.OrdinalIgnoreCase))
+            {
+                await _state.TouchCandidateCheckedAsync(open.CandidateId, ct);
+                result.Summary = "open candidate already tracks latest history hash";
+                result.CandidateId = open.CandidateId;
+                result.Promoted = await TryPromoteStableCandidateAsync(nidMember, state, ct);
+                return result;
+            }
 
-            result.Ok = true;
-            result.Summary = candidate == null
-                ? "بدون candidate باز؛ هش Member با Active مقایسه شد."
-                : $"candidate {candidate.State} hash={candidate.XmlBodyHash}";
+            var stableAt = DateTime.UtcNow.AddHours(_options.StabilityHours);
+            var candidateId = await _state.InsertCandidateAsync(
+                nidMember,
+                history.NidHistory,
+                history.ModifyUtc,
+                hash,
+                history.XmlBody,
+                history.Modifyer,
+                history.ModifyDesc,
+                stableAt,
+                ct);
+
+            result.CandidateId = candidateId;
+            result.Summary = $"candidate {candidateId} opened; stable after {stableAt:O}";
+
+            _logger.LogInformation(
+                "Rule sync: candidate {CandidateId} for NidMember={NidMember}, stableEligibleAt={StableAt}",
+                candidateId, nidMember, stableAt);
+
+            result.Promoted = await TryPromoteStableCandidateAsync(nidMember, state, ct);
             return result;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Rule sync cycle failed");
-            return new RuleSyncCycleResult { Ok = false, Error = ex.Message };
+            result.Ok = false;
+            result.Error = ex.Message;
+            return result;
         }
     }
 
-    private async Task AdvanceCandidateAsync(
+    private async Task<bool> TryPromoteStableCandidateAsync(int nidMember, RuleSyncStateRow state, CancellationToken ct)
+    {
+        var candidate = await _state.GetStableEligibleCandidateAsync(nidMember, _options.StabilityHours, ct);
+        if (candidate is null)
+            return false;
+
+        var dryRun = await _dryRun.RunForCandidateAsync(candidate, ct);
+        if (!dryRun.Success)
+        {
+            _logger.LogWarning(
+                "Rule sync: dry-run failed for candidate {CandidateId}: {Error}",
+                candidate.CandidateId, dryRun.ErrorMessage);
+            await _state.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatuses.Rejected, dryRun.ErrorMessage, ct);
+            await _state.InsertPromotionLogAsync(
+                nidMember,
+                candidate.CandidateId,
+                dryRun.SnapshotId,
+                RulePromotionActions.Rejected,
+                dryRun.ErrorMessage ?? "dry-run failed",
+                ct);
+            return false;
+        }
+
+        if (!_options.AutoPromoteDynamic)
+        {
+            _logger.LogInformation(
+                "Rule sync: candidate {CandidateId} passed dry-run; AutoPromoteDynamic=false",
+                candidate.CandidateId);
+            return false;
+        }
+
+        await PromoteCandidateCoreAsync(nidMember, state, candidate, dryRun.SnapshotId, ct);
+        return true;
+    }
+
+    public async Task PromoteCandidateAsync(int nidMember, long candidateId, CancellationToken ct = default)
+    {
+        var state = await _state.GetOrCreateStateAsync(nidMember, ct);
+        var candidate = await _state.GetCandidateByIdAsync(candidateId, ct)
+            ?? throw new InvalidOperationException($"Candidate {candidateId} not found");
+
+        if (string.Equals(candidate.Status, RuleCandidateStatuses.Promoted, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(candidate.Status, RuleCandidateStatuses.Rejected, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Candidate {candidateId} status is {candidate.Status}");
+
+        var dryRun = await _dryRun.RunForCandidateAsync(candidate, ct);
+        if (!dryRun.Success)
+            throw new InvalidOperationException(dryRun.ErrorMessage ?? "dry-run failed");
+
+        await PromoteCandidateCoreAsync(nidMember, state, candidate, dryRun.SnapshotId, ct);
+    }
+
+    private async Task PromoteCandidateCoreAsync(
+        int nidMember,
+        RuleSyncStateRow state,
         RuleCandidateRow candidate,
-        MemberRuleRecord member,
-        string memberHash,
-        MemberHistoryHead? history,
-        RuleSyncStateRow syncState,
+        long? snapshotId,
         CancellationToken ct)
     {
-        if (candidate.State == RuleCandidateState.Detected)
-        {
-            try
-            {
-                ClsFunctionParser.Parse(member.XmlBody);
-                candidate.ParseOk = true;
-                candidate.State = RuleCandidateState.Parsed;
-                candidate.ValidationOk = true;
-                candidate.State = RuleCandidateState.Validated;
-            }
-            catch (Exception ex)
-            {
-                candidate.ParseOk = false;
-                candidate.State = RuleCandidateState.Rejected;
-                candidate.Notes = $"Parse failed: {ex.Message}";
-                await _state.UpdateCandidateAsync(candidate, ct);
-                await _state.InsertPromotionLogAsync(candidate.NidMember, candidate.Id, syncState.ActiveEngine,
-                    syncState.ActiveEngine, memberHash, history?.NidHistory, "Rejected", candidate.Notes, ct);
-                return;
-            }
-        }
+        var fromEngine = state.ActiveEngine;
+        var fromHash = state.LastStableXmlHash;
 
-        if (!string.Equals(candidate.XmlBodyHash, memberHash, StringComparison.OrdinalIgnoreCase))
-        {
-            candidate.State = RuleCandidateState.Rejected;
-            candidate.Notes = "هش candidate با Member فعال یکی نیست.";
-            await _state.UpdateCandidateAsync(candidate, ct);
-            return;
-        }
+        state.LastStableNidHistory = candidate.SourceNidHistory;
+        state.LastStableModifyAt = candidate.SourceModifyAt;
+        state.LastStableXmlHash = candidate.CanonicalXmlHash;
+        state.ActiveEngine = "Dynamic";
+        state.ActiveDslVersion = null;
+        state.ActiveSnapshotId = snapshotId;
+        state.ConsecutiveDynamicFailures = 0;
+        await _state.UpdateStateAsync(state, ct);
 
-        if (history != null && candidate.NidHistory.HasValue && history.NidHistory > candidate.NidHistory.Value)
-        {
-            candidate.StableSinceUtc = null;
-            candidate.NidHistory = history.NidHistory;
-            candidate.Notes = "MemberHistory جدید — دوره ثبات ۷۲ساعته از نو شروع می‌شود.";
-        }
-        else if (!candidate.StableSinceUtc.HasValue)
-        {
-            candidate.StableSinceUtc = DateTime.UtcNow;
-        }
-
-        var stability = TimeSpan.FromHours(Math.Max(1, _options.StabilityHours));
-        var stableEnough = candidate.StableSinceUtc.HasValue
-            && DateTime.UtcNow - candidate.StableSinceUtc.Value >= stability;
-
-        if (candidate.State is RuleCandidateState.Validated or RuleCandidateState.Stable)
-        {
-            if (!stableEnough)
-            {
-                candidate.State = RuleCandidateState.Stable;
-                await _state.UpdateCandidateAsync(candidate, ct);
-                return;
-            }
-
-            var (dryOk, drySummary) = await _dryRun.RunStructuralPlaceholderAsync(candidate.Id, candidate.NidMember, ct);
-            candidate.DryRunOk = dryOk;
-            candidate.Notes = drySummary;
-            if (!dryOk)
-            {
-                candidate.State = RuleCandidateState.Stable;
-                await _state.UpdateCandidateAsync(candidate, ct);
-                return;
-            }
-
-            candidate.State = RuleCandidateState.PromoteReady;
-            await _state.UpdateCandidateAsync(candidate, ct);
-            await TryPromoteAsync(candidate, syncState, ct);
-        }
-    }
-
-    private async Task TryPromoteAsync(RuleCandidateRow candidate, RuleSyncStateRow syncState, CancellationToken ct)
-    {
-        var from = syncState.ActiveEngine;
-        var to = _options.AutoPromoteDynamic ? "Dynamic" : "Legacy";
-        var outcome = _options.AutoPromoteDynamic ? "Promoted" : "ReadyNotAuto";
-
-        syncState.ActiveXmlBodyHash = candidate.XmlBodyHash;
-        syncState.ActiveMemberVersion = candidate.MemberVersion;
-        if (_options.AutoPromoteDynamic)
-        {
-            syncState.ActiveEngine = "Dynamic";
-            syncState.LastPromotedAtUtc = DateTime.UtcNow;
-        }
-
-        candidate.State = _options.AutoPromoteDynamic ? RuleCandidateState.Promoted : RuleCandidateState.PromoteReady;
-        await _state.UpdateCandidateAsync(candidate, ct);
-        await _state.UpdateStateAsync(syncState, ct);
+        await _state.UpdateCandidateStatusAsync(candidate.CandidateId, RuleCandidateStatuses.Promoted, null, ct);
         await _state.InsertPromotionLogAsync(
-            candidate.NidMember,
-            candidate.Id,
-            from,
-            to,
-            candidate.XmlBodyHash,
-            candidate.NidHistory,
-            outcome,
-            _options.AutoPromoteDynamic
-                ? "AutoPromoteDynamic=true — ActiveEngine=Dynamic"
-                : "شرط‌ها برقرار؛ برای فعال‌سازی Dynamic، AutoPromoteDynamic=true یا promote دستی.",
+            nidMember,
+            candidate.CandidateId,
+            snapshotId,
+            RulePromotionActions.Promoted,
+            $"from={fromEngine} hash={fromHash}",
             ct);
 
-        _logger.LogInformation("Rule promote {Outcome} member={Nid} hash={Hash}", outcome, candidate.NidMember, candidate.XmlBodyHash);
-    }
-
-    private static string BuildDetectionNotes(RuleChangeAssessment a)
-    {
-        var parts = new List<string>();
-        if (a.MemberHashChanged) parts.Add("MemberHash≠ActiveHash");
-        if (a.HistoryAdvanced) parts.Add($"History advanced → {a.LatestNidHistory}");
-        if (a.MemberHashDrift) parts.Add("MemberHash drift");
-        if (a.HistoryHashDiffersFromMember) parts.Add("HistoryHash≠MemberHash");
-        return string.Join("; ", parts);
+        _logger.LogInformation(
+            "Rule sync: promoted candidate {CandidateId} for NidMember={NidMember}",
+            candidate.CandidateId, nidMember);
     }
 }
