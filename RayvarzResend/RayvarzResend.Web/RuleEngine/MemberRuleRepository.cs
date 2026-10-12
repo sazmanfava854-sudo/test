@@ -63,7 +63,7 @@ public sealed class MemberRuleRepository
             Version = reader.IsDBNull(reader.GetOrdinal("Version")) ? 0 : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("Version"))),
             VersionDateTime = reader.IsDBNull(reader.GetOrdinal("VersionDateTime"))
                 ? null
-                : reader.GetDateTime(reader.GetOrdinal("VersionDateTime")),
+                : SqlReaderValueCoercion.ToNullableDateTime(reader.GetValue(reader.GetOrdinal("VersionDateTime"))),
             Source = "DbRuleEngein"
         };
     }
@@ -129,27 +129,25 @@ public sealed class MemberRuleRepository
         try
         {
             var dateOrd = reader.GetOrdinal("ModifyDate");
-            if (reader.IsDBNull(dateOrd))
+            var date = reader.IsDBNull(dateOrd)
+                ? null
+                : SqlReaderValueCoercion.ToNullableDateTime(reader.GetValue(dateOrd));
+            if (date is null)
                 return null;
-            var date = reader.GetDateTime(dateOrd);
+
+            TimeSpan? timeOfDay = null;
             try
             {
                 var timeOrd = reader.GetOrdinal("ModifyTime");
                 if (!reader.IsDBNull(timeOrd))
-                {
-                    var timeVal = reader.GetValue(timeOrd);
-                    if (timeVal is TimeSpan ts)
-                        return date.Date.Add(ts);
-                    if (timeVal is DateTime dt)
-                        return date.Date.Add(dt.TimeOfDay);
-                }
+                    timeOfDay = SqlReaderValueCoercion.ToNullableTimeOfDay(reader.GetValue(timeOrd));
             }
             catch (IndexOutOfRangeException)
             {
                 // ignore missing ModifyTime
             }
 
-            return date;
+            return SqlReaderValueCoercion.CombineDateAndTime(date, timeOfDay);
         }
         catch (IndexOutOfRangeException)
         {
