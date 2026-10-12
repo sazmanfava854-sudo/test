@@ -112,7 +112,7 @@ builder.Services.AddSingleton<BankInquiryConfirmService>();
 builder.Services.AddSingleton<ShahkarService>();
 builder.Services.AddSingleton<RuleEngineStateRepository>();
 builder.Services.AddSingleton<RuleHistoryChecker>();
-builder.Services.AddSingleton<RuleGoldenDryRunService>();
+builder.Services.AddSingleton<RuleCandidateValidator>();
 builder.Services.AddSingleton<RuleVersionManager>();
 builder.Services.AddHostedService<RuleEngineSyncHostedService>();
 

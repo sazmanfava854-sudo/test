@@ -1,50 +1,34 @@
 namespace RayvarzResend.Web.RuleEngine.Sync;
 
-/// <summary>مقایسه Member فعال و MemberHistory با RuleSyncState (LastStableXmlHash / LastSeenNidHistory).</summary>
-public sealed class RuleHistoryChecker
+public enum RuleSyncDecision
 {
-    public RuleChangeAssessment Assess(
-        RuleSyncStateRow state,
-        string currentMemberHash,
-        MemberHistoryHead? latestHistory)
-    {
-        var activeHash = state.LastStableXmlHash ?? "";
-        var assessment = new RuleChangeAssessment
-        {
-            CurrentMemberHash = currentMemberHash,
-            StoredActiveHash = activeHash,
-            MemberHashChanged = !string.IsNullOrEmpty(currentMemberHash)
-                && !string.Equals(currentMemberHash, activeHash, StringComparison.OrdinalIgnoreCase),
-        };
-
-        if (latestHistory != null)
-        {
-            assessment.LatestNidHistory = latestHistory.NidHistory;
-            assessment.LatestHistoryModifyUtc = latestHistory.ModifyUtc;
-            assessment.HistoryAdvanced = state.LastSeenNidHistory == null
-                || latestHistory.NidHistory > state.LastSeenNidHistory.Value;
-
-            var historyHash = XmlBodyCanonicalHash.Compute(latestHistory.XmlBody);
-            assessment.LatestHistoryHash = historyHash;
-            assessment.HistoryHashDiffersFromMember = !string.IsNullOrEmpty(historyHash)
-                && !string.Equals(historyHash, currentMemberHash, StringComparison.OrdinalIgnoreCase);
-        }
-
-        assessment.ShouldOpenCandidate = assessment.MemberHashChanged || assessment.HistoryAdvanced;
-
-        return assessment;
-    }
+    /// <summary>اولین اجرا — نسخه فعلی Member به‌عنوان پایه ثبت می‌شود.</summary>
+    Baseline,
+    /// <summary>هش Member با LastStableXmlHash برابر است.</summary>
+    Unchanged,
+    /// <summary>candidate باز همین هش را دنبال می‌کند.</summary>
+    TrackingOpenCandidate,
+    /// <summary>محتوای جدید — candidate جدید (یا reopen) با شروع مجدد ساعت ثبات.</summary>
+    NewCandidate
 }
 
-public sealed class RuleChangeAssessment
+/// <summary>مقایسه هش XmlBody فعال Member با RuleSyncState.LastStableXmlHash و candidate باز.</summary>
+public sealed class RuleHistoryChecker
 {
-    public string CurrentMemberHash { get; set; } = "";
-    public string StoredActiveHash { get; set; } = "";
-    public bool MemberHashChanged { get; set; }
-    public long? LatestNidHistory { get; set; }
-    public DateTime? LatestHistoryModifyUtc { get; set; }
-    public string? LatestHistoryHash { get; set; }
-    public bool HistoryAdvanced { get; set; }
-    public bool HistoryHashDiffersFromMember { get; set; }
-    public bool ShouldOpenCandidate { get; set; }
+    public RuleSyncDecision Decide(RuleSyncStateRow state, string memberHash, RuleCandidateRow? openCandidate)
+    {
+        if (string.IsNullOrWhiteSpace(state.LastStableXmlHash))
+            return RuleSyncDecision.Baseline;
+
+        if (HashEquals(memberHash, state.LastStableXmlHash))
+            return RuleSyncDecision.Unchanged;
+
+        if (openCandidate != null && HashEquals(memberHash, openCandidate.CanonicalXmlHash))
+            return RuleSyncDecision.TrackingOpenCandidate;
+
+        return RuleSyncDecision.NewCandidate;
+    }
+
+    public static bool HashEquals(string? a, string? b) =>
+        string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
 }

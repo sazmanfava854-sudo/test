@@ -23,14 +23,27 @@
 
 ## چرخه کار
 
-هر `PollIntervalMinutes` (پیش‌فرض ۱۵ دقیقه):
+هر `PollIntervalMinutes` (پیش‌فرض ۱۵ دقیقه) — اجراهای هم‌زمان (پس‌زمینه + `POST /run`) با قفل سریال می‌شوند:
 
-1. خواندن `Member` فعال → **هش canonical** `XmlBody`.
-2. مقایسه هش `XmlBody` عضو فعال با `RuleSyncState.LastStableXmlHash`.
-3. خواندن آخرین `MemberHistory` → مقایسه `NidHistory` با `LastSeenNidHistory`.
-4. در صورت تغییر → `RuleCandidate` با `Status=PendingStability` و `StableEligibleAtUtc = now + StabilityHours`.
-5. پس از رسیدن `StableEligibleAtUtc` → dry run golden (placeholder).
-6. اگر `AutoPromoteDynamic=true` → `ActiveEngine=Dynamic` و log در `RulePromotionLog`؛ در غیر این صورت فقط log و hash فعال به‌روز می‌شود و **ارسال تولید همچنان `LegacyCSharp`**.
+1. خواندن `Member` فعال → **هش canonical** `XmlBody` (منبع حقیقت محتوا).
+2. خواندن آخرین `MemberHistory` → `LastSeenNidHistory` / `LastSeenModifyAt` (تاریخ شمسی `ModifyDate` به میلادی تبدیل می‌شود).
+3. تصمیم:
+
+| وضعیت | اقدام |
+|-------|-------|
+| `LastStableXmlHash` خالی (اولین اجرا) | **Baseline**: نسخه فعلی پایه می‌شود، بدون انتظار ۷۲ ساعت |
+| هش = `LastStableXmlHash` | بدون تغییر؛ candidateهای در انتظار → `Rejected` (برگشت به نسخه پایدار) |
+| هش = candidate باز | فقط `LastCheckedAtUtc` به‌روز می‌شود |
+| هش جدید | candidate `Detected` با `StableEligibleAtUtc = now + StabilityHours`؛ candidateهای قبلی → `Rejected` (Superseded). اگر همین هش قبلاً دیده شده (UNIQUE)، همان ردیف دوباره باز می‌شود |
+
+4. XmlBody نامعتبر (parse ناموفق با `ClsFunctionParser`) همان لحظه `Rejected` می‌شود و تا تغییر محتوا دوباره باز نمی‌شود.
+5. پس از رسیدن `StableEligibleAtUtc` و parse موفق → `LastStable*` به نسخه جدید به‌روز می‌شود:
+   - `AutoPromoteDynamic=false` (پیش‌فرض): candidate → `Stable`، `ActiveEngine` همان `Legacy`.
+   - `AutoPromoteDynamic=true` و circuit breaker بسته: candidate → `Promoted`، `ActiveEngine=Dynamic`.
+6. همه رویدادها در `RulePromotionLog.Action`: `Baseline`, `Superseded`, `Stable`, `Promoted`, `Rejected`.
+
+ارسال تولید در هر حال **`LegacyCSharp`** می‌ماند؛ هیچ کدی هنوز `ActiveEngine` را برای ساخت سند نمی‌خواند.
+Dry run golden (`RuleDryRunResult`) هنوز وصل نیست و sync ردیف ساختگی در آن نمی‌نویسد.
 
 ## API (ادمین)
 
@@ -43,7 +56,7 @@
 
 ### شروع فوری بعد از تغییر دیتابیس
 
-1. تغییر باید روی **DbRuleEngein** باشد: `dbo.Member` (XmlBody فعال) یا ردیف جدید در `dbo.MemberHistory` برای `NidMember=1388`.  
+1. تغییر باید روی **DbRuleEngein** باشد: `dbo.Member.XmlBody` فعال برای `NidMember=1388` (ردیف جدید `MemberHistory` بدون تغییر `XmlBody` فقط `LastSeenNidHistory` را جلو می‌برد).  
    تغییر روی `RayvarzRuleEngine` / `AppUser` توسط این sync **دیده نمی‌شود**.
 2. در `appsettings.json`: `"RuleEngineSync": { "Enabled": true }`
 3. یکی از این دو:
