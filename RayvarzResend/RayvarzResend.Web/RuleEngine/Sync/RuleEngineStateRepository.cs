@@ -115,15 +115,15 @@ public sealed class RuleEngineStateRepository
         cmd.Parameters.AddWithValue("@nid", row.NidMember);
         cmd.Parameters.AddWithValue("@class", row.NidClass);
         cmd.Parameters.AddWithValue("@seenHist", (object?)row.LastSeenNidHistory ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@seenMod", (object?)row.LastSeenModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@seenMod", SqlReaderValueCoercion.ToSqlDateTimeParameter(row.LastSeenModifyAt));
         cmd.Parameters.AddWithValue("@stableHist", (object?)row.LastStableNidHistory ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@stableMod", (object?)row.LastStableModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@stableMod", SqlReaderValueCoercion.ToSqlDateTimeParameter(row.LastStableModifyAt));
         cmd.Parameters.AddWithValue("@stableHash", row.LastStableXmlHash ?? "");
         cmd.Parameters.AddWithValue("@dslVer", (object?)row.ActiveDslVersion ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@engine", row.ActiveEngine);
         cmd.Parameters.AddWithValue("@snapshot", (object?)row.ActiveSnapshotId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@failures", row.ConsecutiveDynamicFailures);
-        cmd.Parameters.AddWithValue("@breaker", (object?)row.CircuitBreakerOpenUntilUtc ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@breaker", SqlReaderValueCoercion.ToSqlDateTimeParameter(row.CircuitBreakerOpenUntilUtc));
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -209,7 +209,7 @@ public sealed class RuleEngineStateRepository
         await using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@nid", nidMember);
         cmd.Parameters.AddWithValue("@hist", sourceNidHistory);
-        cmd.Parameters.AddWithValue("@modAt", (object?)sourceModifyAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@modAt", SqlReaderValueCoercion.ToSqlDateTimeParameter(sourceModifyAt));
         cmd.Parameters.AddWithValue("@hash", canonicalXmlHash);
         cmd.Parameters.AddWithValue("@xml", xmlBody ?? "");
         cmd.Parameters.AddWithValue("@modBy", (object?)modifyer ?? DBNull.Value);

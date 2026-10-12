@@ -15,6 +15,23 @@ public class SqlReaderValueCoercionTests
         Assert.Equal(15, dt.Value.Day);
     }
 
+    [Theory]
+    [InlineData("1403/07/20")]
+    [InlineData("14030720")]
+    [InlineData("۱۴۰۳/۰۷/۲۰")]
+    public void ToNullableDateTime_ConvertsShamsiToGregorian(string raw)
+    {
+        var dt = SqlReaderValueCoercion.ToNullableDateTime(raw);
+        Assert.Equal(new DateTime(2024, 10, 11), dt);
+    }
+
+    [Fact]
+    public void ToSqlDateTimeParameter_RejectsPre1753()
+    {
+        Assert.Equal(DBNull.Value, SqlReaderValueCoercion.ToSqlDateTimeParameter(new DateTime(1403, 7, 20)));
+        Assert.Equal(new DateTime(2024, 10, 11), SqlReaderValueCoercion.ToSqlDateTimeParameter(new DateTime(2024, 10, 11)));
+    }
+
     [Fact]
     public void CombineDateAndTime_MergesParts()
     {
