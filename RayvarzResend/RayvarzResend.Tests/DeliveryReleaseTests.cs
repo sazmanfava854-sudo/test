@@ -105,6 +105,10 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
+        Assert.Contains("hoseine-sh", html);
+        Assert.DoesNotContain("alidoost-pa", html);
+        Assert.DoesNotContain("login-sso-hint", html);
+        Assert.DoesNotContain("ورود یکپارچه سازمانی (رمز در login.mashhad.ir", html);
         Assert.Contains("login.js?v=7", html);
         var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
         Assert.Contains("allowHybridLocalLogin", js);
@@ -212,6 +216,7 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("قالب فایل اکسل — ۲ ستون الزامی", html);
         Assert.Contains("templates/unsent-bill-pay-template.xlsx", html);
         Assert.DoesNotContain("نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh", html);
+        Assert.DoesNotContain("همه ماژول‌ها شامل شاهکار", html);
         Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
         Assert.DoesNotContain("cdn.sheetjs.com", html);
         Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
