@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
@@ -22,6 +23,7 @@ public sealed class TahatorResendService
     private readonly RayvarzClient _client;
     private readonly AccountingDocWriter _accountingDoc;
     private readonly EpayFichePresenceChecker _epay;
+    private readonly RuleSendGate _sendGate;
 
     public TahatorResendService(
         IConfiguration config,
@@ -30,8 +32,10 @@ public sealed class TahatorResendService
         RayvarzPayloadBuilder payload,
         RayvarzClient client,
         AccountingDocWriter accountingDoc,
-        EpayFichePresenceChecker epay)
+        EpayFichePresenceChecker epay,
+        RuleSendGate sendGate)
     {
+        _sendGate = sendGate;
         _config = config;
         _logger = logger;
         _fiches = fiches;
@@ -154,6 +158,7 @@ public sealed class TahatorResendService
 
     public async Task<TahatorSendResult> SendAsync(TahatorFicheRequest req, CancellationToken ct = default)
     {
+        await _sendGate.EnsureOpenAsync(ct);
         var steps = new List<string>();
         var dryRun = IsDryRun;
         var force = req.Force;

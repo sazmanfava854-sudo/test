@@ -14,7 +14,9 @@
   "StabilityHours": 72,
   "NidMember": 1388,
   "AutoPromoteDynamic": false,
-  "StateConnectionStringName": "AppAuth"
+  "StateConnectionStringName": "AppAuth",
+  "SendGateEnabled": true,
+  "SendGateCacheSeconds": 15
 }
 ```
 
@@ -40,7 +42,31 @@
 5. پس از رسیدن `StableEligibleAtUtc` و parse موفق → `LastStable*` به نسخه جدید به‌روز می‌شود:
    - `AutoPromoteDynamic=false` (پیش‌فرض): candidate → `Stable`، `ActiveEngine` همان `Legacy`.
    - `AutoPromoteDynamic=true` و circuit breaker بسته: candidate → `Promoted`، `ActiveEngine=Dynamic`.
-6. همه رویدادها در `RulePromotionLog.Action`: `Baseline`, `Superseded`, `Stable`, `Promoted`, `Rejected`.
+6. همه رویدادها در `RulePromotionLog.Action`: `Baseline`, `Superseded`, `Stable`, `Promoted`, `Rejected`, `SendBlocked`, `SendApproved`, `SendReopened`.
+
+## SendGate — بستن ارسال از لحظه Detected
+
+ستون‌ها: `database/12_RuleEngine_SendGate.sql` (اپ در اولین اتصال خودش اضافه می‌کند؛ اگر مجوز ALTER نیست اسکریپت را دستی اجرا کنید).
+
+| رویداد | `RuleSyncState.SendGate` |
+|--------|--------------------------|
+| Baseline (اولین اجرا) | `Open`، `ApprovedSendXmlHash` = هش فعلی |
+| هش `Member` ≠ `ApprovedSendXmlHash` (همان لحظه Detected، حتی اگر XmlBody نامعتبر باشد) | `Blocked` + `SendBlocked` در log |
+| مدیر «تأیید به‌روزرسانی» (`POST /api/rule/send-gate/approve`) | `Open`، `ApprovedSendXmlHash` = هش فعلی `Member` + `SendApproved` |
+| `Member` به همان نسخه تأییدشده برگردد | `Open` + `SendReopened` |
+| پایان ۷۲ ساعت (`Stable`) | **بدون اثر** روی Gate — فقط audit |
+
+وقتی `Blocked` است، `/api/fiche/send`، `/api/tahator/send` و `/api/unsent/send-batch` با HTTP 409 و فقط این پیام رد می‌شوند:
+
+```
+نیاز به به روز رسانی هست
+```
+
+روال مدیر: لاگ هشدار `sending to Rayvarz is BLOCKED` یا کارت «به‌روزرسانی قوانین» در `/management/` → اعمال تغییر در کد و deploy → دکمه «تأیید به‌روزرسانی و باز کردن ارسال». (`POST /api/rule/send-gate/block` بستن دستی.)
+
+- `SendGateEnabled=false` گیت را غیرفعال می‌کند؛ با `Enabled=false` (sync خاموش) هم گیت اعمال نمی‌شود.
+- خطای اتصال به RayvarzRuleEngine هنگام خواندن Gate ارسال را متوقف نمی‌کند (هشدار در لاگ).
+- مقدار Gate حداکثر `SendGateCacheSeconds` (پیش‌فرض ۱۵ ثانیه) کش می‌شود؛ تأیید/بستن از API کش را فوراً پاک می‌کند.
 
 ارسال تولید در هر حال **`LegacyCSharp`** می‌ماند؛ هیچ کدی هنوز `ActiveEngine` را برای ساخت سند نمی‌خواند.
 Dry run golden (`RuleDryRunResult`) هنوز وصل نیست و sync ردیف ساختگی در آن نمی‌نویسد.
@@ -51,6 +77,8 @@ Dry run golden (`RuleDryRunResult`) هنوز وصل نیست و sync ردیف س
 |-----|------|
 | GET | `/api/rule/sync/status` |
 | POST | `/api/rule/sync/run` — **همین الان** یک چرخه (بعد از تغییر Member/History) |
+| POST | `/api/rule/send-gate/approve` — بدنه اختیاری `{ "note": "..." }` |
+| POST | `/api/rule/send-gate/block` — بدنه اختیاری `{ "note": "..." }` |
 
 با `Enabled: true` اولین چرخه **بلافاصله بعد از استارت** اپ هم اجرا می‌شود (بدون انتظار ۱۵ دقیقه).
 

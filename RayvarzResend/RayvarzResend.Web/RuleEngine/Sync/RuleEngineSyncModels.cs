@@ -26,6 +26,84 @@ public sealed class RuleSyncStateRow
     public DateTime UpdatedAtUtc { get; set; }
     public int ConsecutiveDynamicFailures { get; set; }
     public DateTime? CircuitBreakerOpenUntilUtc { get; set; }
+
+    /// <summary>Open | Blocked (database/12_RuleEngine_SendGate.sql). NULL در DB = Open.</summary>
+    public string SendGate { get; set; } = RuleSendGateStates.Open;
+
+    /// <summary>هش XmlBody که مدیر پس از به‌روزرسانی کد برای ارسال تأیید کرده است.</summary>
+    public string ApprovedSendXmlHash { get; set; } = "";
+
+    public DateTime? SendGateChangedAtUtc { get; set; }
+    public string? SendGateChangedBy { get; set; }
+}
+
+public static class RuleSendGateStates
+{
+    public const string Open = "Open";
+    public const string Blocked = "Blocked";
+
+    public static bool IsBlocked(string? gate) =>
+        string.Equals(gate?.Trim(), Blocked, StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed record RuleSendGateDecision(string Gate, string ApprovedHash, string? Action, string? Reason)
+{
+    public bool Changed => Action != null;
+}
+
+/// <summary>
+/// ارسال از لحظه Detected بسته است: هر XmlBody فعال که با ApprovedSendXmlHash یکی نباشد → Blocked.
+/// فقط تأیید مدیر (یا بازگشت Member به همان نسخه تأییدشده) دوباره Open می‌کند؛ ثبات ۷۲ساعته روی Gate اثری ندارد.
+/// </summary>
+public static class RuleSendGatePolicy
+{
+    public static RuleSendGateDecision Evaluate(
+        string? currentGate,
+        string? approvedHash,
+        string? lastStableHash,
+        string memberHash,
+        bool isBaseline)
+    {
+        var blocked = RuleSendGateStates.IsBlocked(currentGate);
+        var approved = approvedHash?.Trim() ?? "";
+
+        if (approved.Length == 0)
+        {
+            if (isBaseline || string.IsNullOrWhiteSpace(lastStableHash))
+                return new RuleSendGateDecision(RuleSendGateStates.Open, memberHash, RulePromotionActions.SendApproved,
+                    "initial approved hash = current Member (baseline)");
+            approved = lastStableHash!.Trim();
+        }
+
+        var matches = RuleHistoryChecker.HashEquals(approved, memberHash);
+        if (!matches)
+            return blocked
+                ? new RuleSendGateDecision(RuleSendGateStates.Blocked, approved, null, null)
+                : new RuleSendGateDecision(RuleSendGateStates.Blocked, approved, RulePromotionActions.SendBlocked,
+                    "Member XmlBody differs from approved send hash");
+
+        return blocked
+            ? new RuleSendGateDecision(RuleSendGateStates.Open, approved, RulePromotionActions.SendReopened,
+                "Member reverted to approved XmlBody")
+            : new RuleSendGateDecision(RuleSendGateStates.Open, approved,
+                string.Equals(approved, approvedHash?.Trim(), StringComparison.Ordinal) ? null : RulePromotionActions.SendApproved,
+                "approved send hash initialised from LastStableXmlHash");
+    }
+}
+
+public sealed class RuleSendGateRequest
+{
+    public string? Note { get; set; }
+}
+
+public sealed class RuleSendGateChangeResult
+{
+    public bool Ok { get; set; } = true;
+    public string SendGate { get; set; } = RuleSendGateStates.Open;
+    public string? ApprovedSendXmlHash { get; set; }
+    public string? MemberHash { get; set; }
+    public long? OpenCandidateId { get; set; }
+    public string? Error { get; set; }
 }
 
 /// <summary>مقادیر RuleCandidate.Status — سازگار با ردیف‌های نسخه قبلی (Detected/Parsed/Validated/Stable/Promoted/Rejected).</summary>
@@ -52,6 +130,9 @@ public static class RulePromotionActions
     public const string Promoted = "Promoted";
     public const string Rejected = "Rejected";
     public const string Superseded = "Superseded";
+    public const string SendBlocked = "SendBlocked";
+    public const string SendApproved = "SendApproved";
+    public const string SendReopened = "SendReopened";
 }
 
 /// <summary>ردیف dbo.RuleCandidate.</summary>
@@ -82,5 +163,6 @@ public sealed class RuleSyncCycleResult
     public long? CandidateId { get; set; }
     public bool Accepted { get; set; }
     public bool Promoted { get; set; }
+    public string SendGate { get; set; } = RuleSendGateStates.Open;
     public string? Error { get; set; }
 }

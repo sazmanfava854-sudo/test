@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
@@ -9,17 +10,20 @@ public class UnsentFicheService
     private readonly FicheSendService _send;
     private readonly TahatorResendService _tahator;
     private readonly IConfiguration _config;
+    private readonly RuleSendGate _sendGate;
 
     public UnsentFicheService(
         FicheRepository repo,
         FicheSendService send,
         TahatorResendService tahator,
-        IConfiguration config)
+        IConfiguration config,
+        RuleSendGate sendGate)
     {
         _repo = repo;
         _send = send;
         _tahator = tahator;
         _config = config;
+        _sendGate = sendGate;
     }
 
     public async Task<UnsentFicheSearchResult> SearchAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
@@ -163,6 +167,7 @@ public class UnsentFicheService
         ClaimsPrincipal user,
         CancellationToken ct = default)
     {
+        await _sendGate.EnsureOpenAsync(ct);
         var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
         var delayMs = _config.GetValue("Rayvarz:SendDelayMs", 2000);
         var targets = ResolveBatchTargets(req);

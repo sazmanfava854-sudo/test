@@ -22,4 +22,10 @@ public sealed class RuleEngineSyncOptions
 
     /// <summary>Connection string name for RuleSyncState tables (default AppAuth → RayvarzRuleEngine).</summary>
     public string StateConnectionStringName { get; set; } = "AppAuth";
+
+    /// <summary>وقتی Enabled است، ارسال به رایورز با RuleSyncState.SendGate=Blocked رد می‌شود.</summary>
+    public bool SendGateEnabled { get; set; } = true;
+
+    /// <summary>کش خواندن SendGate در مسیر ارسال (ثانیه).</summary>
+    public int SendGateCacheSeconds { get; set; } = 15;
 }

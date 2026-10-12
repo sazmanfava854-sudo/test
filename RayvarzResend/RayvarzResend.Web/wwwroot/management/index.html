@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../css/style.css?v=43" />
-  <link rel="stylesheet" href="management.css?v=2" />
+  <link rel="stylesheet" href="management.css?v=3" />
   <style>
     body:not(.hub-authenticated) .container,
     body:not(.hub-authenticated) .page-bg {
@@ -38,8 +38,18 @@
       <p>برای حساب شما هیچ فرمی تعریف نشده است. با ادمین تماس بگیرید.</p>
     </div>
 
+    <section id="ruleGatePanel" class="card rule-gate-panel" hidden>
+      <h2 class="rule-gate-title">به‌روزرسانی قوانین رایورز</h2>
+      <p id="ruleGateStatus" class="rule-gate-status"></p>
+      <dl id="ruleGateDetails" class="rule-gate-details"></dl>
+      <div class="rule-gate-actions">
+        <button id="btnRuleGateApprove" class="btn" type="button" hidden>تأیید به‌روزرسانی و باز کردن ارسال</button>
+        <button id="btnRuleGateRefresh" class="btn secondary btn-sm" type="button">بررسی مجدد</button>
+      </div>
+    </section>
+
     <div id="hubGrid" class="hub-grid" role="list" hidden></div>
   </div>
-  <script src="management.js?v=4" type="module"></script>
+  <script src="management.js?v=5" type="module"></script>
 </body>
 </html>

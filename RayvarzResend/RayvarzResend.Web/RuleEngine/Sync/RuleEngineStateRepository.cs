@@ -7,7 +7,7 @@ namespace RayvarzResend.Web.RuleEngine.Sync;
 /// جداول sync در RayvarzRuleEngine (اسکیمای database/01 + 03).
 /// RuleCandidate: CandidateId IDENTITY، UNIQUE (NidMember, CanonicalXmlHash)، Source*/StableEligibleAtUtc NOT NULL.
 /// </summary>
-public sealed class RuleEngineStateRepository
+public sealed class RuleEngineStateRepository : IRuleSendGateStore
 {
     private const string CandidateColumns = """
         CandidateId, NidMember, SourceNidHistory, SourceModifyAt, CanonicalXmlHash, XmlBody,
@@ -50,7 +50,6 @@ public sealed class RuleEngineStateRepository
             await conn.OpenAsync(ct);
             await using var cmd = new SqlCommand(probe, conn);
             await cmd.ExecuteNonQueryAsync(ct);
-            _schemaVerified = true;
         }
         catch (SqlException ex)
         {
@@ -58,6 +57,86 @@ public sealed class RuleEngineStateRepository
                 "Rule sync tables in RayvarzRuleEngine do not match database/01_RayvarzRuleEngine_Schema.sql + 03_Phase4_CircuitBreaker.sql");
             throw;
         }
+
+        try
+        {
+            await using var conn = new SqlConnection(_cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(SendGateSchemaSql, conn);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqlException ex)
+        {
+            _logger.LogError(ex,
+                "RuleSyncState.SendGate columns missing and could not be added — run database/12_RuleEngine_SendGate.sql");
+            throw;
+        }
+
+        _schemaVerified = true;
+    }
+
+    /// <summary>هم‌ارز database/12_RuleEngine_SendGate.sql (idempotent).</summary>
+    internal const string SendGateSchemaSql = """
+        IF COL_LENGTH(N'dbo.RuleSyncState', N'ApprovedSendXmlHash') IS NULL
+            ALTER TABLE dbo.RuleSyncState ADD ApprovedSendXmlHash CHAR(64) NULL;
+        IF COL_LENGTH(N'dbo.RuleSyncState', N'SendGateChangedAtUtc') IS NULL
+            ALTER TABLE dbo.RuleSyncState ADD SendGateChangedAtUtc DATETIME2(3) NULL;
+        IF COL_LENGTH(N'dbo.RuleSyncState', N'SendGateChangedBy') IS NULL
+            ALTER TABLE dbo.RuleSyncState ADD SendGateChangedBy NVARCHAR(200) NULL;
+        IF COL_LENGTH(N'dbo.RuleSyncState', N'SendGate') IS NULL
+        BEGIN
+            ALTER TABLE dbo.RuleSyncState ADD SendGate VARCHAR(20) NULL;
+            EXEC (N'
+                UPDATE s SET
+                    ApprovedSendXmlHash = s.LastStableXmlHash,
+                    SendGate = CASE WHEN EXISTS (
+                        SELECT 1 FROM dbo.RuleCandidate c
+                        WHERE c.NidMember = s.NidMember AND c.Status IN (''Detected'', ''Parsed'', ''Validated''))
+                        THEN ''Blocked'' ELSE ''Open'' END,
+                    SendGateChangedAtUtc = SYSUTCDATETIME(),
+                    SendGateChangedBy = N''schema-12''
+                FROM dbo.RuleSyncState s;');
+        END
+        """;
+
+    public async Task<string?> GetSendGateAsync(int nidMember, CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+            return null;
+        await EnsureSchemaAsync(ct);
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand("SELECT SendGate FROM dbo.RuleSyncState WHERE NidMember = @nid", conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        var value = await cmd.ExecuteScalarAsync(ct);
+        return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+    }
+
+    public async Task UpdateSendGateAsync(
+        int nidMember,
+        string gate,
+        string? approvedHash,
+        string changedBy,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE dbo.RuleSyncState SET
+                SendGate = @gate,
+                ApprovedSendXmlHash = @approved,
+                SendGateChangedAtUtc = SYSUTCDATETIME(),
+                SendGateChangedBy = @by,
+                UpdatedAtUtc = SYSUTCDATETIME()
+            WHERE NidMember = @nid
+            """;
+        await using var conn = new SqlConnection(_cs);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@nid", nidMember);
+        cmd.Parameters.AddWithValue("@gate", gate);
+        cmd.Parameters.AddWithValue("@approved",
+            string.IsNullOrWhiteSpace(approvedHash) ? DBNull.Value : approvedHash.Trim());
+        cmd.Parameters.AddWithValue("@by", Truncate(changedBy, 200)!);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task<RuleSyncStateRow> GetOrCreateStateAsync(int nidMember, CancellationToken ct = default)
@@ -94,7 +173,8 @@ public sealed class RuleEngineStateRepository
             SELECT NidMember, NidClass, LastSeenNidHistory, LastSeenModifyAt,
                    LastStableNidHistory, LastStableModifyAt, LastStableXmlHash,
                    ActiveDslVersion, ActiveEngine, ActiveSnapshotId, UpdatedAtUtc,
-                   ConsecutiveDynamicFailures, CircuitBreakerOpenUntilUtc
+                   ConsecutiveDynamicFailures, CircuitBreakerOpenUntilUtc,
+                   SendGate, ApprovedSendXmlHash, SendGateChangedAtUtc, SendGateChangedBy
             FROM dbo.RuleSyncState WHERE NidMember = @nid
             """;
         await using var conn = new SqlConnection(_cs);
@@ -368,7 +448,13 @@ public sealed class RuleEngineStateRepository
         ActiveSnapshotId = ReadNullableInt64(reader, 9),
         UpdatedAtUtc = ReadNullableDateTime(reader, 10) ?? DateTime.UtcNow,
         ConsecutiveDynamicFailures = ReadInt32OrDefault(reader, 11),
-        CircuitBreakerOpenUntilUtc = ReadNullableDateTime(reader, 12)
+        CircuitBreakerOpenUntilUtc = ReadNullableDateTime(reader, 12),
+        SendGate = RuleSendGateStates.IsBlocked(ReadTrimmedString(reader, 13))
+            ? RuleSendGateStates.Blocked
+            : RuleSendGateStates.Open,
+        ApprovedSendXmlHash = ReadTrimmedString(reader, 14),
+        SendGateChangedAtUtc = ReadNullableDateTime(reader, 15),
+        SendGateChangedBy = ReadNullableString(reader, 16)
     };
 
     private static RuleCandidateRow ReadCandidate(SqlDataReader reader) => new()

@@ -111,6 +111,8 @@ builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 builder.Services.AddSingleton<ShahkarService>();
 builder.Services.AddSingleton<RuleEngineStateRepository>();
+builder.Services.AddSingleton<IRuleSendGateStore>(sp => sp.GetRequiredService<RuleEngineStateRepository>());
+builder.Services.AddSingleton<RuleSendGate>();
 builder.Services.AddSingleton<RuleHistoryChecker>();
 builder.Services.AddSingleton<RuleCandidateValidator>();
 builder.Services.AddSingleton<RuleVersionManager>();
@@ -949,16 +951,19 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
     }
 }).RequireAuthorization(adminOnly);
 
-app.MapGet("/api/rule/sync/status", async (RuleEngineStateRepository state, RuleVersionManager sync, IConfiguration config, CancellationToken ct) =>
+app.MapGet("/api/rule/sync/status", async (RuleEngineStateRepository state, RuleVersionManager sync, RuleSendGate sendGate, IConfiguration config, CancellationToken ct) =>
 {
     var nid = config.GetValue($"{RuleEngineSyncOptions.SectionName}:NidMember", 1388);
     var row = state.IsConfigured ? await state.GetStateAsync(nid, ct) : null;
     var open = state.IsConfigured ? await state.GetOpenCandidateAsync(nid, ct) : null;
+    sendGate.Invalidate();
     return Results.Ok(new
     {
         enabled = config.GetValue($"{RuleEngineSyncOptions.SectionName}:Enabled", false),
         configured = state.IsConfigured,
         nidMember = nid,
+        sendGateActive = sendGate.IsActive,
+        sendBlocked = await sendGate.IsBlockedAsync(ct),
         state = row,
         openCandidate = open,
         pollIntervalMinutes = config.GetValue($"{RuleEngineSyncOptions.SectionName}:PollIntervalMinutes", 15),
@@ -970,6 +975,18 @@ app.MapGet("/api/rule/sync/status", async (RuleEngineStateRepository state, Rule
 app.MapPost("/api/rule/sync/run", async (RuleVersionManager sync, CancellationToken ct) =>
 {
     var result = await sync.RunCycleAsync(ct);
+    return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/send-gate/approve", async (RuleSendGateRequest? req, RuleVersionManager sync, HttpContext http, CancellationToken ct) =>
+{
+    var result = await sync.ApproveSendAsync(http.User.Identity?.Name ?? "admin", req?.Note, ct);
+    return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/send-gate/block", async (RuleSendGateRequest? req, RuleVersionManager sync, HttpContext http, CancellationToken ct) =>
+{
+    var result = await sync.BlockSendAsync(http.User.Identity?.Name ?? "admin", req?.Note, ct);
     return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
 }).RequireAuthorization(adminOnly);
 
@@ -1051,6 +1068,10 @@ app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendS
 
         return Results.Ok(await tahator.SendAsync(req, ct));
     }
+    catch (RuleSendGateBlockedException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 409);
+    }
     catch (Exception ex)
     {
         return Results.Json(new { error = ex.Message, steps = Array.Empty<string>() }, statusCode: 500);
@@ -1069,6 +1090,10 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService se
     try
     {
         return Results.Ok(await send.SendAsync(req, ct));
+    }
+    catch (RuleSendGateBlockedException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 409);
     }
     catch (InvalidOperationException ex)
     {
@@ -1150,6 +1175,10 @@ app.MapPost("/api/unsent/send-batch", async (
     try
     {
         return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
+    }
+    catch (RuleSendGateBlockedException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 409);
     }
     catch (Exception ex)
     {

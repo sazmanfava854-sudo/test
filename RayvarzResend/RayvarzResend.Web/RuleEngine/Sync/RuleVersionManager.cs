@@ -13,6 +13,7 @@ public sealed class RuleVersionManager
     private readonly MemberRuleRepository _memberRules;
     private readonly RuleHistoryChecker _checker;
     private readonly RuleCandidateValidator _validator;
+    private readonly RuleSendGate _sendGate;
     private readonly RuleEngineSyncOptions _options;
     private readonly ILogger<RuleVersionManager> _logger;
     private readonly SemaphoreSlim _cycleLock = new(1, 1);
@@ -22,6 +23,7 @@ public sealed class RuleVersionManager
         MemberRuleRepository memberRules,
         RuleHistoryChecker checker,
         RuleCandidateValidator validator,
+        RuleSendGate sendGate,
         IOptions<RuleEngineSyncOptions> options,
         ILogger<RuleVersionManager> logger)
     {
@@ -29,8 +31,84 @@ public sealed class RuleVersionManager
         _memberRules = memberRules;
         _checker = checker;
         _validator = validator;
+        _sendGate = sendGate;
         _options = options.Value;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// مدیر پس از اعمال تغییرات قانون در کد: XmlBody فعلی Member تأیید و ارسال باز می‌شود.
+    /// ثبات ۷۲ساعته candidate مستقل از این تأیید ادامه می‌یابد.
+    /// </summary>
+    public async Task<RuleSendGateChangeResult> ApproveSendAsync(string approvedBy, string? note, CancellationToken ct = default)
+    {
+        await _cycleLock.WaitAsync(ct);
+        try
+        {
+            if (!_state.IsConfigured)
+                return new RuleSendGateChangeResult { Ok = false, Error = "RayvarzRuleEngine not configured." };
+
+            var nidMember = _options.NidMember;
+            await _state.GetOrCreateStateAsync(nidMember, ct);
+            var member = await _memberRules.LoadActiveMemberAsync(nidMember, ct: ct);
+            if (member is null || string.IsNullOrWhiteSpace(member.XmlBody))
+                return new RuleSendGateChangeResult
+                {
+                    Ok = false,
+                    Error = $"Active Member {nidMember} not found or XmlBody empty (ConnectionStrings:RuleEngine)."
+                };
+
+            var memberHash = XmlBodyCanonicalHash.Compute(member.XmlBody);
+            var open = await _state.GetOpenCandidateAsync(nidMember, ct);
+            await _state.UpdateSendGateAsync(nidMember, RuleSendGateStates.Open, memberHash, approvedBy, ct);
+            var reason = $"approved by {approvedBy}, hash={memberHash[..12]}"
+                + (open != null ? $", candidate {open.CandidateId} {open.Status}" : "")
+                + (string.IsNullOrWhiteSpace(note) ? "" : $": {note.Trim()}");
+            await _state.InsertPromotionLogAsync(nidMember, open?.CandidateId, null, RulePromotionActions.SendApproved, reason, ct);
+            _sendGate.Invalidate();
+
+            _logger.LogInformation("Rule send gate opened for NidMember={NidMember} by {User} (hash {Hash})",
+                nidMember, approvedBy, memberHash);
+            return new RuleSendGateChangeResult
+            {
+                SendGate = RuleSendGateStates.Open,
+                ApprovedSendXmlHash = memberHash,
+                MemberHash = memberHash,
+                OpenCandidateId = open?.CandidateId
+            };
+        }
+        finally
+        {
+            _cycleLock.Release();
+        }
+    }
+
+    public async Task<RuleSendGateChangeResult> BlockSendAsync(string blockedBy, string? note, CancellationToken ct = default)
+    {
+        await _cycleLock.WaitAsync(ct);
+        try
+        {
+            if (!_state.IsConfigured)
+                return new RuleSendGateChangeResult { Ok = false, Error = "RayvarzRuleEngine not configured." };
+
+            var nidMember = _options.NidMember;
+            var state = await _state.GetOrCreateStateAsync(nidMember, ct);
+            await _state.UpdateSendGateAsync(nidMember, RuleSendGateStates.Blocked, state.ApprovedSendXmlHash, blockedBy, ct);
+            await _state.InsertPromotionLogAsync(nidMember, null, null, RulePromotionActions.SendBlocked,
+                $"blocked manually by {blockedBy}" + (string.IsNullOrWhiteSpace(note) ? "" : $": {note.Trim()}"), ct);
+            _sendGate.Invalidate();
+
+            _logger.LogWarning("Rule send gate blocked manually for NidMember={NidMember} by {User}", nidMember, blockedBy);
+            return new RuleSendGateChangeResult
+            {
+                SendGate = RuleSendGateStates.Blocked,
+                ApprovedSendXmlHash = state.ApprovedSendXmlHash
+            };
+        }
+        finally
+        {
+            _cycleLock.Release();
+        }
     }
 
     public async Task<RuleSyncCycleResult> RunCycleAsync(CancellationToken ct = default)
@@ -127,8 +205,41 @@ public sealed class RuleVersionManager
         }
 
         await TryAcceptStableCandidateAsync(nidMember, state, memberHash, result, ct);
+        await ApplySendGateAsync(nidMember, state, memberHash, decision == RuleSyncDecision.Baseline, result, ct);
         result.StableHash = state.LastStableXmlHash;
         return result;
+    }
+
+    private async Task ApplySendGateAsync(
+        int nidMember,
+        RuleSyncStateRow state,
+        string memberHash,
+        bool isBaseline,
+        RuleSyncCycleResult result,
+        CancellationToken ct)
+    {
+        var gate = RuleSendGatePolicy.Evaluate(
+            state.SendGate, state.ApprovedSendXmlHash, state.LastStableXmlHash, memberHash, isBaseline);
+        result.SendGate = gate.Gate;
+        if (!gate.Changed)
+            return;
+
+        await _state.UpdateSendGateAsync(nidMember, gate.Gate, gate.ApprovedHash, "rule-sync", ct);
+        var open = await _state.GetOpenCandidateAsync(nidMember, ct);
+        await _state.InsertPromotionLogAsync(nidMember, open?.CandidateId, null, gate.Action!, gate.Reason, ct);
+        _sendGate.Invalidate();
+
+        if (RuleSendGateStates.IsBlocked(gate.Gate))
+        {
+            result.Summary += "; send to Rayvarz BLOCKED until admin approval";
+            _logger.LogWarning(
+                "Rule change detected for NidMember={NidMember} (candidate {CandidateId}) — sending to Rayvarz is BLOCKED until an admin approves (POST /api/rule/send-gate/approve)",
+                nidMember, open?.CandidateId);
+        }
+        else
+        {
+            _logger.LogInformation("Rule send gate {Action} for NidMember={NidMember}: {Reason}", gate.Action, nidMember, gate.Reason);
+        }
     }
 
     /// <summary>
