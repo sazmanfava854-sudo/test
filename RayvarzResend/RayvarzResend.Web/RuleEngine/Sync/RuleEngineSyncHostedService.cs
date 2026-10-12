@@ -27,23 +27,13 @@ public sealed class RuleEngineSyncHostedService : BackgroundService
         }
 
         var delay = TimeSpan.FromMinutes(Math.Max(1, _options.PollIntervalMinutes));
-        _logger.LogInformation("RuleEngineSyncHostedService: poll every {Minutes} min, stability {Hours}h",
+        _logger.LogInformation(
+            "RuleEngineSyncHostedService: first cycle now, then every {Minutes} min, stability {Hours}h",
             _options.PollIntervalMinutes, _options.StabilityHours);
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
-            {
-                var result = await _manager.RunCycleAsync(stoppingToken);
-                if (!result.Ok)
-                    _logger.LogWarning("Rule sync cycle: {Error}", result.Error);
-                else
-                    _logger.LogDebug("Rule sync cycle: {Summary}", result.Summary);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogError(ex, "Rule sync background cycle failed");
-            }
+            await RunOneCycleAsync(stoppingToken);
 
             try
             {
@@ -53,6 +43,22 @@ public sealed class RuleEngineSyncHostedService : BackgroundService
             {
                 break;
             }
+        }
+    }
+
+    private async Task RunOneCycleAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            var result = await _manager.RunCycleAsync(stoppingToken);
+            if (!result.Ok)
+                _logger.LogWarning("Rule sync cycle: {Error}", result.Error);
+            else
+                _logger.LogInformation("Rule sync cycle: {Summary}", result.Summary);
+        }
+        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Rule sync background cycle failed");
         }
     }
 }

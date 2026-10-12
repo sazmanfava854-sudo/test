@@ -37,7 +37,19 @@
 | متد | مسیر |
 |-----|------|
 | GET | `/api/rule/sync/status` |
-| POST | `/api/rule/sync/run` — اجرای دستی یک چرخه |
+| POST | `/api/rule/sync/run` — **همین الان** یک چرخه (بعد از تغییر Member/History) |
+
+با `Enabled: true` اولین چرخه **بلافاصله بعد از استارت** اپ هم اجرا می‌شود (بدون انتظار ۱۵ دقیقه).
+
+### شروع فوری بعد از تغییر دیتابیس
+
+1. تغییر باید روی **DbRuleEngein** باشد: `dbo.Member` (XmlBody فعال) یا ردیف جدید در `dbo.MemberHistory` برای `NidMember=1388`.  
+   تغییر روی `RayvarzRuleEngine` / `AppUser` توسط این sync **دیده نمی‌شود**.
+2. در `appsettings.json`: `"RuleEngineSync": { "Enabled": true }`
+3. یکی از این دو:
+   - **ری‌استارت** سرویس (چرخه اول خودکار)، یا
+   - بدون ری‌استارت: با کوکی ادمین → `POST /api/rule/sync/run`
+4. نتیجه: `GET /api/rule/sync/status` → `openCandidate` / `lastMemberXmlBodyHash`
 
 ## آنچه هنوز نیست (فاز ۲–۵)
 
