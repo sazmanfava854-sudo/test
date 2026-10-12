@@ -110,8 +110,13 @@
 
 .rule-gate-details dd {
   margin: 0;
-  direction: ltr;
+  unicode-bidi: plaintext;
   text-align: right;
+}
+
+.rule-gate-panel[hidden],
+.rule-gate-actions [hidden] {
+  display: none !important;
 }
 
 .rule-gate-actions {

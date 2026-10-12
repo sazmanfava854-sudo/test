@@ -213,7 +213,8 @@ function renderRuleGate(data) {
     ['آخرین تغییر Gate', `${formatUtc(state.sendGateChangedAtUtc)} — ${state.sendGateChangedBy || '—'}`]
   ];
   if (open) {
-    rows.push(['Candidate در انتظار', `#${open.candidateId} ${open.status} — هش ${shortHash(open.canonicalXmlHash)}`]);
+    rows.push(['Candidate در انتظار', `#${open.candidateId} ${open.status}`]);
+    rows.push(['هش Candidate', shortHash(open.canonicalXmlHash)]);
     rows.push(['تغییردهنده', `${open.modifyer || '—'} ${open.modifyDesc ? `(${open.modifyDesc})` : ''}`]);
     rows.push(['پایان دوره ثبات ۷۲ساعته', formatUtc(open.stableEligibleAtUtc)]);
   }
