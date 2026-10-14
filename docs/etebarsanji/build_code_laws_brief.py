@@ -318,6 +318,8 @@ FILES = [
     ("۱۷", "urban-planning-etebarsanji-17-income.mdc"),
     ("۱۸", "urban-planning-etebarsanji-18-movafeghat.mdc"),
     ("۱۹", "urban-planning-etebarsanji-19-request-ugp.mdc"),
+    ("۲۰", "urban-planning-etebarsanji-20-checklist-on-tick.mdc"),
+    ("۲۱", "urban-planning-etebarsanji-21-checklist-abol.mdc"),
 ]
 
 SECRET = re.compile(r"zxc@|172\.16\.8|aGVkYWlhdC|d158aeeb|Password=|User ID=esup", re.I)
@@ -350,6 +352,8 @@ SECTION_TITLE = {
     "urban-planning-etebarsanji-17-income.mdc": "درآمد",
     "urban-planning-etebarsanji-18-movafeghat.mdc": "موافقت اصولی و فیش مشترک",
     "urban-planning-etebarsanji-19-request-ugp.mdc": "درخواست شهروندسپاری",
+    "urban-planning-etebarsanji-20-checklist-on-tick.mdc": "اعتبارسنجی چک‌لیست (OnTick)",
+    "urban-planning-etebarsanji-21-checklist-abol.mdc": "اعتبارسنجی ابطال چک‌لیست",
 }
 
 SECTION_BLURB = {
@@ -409,6 +413,12 @@ SECTION_BLURB = {
     ],
     "urban-planning-etebarsanji-19-request-ugp.mdc": [
         "این فرم درخواست را از درگاه شهروندسپاری می‌گیرد و نام آن در برنامه RequestUGP است. با ثبت درخواست داخلی سرا۸ یکی نیست.",
+    ],
+    "urban-planning-etebarsanji-20-checklist-on-tick.mdc": [
+        "این فرمول هنگام تیک چک‌لیست اجرا می‌شود؛ خروجی از `GetOnTickChecklistParameter().Result` و `Description` است. با `Run()` مسیریاب فرم‌های ذخیره یکی نیست.",
+    ],
+    "urban-planning-etebarsanji-21-checklist-abol.mdc": [
+        "این فرمول هنگام ابطال چک‌لیست اجرا می‌شود و از `AddError(Stop, …)` استفاده می‌کند. منبع مستقیم: `docs/etebarsanji/vb/abol-checklist-run.vb`.",
     ],
 }
 

@@ -55,6 +55,8 @@ MAIN_FUNC = {
     "17": "FnIncome",
     "18": "MovafeghatOsooli",
     "19": "RequestUGP",
+    "20": "Run",
+    "21": "Run",
 }
 
 FORM_NAME = {
@@ -77,6 +79,8 @@ FORM_NAME = {
     "17": "Income / IncomeFromMenu",
     "18": "MovafeghatOsooli",
     "19": "RequestUGP",
+    "20": "OnTickChecklist (GetOnTickChecklistParameter)",
+    "21": "ChecklistCancel",
 }
 
 EXTRA_FUNCS = {
@@ -99,6 +103,13 @@ EXTRA_FUNCS = {
     "17": ["Check_Taghsid", "FicheEnteghal", "getValueGhatar"],
     "18": ["FicheTaeed (تعریف)"],
     "19": ["NewRequestOrder", "CheckPayanKarGroup"],
+    "20": [
+        "ConfirmOwner / UnConfirmOwner / Confirm / UnConfirm",
+        "ControlTask / ControlCheck / SaveCheck / CheckMalek",
+    ],
+    "21": [
+        "Fiche / Comm100 / ControlTask / CheckMalek / GetIdWorkflow",
+    ],
 }
 
 FUNC_IN_TITLE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
@@ -217,7 +228,10 @@ def build() -> str:
         "مرحلهٔ فرایند با **عنوان گردش‌کار** (WorkflowTitel) نوشته شده، نه با شناسه GUID.\n"
     )
     lines.append(
-        "\nمنبع جزئیات: فایل‌های `.cursor/rules/urban-planning-etebarsanji-*.mdc`.\n"
+        "\nمنبع جزئیات: فایل‌های `.cursor/rules/urban-planning-etebarsanji-*.mdc`. "
+        "بخش‌های **۲۰** و **۲۱** مستقیماً از VB در `docs/etebarsanji/vb/` استخراج شده‌اند. "
+        "برای بخش‌های **۱، ۲، ۵، ۱۰** نسخهٔ VB همان توابع در همان پوشه موجود است؛ "
+        "ردیف‌های جدول آن بخش‌ها هنوز از قانون‌نامه mdc تولید می‌شوند مگر صریحاً با VB هم‌تراز شده باشند.\n"
     )
     lines.append("\n---\n\n")
     lines.append("## اعتبارسنجی چیست؟\n\n")
@@ -279,7 +293,7 @@ def build() -> str:
     lines.append(
         "2. گردش‌کار جدید را در `GetIdWorkflow` و `GetSara8Workflow` و وایت‌لیست گروه با هم به‌روز کنید.\n"
     )
-    lines.append(f"\n*مجموع {total} کنترل در ۱۹ بخش.*\n")
+    lines.append(f"\n*مجموع {total} کنترل در {len(FILES)} بخش.*\n")
     return "".join(lines)
 
 
