@@ -47,7 +47,9 @@ OUTS = [
     Path("/workspace/docs/مستند-اعتبارسنجی.docx"),
     _DIR / "مستند-اعتبارسنجی.docx",
     Path("/opt/cursor/artifacts/مستند-اعتبارسنجی.docx"),
+    Path("/opt/cursor/artifacts/مستند-اعتبارسنجی-شماره‌دار.docx"),
 ]
+OUT_MD = Path("/workspace/docs/مستند-اعتبارسنجی.md")
 
 # توابع مشترک: بار اول کامل؛ بار بعد فقط تفاوت همین فرم.
 SHARED = (
@@ -584,8 +586,8 @@ BAROKAF_INTRO = (
     "ذخیره فرم بروکف از تابع همین فرم آغاز می‌شود. "
     "اگر تأیید مدیر برقرار باشد، ذخیره قطع می‌شود و مساحت پس از اصلاح حساب نمی‌شود. "
     "اگر فیش تأییدشده باشد، تغییر اضلاع و مساحت قطع می‌شود، ولی تغییرِ تنها عمق اول و عمق پشت جبهه با هشدار می‌گذرد. "
-    "اگر ذخیره قطع نشود، در پایان، اطلاعات بروکف روی پرونده ملک رونوشت می‌شود. "
-    "آنچه خاموش است در بند پایانی همین بخش آمده و اکنون برای کارشناس اجرا نمی‌شود."
+    "در این بخش فقط کنترل‌هایی آمده‌اند که خطا یا هشدار می‌سازند. محاسبه مساحت، ثبت مبلغ، "
+    "صفر کردن مساحت ملک بستر و رونوشت پایانی بروکف اثر ذخیره‌اند و اعتبارسنجی مستقل شمرده نشده‌اند."
 )
 
 BAROKAF_CHECKS = [
@@ -750,6 +752,42 @@ BAROKAF_CHECKS = [
     ),
 ]
 
+# فهرست نهایی فقط اعتبارسنجی است. محاسبه، آماده‌سازی، ثبت تاریخ، پیامک خاموش و
+# رونوشت داده در متن VB اثر جانبی‌اند و نباید هم‌ردیف Stop/Warning بیایند.
+_BAROKAF_NON_VALIDATIONS = {
+    "ایجاد عامل بازدید برای اصلاح نقشه در سرا۱۰",
+    "خواندن بایگانی برای یک شماره کار",
+    "تشخیص تغییر عمق از تغییر بقیه اطلاعات",
+    "مساحت پس از کسر مسیر",
+    "ثبت تاریخ تغییر در سایر امکانات",
+    "مبلغ خدمات نقشه‌برداری",
+    "ملک واقع در بستر در سرا۱۰",
+    "رونوشت بروکف روی پرونده ملک",
+    "آنچه اکنون اجرا نمی‌شود",
+}
+BAROKAF_CHECKS = [
+    (heading, paragraphs)
+    for heading, paragraphs in BAROKAF_CHECKS
+    if heading not in _BAROKAF_NON_VALIDATIONS
+]
+
+# «درستی مساحت ملک» در کد دو بخش دارد: محاسبه و توقف. فقط شرط توقف در فهرست
+# اعتبارسنجی می‌ماند.
+BAROKAF_CHECKS = [
+    (
+        "صفر بودن مساحت ملک",
+        [
+            "اگر پس از صفر در نظر گرفتن مساحت‌های کمتر از نیم متر و کسر تجاوز به معبر، "
+            "هم مساحت موجود و هم مساحت سند صفر باشند، ذخیره متوقف می‌شود.",
+            "برای پرونده دارای دستگاه، پیام «//مساحت ملک صحیح نمی باشد» و برای ملک بدون دستگاه، "
+            "پیام «مساحت ملک صحیح نمی باشد+» ثبت می‌شود.",
+        ],
+    )
+    if heading == "درستی مساحت ملک"
+    else (heading, paragraphs)
+    for heading, paragraphs in BAROKAF_CHECKS
+]
+
 BAROKAF_FEE_ROWS = [
     ["کمتر از ۱۰۱", "۲٬۵۴۰٬۰۰۰"],
     ["از ۱۰۱ تا ۳۰۰", "۵٬۰۸۰٬۰۰۰"],
@@ -816,6 +854,79 @@ def add_toc(doc: Document, text: str, *, bold: bool, size: int, space_before: in
     return num_run
 
 
+def catalog_manual_pack(
+    filename: str,
+    intro: str,
+    prepend: list[tuple[str, list[str]]] | None = None,
+    skip_contains: tuple[str, ...] = (),
+):
+    """قانون‌های mdc را بدون جدول، با عنوان و متن پیوسته، به بستهٔ سند تبدیل کن."""
+    data = parse_file(RULES / filename)
+    checks = list(prepend or [])
+    seen: set[str] = set()
+    for law in data["laws"]:
+        blob = " ".join(
+            [
+                law.get("title") or "",
+                law.get("simple") or "",
+                " ".join((law.get("fields") or {}).values()),
+            ]
+        )
+        if any(token in blob for token in skip_contains):
+            continue
+        checks.append((law_title(law), literary_body(law, seen)))
+    return intro, checks
+
+
+ONTICK_INTRO = (
+    "این بخش مربوط به فرمول تیک چک‌لیست است. تابع Run بر اساس نوع تیک، یکی از مسیرهای "
+    "تأیید مالک، عدم تأیید مالک، تأیید شهرداری یا عدم تأیید شهرداری را فراخوانی می‌کند. "
+    "رد شدن کنترل با Result=false و متن Description به کاربر اعلام می‌شود. "
+    "هر پیام زیر فقط در تابع و شرطی اجرا می‌شود که در کد ویژوال‌بیسیک ثبت شده است."
+)
+
+ONTICK_PREPEND = [
+    (
+        "تأیید مالک ـ تسویه نوسازی",
+        [
+            "این کنترل در تابع ConfirmOwner و برای چک‌لیست 7589e0f8-a7bb-4ca0-8512-eee357852733 اجرا می‌شود. "
+            "سال تسویه نوسازی با سال جاری شمسی مقایسه می‌شود.",
+            "اگر پرونده از نوع دستگاه باشد و سال جاری از سال تسویه بیشتر باشد، تأیید رد می‌شود و پیام "
+            "«تسویه نوسازی انجام نشده است - دستگاه @@» نمایش داده می‌شود.",
+            "اگر پرونده دارای آپارتمان باشد، همه فرزندان نوع آپارتمان بررسی می‌شوند. برای هر آپارتمان تسویه‌نشده، "
+            "تأیید رد می‌شود و پیام «تسویه نوسازی آپارتمان انجام نشده است @» همراه با کد نوسازی همان آپارتمان نمایش داده می‌شود.",
+            "اگر مسیر به ملک برسد و سال جاری از سال تسویه ملک بیشتر باشد، تأیید رد می‌شود و پیام "
+            "«تسویه نوسازی ملک انجام نشده است» نمایش داده می‌شود.",
+        ],
+    ),
+    (
+        "تأیید مالک ـ تسویه صنفی",
+        [
+            "این کنترل در تابع ConfirmOwner و برای چک‌لیست fab0db1c-efa4-4044-9b0c-29d1323e69b6 اجرا می‌شود.",
+            "اگر واحد صنفی وجود داشته باشد و سال جاری از سال تسویه صنفی بیشتر باشد، تأیید رد می‌شود و پیام "
+            "«تسویه صنفی انجام نشده است @@» نمایش داده می‌شود.",
+            "اگر هیچ فرزند نوع واحد صنفی وجود نداشته باشد، تأیید رد می‌شود و پیام «واحد صنفی وجود ندارد» نمایش داده می‌شود.",
+        ],
+    ),
+    (
+        "تأیید مالک ـ بدهی نوسازی",
+        [
+            "این کنترل با بررسی بدهی نوسازی از سال ۱۳۹۵ در تابع ConfirmOwner اجرا می‌شود و با کنترل سال تسویه تفاوت دارد.",
+            "بسته به نوع پرونده، بدهی روی دستگاه، آپارتمان‌ها یا ملک سنجیده می‌شود. وجود بدهی، Result را false می‌کند و یکی از پیام‌های "
+            "«دارای بدهی نوسازی می‌باشید لطفاً پس از پرداخت تأیید نمایید» یا "
+            "«دارای بدهی نوسازی بر روی یک یا چند تا از آپارتمان‌ها می‌باشد» نمایش داده می‌شود.",
+        ],
+    ),
+]
+
+ABOL_INTRO = (
+    "این بخش مربوط به فرمول ابطال چک‌لیست است. نقطه ورود تابع Run است. "
+    "توابع Fiche، Comm100، UseBazdidT، GetIdWorkflow و ControlTask در مسیر فعال از Run فراخوانی می‌شوند. "
+    "توابع ControlCheckList، SaveCheck و msg در مسیر فعال فراخوانی نمی‌شوند؛ CheckMalek فراخوانی می‌شود، "
+    "ولی شاخه‌ای که باید توقف ایجاد کند در کد کامنت است. پیامک پایان تابع اثر جانبی است و اعتبارسنجی شمرده نشده است."
+)
+
+
 def manual_pack(filename: str):
     if "01-formula-run" in filename:
         return RUN_INTRO, RUN_CHECKS
@@ -827,6 +938,33 @@ def manual_pack(filename: str):
         return F.REQ_INTRO, F.REQ_CHECKS
     if "10-manager-confirm" in filename:
         return F.MC_INTRO, F.MC_CHECKS
+    if "20-checklist-on-tick" in filename:
+        return catalog_manual_pack(
+            filename,
+            ONTICK_INTRO,
+            prepend=ONTICK_PREPEND,
+            skip_contains=(
+                "تسویه نوسازی انجام نشده",
+                "تسویه نوسازی آپارتمان",
+                "تسویه نوسازی ملک",
+                "تسویه صنفی انجام نشده",
+                "واحد صنفی وجود ندارد",
+                "داراي بدهي نوسازي",
+                "دارای بدهی نوسازی",
+            ),
+        )
+    if "21-checklist-abol" in filename:
+        return catalog_manual_pack(
+            filename,
+            ABOL_INTRO,
+            skip_contains=(
+                "غیرفعال",
+                "مرده",
+                "زیرساخت",
+                "پیامک پس از عبور",
+                "ورود تابع Run ابطال",
+            ),
+        )
     return None
 
 
@@ -919,6 +1057,47 @@ def finish_run(text: str) -> str:
     return text
 
 
+def write_numbered_markdown(parsed: list[dict]) -> None:
+    """همان فهرست شماره‌دار Word را بدون جدول تابع/شرح در Markdown نگه دار."""
+    lines = [
+        "# مستند اعتبارسنجی سامانه شهرسازی",
+        "",
+        "این نسخه فقط کنترل‌های مستندشده را به‌صورت عنوان و توضیح شماره‌دار ارائه می‌کند. "
+        "نام تابع فقط در جایی آمده است که برای تشخیص مسیر اجرا ضرورت فنی دارد.",
+        "",
+        "## فهرست",
+        "",
+    ]
+    for i, sec in enumerate(parsed, start=1):
+        title = SECTION_TITLE.get(sec["file"], sec["title"])
+        lines.append(f"- {i}- {title}")
+        for j, sub in enumerate(section_subtitles(sec), start=1):
+            lines.append(f"  - {i}-{j} {sub}")
+
+    for i, sec in enumerate(parsed, start=1):
+        title = SECTION_TITLE.get(sec["file"], sec["title"])
+        lines.extend(["", "---", "", f"## {i}- {title}", ""])
+        pack = manual_pack(sec["file"])
+        if pack:
+            intro, checks = pack
+            lines.extend([finish_run(intro), ""])
+            for j, (heading, paras) in enumerate(checks, start=1):
+                lines.extend([f"### {i}-{j} {heading}", ""])
+                for para in paras:
+                    lines.extend([finish_run(para), ""])
+            continue
+
+        for blurb in SECTION_BLURB.get(sec["file"], []):
+            lines.extend([polish(blurb), ""])
+        seen: set[str] = set()
+        for j, law in enumerate(sec["laws"], start=1):
+            lines.extend([f"### {i}-{j} {law_title(law)}", ""])
+            for para in literary_body(law, seen):
+                lines.extend([para, ""])
+
+    OUT_MD.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
 def build():
     parsed = []
     for num, name in FILES:
@@ -926,6 +1105,8 @@ def build():
         data["num"] = num
         data["file"] = name
         parsed.append(data)
+
+    write_numbered_markdown(parsed)
 
     doc = Document()
     setup(doc)

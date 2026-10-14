@@ -54,12 +54,20 @@ def extract_adderror_stops(code: str) -> list[tuple[str, str]]:
     return rows
 
 
-def extract_ontick_messages(code: str) -> list[str]:
+def extract_ontick_messages(code: str) -> list[tuple[str, str]]:
     c = strip_comments(code)
-    seen: set[str] = set()
-    out: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
     lines = c.splitlines()
+    current_function = "Run"
     for i, line in enumerate(lines):
+        fm = re.search(
+            r"(?:Public|Private)\s+Function\s+([A-Za-z_][A-Za-z0-9_]*)",
+            line,
+            re.I,
+        )
+        if fm:
+            current_function = fm.group(1)
         if "GetOnTickChecklistParameter().Result" not in line:
             continue
         if "false" not in line.lower():
@@ -74,9 +82,10 @@ def extract_ontick_messages(code: str) -> list[str]:
             msg = "Ex :"
         else:
             continue
-        if msg not in seen:
-            seen.add(msg)
-            out.append(msg)
+        item = (current_function, msg)
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
     return out
 
 
@@ -310,11 +319,27 @@ alwaysApply: false
 """
     laws: list[str] = []
     n = 0
-    for msg in extract_ontick_messages(code):
+    function_titles = {
+        "Run": "اجرای فرمول",
+        "NewParvaneh": "پروانه جدید",
+        "NewParvaneh_ToseEh": "پروانه توسعه",
+        "ConfirmOwner": "تأیید مالک",
+        "UnConfirmOwner": "عدم تأیید مالک",
+        "Confirm": "تأیید شهرداری",
+        "UnConfirm": "عدم تأیید شهرداری",
+        "SaveCheck": "ذخیره چک‌لیست",
+        "FunBlackListNew": "کنترل فهرست سیاه",
+        "CheckExistRequest": "کنترل درخواست موجود",
+        "CreatRequestAmlak": "ساخت درخواست املاک",
+    }
+    for fn, msg in extract_ontick_messages(code):
         n += 1
-        title = msg[:70] + ("…" if len(msg) > 70 else "")
+        function_title = function_titles.get(fn, f"تابع {fn}")
+        msg_title = msg[:58] + ("…" if len(msg) > 58 else "")
+        title = f"{function_title} ـ {msg_title}"
         simple = (
-            f"هنگام تیک چک‌لیست، اگر شرط مربوط در `Run()` یا تابع فراخوانی‌شده برقرار باشد، "
+            f"این کنترل در مسیر «{function_title}» و تابع `{fn}()` اجرا می‌شود. "
+            f"اگر شرط مربوط در کد برقرار باشد، "
             f"`GetOnTickChecklistParameter().Result` برابر `\"false\"` می‌شود و در `Description` این متن ثبت می‌شود؛ "
             f"تیک/ذخیره چک‌لیست مجاز نیست: «{msg}»"
         )
@@ -324,7 +349,7 @@ alwaysApply: false
                 title,
                 simple,
                 [
-                    ("تابع", "`Run()` یا تابع فراخوانی‌شده از Run"),
+                    ("تابع", f"`{fn}()`"),
                     ("شدت", "Result=false (توقف تیک چک‌لیست)"),
                     ("اقدام", f"Description = «{msg}»"),
                 ],
