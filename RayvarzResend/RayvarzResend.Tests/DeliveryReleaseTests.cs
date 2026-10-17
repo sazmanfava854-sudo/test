@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v26_unified_excel_epay()
+    public void ReleaseInfo_is_v27_pr115()
     {
-        Assert.Equal(26, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-unified-excel-epay-v26", ReleaseInfo.Tag);
+        Assert.Equal(27, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr115-v27", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,16 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v26_doc_lists_unified_excel_epay()
+    public void DELIVERY_v27_doc_lists_pr115_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v26.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v27.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
         Assert.Contains("نسخه آخر", doc);
-        Assert.Contains("unified-excel-epay-release-ffcb", doc);
-        Assert.Contains("epay", doc, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("mixed Income", doc);
+        Assert.Contains("unsent-search-optional-date-4c4a", doc);
+        Assert.Contains("SendGate", doc);
+        Assert.Contains("تهاتر", doc);
     }
 
     [Fact]
