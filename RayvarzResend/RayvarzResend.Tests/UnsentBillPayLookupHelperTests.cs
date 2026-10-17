@@ -122,6 +122,48 @@ public class UnsentBillPayLookupHelperTests
     }
 
     [Fact]
+    public void Pair_partner_already_in_rayvarz_is_counted_registered_not_rejected()
+    {
+        var result = new UnsentBatchSendResult
+        {
+            Total = 2,
+            Succeeded = 1,
+            Skipped = 1,
+            Results =
+            [
+                new UnsentBatchSendItemResult
+                {
+                    FicheNo = "050833533199",
+                    Success = true,
+                    Skipped = true,
+                    SkipReason = "AllInRayvarz",
+                    Message = "این فیش قبلاً در رایورز ثبت شده است."
+                },
+                new UnsentBatchSendItemResult
+                {
+                    FicheNo = "050833533196",
+                    Success = true,
+                    Message = "فیش 050833533196 ارسال شد."
+                }
+            ]
+        };
+
+        UnsentFicheService.PromoteTahatorPairRegisteredInSameBatch(
+            result,
+            new Dictionary<string, string>
+            {
+                ["050833533199"] = "050833533196",
+                ["050833533196"] = "050833533199"
+            });
+
+        Assert.Equal(2, result.Succeeded);
+        Assert.Equal(0, result.Skipped);
+        Assert.True(result.Results[0].Success);
+        Assert.False(result.Results[0].Skipped);
+        Assert.Contains("ثبت شد", result.Results[0].Message);
+    }
+
+    [Fact]
     public void ExpandLookupKeys_includes_stored_width_and_padded_form()
     {
         var keys = UnsentBillPayLookupHelper.ExpandLookupKeys("050833533236");

@@ -479,6 +479,22 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         }
     }
 
+    /// <summary>مقایسه متنی RowDocNo تا شمارهٔ نزدیک (مثل …۱۹۹ و …۱۹۶) با تبدیل عددی یکی دیده نشود.</summary>
+    private const string RowDocNoEqualsSql =
+        "(LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo))) = @f OR LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo))) = @fAlt)";
+
+    private const string RefEqualsSql =
+        "(LTRIM(RTRIM(CONVERT(nvarchar(40), Ref))) = @f OR LTRIM(RTRIM(CONVERT(nvarchar(40), Ref))) = @fAlt)";
+
+    private static void AddRowDocNoParameters(SqlCommand cmd, string ficheNo)
+    {
+        var alt = ficheNo.TrimStart('0');
+        if (alt.Length == 0)
+            alt = ficheNo;
+        cmd.Parameters.Add(new SqlParameter("@f", System.Data.SqlDbType.NVarChar, 40) { Value = ficheNo });
+        cmd.Parameters.Add(new SqlParameter("@fAlt", System.Data.SqlDbType.NVarChar, 40) { Value = alt });
+    }
+
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)
     {
         ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo.Trim());
@@ -532,28 +548,28 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
     {
         var sql = docTypFilter is { Length: > 0 }
             ? shamsiYear is > 0
-                ? """
+                ? $"""
                   SELECT TOP 1 1 FROM ray.incmdocsys
-                  WHERE yr = @yr AND RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  WHERE yr = @yr AND {RowDocNoEqualsSql} AND DocTyp IN (@d0, @d1)
                   """
-                : """
+                : $"""
                   SELECT TOP 1 1 FROM ray.incmdocsys
-                  WHERE RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  WHERE {RowDocNoEqualsSql} AND DocTyp IN (@d0, @d1)
                   """
             : shamsiYear is > 0
-                ? """
+                ? $"""
                   SELECT TOP 1 1 FROM ray.incmdocsys
-                  WHERE yr = @yr AND (Ref = @f OR RowDocNo = @f)
+                  WHERE yr = @yr AND ({RefEqualsSql} OR {RowDocNoEqualsSql})
                   """
-                : """
+                : $"""
                   SELECT TOP 1 1 FROM ray.incmdocsys
-                  WHERE Ref = @f OR RowDocNo = @f
+                  WHERE {RefEqualsSql} OR {RowDocNoEqualsSql}
                   """;
 
         await using var conn = new SqlConnection(_rayCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@f", ficheNo);
+        AddRowDocNoParameters(cmd, ficheNo);
         if (shamsiYear is > 0)
             cmd.Parameters.AddWithValue("@yr", shamsiYear.Value);
         if (docTypFilter is { Length: > 0 })
@@ -654,36 +670,36 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     {
         var sql = docTypFilter is { Length: > 0 }
             ? shamsiYear is > 0
-                ? """
+                ? $"""
                   SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
                   FROM ray.incmdocsys
-                  WHERE yr = @yr AND RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  WHERE yr = @yr AND {RowDocNoEqualsSql} AND DocTyp IN (@d0, @d1)
                   ORDER BY ActDate DESC
                   """
-                : """
+                : $"""
                   SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
                   FROM ray.incmdocsys
-                  WHERE RowDocNo = @f AND DocTyp IN (@d0, @d1)
+                  WHERE {RowDocNoEqualsSql} AND DocTyp IN (@d0, @d1)
                   ORDER BY ActDate DESC
                   """
             : shamsiYear is > 0
-                ? """
+                ? $"""
                   SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
                   FROM ray.incmdocsys
-                  WHERE yr = @yr AND (RowDocNo = @f OR Ref = @f)
+                  WHERE yr = @yr AND ({RowDocNoEqualsSql} OR {RefEqualsSql})
                   ORDER BY ActDate DESC
                   """
-                : """
+                : $"""
                   SELECT TOP 1 Branch, Yr, DocTyp, Doc, Fund
                   FROM ray.incmdocsys
-                  WHERE RowDocNo = @f OR Ref = @f
+                  WHERE {RowDocNoEqualsSql} OR {RefEqualsSql}
                   ORDER BY ActDate DESC
                   """;
 
         await using var conn = new SqlConnection(_rayCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@f", ficheNo);
+        AddRowDocNoParameters(cmd, ficheNo);
         if (shamsiYear is > 0)
             cmd.Parameters.AddWithValue("@yr", shamsiYear.Value);
         if (docTypFilter is { Length: > 0 })

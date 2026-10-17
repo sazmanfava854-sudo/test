@@ -185,6 +185,7 @@ public class UnsentFicheService
             return result;
 
         var index = 0;
+        var tahatorPartnerByFiche = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var target in targets.GroupBy(t => t.FicheNo, StringComparer.Ordinal).Select(g => g.First()))
         {
@@ -212,6 +213,9 @@ public class UnsentFicheService
                 item.VerifiedInRayvarz = outcome.VerifiedInRayvarz;
                 item.DocNotSentError = outcome.DocNotSentError;
 
+                if (!string.IsNullOrWhiteSpace(outcome.PartnerFicheNo))
+                    tahatorPartnerByFiche[ficheNo] = outcome.PartnerFicheNo;
+
                 if (outcome.Skipped)
                     result.Skipped++;
                 else if (outcome.Success)
@@ -226,7 +230,40 @@ public class UnsentFicheService
             }
         }
 
+        PromoteTahatorPairRegisteredInSameBatch(result, tahatorPartnerByFiche);
         return result;
+    }
+
+    /// <summary>
+    /// اگر در همین ارسال دسته‌ای یکی از جفت تهاتر ثبت شود و فیش دیگر فقط به‌خاطر «قبلاً در رایورز» رد شود،
+    /// آن را هم ثبت‌شده حساب کن — نه رد شده.
+    /// </summary>
+    public static void PromoteTahatorPairRegisteredInSameBatch(
+        UnsentBatchSendResult result,
+        IReadOnlyDictionary<string, string> partnerByFiche)
+    {
+        var sent = new HashSet<string>(
+            result.Results.Where(r => r.Success && !r.Skipped).Select(r => r.FicheNo.Trim()),
+            StringComparer.Ordinal);
+
+        foreach (var item in result.Results)
+        {
+            if (!item.Skipped || !string.Equals(item.SkipReason, "AllInRayvarz", StringComparison.Ordinal))
+                continue;
+            if (!partnerByFiche.TryGetValue(item.FicheNo.Trim(), out var partner))
+                continue;
+            if (string.IsNullOrWhiteSpace(partner) || !sent.Contains(partner.Trim()))
+                continue;
+
+            item.Skipped = false;
+            item.Success = true;
+            item.SkipReason = null;
+            item.VerifiedInRayvarz = true;
+            item.Message = $"فیش {item.FicheNo.Trim()} در رایورز ثبت شد.";
+            if (result.Skipped > 0)
+                result.Skipped--;
+            result.Succeeded++;
+        }
     }
 
     private async Task<UnsentBatchPlanResult> BuildPlanAsync(
@@ -346,7 +383,8 @@ public class UnsentFicheService
         bool VerifiedInRayvarz = false,
         string? DocNotSentError = null,
         string BillId = "",
-        string PaymentId = "");
+        string PaymentId = "",
+        string? PartnerFicheNo = null);
 
     private async Task<ProcessOutcome> ProcessOneAsync(
         UnsentBatchSendRequest req,
@@ -379,7 +417,8 @@ public class UnsentFicheService
                 tahResult.SkipReason,
                 DocNotSentError: tahResult.DocNotSentError,
                 BillId: plan.BillId,
-                PaymentId: plan.PaymentId);
+                PaymentId: plan.PaymentId,
+                PartnerFicheNo: OtherTahatorFicheNo(tahResult.Pair, ficheNo));
         }
 
         var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
@@ -409,6 +448,17 @@ public class UnsentFicheService
             DocNotSentError: sendResult.DocNotSentError,
             BillId: plan.BillId,
             PaymentId: plan.PaymentId);
+    }
+
+    private static string? OtherTahatorFicheNo(TahatorPairInfo? pair, string ficheNo)
+    {
+        if (pair == null)
+            return null;
+        if (string.Equals(ficheNo, pair.AmountFicheNo, StringComparison.Ordinal))
+            return pair.IncomeFicheNo;
+        if (string.Equals(ficheNo, pair.IncomeFicheNo, StringComparison.Ordinal))
+            return pair.AmountFicheNo;
+        return null;
     }
 
     private static void ApplyExcelDisplayIds(UnsentFicheListItem item, string rawBill, string rawPay)
