@@ -69,8 +69,7 @@ public class FicheSendService
         if (existsInRayvarz)
             throw new InvalidOperationException("فیش در رایورز موجود است — ارسال نشد");
 
-        var epayIds = EpayFichePresenceChecker.ResolveIds(fiche);
-        await _epay.EnsurePresentOrThrowAsync(epayIds.BillId, epayIds.PaymentId, ct);
+        await _epay.EnsurePresentOrThrowAsync(fiche, ct);
 
         var built = await _payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
         var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");

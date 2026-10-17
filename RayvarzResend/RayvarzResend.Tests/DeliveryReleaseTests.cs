@@ -257,7 +257,9 @@ public class DeliveryReleaseTests
         var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
         Assert.Contains("EnsurePresentOrThrowAsync", send);
         Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
-        Assert.Contains("CheckAsync", File.ReadAllText(WebFile("Services", "TahatorResendService.cs")));
+        var tahatorSend = File.ReadAllText(WebFile("Services", "TahatorResendService.cs"));
+        Assert.DoesNotContain("CheckAsync", tahatorSend);
+        Assert.Contains("epay ثبت نمی‌شود", tahatorSend);
     }
 
     [Fact]

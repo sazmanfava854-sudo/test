@@ -25,6 +25,7 @@ public sealed class EpayFichePresenceResult
 /// <summary>
 /// استعلام وجود فیش در epay_FindFichesByBillIDPayID.
 /// Paid و NotPaid یعنی فیش در سامانه هست؛ RecordNotFound یعنی نیست.
+/// فیش تهاتر (۱۵۷/۱۵۸) در epay ثبت نمی‌شود — قبل از ارسال تهاتر استعلام نمی‌شود.
 /// </summary>
 public sealed class EpayFichePresenceChecker
 {
@@ -49,6 +50,9 @@ public sealed class EpayFichePresenceChecker
         var pay = FirstNonEmpty(fiche.PaymentIdRaw, fiche.PaymentId);
         return (bill, pay);
     }
+
+    public static bool RequiresEpayPresence(FicheHeaderDto? fiche) =>
+        fiche != null && !TahatorRowBuilder.IsTahatorFiche(fiche);
 
     public async Task<EpayFichePresenceResult> CheckAsync(
         string? billId,
@@ -88,6 +92,15 @@ public sealed class EpayFichePresenceChecker
                     ex, BankInquiryResponseParser.FicheLookupSourceLabel)
             };
         }
+    }
+
+    public Task EnsurePresentOrThrowAsync(FicheHeaderDto fiche, CancellationToken ct = default)
+    {
+        if (!RequiresEpayPresence(fiche))
+            return Task.CompletedTask;
+
+        var ids = ResolveIds(fiche);
+        return EnsurePresentOrThrowAsync(ids.BillId, ids.PaymentId, ct);
     }
 
     public async Task EnsurePresentOrThrowAsync(
