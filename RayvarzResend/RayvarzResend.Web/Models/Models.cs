@@ -324,6 +324,8 @@ public class UnsentBillPayPair
 {
     public string BillId { get; set; } = "";
     public string PaymentId { get; set; } = "";
+    /// <summary>ستون اختیاری اکسل — برای فیش تهاتر (شناسه قبض=پرداخت=شماره فیش).</summary>
+    public string? FicheNo { get; set; }
 }
 
 public class UnsentBillPayLookupRequest

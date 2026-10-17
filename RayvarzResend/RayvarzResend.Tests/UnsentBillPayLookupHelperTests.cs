@@ -24,11 +24,82 @@ public class UnsentBillPayLookupHelperTests
     }
 
     [Fact]
+    public void NormalizePairs_converts_persian_fiche_number()
+    {
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair
+            {
+                BillId = "۰۵۰۸۳۳۵۳۳۲۴۲",
+                PaymentId = "۰۵۰۸۳۳۵۳۳۲۴۲",
+                FicheNo = "۰۵۰۸۳۳۵۳۳۲۴۲"
+            }
+        ]);
+
+        Assert.Equal("050833533242", pairs[0].FicheNo);
+        Assert.Equal("0050833533242", pairs[0].BillId);
+    }
+
+    [Fact]
+    public void Identifier_search_converts_persian_and_arabic_digits()
+    {
+        Assert.Equal("050833533242", IdentifierText.Normalize("۰۵۰۸۳۳۵۳۳۲۴۲"));
+        Assert.Equal("050833533242", IdentifierText.Normalize("٠٥٠٨٣٣٥٣٣٢٤٢"));
+        Assert.Equal("101104/9881711", IdentifierText.Normalize("۱۰۱۱۰۴/۹۸۸۱۷۱۱"));
+
+        var filter = FicheDateChangeHelper.BuildIdentifierFilter("۵۰۸۳۳۵۳۳۱۹۹");
+        Assert.NotNull(filter);
+        Assert.Contains("FicheNo IN", filter.Value.Clause);
+        Assert.Contains(filter.Value.Parameters, p => p.Value == "050833533199");
+        Assert.Contains(filter.Value.Parameters, p => p.Value == "50833533199");
+    }
+
+    [Fact]
+    public void ExpandLookupKeys_matches_fiche_without_leading_zero()
+    {
+        var keys = UnsentBillPayLookupHelper.ExpandLookupKeys("۵۰۸۳۳۵۳۳۱۹۹");
+        Assert.Contains("50833533199", keys);
+        Assert.Contains("050833533199", keys);
+        Assert.Contains("0050833533199", keys);
+    }
+
+    [Fact]
+    public void NormalizePairs_accepts_fiche_number_without_bill_and_pay()
+    {
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair { FicheNo = "50833533243" },
+            new UnsentBillPayPair { BillId = "50833533199", PaymentId = "" }
+        ]);
+
+        Assert.Single(pairs);
+        Assert.Equal("50833533243", pairs[0].FicheNo);
+        Assert.Equal("0050833533243", pairs[0].BillId);
+    }
+
+    [Fact]
+    public void Negative_rayvarz_tahator_amount_is_replaced_by_partner()
+    {
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.ReplaceWithPartner,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, true, -1027136660m, true, false));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.RemoveAlreadyInRayvarz,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, true, 3183050000m, true, false));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.RemoveAlreadyInRayvarz,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, true, -1m, true, true));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.Keep,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, false, null, true, false));
+    }
+
+    [Fact]
     public void ValidateRequest_requires_valid_pairs_and_max()
     {
         Assert.Equal("درخواست خالی است", UnsentBillPayLookupHelper.ValidateRequest(null));
         Assert.Equal(
-            "فایل اکسل باید حداقل یک ردیف با شناسه قبض و شناسه پرداخت معتبر داشته باشد",
+            "هر ردیف اکسل باید شماره فیش، یا شناسه قبض و شناسه پرداخت داشته باشد",
             UnsentBillPayLookupHelper.ValidateRequest(new UnsentBillPayLookupRequest()));
 
         var tooMany = new UnsentBillPayLookupRequest
@@ -89,7 +160,103 @@ public class UnsentBillPayLookupHelperTests
             {
                 Found = true,
                 SwappedColumns = true
-            }));
+            },
+            "3091418652060",
+            "1426270355"));
+
+        Assert.DoesNotContain(
+            "جابه‌جا",
+            UnsentBillPayLookupHelper.DescribeMiss(new BillPayMissDiagnostic
+            {
+                Found = true,
+                SwappedColumns = true
+            },
+            "050833533236",
+            "050833533236"));
+    }
+
+    [Fact]
+    public void DescribeMiss_prefers_already_sent_over_swapped_flag()
+    {
+        var reason = UnsentBillPayLookupHelper.DescribeMiss(
+            new BillPayMissDiagnostic
+            {
+                Found = true,
+                FicheNo = "050833533236",
+                AlreadySent = true,
+                SwappedColumns = true
+            },
+            "050833533236",
+            "050833533236");
+        Assert.Contains("قبلاً ارسال شده", reason);
+        Assert.DoesNotContain("جابه‌جا", reason);
+    }
+
+    [Fact]
+    public void Pair_partner_already_in_rayvarz_is_counted_registered_not_rejected()
+    {
+        var result = new UnsentBatchSendResult
+        {
+            Total = 2,
+            Succeeded = 1,
+            Skipped = 1,
+            Results =
+            [
+                new UnsentBatchSendItemResult
+                {
+                    FicheNo = "050833533199",
+                    Success = true,
+                    Skipped = true,
+                    SkipReason = "AllInRayvarz",
+                    Message = "این فیش قبلاً در رایورز ثبت شده است."
+                },
+                new UnsentBatchSendItemResult
+                {
+                    FicheNo = "050833533196",
+                    Success = true,
+                    Message = "فیش 050833533196 ارسال شد."
+                }
+            ]
+        };
+
+        UnsentFicheService.PromoteTahatorPairRegisteredInSameBatch(
+            result,
+            new Dictionary<string, string>
+            {
+                ["050833533199"] = "050833533196",
+                ["050833533196"] = "050833533199"
+            });
+
+        Assert.Equal(2, result.Succeeded);
+        Assert.Equal(0, result.Skipped);
+        Assert.True(result.Results[0].Success);
+        Assert.False(result.Results[0].Skipped);
+        Assert.Contains("ثبت شد", result.Results[0].Message);
+    }
+
+    [Fact]
+    public void ExpandLookupKeys_includes_stored_width_and_padded_form()
+    {
+        var keys = UnsentBillPayLookupHelper.ExpandLookupKeys("050833533236");
+        Assert.Contains("050833533236", keys);
+        Assert.Contains("0050833533236", keys);
+        Assert.Contains("50833533236", keys);
+    }
+
+    [Fact]
+    public void NormalizePairs_carries_optional_fiche_no()
+    {
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair
+            {
+                BillId = "050833533236",
+                PaymentId = "050833533236",
+                FicheNo = "050833533236"
+            }
+        ]);
+        Assert.Single(pairs);
+        Assert.Equal("050833533236", pairs[0].FicheNo);
     }
 
     [Fact]

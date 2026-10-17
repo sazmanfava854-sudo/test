@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using RayvarzResend.Web.Models;
+using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
@@ -9,17 +10,20 @@ public class UnsentFicheService
     private readonly FicheSendService _send;
     private readonly TahatorResendService _tahator;
     private readonly IConfiguration _config;
+    private readonly RuleSendGate _sendGate;
 
     public UnsentFicheService(
         FicheRepository repo,
         FicheSendService send,
         TahatorResendService tahator,
-        IConfiguration config)
+        IConfiguration config,
+        RuleSendGate sendGate)
     {
         _repo = repo;
         _send = send;
         _tahator = tahator;
         _config = config;
+        _sendGate = sendGate;
     }
 
     public async Task<UnsentFicheSearchResult> SearchAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
@@ -56,18 +60,22 @@ public class UnsentFicheService
         var incomeFoundPairs = pairs
             .Where(p => incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
             .ToList();
-        var dutyConflictBatch = incomeFoundPairs.Count > 0
-            ? await _repo.LookupBillPayBatchAsync(
-                UnsentFicheKind.Duty, incomeFoundPairs, diagnoseMisses: false, ct)
-            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
-
         var remainingPairs = pairs
             .Where(p => !incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
             .ToList();
-        var dutyBatch = remainingPairs.Count > 0
-            ? await _repo.LookupBillPayBatchAsync(
-                UnsentFicheKind.Duty, remainingPairs, diagnoseMisses: false, ct)
-            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+
+        var emptyBatch = new FicheRepository.BillPayBatchLookupResult(
+            [],
+            new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+        var dutyConflictTask = incomeFoundPairs.Count > 0
+            ? _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, incomeFoundPairs, diagnoseMisses: false, ct)
+            : Task.FromResult(emptyBatch);
+        var dutyRemainingTask = remainingPairs.Count > 0
+            ? _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, remainingPairs, diagnoseMisses: false, ct)
+            : Task.FromResult(emptyBatch);
+        await Task.WhenAll(dutyConflictTask, dutyRemainingTask);
+        var dutyConflictBatch = await dutyConflictTask;
+        var dutyBatch = await dutyRemainingTask;
 
         var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
             pairs,
@@ -125,7 +133,83 @@ public class UnsentFicheService
             };
         }
 
+        await AdjustTahatorExcelRowsAsync(result, ct);
         return result;
+    }
+
+    /// <summary>
+    /// فیش تهاترِ موجود در رایورز از گرید ارسال حذف می‌شود.
+    /// اگر مبلغ آن منفی باشد (۰۵۰۸۳۳۵۳۳۲۴۲) جفتِ غایب (۰۵۰۸۳۳۵۳۳۲۴۳) جای آن می‌آید.
+    /// </summary>
+    private async Task AdjustTahatorExcelRowsAsync(UnsentBillPayLookupResult result, CancellationToken ct)
+    {
+        var tahatorNos = result.Items.Where(i => i.IsTahator).Select(i => i.FicheNo).ToList();
+        if (tahatorNos.Count == 0)
+            return;
+
+        var amounts = await _repo.GetRayvarzMinAmountByFicheNoAsync(tahatorNos, ct);
+        if (amounts.Count == 0)
+            return;
+
+        var partnerByFiche = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in result.Items)
+        {
+            if (!item.IsTahator || !amounts.ContainsKey(item.FicheNo))
+                continue;
+            var pair = await _repo.ResolveTahatorPairAsync(item.FicheNo, ct);
+            var partnerNo = OtherTahatorFicheNo(pair, item.FicheNo);
+            if (!string.IsNullOrWhiteSpace(partnerNo))
+                partnerByFiche[item.FicheNo] = partnerNo;
+        }
+
+        var partnerAmounts = await _repo.GetRayvarzMinAmountByFicheNoAsync(partnerByFiche.Values.ToList(), ct);
+        var kept = new List<UnsentFicheListItem>();
+        foreach (var item in result.Items)
+        {
+            if (!item.IsTahator || !amounts.TryGetValue(item.FicheNo, out var amount))
+            {
+                kept.Add(item);
+                continue;
+            }
+
+            partnerByFiche.TryGetValue(item.FicheNo, out var partnerNo);
+            var hasPartner = !string.IsNullOrWhiteSpace(partnerNo);
+            var partnerInRayvarz = hasPartner && partnerAmounts.ContainsKey(partnerNo!);
+            var action = UnsentBillPayLookupHelper.DecideTahatorExcelRow(
+                item.IsTahator, true, amount, hasPartner, partnerInRayvarz);
+
+            if (action == UnsentBillPayLookupHelper.TahatorExcelRowAction.Keep)
+            {
+                kept.Add(item);
+                continue;
+            }
+
+            if (action == UnsentBillPayLookupHelper.TahatorExcelRowAction.ReplaceWithPartner)
+            {
+                var partner = await _repo.LoadIncomeListItemByFicheNoAsync(partnerNo!, unsentOnly: true, ct)
+                    ?? await _repo.LoadIncomeListItemByFicheNoAsync(partnerNo!, unsentOnly: false, ct);
+                if (partner != null)
+                {
+                    partner.SourceKind = UnsentFicheKind.Income;
+                    kept.Add(partner);
+                    continue;
+                }
+            }
+
+            result.Misses.Add(new UnsentBillPayMiss
+            {
+                BillId = item.BillId,
+                PaymentId = item.PaymentId,
+                Reason = $"فیش {item.FicheNo} قبلاً در رایورز ثبت شده است"
+            });
+        }
+
+        result.Items = kept
+            .GroupBy(i => i.FicheNo, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
+        result.Found = result.Items.Count;
+        result.NotFound = result.Misses.Count;
     }
 
     private static List<UnsentBatchFicheTarget> ResolveBatchTargets(UnsentBatchSendRequest req)
@@ -136,7 +220,7 @@ public class UnsentFicheService
                 .Where(t => !string.IsNullOrWhiteSpace(t.FicheNo))
                 .Select(t => new UnsentBatchFicheTarget
                 {
-                    FicheNo = t.FicheNo.Trim(),
+                    FicheNo = IdentifierText.Normalize(t.FicheNo),
                     SourceKind = t.SourceKind
                 })
                 .ToList();
@@ -146,7 +230,7 @@ public class UnsentFicheService
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Select(n => new UnsentBatchFicheTarget
             {
-                FicheNo = n.Trim(),
+                FicheNo = IdentifierText.Normalize(n),
                 SourceKind = req.FicheKind
             })
             .ToList();
@@ -163,6 +247,7 @@ public class UnsentFicheService
         ClaimsPrincipal user,
         CancellationToken ct = default)
     {
+        await _sendGate.EnsureOpenAsync(ct);
         var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
         var delayMs = _config.GetValue("Rayvarz:SendDelayMs", 2000);
         var targets = ResolveBatchTargets(req);
@@ -176,6 +261,7 @@ public class UnsentFicheService
             return result;
 
         var index = 0;
+        var tahatorPartnerByFiche = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var target in targets.GroupBy(t => t.FicheNo, StringComparer.Ordinal).Select(g => g.First()))
         {
@@ -203,6 +289,9 @@ public class UnsentFicheService
                 item.VerifiedInRayvarz = outcome.VerifiedInRayvarz;
                 item.DocNotSentError = outcome.DocNotSentError;
 
+                if (!string.IsNullOrWhiteSpace(outcome.PartnerFicheNo))
+                    tahatorPartnerByFiche[ficheNo] = outcome.PartnerFicheNo;
+
                 if (outcome.Skipped)
                     result.Skipped++;
                 else if (outcome.Success)
@@ -217,7 +306,40 @@ public class UnsentFicheService
             }
         }
 
+        PromoteTahatorPairRegisteredInSameBatch(result, tahatorPartnerByFiche);
         return result;
+    }
+
+    /// <summary>
+    /// اگر در همین ارسال دسته‌ای یکی از جفت تهاتر ثبت شود و فیش دیگر فقط به‌خاطر «قبلاً در رایورز» رد شود،
+    /// آن را هم ثبت‌شده حساب کن — نه رد شده.
+    /// </summary>
+    public static void PromoteTahatorPairRegisteredInSameBatch(
+        UnsentBatchSendResult result,
+        IReadOnlyDictionary<string, string> partnerByFiche)
+    {
+        var sent = new HashSet<string>(
+            result.Results.Where(r => r.Success && !r.Skipped).Select(r => r.FicheNo.Trim()),
+            StringComparer.Ordinal);
+
+        foreach (var item in result.Results)
+        {
+            if (!item.Skipped || !string.Equals(item.SkipReason, "AllInRayvarz", StringComparison.Ordinal))
+                continue;
+            if (!partnerByFiche.TryGetValue(item.FicheNo.Trim(), out var partner))
+                continue;
+            if (string.IsNullOrWhiteSpace(partner) || !sent.Contains(partner.Trim()))
+                continue;
+
+            item.Skipped = false;
+            item.Success = true;
+            item.SkipReason = null;
+            item.VerifiedInRayvarz = true;
+            item.Message = $"فیش {item.FicheNo.Trim()} در رایورز ثبت شد.";
+            if (result.Skipped > 0)
+                result.Skipped--;
+            result.Succeeded++;
+        }
     }
 
     private async Task<UnsentBatchPlanResult> BuildPlanAsync(
@@ -337,7 +459,8 @@ public class UnsentFicheService
         bool VerifiedInRayvarz = false,
         string? DocNotSentError = null,
         string BillId = "",
-        string PaymentId = "");
+        string PaymentId = "",
+        string? PartnerFicheNo = null);
 
     private async Task<ProcessOutcome> ProcessOneAsync(
         UnsentBatchSendRequest req,
@@ -370,7 +493,8 @@ public class UnsentFicheService
                 tahResult.SkipReason,
                 DocNotSentError: tahResult.DocNotSentError,
                 BillId: plan.BillId,
-                PaymentId: plan.PaymentId);
+                PaymentId: plan.PaymentId,
+                PartnerFicheNo: OtherTahatorFicheNo(tahResult.Pair, ficheNo));
         }
 
         var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
@@ -400,6 +524,17 @@ public class UnsentFicheService
             DocNotSentError: sendResult.DocNotSentError,
             BillId: plan.BillId,
             PaymentId: plan.PaymentId);
+    }
+
+    private static string? OtherTahatorFicheNo(TahatorPairInfo? pair, string ficheNo)
+    {
+        if (pair == null)
+            return null;
+        if (string.Equals(ficheNo, pair.AmountFicheNo, StringComparison.Ordinal))
+            return pair.IncomeFicheNo;
+        if (string.Equals(ficheNo, pair.IncomeFicheNo, StringComparison.Ordinal))
+            return pair.AmountFicheNo;
+        return null;
     }
 
     private static void ApplyExcelDisplayIds(UnsentFicheListItem item, string rawBill, string rawPay)

@@ -69,14 +69,37 @@ public static class BankInquiryConfirmHelper
 
         if (!string.IsNullOrWhiteSpace(req.FicheNo))
         {
-            clauses.Add("f.FicheNo = @ficheNo");
-            parameters.Add(("@ficheNo", req.FicheNo.Trim()));
+            var keys = UnsentBillPayLookupHelper.ExpandFicheNoKeys(req.FicheNo);
+            var names = new List<string>(keys.Count);
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var name = $"@ficheNo{i}";
+                names.Add(name);
+                parameters.Add((name, keys[i]));
+            }
+            if (names.Count > 0)
+                clauses.Add("f.FicheNo IN (" + string.Join(", ", names) + ")");
         }
         else if (!string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId))
         {
-            clauses.Add("f.BillID = @billId AND f.PaymentID = @paymentId");
-            parameters.Add(("@billId", req.BillId.Trim()));
-            parameters.Add(("@paymentId", req.PaymentId.Trim()));
+            var billKeys = UnsentBillPayLookupHelper.ExpandLookupKeys(req.BillId);
+            var payKeys = UnsentBillPayLookupHelper.ExpandLookupKeys(req.PaymentId);
+            var billNames = new List<string>(billKeys.Count);
+            var payNames = new List<string>(payKeys.Count);
+            for (var i = 0; i < billKeys.Count; i++)
+            {
+                var name = $"@billId{i}";
+                billNames.Add(name);
+                parameters.Add((name, billKeys[i]));
+            }
+            for (var i = 0; i < payKeys.Count; i++)
+            {
+                var name = $"@paymentId{i}";
+                payNames.Add(name);
+                parameters.Add((name, payKeys[i]));
+            }
+            if (billNames.Count > 0 && payNames.Count > 0)
+                clauses.Add($"f.BillID IN ({string.Join(", ", billNames)}) AND f.PaymentID IN ({string.Join(", ", payNames)})");
         }
         else if (!string.IsNullOrWhiteSpace(req.IdentifierValue))
         {
@@ -84,7 +107,8 @@ public static class BankInquiryConfirmHelper
             if (identifierFilter != null)
             {
                 clauses.Add(identifierFilter.Value.Clause);
-                parameters.Add((identifierFilter.Value.ParamName, identifierFilter.Value.Value));
+                foreach (var (name, value) in identifierFilter.Value.Parameters)
+                    parameters.Add((name, value));
             }
         }
 

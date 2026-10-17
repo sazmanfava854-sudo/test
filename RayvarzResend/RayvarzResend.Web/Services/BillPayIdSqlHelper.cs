@@ -22,6 +22,105 @@ public static class BillPayIdSqlHelper
         ({Norm13(billColumn)} = {Norm13($"{pairAlias}.BillId")} AND {Norm13(paymentColumn)} = {Norm13($"{pairAlias}.PaymentId")})
         """;
 
+    /// <summary>
+    /// تطابق اکسل: مستقیم + تهاتر (شناسه قبض=پرداخت=شماره فیش) + ستون اختیاری شماره فیش.
+    /// </summary>
+    public static string PairMatchStrictForExcelLookup(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        $"""
+        (
+          {PairMatchStrictOnTable(billColumn, paymentColumn, pairAlias)}
+          OR {TahatorSameBillPayFicheMatch(billColumn, paymentColumn, ficheNoColumn, pairAlias)}
+          OR {ExcelFicheNoColumnMatch(ficheNoColumn, billColumn, paymentColumn, pairAlias)}
+        )
+        """;
+
+    /// <summary>ستون Swapped فقط وقتی واقعاً جابه‌جا شده — نه وقتی قبض و پرداخت یکسان‌اند (تهاتر).</summary>
+    public static string SwappedColumnsCaseSql(
+        string billColumn,
+        string paymentColumn,
+        string pairBillExpr,
+        string pairPayExpr) =>
+        $"""
+        CASE WHEN (
+              {Norm13(billColumn)} = {Norm13(pairPayExpr)}
+              AND {Norm13(paymentColumn)} = {Norm13(pairBillExpr)}
+              AND NOT (
+                {Norm13(billColumn)} = {Norm13(pairBillExpr)}
+                AND {Norm13(paymentColumn)} = {Norm13(pairPayExpr)}
+              )
+             ) THEN 1 ELSE 0 END
+        """;
+
+    /// <summary>شرط WHERE داخل CROSS APPLY — یک ردیف اکسل در هر بار.</summary>
+    public static string PairMatchExcelApplyWhere(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        $"""
+        (
+          (
+            {Norm13($"{pairAlias}.BillId")} <> {Norm13($"{pairAlias}.PaymentId")}
+            AND {PairMatchOnTable(billColumn, paymentColumn, pairAlias)}
+          )
+          OR (
+            {Norm13($"{pairAlias}.BillId")} = {Norm13($"{pairAlias}.PaymentId")}
+            AND {TahatorSameBillPayFicheMatch(billColumn, paymentColumn, ficheNoColumn, pairAlias)}
+          )
+          OR {ExcelFicheNoColumnMatch(ficheNoColumn, billColumn, paymentColumn, pairAlias)}
+        )
+        """;
+
+    /// <summary>فقط تطابق مستقیم (بدون جابه‌جایی) — برای APPLY وقتی قبض و پرداخت متفاوت‌اند.</summary>
+    public static string PairMatchDistinctBillPayApplyWhere(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        $"""
+        (
+          {PairMatchStrictOnTable(billColumn, paymentColumn, pairAlias)}
+          OR {ExcelFicheNoColumnMatch(ficheNoColumn, billColumn, paymentColumn, pairAlias)}
+        )
+        """;
+
+    public static string TahatorSameBillPayFicheApplyWhere(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        TahatorSameBillPayFicheMatch(billColumn, paymentColumn, ficheNoColumn, pairAlias);
+
+    private static string TahatorSameBillPayFicheMatch(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias) =>
+        $"""
+        (
+          {Norm13($"{pairAlias}.BillId")} = {Norm13($"{pairAlias}.PaymentId")}
+          AND {Norm13(billColumn)} = {Norm13(paymentColumn)}
+          AND {Norm13(ficheNoColumn)} = {Norm13($"{pairAlias}.BillId")}
+        )
+        """;
+
+    private static string ExcelFicheNoColumnMatch(
+        string ficheNoColumn,
+        string billColumn,
+        string paymentColumn,
+        string pairAlias) =>
+        $"""
+        (
+          NULLIF(LTRIM(RTRIM(CAST({pairAlias}.FicheNo AS nvarchar(40)))), '') IS NOT NULL
+          AND LTRIM(RTRIM(CAST({ficheNoColumn} AS nvarchar(40)))) = LTRIM(RTRIM(CAST({pairAlias}.FicheNo AS nvarchar(40))))
+          AND {PairMatchStrictOnTable(billColumn, paymentColumn, pairAlias)}
+        )
+        """;
+
     private static string PairMatchDirect(string billColumn, string paymentColumn, string pairAlias) =>
         $"""
         (

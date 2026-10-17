@@ -52,8 +52,28 @@ const MODULES = [
 let currentUser = null;
 let authMode = null;
 
+function readIsAdminFlag(user) {
+  if (!user) return false;
+  const raw = user.isAdmin ?? user.IsAdmin;
+  return raw === true || raw === 1 || raw === '1' || raw === 'true';
+}
+
+function normalizeAuthSession(user) {
+  if (!user) return user;
+  if (readIsAdminFlag(user)) {
+    user.isAdmin = true;
+    user.canAccessUnsentFiches = true;
+    user.canAccessInstallment = true;
+    user.canAccessFicheDateChange = true;
+    user.canAccessBankInquiryConfirm = true;
+    user.canAccessShahkar = true;
+    user.canManageUsers = true;
+  }
+  return user;
+}
+
 function isAdminUser(user) {
-  return !!user?.isAdmin;
+  return readIsAdminFlag(user ?? currentUser);
 }
 
 function hasAnyModulePermission(user) {
@@ -153,6 +173,94 @@ function renderModuleCards(user) {
   });
 }
 
+function shortHash(hash) {
+  const h = String(hash || '').trim();
+  return h ? h.slice(0, 12) : '—';
+}
+
+function formatUtc(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('fa-IR');
+}
+
+function renderRuleGate(data) {
+  const panel = document.getElementById('ruleGatePanel');
+  const status = document.getElementById('ruleGateStatus');
+  const details = document.getElementById('ruleGateDetails');
+  const approve = document.getElementById('btnRuleGateApprove');
+
+  if (!data?.enabled || !data?.configured || !data?.sendGateActive) {
+    panel.hidden = true;
+    return;
+  }
+
+  const blocked = !!data.sendBlocked;
+  panel.hidden = false;
+  panel.classList.toggle('is-blocked', blocked);
+  panel.classList.toggle('is-open', !blocked);
+  status.textContent = blocked
+    ? (data.sendBlockedAdminMessage || 'نیاز به به روز رسانی هست')
+    : 'ارسال به رایورز باز است.';
+  approve.hidden = !blocked;
+
+  const state = data.state || {};
+  const open = data.openCandidate;
+  const rows = [
+    ['NidMember', data.nidMember],
+    ['هش تأییدشده برای ارسال', shortHash(state.approvedSendXmlHash)],
+    ['هش پایدار (Stable)', shortHash(state.lastStableXmlHash)],
+    ['آخرین تغییر Gate', `${formatUtc(state.sendGateChangedAtUtc)} — ${state.sendGateChangedBy || '—'}`]
+  ];
+  if (open) {
+    rows.push(['Candidate در انتظار', `#${open.candidateId} ${open.status}`]);
+    rows.push(['هش Candidate', shortHash(open.canonicalXmlHash)]);
+    rows.push(['تغییردهنده', `${open.modifyer || '—'} ${open.modifyDesc ? `(${open.modifyDesc})` : ''}`]);
+    rows.push(['پایان دوره ثبات ۷۲ساعته', formatUtc(open.stableEligibleAtUtc)]);
+  }
+  details.innerHTML = '';
+  rows.forEach(([label, value]) => {
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = String(value ?? '—');
+    details.append(dt, dd);
+  });
+}
+
+async function loadRuleGate() {
+  try {
+    const res = await fetch('/api/rule/sync/status', { credentials: 'include' });
+    if (!res.ok) return;
+    renderRuleGate(await res.json());
+  } catch {
+    // ignore
+  }
+}
+
+async function approveRuleGate() {
+  const note = window.prompt('تغییرات قانون در کد اعمال و deploy شده است؟ توضیح (اختیاری):', '');
+  if (note === null) return;
+  const btn = document.getElementById('btnRuleGateApprove');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/rule/send-gate/approve', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) window.alert(data.error || `خطا (HTTP ${res.status})`);
+  } finally {
+    btn.disabled = false;
+    await loadRuleGate();
+  }
+}
+
+document.getElementById('btnRuleGateApprove')?.addEventListener('click', approveRuleGate);
+document.getElementById('btnRuleGateRefresh')?.addEventListener('click', loadRuleGate);
+
 async function logout() {
   try {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
@@ -169,10 +277,11 @@ async function ensureAuthenticated() {
     await redirectToLogin();
     return false;
   }
-  currentUser = await res.json();
+  currentUser = normalizeAuthSession(await res.json());
   document.body.classList.add('hub-authenticated');
   applyUserHeader(currentUser);
   renderModuleCards(currentUser);
+  if (isAdminUser(currentUser)) loadRuleGate();
   return true;
 }
 

@@ -24,6 +24,17 @@ public class TahatorGoldenSeedTests
     };
 
     [Fact]
+    public void Rule_engine_sync_schema_sql_exists()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "database", "11_RuleEngine_Sync_Schema.sql"));
+        Assert.True(File.Exists(path), path);
+        var sql = File.ReadAllText(path);
+        Assert.Contains("RuleSyncState", sql);
+        Assert.Contains("RuleCandidate", sql);
+    }
+
+    [Fact]
     public void Golden_seed_sql_exists_and_targets_ids_11_through_14()
     {
         Assert.True(File.Exists(GoldenSeedSqlPath), GoldenSeedSqlPath);

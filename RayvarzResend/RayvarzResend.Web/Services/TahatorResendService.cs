@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
@@ -21,7 +22,7 @@ public sealed class TahatorResendService
     private readonly RayvarzPayloadBuilder _payload;
     private readonly RayvarzClient _client;
     private readonly AccountingDocWriter _accountingDoc;
-    private readonly EpayFichePresenceChecker _epay;
+    private readonly RuleSendGate _sendGate;
 
     public TahatorResendService(
         IConfiguration config,
@@ -30,15 +31,15 @@ public sealed class TahatorResendService
         RayvarzPayloadBuilder payload,
         RayvarzClient client,
         AccountingDocWriter accountingDoc,
-        EpayFichePresenceChecker epay)
+        RuleSendGate sendGate)
     {
+        _sendGate = sendGate;
         _config = config;
         _logger = logger;
         _fiches = fiches;
         _payload = payload;
         _client = client;
         _accountingDoc = accountingDoc;
-        _epay = epay;
         _saraCs = config.GetConnectionString("Sara")
             ?? throw new InvalidOperationException("ConnectionStrings:Sara تنظیم نشده");
     }
@@ -154,6 +155,7 @@ public sealed class TahatorResendService
 
     public async Task<TahatorSendResult> SendAsync(TahatorFicheRequest req, CancellationToken ct = default)
     {
+        await _sendGate.EnsureOpenAsync(ct);
         var steps = new List<string>();
         var dryRun = IsDryRun;
         var force = req.Force;
@@ -229,13 +231,7 @@ public sealed class TahatorResendService
                 if (fiche.Rows.Count == 0 || fiche.Payable <= 0)
                     return Fail(ficheNo, dryRun, steps, $"فیش {no} ردیف/مبلغ معتبر ندارد.");
 
-                var epayIds = EpayFichePresenceChecker.ResolveIds(fiche);
-                var epay = await _epay.CheckAsync(epayIds.BillId, epayIds.PaymentId, ct);
-                if (!epay.Exists)
-                {
-                    steps.Add($"1e) epay {no}: {epay.UserMessage}");
-                    return Fail(ficheNo, dryRun, steps, epay.UserMessage);
-                }
+                steps.Add($"1e) epay {no}: رد شد — فیش تهاتر در سامانه epay ثبت نمی‌شود");
 
                 var state = await TryLoadIncomeFicheStateAsync(no, ct);
                 if (state == null)

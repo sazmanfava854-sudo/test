@@ -445,6 +445,9 @@ function mapUnsentExcelHeaderIndex(headers) {
     if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
       map.paymentId = idx;
     }
+    if (key === 'شمارهفیش' || key === 'ficheno' || key === 'fiche' || key === 'فیش') {
+      map.ficheNo = idx;
+    }
   });
   return map;
 }
@@ -473,6 +476,10 @@ function normalizeDigits(value) {
     if (code >= 0x06f0 && code <= 0x06f9) return String(code - 0x06f0);
     return String(code - 0x0660);
   });
+}
+
+function normalizeSearchId(value) {
+  return normalizeDigits(String(value ?? '')).trim();
 }
 
 function normalizeBillOrPayIdDigits(value) {
@@ -544,7 +551,7 @@ function parseInstallmentExcelFile(file) {
           }
 
           const item = {
-            identifier: identifier.trim(),
+            identifier: normalizeSearchId(identifier),
             paymentCost: paymentCost.trim(),
             paymentDate: paymentDate.trim()
           };
@@ -597,32 +604,38 @@ function parseUnsentExcelFile(file) {
         }
 
         const col = mapUnsentExcelHeaderIndex(headerRow);
-        if (col.billId == null || col.paymentId == null) {
-          reject(new Error('ستون‌های الزامی اکسل: شناسه قبض و شناسه پرداخت'));
+        if (col.ficheNo == null && (col.billId == null || col.paymentId == null)) {
+          reject(new Error('ستون شماره فیش، یا هر دو ستون شناسه قبض و شناسه پرداخت لازم است'));
           return;
         }
 
         const parsed = [];
         const seen = new Set();
         for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const billId = parseExcelCellValue(sheet, r, col.billId);
-          const paymentId = parseExcelCellValue(sheet, r, col.paymentId);
-          if (!billId && !paymentId) continue;
-          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)) {
+          const billId = col.billId != null ? parseExcelCellValue(sheet, r, col.billId) : '';
+          const paymentId = col.paymentId != null ? parseExcelCellValue(sheet, r, col.paymentId) : '';
+          const ficheNo = col.ficheNo != null ? parseExcelCellValue(sheet, r, col.ficheNo) : '';
+          if (!billId && !paymentId && !ficheNo) continue;
+          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)
+            || hasScientificNotation(ficheNo)) {
             reject(new Error(
               `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
             ));
             return;
           }
           const item = {
-            billId: billId.trim(),
-            paymentId: paymentId.trim()
+            billId: normalizeSearchId(billId),
+            paymentId: normalizeSearchId(paymentId),
+            ficheNo: normalizeSearchId(ficheNo)
           };
-          if (!item.billId || !item.paymentId) {
-            reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
+          const pairComplete = !!item.billId && !!item.paymentId;
+          if (!item.ficheNo && !pairComplete) {
+            reject(new Error(`ردیف ${r + 1}: یا شماره فیش را وارد کنید، یا شناسه قبض و شناسه پرداخت را با هم`));
             return;
           }
-          const key = `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`;
+          const key = pairComplete
+            ? `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`
+            : `fiche:${normalizeBillOrPayIdDigits(item.ficheNo)}`;
           if (seen.has(key)) continue;
           seen.add(key);
           parsed.push(item);
@@ -747,7 +760,7 @@ function getInstallmentPayload() {
   const raw = ($('installmentValues')?.value || '').trim();
   return {
     ...base,
-    valuesText: raw
+    valuesText: normalizeSearchId(raw)
   };
 }
 
@@ -1117,8 +1130,9 @@ function setupFicheDateAccountGroupLazyLoad() {
 
 function updateUserGroupPermsTriggerLabel() {
   const labelEl = $('userGroupPermsTriggerLabel');
-  if (!labelEl) return;
-  const labels = Array.from(document.querySelectorAll('.user-group-perm-check:checked'))
+  const menu = $('userGroupPermsMenu');
+  if (!labelEl || !menu) return;
+  const labels = Array.from(menu.querySelectorAll('.user-group-perm-check:checked'))
     .map((el) => (el.dataset.permLabel || '').trim())
     .filter(Boolean);
   if (labels.length === 0) {
@@ -1176,7 +1190,7 @@ function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
   const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 25;
   ficheDateSearchState.pageSize = pageSize;
   return {
-    identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
+    identifierValue: normalizeSearchId($('ficheDateIdentifier')?.value),
     permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
     permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
     temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
@@ -1405,9 +1419,9 @@ function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
   const pageSize = parseInt($('bankInquiryPageSize')?.value || bankInquirySearchState.pageSize, 10) || 25;
   bankInquirySearchState.pageSize = pageSize;
   return {
-    ficheNo: ($('bankInquiryFicheNo')?.value || '').trim(),
-    billId: ($('bankInquiryBillId')?.value || '').trim(),
-    paymentId: ($('bankInquiryPaymentId')?.value || '').trim(),
+    ficheNo: normalizeSearchId($('bankInquiryFicheNo')?.value),
+    billId: normalizeSearchId($('bankInquiryBillId')?.value),
+    paymentId: normalizeSearchId($('bankInquiryPaymentId')?.value),
     page,
     pageSize
   };
@@ -1607,7 +1621,7 @@ function renderShahkarTable(items) {
 
 async function fetchShahkarResults({ clearSelection = false } = {}) {
   const userName = ($('shahkarUserName')?.value || '').trim();
-  const nationalCode = ($('shahkarNationalCode')?.value || '').trim();
+  const nationalCode = normalizeSearchId($('shahkarNationalCode')?.value);
   if (!userName && !nationalCode) {
     return showAppWarning('نام کاربری یا کد ملی را وارد کنید');
   }
@@ -1882,11 +1896,11 @@ function getUnsentSearchFilters() {
   const toDate = ($('unsentToDate')?.value || '').trim();
   return {
     ficheKind: $('unsentFicheKind').value,
-    ficheNo: ($('unsentFicheNo')?.value || '').trim(),
+    ficheNo: normalizeSearchId($('unsentFicheNo')?.value),
     fromDate: fromDate || null,
     toDate: toDate || null,
-    billId: ($('unsentBillId')?.value || '').trim(),
-    paymentId: ($('unsentPaymentId')?.value || '').trim(),
+    billId: normalizeSearchId($('unsentBillId')?.value),
+    paymentId: normalizeSearchId($('unsentPaymentId')?.value),
     district: branchIdToDistrict($('unsentDistrict')?.value)
   };
 }
@@ -1895,8 +1909,10 @@ function validateUnsentSearchFilters(filters) {
   if ((filters.fromDate && !filters.toDate) || (!filters.fromDate && filters.toDate)) {
     return 'هر دو تاریخ از و تا را وارد کنید';
   }
-  if (!filters.fromDate || !filters.toDate) {
-    return 'بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است';
+  const hasAny = filters.ficheNo || filters.billId || filters.paymentId || filters.district
+    || (filters.fromDate && filters.toDate);
+  if (!hasAny) {
+    return 'حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید';
   }
   return null;
 }
@@ -2142,8 +2158,28 @@ async function apiFetch(url, options = {}) {
   return res;
 }
 
+function readIsAdminFlag(user) {
+  if (!user) return false;
+  const raw = user.isAdmin ?? user.IsAdmin;
+  return raw === true || raw === 1 || raw === '1' || raw === 'true';
+}
+
+function normalizeAuthSession(user) {
+  if (!user) return user;
+  if (readIsAdminFlag(user)) {
+    user.isAdmin = true;
+    user.canAccessUnsentFiches = true;
+    user.canAccessInstallment = true;
+    user.canAccessFicheDateChange = true;
+    user.canAccessBankInquiryConfirm = true;
+    user.canAccessShahkar = true;
+    user.canManageUsers = true;
+  }
+  return user;
+}
+
 function isAdminUser() {
-  return !!currentUser?.isAdmin;
+  return readIsAdminFlag(currentUser);
 }
 
 function canAccessUnsent() {
@@ -2271,7 +2307,7 @@ async function ensureAuthenticated() {
     redirectToLogin();
     return false;
   }
-  currentUser = await res.json();
+  currentUser = normalizeAuthSession(await res.json());
   document.body.classList.add('app-authenticated');
   applyAuthUi();
   return true;
@@ -2289,7 +2325,7 @@ async function loadUsersTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/users');
   const data = await parseJsonResponse(res);
-  cachedUsers = data.items || [];
+  cachedUsers = (data.items || []).map(normalizeEntityId);
   const tbody = $('usersTable')?.querySelector('tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -2313,9 +2349,6 @@ async function loadUsersTable() {
     `;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('.btn-edit-user').forEach((btn) => {
-    btn.addEventListener('click', () => openUserEdit(btn.dataset.userId));
-  });
 }
 
 let cachedGroups = [];
@@ -2323,11 +2356,64 @@ let cachedUsers = [];
 let editingUserId = null;
 let editingGroupId = null;
 
+function normalizeEntityId(entity) {
+  if (!entity || typeof entity !== 'object') return entity;
+  const id = entity.id ?? entity.Id;
+  return id != null ? { ...entity, id } : entity;
+}
+
+function syncGroupFormActions() {
+  const createBtn = $('btnCreateGroup');
+  const cancelBtn = $('btnCancelGroupEdit');
+  const form = document.querySelector('.user-groups-form');
+  if (createBtn) {
+    createBtn.textContent = editingGroupId ? 'ذخیره تغییرات گروه' : 'ثبت گروه';
+  }
+  if (cancelBtn) cancelBtn.hidden = !editingGroupId;
+  form?.classList.toggle('is-editing', !!editingGroupId);
+}
+
+function setupGroupsTableActions() {
+  const table = $('groupsTable');
+  const tbody = table?.querySelector('tbody');
+  if (!tbody || tbody.dataset.actionsBound === '1') return;
+  tbody.dataset.actionsBound = '1';
+  tbody.addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.btn-edit-group');
+    if (editBtn) {
+      e.preventDefault();
+      openGroupEdit(editBtn.dataset.groupId);
+      return;
+    }
+    const saveBtn = e.target.closest('.btn-save-group');
+    if (saveBtn) {
+      e.preventDefault();
+      try {
+        await saveGroupFromForm();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  });
+}
+
+function setupUsersTableActions() {
+  const tbody = $('usersTable')?.querySelector('tbody');
+  if (!tbody || tbody.dataset.actionsBound === '1') return;
+  tbody.dataset.actionsBound = '1';
+  tbody.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('.btn-edit-user');
+    if (!editBtn) return;
+    e.preventDefault();
+    openUserEdit(editBtn.dataset.userId);
+  });
+}
+
 async function loadGroupsTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/groups');
   const data = await parseJsonResponse(res);
-  cachedGroups = data.items || [];
+  cachedGroups = (data.items || []).map(normalizeEntityId);
   renderGroupsTableBody();
   const editUser = editingUserId
     ? cachedUsers.find((u) => String(u.id) === String(editingUserId))
@@ -2361,18 +2447,6 @@ function renderGroupsTableBody() {
     `;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('.btn-edit-group').forEach((btn) => {
-    btn.addEventListener('click', () => openGroupEdit(btn.dataset.groupId));
-  });
-  tbody.querySelectorAll('.btn-save-group').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      try {
-        await saveGroupFromForm();
-      } catch (e) {
-        alert(e.message);
-      }
-    });
-  });
 }
 
 function openGroupEdit(groupId) {
@@ -2387,7 +2461,9 @@ function openGroupEdit(groupId) {
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   updateUserGroupPermsTriggerLabel();
+  syncGroupFormActions();
   renderGroupsTableBody();
+  document.querySelector('.user-groups-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function resetGroupForm() {
@@ -2400,6 +2476,7 @@ function resetGroupForm() {
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   updateUserGroupPermsTriggerLabel();
+  syncGroupFormActions();
   renderGroupsTableBody();
 }
 
@@ -2513,6 +2590,27 @@ function readDirectPermissionsFromForm(prefix) {
   };
 }
 
+function allDirectPermissionsGranted() {
+  return {
+    canAccessUnsentFiches: true,
+    canAccessInstallment: true,
+    canAccessFicheDateChange: true,
+    canAccessBankInquiryConfirm: true,
+    canAccessShahkar: true,
+    canManageUsers: true
+  };
+}
+
+function syncAdminCheckboxDirectPermissions(adminCheckboxId, directPrefix) {
+  const adminEl = $(adminCheckboxId);
+  if (!adminEl) return;
+  const sync = () => {
+    if (adminEl.checked) setDirectPermissionsOnForm(directPrefix, allDirectPermissionsGranted());
+  };
+  adminEl.addEventListener('change', sync);
+  sync();
+}
+
 function setDirectPermissionsOnForm(prefix, perms) {
   const p = perms || {};
   if ($(`${prefix}Unsent`)) $(`${prefix}Unsent`).checked = !!p.canAccessUnsentFiches;
@@ -2578,6 +2676,7 @@ function openUserEdit(userId) {
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
   renderUserGroupsPickerMenu('editUserGroupsMenu', 'editUserGroupsTriggerLabel', user.groupIds || []);
   setDirectPermissionsOnForm('editUserDirect', user.directPermissions);
+  panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeUserEdit() {
@@ -2925,6 +3024,11 @@ async function init() {
   if (canManageUsers()) {
     setupUserGroupPermsDropdown();
     setupUserManagementPickers();
+    setupGroupsTableActions();
+    setupUsersTableActions();
+    syncAdminCheckboxDirectPermissions('newUserIsAdmin', 'newUserDirect');
+    syncAdminCheckboxDirectPermissions('editUserIsAdmin', 'editUserDirect');
+    syncGroupFormActions();
     await loadGroupsTable();
     await loadUsersTable();
   }
@@ -2949,7 +3053,7 @@ function setupEventHandlers() {
 
   bindClick('btnLoad', async () => {
   const kind = getSingleFicheKind();
-  const value = $('identifierValue').value.trim();
+  const value = normalizeSearchId($('identifierValue').value);
   if (!value) return showAppWarning('شناسه فیش را وارد کنید');
 
   $('btnLoad').disabled = true;
@@ -3548,11 +3652,12 @@ function setupAuthAndAdminHandlers() {
   });
   bindClick('btnCreateGroup', async () => {
     try {
-      await saveGroupFromForm({ forceCreate: true });
+      await saveGroupFromForm();
     } catch (e) {
       alert(e.message);
     }
   });
+  bindClick('btnCancelGroupEdit', () => resetGroupForm());
   bindClick('btnRefreshGroups', loadGroupsTable);
   bindClick('btnSaveUserEdit', async () => {
     try {

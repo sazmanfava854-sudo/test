@@ -32,7 +32,7 @@ public static class InstallmentCheckHelper
 
         return raw
             .Split(new[] { ',', '\n', '\r', ';', '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(s => s.Trim())
+            .Select(s => IdentifierText.Normalize(s))
             .Where(s => s.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();

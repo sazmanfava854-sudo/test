@@ -1,3 +1,4 @@
+using RayvarzResend.Web.Models;
 using RayvarzResend.Web.Services;
 using Xunit;
 
@@ -5,6 +6,19 @@ namespace RayvarzResend.Tests;
 
 public class EpayFichePresenceCheckerTests
 {
+    [Fact]
+    public void RequiresEpayPresence_false_for_tahator_groups()
+    {
+        var tahator = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = TahatorRowBuilder.IncomeAccountGroupTahatorAmount
+        };
+        var income = new FicheHeaderDto { Category = FicheCategory.Income, IncomeAccountGroup = 150 };
+        Assert.False(EpayFichePresenceChecker.RequiresEpayPresence(tahator));
+        Assert.True(EpayFichePresenceChecker.RequiresEpayPresence(income));
+    }
+
     [Fact]
     public void Paid_or_not_paid_means_fiche_exists_in_epay()
     {

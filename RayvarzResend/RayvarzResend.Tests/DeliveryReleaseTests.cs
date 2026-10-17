@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v26_unified_excel_epay()
+    public void ReleaseInfo_is_v33_pr115()
     {
-        Assert.Equal(26, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-unified-excel-epay-v26", ReleaseInfo.Tag);
+        Assert.Equal(33, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr115-v33", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,16 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v26_doc_lists_unified_excel_epay()
+    public void DELIVERY_v33_doc_lists_leading_zero_and_negative_partner()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v26.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v33.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("نسخه آخر", doc);
-        Assert.Contains("unified-excel-epay-release-ffcb", doc);
-        Assert.Contains("epay", doc, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("mixed Income", doc);
+        Assert.Contains("releaseVersion: 33", doc);
+        Assert.Contains("50833533199", doc);
+        Assert.Contains("050833533243", doc);
     }
 
     [Fact]
@@ -105,6 +104,10 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
+        Assert.Contains("hoseine-sh", html);
+        Assert.DoesNotContain("alidoost-pa", html);
+        Assert.DoesNotContain("login-sso-hint", html);
+        Assert.DoesNotContain("ورود یکپارچه سازمانی (رمز در login.mashhad.ir", html);
         Assert.Contains("login.js?v=7", html);
         var js = File.ReadAllText(WebFile("wwwroot", "js", "login.js"));
         Assert.Contains("allowHybridLocalLogin", js);
@@ -212,13 +215,16 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("قالب فایل اکسل — ۲ ستون الزامی", html);
         Assert.Contains("templates/unsent-bill-pay-template.xlsx", html);
         Assert.DoesNotContain("نام کاربری ویندوز برای لاگین یکپارچه — مثلاً hoseine-sh", html);
+        Assert.DoesNotContain("همه ماژول‌ها شامل شاهکار", html);
         Assert.Contains("lib/xlsx/xlsx.full.min.js", html);
         Assert.DoesNotContain("cdn.sheetjs.com", html);
         Assert.True(File.Exists(WebFile("wwwroot", "lib", "xlsx", "xlsx.full.min.js")));
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=94", html);
+        Assert.Contains("js/app.js?v=98", html);
+        Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
+        Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);
         Assert.Contains("col-unsent-fill", html);
         Assert.DoesNotContain("<span id=\"unsentExcelStatus\" hidden", html);
@@ -231,6 +237,7 @@ public class DeliveryReleaseTests
         Assert.Contains("function getSelectedUnsentBatchTargets(", js);
         Assert.Contains("function appendUnsentItems(", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
+        Assert.Contains("map.ficheNo", js);
         Assert.Contains("BuildMixedLookupResult", File.ReadAllText(WebFile("Services", "UnsentBillPayLookupHelper.cs")));
         Assert.Contains("function canAccessRayvarzModule(", js);
         Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);
@@ -239,13 +246,19 @@ public class DeliveryReleaseTests
         Assert.Contains("<th>شناسه پرداخت</th>", html);
 
         var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", program);
+        Assert.Contains("حداقل یک فیلتر (تاریخ، فیش، قبض، پرداخت، منطقه) لازم است", program);
+        Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", js);
+        Assert.Contains("حداقل یکی از شماره فیش، شناسه قبض، شناسه پرداخت، منطقه یا بازه تاریخ را وارد کنید", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", program);
         Assert.Contains("EpayFichePresenceChecker", program);
 
         var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
         Assert.Contains("EnsurePresentOrThrowAsync", send);
         Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
-        Assert.Contains("CheckAsync", File.ReadAllText(WebFile("Services", "TahatorResendService.cs")));
+        var tahatorSend = File.ReadAllText(WebFile("Services", "TahatorResendService.cs"));
+        Assert.DoesNotContain("EpayFichePresenceChecker", tahatorSend);
+        Assert.Contains("epay ثبت نمی‌شود", tahatorSend);
     }
 
     [Fact]

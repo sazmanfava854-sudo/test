@@ -21,7 +21,7 @@ public static class InstallmentExcelMatcher
   }
 
   public static string NormalizeDigits(string? raw) =>
-    new string((raw ?? "").Where(char.IsDigit).ToArray());
+    new string(IdentifierText.Normalize(raw).Where(char.IsDigit).ToArray());
 
   public static string NormalizeDate(string? raw)
   {

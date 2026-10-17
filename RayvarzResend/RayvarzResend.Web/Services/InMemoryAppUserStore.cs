@@ -38,7 +38,9 @@ public sealed class InMemoryAppUserStore
             IsAdmin = req.IsAdmin,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow,
-            DirectPermissions = req.DirectPermissions ?? new AppUserDirectPermissions()
+            DirectPermissions = req.IsAdmin
+                ? AppUserDirectPermissions.AllGranted()
+                : req.DirectPermissions ?? new AppUserDirectPermissions()
         };
         _byUsername[user.Username] = user;
         _byId[user.Id] = user;
@@ -233,7 +235,9 @@ public sealed class InMemoryAppUserStore
         }
         if (req.GroupIds != null)
             SetUserGroups(id, req.GroupIds);
-        if (req.DirectPermissions != null)
+        if (user.IsAdmin)
+            user.DirectPermissions = AppUserDirectPermissions.AllGranted();
+        else if (req.DirectPermissions != null)
             user.DirectPermissions = req.DirectPermissions;
 
         return List().First(u => u.Id == id);

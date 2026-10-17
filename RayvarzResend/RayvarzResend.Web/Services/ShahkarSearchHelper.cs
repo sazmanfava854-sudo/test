@@ -10,7 +10,7 @@ public static class ShahkarSearchHelper
             return "درخواست خالی است";
 
         var userName = (req.UserName ?? "").Trim();
-        var nationalCode = (req.NationalCode ?? "").Trim();
+        var nationalCode = IdentifierText.Normalize(req.NationalCode);
         if (userName.Length == 0 && nationalCode.Length == 0)
             return "نام کاربری یا کد ملی را وارد کنید";
 
@@ -23,7 +23,7 @@ public static class ShahkarSearchHelper
     public static (string WhereSql, Dictionary<string, object> Parameters) BuildSearchWhere(ShahkarSearchRequest req)
     {
         var userName = (req.UserName ?? "").Trim();
-        var nationalCode = (req.NationalCode ?? "").Trim();
+        var nationalCode = IdentifierText.Normalize(req.NationalCode);
         var clauses = new List<string>();
         var parameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 

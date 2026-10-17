@@ -7,6 +7,7 @@ using Microsoft.Data.SqlClient;
 using RayvarzResend.Web;
 using RayvarzResend.Web.Models;
 using RayvarzResend.Web.RuleEngine;
+using RayvarzResend.Web.RuleEngine.Sync;
 using RayvarzResend.Web.Services;
 
 WebApplicationBuilder builder;
@@ -38,6 +39,7 @@ builder.Services.PostConfigure<ShimasAuthOptions>(o =>
     ShimasAuthConfiguration.ApplyMashhadAliases(builder.Configuration, o));
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.Configure<ShahkarOptions>(builder.Configuration.GetSection(ShahkarOptions.SectionName));
+builder.Services.Configure<RuleEngineSyncOptions>(builder.Configuration.GetSection(RuleEngineSyncOptions.SectionName));
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>
     {
@@ -108,6 +110,13 @@ builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
 builder.Services.AddSingleton<ShahkarService>();
+builder.Services.AddSingleton<RuleEngineStateRepository>();
+builder.Services.AddSingleton<IRuleSendGateStore>(sp => sp.GetRequiredService<RuleEngineStateRepository>());
+builder.Services.AddSingleton<RuleSendGate>();
+builder.Services.AddSingleton<RuleHistoryChecker>();
+builder.Services.AddSingleton<RuleCandidateValidator>();
+builder.Services.AddSingleton<RuleVersionManager>();
+builder.Services.AddHostedService<RuleEngineSyncHostedService>();
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -942,6 +951,47 @@ app.MapGet("/api/rule/member/{nidMember:int}/meta", async (int nidMember, Member
     }
 }).RequireAuthorization(adminOnly);
 
+app.MapGet("/api/rule/sync/status", async (RuleEngineStateRepository state, RuleVersionManager sync, RuleSendGate sendGate, IConfiguration config, CancellationToken ct) =>
+{
+    var nid = config.GetValue($"{RuleEngineSyncOptions.SectionName}:NidMember", 1388);
+    var row = state.IsConfigured ? await state.GetStateAsync(nid, ct) : null;
+    var open = state.IsConfigured ? await state.GetOpenCandidateAsync(nid, ct) : null;
+    sendGate.Invalidate();
+    return Results.Ok(new
+    {
+        enabled = config.GetValue($"{RuleEngineSyncOptions.SectionName}:Enabled", false),
+        configured = state.IsConfigured,
+        nidMember = nid,
+        sendGateActive = sendGate.IsActive,
+        sendBlocked = await sendGate.IsBlockedAsync(ct),
+        sendBlockedUserMessage = RuleSendGate.UserBlockedMessage,
+        sendBlockedAdminMessage = RuleSendGate.AdminBlockedMessage,
+        state = row,
+        openCandidate = open,
+        pollIntervalMinutes = config.GetValue($"{RuleEngineSyncOptions.SectionName}:PollIntervalMinutes", 15),
+        stabilityHours = config.GetValue($"{RuleEngineSyncOptions.SectionName}:StabilityHours", 72),
+        autoPromoteDynamic = config.GetValue($"{RuleEngineSyncOptions.SectionName}:AutoPromoteDynamic", false)
+    });
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/sync/run", async (RuleVersionManager sync, CancellationToken ct) =>
+{
+    var result = await sync.RunCycleAsync(ct);
+    return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/send-gate/approve", async (RuleSendGateRequest? req, RuleVersionManager sync, HttpContext http, CancellationToken ct) =>
+{
+    var result = await sync.ApproveSendAsync(http.User.Identity?.Name ?? "admin", req?.Note, ct);
+    return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
+}).RequireAuthorization(adminOnly);
+
+app.MapPost("/api/rule/send-gate/block", async (RuleSendGateRequest? req, RuleVersionManager sync, HttpContext http, CancellationToken ct) =>
+{
+    var result = await sync.BlockSendAsync(http.User.Identity?.Name ?? "admin", req?.Note, ct);
+    return result.Ok ? Results.Ok(result) : Results.Json(result, statusCode: 503);
+}).RequireAuthorization(adminOnly);
+
 app.MapGet("/api/rule/bridge/health", (IConfiguration config) => Results.Ok(new
 {
     ok = true,
@@ -1004,8 +1054,13 @@ app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResend
     }
 }).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, HttpContext http, CancellationToken ct) =>
+static IResult RuleSendGateBlocked() =>
+    Results.Json(new { error = RuleSendGate.UserBlockedMessage }, statusCode: 409);
+
+app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
 {
+    if (await sendGate.IsBlockedAsync(ct))
+        return RuleSendGateBlocked();
     if (string.IsNullOrWhiteSpace(req?.FicheNo))
         return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
     try
@@ -1020,14 +1075,20 @@ app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendS
 
         return Results.Ok(await tahator.SendAsync(req, ct));
     }
+    catch (RuleSendGateBlockedException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 409);
+    }
     catch (Exception ex)
     {
         return Results.Json(new { error = ex.Message, steps = Array.Empty<string>() }, statusCode: 500);
     }
 }).RequireAuthorization(authenticated);
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
 {
+    if (await sendGate.IsBlockedAsync(ct))
+        return RuleSendGateBlocked();
     if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
         return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
 
@@ -1038,6 +1099,10 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService se
     try
     {
         return Results.Ok(await send.SendAsync(req, ct));
+    }
+    catch (RuleSendGateBlockedException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 409);
     }
     catch (InvalidOperationException ex)
     {
@@ -1070,8 +1135,6 @@ app.MapPost("/api/unsent/search", async (
         return Results.BadRequest(new { error = "درخواست جستجو خالی است" });
     if (req.HasPartialDateRange)
         return Results.BadRequest(new { error = "هر دو تاریخ از و تا را وارد کنید" });
-    if (!req.HasDateRange)
-        return Results.BadRequest(new { error = "بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است" });
     if (!req.HasAnyFilter)
         return Results.BadRequest(new { error = "حداقل یک فیلتر (تاریخ، فیش، قبض، پرداخت، منطقه) لازم است" });
     try
@@ -1109,9 +1172,12 @@ app.MapPost("/api/unsent/send-batch", async (
     UnsentBatchSendRequest? req,
     UnsentFicheService unsent,
     AppPermissionService perms,
+    RuleSendGate sendGate,
     HttpContext http,
     CancellationToken ct) =>
 {
+    if (await sendGate.IsBlockedAsync(ct))
+        return RuleSendGateBlocked();
     var denied = await DenyUnlessUnsent(http, perms, ct);
     if (denied != null) return denied;
     if (req == null || ((req.Targets == null || req.Targets.Count == 0) && (req.FicheNos == null || req.FicheNos.Count == 0)))
@@ -1119,6 +1185,10 @@ app.MapPost("/api/unsent/send-batch", async (
     try
     {
         return Results.Ok(await unsent.SendBatchAsync(req, http.User, ct));
+    }
+    catch (RuleSendGateBlockedException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 409);
     }
     catch (Exception ex)
     {
