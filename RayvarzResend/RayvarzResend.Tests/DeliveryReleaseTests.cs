@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v30_pr115()
+    public void ReleaseInfo_is_v31_pr115()
     {
-        Assert.Equal(30, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr115-v30", ReleaseInfo.Tag);
+        Assert.Equal(31, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr115-v31", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v30_doc_lists_pr115_release()
+    public void DELIVERY_v31_doc_lists_pair_send_message()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v30.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v31.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("نسخه آخر", doc);
-        Assert.Contains("504", doc);
-        Assert.Contains("FicheNo", doc);
+        Assert.Contains("releaseVersion: 31", doc);
+        Assert.Contains("تهاتر", doc);
+        Assert.Contains("رد شده", doc);
     }
 
     [Fact]
