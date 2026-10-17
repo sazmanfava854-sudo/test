@@ -352,7 +352,7 @@ SECTION_TITLE = {
     "urban-planning-etebarsanji-17-income.mdc": "درآمد",
     "urban-planning-etebarsanji-18-movafeghat.mdc": "موافقت اصولی و فیش مشترک",
     "urban-planning-etebarsanji-19-request-ugp.mdc": "درخواست شهروندسپاری",
-    "urban-planning-etebarsanji-20-checklist-on-tick.mdc": "اعتبارسنجی چک‌لیست (OnTick)",
+    "urban-planning-etebarsanji-20-checklist-on-tick.mdc": "اعتبارسنجی تأیید چک‌لیست",
     "urban-planning-etebarsanji-21-checklist-abol.mdc": "اعتبارسنجی ابطال چک‌لیست",
 }
 

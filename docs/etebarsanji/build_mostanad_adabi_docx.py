@@ -879,18 +879,16 @@ def catalog_manual_pack(
 
 
 ONTICK_INTRO = (
-    "این بخش مربوط به فرمول تیک چک‌لیست است. تابع Run بر اساس نوع تیک، یکی از مسیرهای "
-    "تأیید مالک، عدم تأیید مالک، تأیید شهرداری یا عدم تأیید شهرداری را فراخوانی می‌کند. "
-    "رد شدن کنترل با Result=false و متن Description به کاربر اعلام می‌شود. "
-    "هر پیام زیر فقط در تابع و شرطی اجرا می‌شود که در کد ویژوال‌بیسیک ثبت شده است."
+    "این بخش هنگام تأیید یا عدم تأیید چک‌لیست اجرا می‌شود. "
+    "کنترل‌ها بر اساس انتخاب مالک یا شهرداری انجام می‌شوند. "
+    "اگر شرط هر کنترل برقرار باشد، تأیید انجام نمی‌شود و پیام ثبت‌شده در برنامه نمایش داده می‌شود."
 )
 
 ONTICK_PREPEND = [
     (
         "تأیید مالک ـ تسویه نوسازی",
         [
-            "این کنترل در تابع ConfirmOwner و برای چک‌لیست 7589e0f8-a7bb-4ca0-8512-eee357852733 اجرا می‌شود. "
-            "سال تسویه نوسازی با سال جاری شمسی مقایسه می‌شود.",
+            "این اعتبارسنجی هنگام تأیید مالک اجرا می‌شود و سال تسویه نوسازی را با سال جاری مقایسه می‌کند.",
             "اگر پرونده از نوع دستگاه باشد و سال جاری از سال تسویه بیشتر باشد، تأیید رد می‌شود و پیام "
             "«تسویه نوسازی انجام نشده است - دستگاه @@» نمایش داده می‌شود.",
             "اگر پرونده دارای آپارتمان باشد، همه فرزندان نوع آپارتمان بررسی می‌شوند. برای هر آپارتمان تسویه‌نشده، "
@@ -902,7 +900,7 @@ ONTICK_PREPEND = [
     (
         "تأیید مالک ـ تسویه صنفی",
         [
-            "این کنترل در تابع ConfirmOwner و برای چک‌لیست fab0db1c-efa4-4044-9b0c-29d1323e69b6 اجرا می‌شود.",
+            "این اعتبارسنجی هنگام تأیید مالک برای واحد صنفی اجرا می‌شود.",
             "اگر واحد صنفی وجود داشته باشد و سال جاری از سال تسویه صنفی بیشتر باشد، تأیید رد می‌شود و پیام "
             "«تسویه صنفی انجام نشده است @@» نمایش داده می‌شود.",
             "اگر هیچ فرزند نوع واحد صنفی وجود نداشته باشد، تأیید رد می‌شود و پیام «واحد صنفی وجود ندارد» نمایش داده می‌شود.",
@@ -911,7 +909,7 @@ ONTICK_PREPEND = [
     (
         "تأیید مالک ـ بدهی نوسازی",
         [
-            "این کنترل با بررسی بدهی نوسازی از سال ۱۳۹۵ در تابع ConfirmOwner اجرا می‌شود و با کنترل سال تسویه تفاوت دارد.",
+            "این اعتبارسنجی هنگام تأیید مالک، بدهی نوسازی از سال ۱۳۹۵ را بررسی می‌کند و با کنترل سال تسویه تفاوت دارد.",
             "بسته به نوع پرونده، بدهی روی دستگاه، آپارتمان‌ها یا ملک سنجیده می‌شود. وجود بدهی، Result را false می‌کند و یکی از پیام‌های "
             "«دارای بدهی نوسازی می‌باشید لطفاً پس از پرداخت تأیید نمایید» یا "
             "«دارای بدهی نوسازی بر روی یک یا چند تا از آپارتمان‌ها می‌باشد» نمایش داده می‌شود.",
@@ -920,10 +918,8 @@ ONTICK_PREPEND = [
 ]
 
 ABOL_INTRO = (
-    "این بخش مربوط به فرمول ابطال چک‌لیست است. نقطه ورود تابع Run است. "
-    "توابع Fiche، Comm100، UseBazdidT، GetIdWorkflow و ControlTask در مسیر فعال از Run فراخوانی می‌شوند. "
-    "توابع ControlCheckList، SaveCheck و msg در مسیر فعال فراخوانی نمی‌شوند؛ CheckMalek فراخوانی می‌شود، "
-    "ولی شاخه‌ای که باید توقف ایجاد کند در کد کامنت است. پیامک پایان تابع اثر جانبی است و اعتبارسنجی شمرده نشده است."
+    "این بخش هنگام ابطال چک‌لیست اجرا می‌شود. فقط کنترل‌های فعال و پیام‌های قابل نمایش آمده‌اند. "
+    "کنترل‌های کامنت‌شده، مسیرهای غیرقابل اجرا و پیامک پایان کار در فهرست اعتبارسنجی قرار نگرفته‌اند."
 )
 
 
@@ -968,11 +964,195 @@ def manual_pack(filename: str):
     return None
 
 
-def section_subtitles(sec: dict) -> list[str]:
+_GUID = re.compile(r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}")
+_LATIN_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_./<>=\"'-]*")
+
+
+def is_active_validation(law: dict) -> bool:
+    """فقط کنترل‌های فعالِ دارای توقف یا هشدار را وارد سند کاربر نهایی کن."""
+    fields = law.get("fields") or {}
+    title = law.get("title") or ""
+    severity = fields.get("شدت") or ""
+    blob = " ".join([title, severity, law.get("simple") or "", fields.get("اقدام") or ""])
+    inactive = ("مرده", "کامنت", "خاموش", "اجرا نمی‌شود", "صدا نمی‌شود", "بدون Caller")
+    if any(word in title or word in severity for word in inactive):
+        return False
+    active_marks = ("Stop", "Warning", "Result=false", "توقف", "هشدار", "Result = false")
+    return any(mark in severity or mark in blob for mark in active_marks)
+
+
+def plain_persian(text: str) -> str:
+    """شناسه، نام تابع و واژهٔ برنامه‌نویسی را از متن مخاطب عمومی بردار."""
+    if not text:
+        return ""
+    replacements = {
+        "Sara10": "سرا۱۰",
+        "SARA10": "سرا۱۰",
+        "Stop": "توقف",
+        "Warning": "هشدار",
+        "Exit Function": "پایان بررسی",
+        "Result=false": "رد تأیید",
+        "Result = false": "رد تأیید",
+        "AddError": "پیام",
+        "FormName": "نام فرم",
+        "WorkflowTitel": "عنوان فرایند",
+        "GUID": "شناسه",
+        "Msgbox": "پیام",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    text = _GUID.sub("", text)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = _LATIN_WORD.sub("", text)
+    text = re.sub(r"\(\s*\)", "", text)
+    text = re.sub(r"\s*[/=<>]+\s*", " ", text)
+    text = re.sub(r"و?\s*نام آن در برنامه\s*است", "", text)
+    text = text.replace("تابع", "")
+    text = text.replace("کامنت‌شده", "غیرفعال").replace("کامنت شده", "غیرفعال")
+    text = text.replace("کامنت", "غیرفعال").replace("خاموش", "غیرفعال")
+    text = text.replace("پارامتر", "اطلاعات ورودی")
+    text = re.sub(r"\s+", " ", text).strip(" —-؛،:")
+    return finish_run(text) if text else ""
+
+
+def public_paragraphs(paragraphs: list[str]) -> list[str]:
+    """فقط زمان فعال‌شدن، نتیجه و پیام را نگه دار؛ شرح ساختمان کد حذف شود."""
+    kept: list[str] = []
+    useful = (
+        "اگر",
+        "هنگام",
+        "زمانی",
+        "وقتی",
+        "در صورت",
+        "پیام",
+        "متوقف",
+        "هشدار",
+        "مجاز",
+        "الزام",
+        "باید",
+    )
+    technical = (
+        "برمی‌گرداند",
+        "فراخوان",
+        "متغیر",
+        "پارامتر",
+        "حلقه",
+        "شاخه",
+        "آرایه",
+        "مقدار صفر یا یک",
+    )
+    for paragraph in paragraphs:
+        for sentence in re.split(r"(?<=[.!؟])\s+", paragraph):
+            if sentence.strip().startswith(("کار برنامه", "از این کنترل معاف", "خود این تابع")):
+                continue
+            latin_tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", sentence)
+            code_heavy = (
+                len(latin_tokens) >= 2
+                or any(token in sentence for token in ("<>", "=>", "Function(", "Get", "Count", "{", "}"))
+            )
+            if code_heavy and "پیام" not in sentence and "«" not in sentence:
+                continue
+            cleaned = plain_persian(sentence)
+            if not cleaned:
+                continue
+            if any(word in cleaned for word in technical) and "پیام" not in cleaned:
+                continue
+            if any(word in cleaned for word in useful):
+                kept.append(cleaned)
+    if not kept:
+        kept.append(
+            "شرط این اعتبارسنجی در کد موجود است، اما توضیح فارسی قابل اثباتی برای نمایش به کاربر در متن ارسالی ثبت نشده است."
+        )
+    return kept
+
+
+def is_user_message(message: str) -> bool:
+    """فقط جمله‌های کامل قابل نمایش به کاربر را بپذیر."""
+    message = re.sub(r"\s+", " ", message or "").strip(" .،؛")
+    if len(message) < 12 or " " not in message:
+        return False
+    if re.search(r"[&{}<>]|…|\.{3}", message):
+        return False
+    if any(word in message for word in ("پاکسازی", "بارد", "ويرايش", "پایان بررسی", "مقدار 0", "→")):
+        return False
+    return bool(re.search(r"[\u0600-\u06ff]", message))
+
+
+def public_law_paragraphs(law: dict, title: str) -> list[str]:
+    """از هر قانون فقط شرط فعال‌شدن و پیام قابل نمایش را بساز."""
+    fields = law.get("fields") or {}
+    simple = law.get("simple") or ""
+    condition_raw = fields.get("شرط") or fields.get("شرط زنده") or ""
+
+    condition_sentences: list[str] = []
+    for source in (simple, condition_raw):
+        for sentence in re.split(r"(?<=[.!؟])\s+", source):
+            if not any(word in sentence for word in ("اگر", "هنگام", "زمانی", "وقتی", "در صورت", "فقط")):
+                continue
+            if len(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", sentence)) >= 2:
+                continue
+            cleaned = plain_persian(sentence)
+            if cleaned and cleaned not in condition_sentences:
+                condition_sentences.append(cleaned)
+        if condition_sentences:
+            break
+
+    blob = " ".join([simple, *fields.values()])
+    messages: list[str] = []
+    for pattern in (r"«([^»]+)»", r'"([^"]*[\u0600-\u06ff][^"]*)"'):
+        for match in re.findall(pattern, blob):
+            msg = plain_persian(match).rstrip(".")
+            if not is_user_message(msg) or msg in messages:
+                continue
+            messages.append(msg)
+
+    if not condition_sentences and not messages:
+        return []
+
+    paragraphs = condition_sentences[:2]
+    if messages:
+        paragraphs.append("در این حالت پیام زیر نمایش داده می‌شود:")
+        paragraphs.extend(f"«{message}»" for message in messages[:3])
+    return paragraphs
+
+
+def public_law_pack(sec: dict):
+    checks: list[tuple[str, list[str]]] = []
+    for law in sec["laws"]:
+        if not is_active_validation(law):
+            continue
+        title = plain_persian(law_title(law)).rstrip(".")
+        title = re.sub(r"^0\s+", "", title)
+        title = re.sub(r"\bمنبع\s+\d+\b", "", title)
+        title = title.replace("درون همین", "").replace("اصلی", "")
+        title = re.sub(r"\s+", " ", title).strip(" ـ-")
+        if len(title) < 4:
+            title = "اعتبارسنجی ذخیره"
+        paragraphs = public_law_paragraphs(law, title)
+        if paragraphs:
+            checks.append((title, paragraphs))
+    intro_parts = SECTION_BLURB.get(sec["file"], [])
+    intro = plain_persian(intro_parts[0]) if intro_parts else ""
+    return intro, checks
+
+
+def document_pack(sec: dict):
+    """بستهٔ نهایی سند؛ محتوای فنیِ mdc به متن عمومی تبدیل می‌شود."""
     pack = manual_pack(sec["file"])
-    if pack:
-        return [h for h, _ in pack[1]]
-    return [law_title(law) for law in sec["laws"]]
+    if pack and any(
+        key in sec["file"]
+        for key in ("02-barokaf", "20-checklist-on-tick", "21-checklist-abol")
+    ):
+        intro, checks = pack
+        return plain_persian(intro), [
+            (plain_persian(heading).rstrip("."), public_paragraphs(paras))
+            for heading, paras in checks
+        ]
+    return public_law_pack(sec)
+
+
+def section_subtitles(sec: dict) -> list[str]:
+    return [h for h, _ in document_pack(sec)[1]]
 
 
 def shown_title(text: str) -> str:
@@ -1062,8 +1242,8 @@ def write_numbered_markdown(parsed: list[dict]) -> None:
     lines = [
         "# مستند اعتبارسنجی سامانه شهرسازی",
         "",
-        "این نسخه فقط کنترل‌های مستندشده را به‌صورت عنوان و توضیح شماره‌دار ارائه می‌کند. "
-        "نام تابع فقط در جایی آمده است که برای تشخیص مسیر اجرا ضرورت فنی دارد.",
+        "این نسخه فقط شرایط فعال‌شدن اعتبارسنجی‌ها و پیام قابل نمایش به کاربر را "
+        "به‌صورت عنوان و توضیح شماره‌دار ارائه می‌کند.",
         "",
         "## فهرست",
         "",
@@ -1077,22 +1257,12 @@ def write_numbered_markdown(parsed: list[dict]) -> None:
     for i, sec in enumerate(parsed, start=1):
         title = SECTION_TITLE.get(sec["file"], sec["title"])
         lines.extend(["", "---", "", f"## {i}- {title}", ""])
-        pack = manual_pack(sec["file"])
-        if pack:
-            intro, checks = pack
-            lines.extend([finish_run(intro), ""])
-            for j, (heading, paras) in enumerate(checks, start=1):
-                lines.extend([f"### {i}-{j} {heading}", ""])
-                for para in paras:
-                    lines.extend([finish_run(para), ""])
-            continue
-
-        for blurb in SECTION_BLURB.get(sec["file"], []):
-            lines.extend([polish(blurb), ""])
-        seen: set[str] = set()
-        for j, law in enumerate(sec["laws"], start=1):
-            lines.extend([f"### {i}-{j} {law_title(law)}", ""])
-            for para in literary_body(law, seen):
+        intro, checks = document_pack(sec)
+        if intro:
+            lines.extend([intro, ""])
+        for j, (heading, paras) in enumerate(checks, start=1):
+            lines.extend([f"### {i}-{j} {heading}", ""])
+            for para in paras:
                 lines.extend([para, ""])
 
     OUT_MD.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
@@ -1115,19 +1285,15 @@ def build():
     add_heading(doc, "مستند اعتبارسنجی سامانه شهرسازی", 1)
     add_p(
         doc,
-        "هنگامی که کارشناس در هر یک از فرم‌های سامانه گزینه ذخیره را برمی‌گزیند، "
-        "برنامه نخست به تابع مسیریاب وارد می‌شود و سپس، بر اساس نام فرم، تابع همان صفحه را فراخوانی می‌کند. "
-        "این برنامه محاسبهٔ ضوابط شهرسازی نیست؛ بلکه بررسی می‌کند که داده کامل باشد، کاربر مجوز داشته باشد، "
-        "و فیش درآمد یا تأیید مدیر مانعی برای ادامه ایجاد نکرده باشد. در برخی فرم‌ها عددی نیز ثبت می‌شود، "
-        "مانند مساحت پس از کسر مسیر، و گاه پیامک یا اعلان کارتابل ساخته می‌شود.",
+        "هنگامی که کارشناس گزینه ذخیره یا تأیید را انتخاب می‌کند، کنترل‌های مربوط به همان بخش اجرا می‌شوند. "
+        "در این مستند فقط شرایط فعال‌شدن هر اعتبارسنجی و پیام قابل نمایش به کاربر آمده است.",
         first_line=0.6,
         space_after=10,
     )
     add_p(
         doc,
-        "در این مستند، برای هر فرم، اعتبارسنجی‌هایی که هنگام ذخیره اجرا می‌شوند یک‌به‌یک آمده است. "
-        "تابع مشترک فقط در نخستین بخش شرح داده می‌شود و در فرم‌های بعد تنها تفاوت همان فرم نوشته می‌شود. "
-        "نوع درخواست با عنوان فارسی فرایند آمده است، نه با شناسه.",
+        "نام‌های برنامه‌نویسی، شناسه‌ها، توضیحات فنی و کنترل‌های غیرفعال حذف شده‌اند. "
+        "موارد محاسباتی و پیامک نیز تا وقتی مانع یا هشدار فعال نباشند، اعتبارسنجی شمرده نشده‌اند.",
         first_line=0.6,
     )
 
@@ -1145,89 +1311,24 @@ def build():
                 add_toc(doc, sub_title, bold=False, size=12, space_before=0, space_after=1, level=2)
             )
 
-    add_heading(doc, "نام فرم‌ها", 1)
-    add_table(
-        doc,
-        ["نام فارسی", "نام در برنامه"],
-        [
-            ["مسیریاب و ابزار مشترک", "Run"],
-            ["بروکف", "Barokaf"],
-            ["بازدید آپارتمان", "Revisit_Apartment"],
-            ["پرونده آپارتمان", "Parvandeh_Apartment"],
-            ["درخواست سرا۸", "Request"],
-            ["بازدید ملک", "Revisit_House"],
-            ["بازدید ساختمان", "Revisit_Building"],
-            ["بازدید دستگاه", "Revisit_HouseSharing"],
-            ["تحلیل تخلف", "AnalysisBuilding"],
-            ["تأیید مدیر", "ManagerConfirm"],
-            ["صلحنامه", "Peace_List"],
-            ["توافق", "Agreement_List"],
-            ["تخفیف", "AllDiscount"],
-            ["جریمه لایحه", "Fine"],
-            ["ضابطه", "Zabeteh"],
-            ["مأمور بازدید", "AssignRevisit"],
-            ["درآمد", "Income"],
-            ["موافقت اصولی", "MovafeghatOsooli"],
-            ["شهروندسپاری", "RequestUGP"],
-        ],
-    )
-
-    seen: set[str] = set()
     total = 0
     for i, sec in enumerate(parsed, start=1):
         title = shown_title(toc_line(i, SECTION_TITLE.get(sec["file"], sec["title"])))
         add_heading(doc, title, 1)
-        pack = manual_pack(sec["file"])
-        if pack:
-            intro, checks = pack
-            add_p(doc, finish_run(intro), first_line=0.5)
-            for j, (heading, paras) in enumerate(checks, start=1):
-                add_heading(doc, shown_title(toc_line(i, heading, j)), 2)
-                for para in paras:
-                    add_p(doc, finish_run(para), size=12, first_line=0.45, space_after=6)
-                if heading == "مبلغ خدمات نقشه‌برداری":
-                    add_table(doc, ["مساحت پس از اصلاح، متر مربع", "مبلغ، ریال"], BAROKAF_FEE_ROWS)
-                total += 1
-            continue
-        for blurb in SECTION_BLURB.get(sec["file"], []):
-            add_p(doc, polish(blurb), first_line=0.5)
-        if not sec["laws"]:
+        intro, checks = document_pack(sec)
+        if intro:
+            add_p(doc, intro, first_line=0.5)
+        if not checks:
             add_p(doc, "برای این فرم اعتبارسنجی استخراج نشد.", color=GRAY)
             continue
-        for j, law in enumerate(sec["laws"], start=1):
-            add_heading(doc, shown_title(toc_line(i, law_title(law), j)), 2)
-            for para in literary_body(law, seen):
+        for j, (heading, paragraphs) in enumerate(checks, start=1):
+            add_heading(doc, shown_title(toc_line(i, heading, j)), 2)
+            for para in paragraphs:
                 add_p(doc, para, size=12, first_line=0.45, space_after=6)
-            for tbl in law.get("extra_tables") or []:
-                if keep_table(tbl):
-                    width = max(len(r) for r in tbl)
-                    headers = [spell_fix(half_space(c))[:80] for c in tbl[0]]
-                    headers += [""] * (width - len(headers))
-                    body = []
-                    for r in tbl[1:]:
-                        row = [spell_fix(half_space(c))[:180] for c in r]
-                        row += [""] * (width - len(row))
-                        body.append(row)
-                    add_table(doc, headers, body)
             total += 1
 
-    add_heading(doc, "جمع", 1)
-    add_table(
-        doc,
-        ["فرم", "تعداد اعتبارسنجی"],
-        [
-            [
-                SECTION_TITLE.get(s["file"], s["title"]),
-                str(
-                    len(manual_pack(s["file"])[1])
-                    if manual_pack(s["file"])
-                    else len(s["laws"])
-                ),
-            ]
-            for s in parsed
-        ]
-        + [["جمع", str(total)]],
-    )
+    add_heading(doc, "جمع‌بندی", 1)
+    add_p(doc, f"در مجموع، {total} اعتبارسنجی فعال در این مستند ثبت شده است.")
     add_p(
         doc,
         "اگر پیام روی صفحه با این شرح تفاوت داشت، متن همان پیام ملاک عمل کارشناس است "
