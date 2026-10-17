@@ -258,7 +258,11 @@ public class DeliveryReleaseTests
         Assert.Contains("EnsurePresentOrThrowAsync", send);
         Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
         var tahatorSend = File.ReadAllText(WebFile("Services", "TahatorResendService.cs"));
+<<<<<<< HEAD
         Assert.DoesNotContain("CheckAsync", tahatorSend);
+=======
+        Assert.DoesNotContain("EpayFichePresenceChecker", tahatorSend);
+>>>>>>> e221e0d (fix(tahator): skip epay presence check for tahator fiches)
         Assert.Contains("epay ثبت نمی‌شود", tahatorSend);
     }
 
