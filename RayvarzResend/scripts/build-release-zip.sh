@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-29.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-30.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v29 — نسخه آخر (PR #115)
+echo RayvarzResend v30 — نسخه آخر (PR #115)
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v29 — نسخه آخر (PR #115: تهاتر بدون epay + اکسل سریع + SendGate)
+RayvarzResend v30 — نسخه آخر (ورود اکسل بدون 504 + تهاتر بدون epay)
 
 نصب روی سرور ویندوز
 --------------------
@@ -47,7 +47,7 @@ RayvarzResend v29 — نسخه آخر (PR #115: تهاتر بدون epay + اک�
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 29
+     releaseVersion = 30
      accountingDoc.dryRun = false
      dryRun = false
 

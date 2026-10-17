@@ -1,15 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۲۹ — PR #115)** — تهاتر بدون epay، اکسل سریع، SendGate، ارسال‌نشده.
+**نسخه آخر (تحویل: ۳۰ — PR #115)** — ورود اکسل بدون 504، تهاتر بدون epay، SendGate.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-pr115-v29` |
-| Zip publish | `RayvarzResend-29.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| **Tag نسخه** | `rayvarzresend-pr115-v30` |
+| Zip publish | `RayvarzResend-30.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/unsent-search-optional-date-4c4a`](https://github.com/sazmanfava854-sudo/test/tree/cursor/unsent-search-optional-date-4c4a) |
-| جزئیات | [`DELIVERY-v29.md`](DELIVERY-v29.md) |
-| v28 قبلی | [`DELIVERY-v28.md`](DELIVERY-v28.md) |
+| جزئیات | [`DELIVERY-v30.md`](DELIVERY-v30.md) |
+| v29 قبلی | [`DELIVERY-v29.md`](DELIVERY-v29.md) |
 | v25 قبلی | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
 | v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
 | v23 جزئیات | [`DELIVERY-v23.md`](DELIVERY-v23.md) |
@@ -18,7 +18,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 29` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 30` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 
