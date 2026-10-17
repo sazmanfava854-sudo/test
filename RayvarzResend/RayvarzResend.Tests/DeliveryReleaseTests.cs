@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v27_pr115()
+    public void ReleaseInfo_is_v28_pr115()
     {
-        Assert.Equal(27, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr115-v27", ReleaseInfo.Tag);
+        Assert.Equal(28, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr115-v28", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v27_doc_lists_pr115_release()
+    public void DELIVERY_v28_doc_lists_pr115_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v27.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v28.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
         Assert.Contains("نسخه آخر", doc);
         Assert.Contains("unsent-search-optional-date-4c4a", doc);
-        Assert.Contains("SendGate", doc);
+        Assert.Contains("CROSS APPLY", doc);
         Assert.Contains("تهاتر", doc);
     }
 

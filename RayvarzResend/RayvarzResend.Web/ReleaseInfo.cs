@@ -1,10 +1,10 @@
 namespace RayvarzResend.Web;
 
-/// <summary>نسخه آخر — v27 (PR #115): SendGate Rule Engine، جستجوی ارسال‌نشده بدون تاریخ اجباری، اکسل تهاتر bill=pay + شماره فیش.</summary>
+/// <summary>نسخه آخر — v28 (PR #115): بهینه‌سازی سرعت ورود اکسل (CROSS APPLY) + v27 SendGate/تهاتر/ارسال‌نشده.</summary>
 public static class ReleaseInfo
 {
-    public const int Number = 27;
-    public const string Label = "27";
-    public const string Tag = "rayvarzresend-pr115-v27";
+    public const int Number = 28;
+    public const string Label = "28";
+    public const string Tag = "rayvarzresend-pr115-v28";
     public const string DisplayName = "نسخه آخر";
 }
