@@ -60,18 +60,22 @@ public class UnsentFicheService
         var incomeFoundPairs = pairs
             .Where(p => incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
             .ToList();
-        var dutyConflictBatch = incomeFoundPairs.Count > 0
-            ? await _repo.LookupBillPayBatchAsync(
-                UnsentFicheKind.Duty, incomeFoundPairs, diagnoseMisses: false, ct)
-            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
-
         var remainingPairs = pairs
             .Where(p => !incomeKeys.Contains(UnsentBillPayLookupHelper.PairKey(p)))
             .ToList();
-        var dutyBatch = remainingPairs.Count > 0
-            ? await _repo.LookupBillPayBatchAsync(
-                UnsentFicheKind.Duty, remainingPairs, diagnoseMisses: false, ct)
-            : new FicheRepository.BillPayBatchLookupResult([], new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+
+        var emptyBatch = new FicheRepository.BillPayBatchLookupResult(
+            [],
+            new Dictionary<string, BillPayMissDiagnostic>(StringComparer.Ordinal));
+        var dutyConflictTask = incomeFoundPairs.Count > 0
+            ? _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, incomeFoundPairs, diagnoseMisses: false, ct)
+            : Task.FromResult(emptyBatch);
+        var dutyRemainingTask = remainingPairs.Count > 0
+            ? _repo.LookupBillPayBatchAsync(UnsentFicheKind.Duty, remainingPairs, diagnoseMisses: false, ct)
+            : Task.FromResult(emptyBatch);
+        await Task.WhenAll(dutyConflictTask, dutyRemainingTask);
+        var dutyConflictBatch = await dutyConflictTask;
+        var dutyBatch = await dutyRemainingTask;
 
         var result = UnsentBillPayLookupHelper.BuildMixedLookupResult(
             pairs,

@@ -39,4 +39,22 @@ public class BillPayIdSqlHelperTests
         var sql = BillPayIdSqlHelper.SwappedColumnsCaseSql("f.BillID", "f.PaymentID", "p.BillId", "p.PaymentId");
         Assert.Contains("AND NOT", sql);
     }
+
+    [Fact]
+    public void PairMatchExcelApplyWhere_splits_tahator_and_distinct_pairs()
+    {
+        var sql = BillPayIdSqlHelper.PairMatchExcelApplyWhere("f.BillID", "f.PaymentID", "f.FicheNo");
+        Assert.Contains("p.BillId", sql);
+        Assert.Contains("<>", sql);
+        Assert.Contains("p.PaymentId", sql);
+    }
+
+    [Fact]
+    public void PairMatchDistinctBillPayApplyWhere_omits_swapped_branch()
+    {
+        var distinct = BillPayIdSqlHelper.PairMatchDistinctBillPayApplyWhere("f.BillID", "f.PaymentID", "f.FicheNo");
+        Assert.DoesNotContain(
+            $"{BillPayIdSqlHelper.Norm13("f.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}",
+            distinct);
+    }
 }

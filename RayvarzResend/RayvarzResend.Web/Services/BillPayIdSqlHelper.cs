@@ -55,6 +55,46 @@ public static class BillPayIdSqlHelper
              ) THEN 1 ELSE 0 END
         """;
 
+    /// <summary>شرط WHERE داخل CROSS APPLY — یک ردیف اکسل در هر بار.</summary>
+    public static string PairMatchExcelApplyWhere(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        $"""
+        (
+          (
+            {Norm13($"{pairAlias}.BillId")} <> {Norm13($"{pairAlias}.PaymentId")}
+            AND {PairMatchOnTable(billColumn, paymentColumn, pairAlias)}
+          )
+          OR (
+            {Norm13($"{pairAlias}.BillId")} = {Norm13($"{pairAlias}.PaymentId")}
+            AND {TahatorSameBillPayFicheMatch(billColumn, paymentColumn, ficheNoColumn, pairAlias)}
+          )
+          OR {ExcelFicheNoColumnMatch(ficheNoColumn, billColumn, paymentColumn, pairAlias)}
+        )
+        """;
+
+    /// <summary>فقط تطابق مستقیم (بدون جابه‌جایی) — برای APPLY وقتی قبض و پرداخت متفاوت‌اند.</summary>
+    public static string PairMatchDistinctBillPayApplyWhere(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        $"""
+        (
+          {PairMatchStrictOnTable(billColumn, paymentColumn, pairAlias)}
+          OR {ExcelFicheNoColumnMatch(ficheNoColumn, billColumn, paymentColumn, pairAlias)}
+        )
+        """;
+
+    public static string TahatorSameBillPayFicheApplyWhere(
+        string billColumn,
+        string paymentColumn,
+        string ficheNoColumn,
+        string pairAlias = "p") =>
+        TahatorSameBillPayFicheMatch(billColumn, paymentColumn, ficheNoColumn, pairAlias);
+
     private static string TahatorSameBillPayFicheMatch(
         string billColumn,
         string paymentColumn,

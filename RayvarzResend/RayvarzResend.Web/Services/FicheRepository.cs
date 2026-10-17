@@ -850,8 +850,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         List<UnsentFicheListItem> Items,
         Dictionary<string, BillPayMissDiagnostic> Diagnostics);
 
-    private const int BillPayLookupChunkSize = 50;
-    private const int BillPayDiagnoseChunkSize = 40;
+    private const int BillPayLookupChunkSize = 40;
+    private const int BillPayDiagnoseChunkSize = 30;
     private const int BillPaySqlCommandTimeoutSeconds = 120;
 
     /// <summary>جستجوی سریع اکسل: یک اتصال SQL، بدون join نوسازی؛ diagnose اختیاری.</summary>
@@ -872,12 +872,25 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         foreach (var chunk in pairs.Chunk(BillPayLookupChunkSize))
         {
             var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
-            var sql = kind == UnsentFicheKind.Duty
-                ? BuildDutyPairSqlLite(chunkArray.Length)
-                : BuildIncomePairSqlLite(chunkArray.Length);
-            var found = await ExecuteUnsentPairLookupOnConnectionAsync(
-                conn, sql, chunkArray, chunkArray.Length + 5, isDuty: kind == UnsentFicheKind.Duty, ct);
-            items.AddRange(found);
+            var distinct = chunkArray.Where(p => p.BillId != p.PaymentId).ToArray();
+            var tahator = chunkArray.Where(p => p.BillId == p.PaymentId).ToArray();
+            if (distinct.Length > 0)
+            {
+                var sqlDistinct = kind == UnsentFicheKind.Duty
+                    ? BuildDutyPairApplySql(distinct.Length, tahatorSameBillPay: false)
+                    : BuildIncomePairApplySql(distinct.Length, tahatorSameBillPay: false);
+                items.AddRange(await ExecuteUnsentPairLookupOnConnectionAsync(
+                    conn, sqlDistinct, distinct, isDuty: kind == UnsentFicheKind.Duty, ct));
+            }
+
+            if (tahator.Length > 0)
+            {
+                var sqlTahator = kind == UnsentFicheKind.Duty
+                    ? BuildDutyPairApplySql(tahator.Length, tahatorSameBillPay: true)
+                    : BuildIncomePairApplySql(tahator.Length, tahatorSameBillPay: true);
+                items.AddRange(await ExecuteUnsentPairLookupOnConnectionAsync(
+                    conn, sqlTahator, tahator, isDuty: kind == UnsentFicheKind.Duty, ct));
+            }
         }
 
         items = items
@@ -943,15 +956,38 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         foreach (var chunk in pairs.Chunk(BillPayDiagnoseChunkSize))
         {
             var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
-            var sql = kind == UnsentFicheKind.Duty
-                ? BuildBillPayDiagnoseDutySql(chunkArray.Length)
-                : BuildBillPayDiagnoseIncomeSql(chunkArray.Length);
-            var rows = await ExecuteBillPayDiagnoseOnConnectionAsync(conn, sql, chunkArray, ct);
-            foreach (var row in rows)
-            {
-                if (!diagnostics.ContainsKey(row.PairKey))
-                    diagnostics[row.PairKey] = row.Diagnostic;
-            }
+            await AppendBillPayDiagnoseChunkAsync(conn, kind, chunkArray, diagnostics, tahatorSameBillPay: false, ct);
+            var tahator = chunkArray.Where(p => p.BillId == p.PaymentId).ToArray();
+            if (tahator.Length > 0)
+                await AppendBillPayDiagnoseChunkAsync(conn, kind, tahator, diagnostics, tahatorSameBillPay: true, ct);
+        }
+    }
+
+    private async Task AppendBillPayDiagnoseChunkAsync(
+        SqlConnection conn,
+        UnsentFicheKind kind,
+        NormalizedBillPayPair[] chunkArray,
+        Dictionary<string, BillPayMissDiagnostic> diagnostics,
+        bool tahatorSameBillPay,
+        CancellationToken ct)
+    {
+        if (chunkArray.Length == 0)
+            return;
+
+        var pairs = tahatorSameBillPay
+            ? chunkArray
+            : chunkArray.Where(p => p.BillId != p.PaymentId).ToArray();
+        if (pairs.Length == 0)
+            return;
+
+        var sql = kind == UnsentFicheKind.Duty
+            ? BuildBillPayDiagnoseDutySql(pairs.Length, tahatorSameBillPay)
+            : BuildBillPayDiagnoseIncomeSql(pairs.Length, tahatorSameBillPay);
+        var rows = await ExecuteBillPayDiagnoseOnConnectionAsync(conn, sql, pairs, ct);
+        foreach (var row in rows)
+        {
+            if (!diagnostics.ContainsKey(row.PairKey))
+                diagnostics[row.PairKey] = row.Diagnostic;
         }
     }
 
@@ -997,88 +1033,122 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         return rows;
     }
 
-    private static string BuildBillPayDiagnoseIncomeSql(int pairCount)
+    private static string BuildBillPayPairValuesClause(int pairCount) =>
+        string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
+
+    private static string BuildBillPayDiagnoseIncomeSql(int pairCount, bool tahatorSameBillPay)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
+        var values = BuildBillPayPairValuesClause(pairCount);
+        var match = tahatorSameBillPay
+            ? BillPayIdSqlHelper.TahatorSameBillPayFicheApplyWhere("x.BillID", "x.PaymentID", "x.FicheNo")
+            : BillPayIdSqlHelper.PairMatchExcelApplyWhere("x.BillID", "x.PaymentID", "x.FicheNo");
         return $"""
                 SELECT p.BillId AS PairBill,
                        p.PaymentId AS PairPay,
-                       f.FicheNo,
-                       CASE WHEN EXISTS (
-                             SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                             WHERE h.NidFiche = f.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                       CASE WHEN f.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
-                       {BillPayIdSqlHelper.SwappedColumnsCaseSql("f.BillID", "f.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
-                FROM dbo.Income_Fiche f WITH (NOLOCK)
-                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
-                  ON (
-                    {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
-                    OR {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("f.BillID", "f.PaymentID", "f.FicheNo")}
-                  )
+                       hit.FicheNo,
+                       hit.Sent,
+                       hit.Cancelled,
+                       hit.Swapped
+                FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
+                CROSS APPLY (
+                    SELECT TOP 1
+                           x.FicheNo,
+                           CASE WHEN EXISTS (
+                                 SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                                 WHERE h.NidFiche = x.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                           CASE WHEN x.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
+                           {BillPayIdSqlHelper.SwappedColumnsCaseSql("x.BillID", "x.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
+                    FROM dbo.Income_Fiche x WITH (NOLOCK)
+                    WHERE {match}
+                    ORDER BY COALESCE(x.BankPaymentDate, x.PaymentDate) DESC, x.FicheNo
+                ) hit
                 """;
     }
 
-    private static string BuildBillPayDiagnoseDutySql(int pairCount)
+    private static string BuildBillPayDiagnoseDutySql(int pairCount, bool tahatorSameBillPay)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
+        var values = BuildBillPayPairValuesClause(pairCount);
+        var match = tahatorSameBillPay
+            ? BillPayIdSqlHelper.TahatorSameBillPayFicheApplyWhere("x.BillID", "x.PaymentID", "x.FicheNo")
+            : BillPayIdSqlHelper.PairMatchExcelApplyWhere("x.BillID", "x.PaymentID", "x.FicheNo");
         return $"""
                 SELECT p.BillId AS PairBill,
                        p.PaymentId AS PairPay,
-                       d.FicheNo,
-                       CASE WHEN EXISTS (
-                             SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                             WHERE h.NidFiche = d.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                       CASE WHEN d.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
-                       {BillPayIdSqlHelper.SwappedColumnsCaseSql("d.BillID", "d.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
-                FROM dbo.Duty_Fiche d WITH (NOLOCK)
-                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
-                  ON (
-                    {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
-                    OR {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("d.BillID", "d.PaymentID", "d.FicheNo")}
-                  )
+                       hit.FicheNo,
+                       hit.Sent,
+                       hit.Cancelled,
+                       hit.Swapped
+                FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
+                CROSS APPLY (
+                    SELECT TOP 1
+                           x.FicheNo,
+                           CASE WHEN EXISTS (
+                                 SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                                 WHERE h.NidFiche = x.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                           CASE WHEN x.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
+                           {BillPayIdSqlHelper.SwappedColumnsCaseSql("x.BillID", "x.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
+                    FROM dbo.Duty_Fiche x WITH (NOLOCK)
+                    WHERE {match}
+                    ORDER BY COALESCE(x.BankPaymentDate, x.PaymentDate) DESC, x.FicheNo
+                ) hit
                 """;
     }
 
-    private static string BuildIncomePairSqlLite(int pairCount)
+    private static string BuildIncomePairApplySql(int pairCount, bool tahatorSameBillPay)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
+        var values = BuildBillPayPairValuesClause(pairCount);
+        var match = tahatorSameBillPay
+            ? BillPayIdSqlHelper.TahatorSameBillPayFicheApplyWhere("f.BillID", "f.PaymentID", "f.FicheNo")
+            : BillPayIdSqlHelper.PairMatchDistinctBillPayApplyWhere("f.BillID", "f.PaymentID", "f.FicheNo");
         return $"""
-              SELECT TOP (@max)
-                     f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
-                     f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
-                     f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+              SELECT x.FicheNo, x.NidFiche, x.BillID, x.PaymentID, x.Payable,
+                     x.PaymentDate, x.BankPaymentDate, x.EumFicheStatus,
+                     x.IncomeAccountGroup,
                      '' AS NidWorkItem,
                      '' AS District,
                      '' AS BnkAcntNo
               FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
-              INNER JOIN dbo.Income_Fiche f WITH (NOLOCK)
-                ON {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("f.BillID", "f.PaymentID", "f.FicheNo")}
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = f.NidFiche)
-                AND f.EumFicheStatus <> 4
-              ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              CROSS APPLY (
+                  SELECT TOP 1
+                         f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                         f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                         f.CI_IncomeAccountGroup AS IncomeAccountGroup
+                  FROM dbo.Income_Fiche f WITH (NOLOCK)
+                  WHERE {match}
+                    AND NOT EXISTS (
+                          SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                          WHERE h.NidFiche = f.NidFiche)
+                    AND f.EumFicheStatus <> 4
+                  ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
+              ) x
               """;
     }
 
-    private static string BuildDutyPairSqlLite(int pairCount)
+    private static string BuildDutyPairApplySql(int pairCount, bool tahatorSameBillPay)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
+        var values = BuildBillPayPairValuesClause(pairCount);
+        var match = tahatorSameBillPay
+            ? BillPayIdSqlHelper.TahatorSameBillPayFicheApplyWhere("d.BillID", "d.PaymentID", "d.FicheNo")
+            : BillPayIdSqlHelper.PairMatchDistinctBillPayApplyWhere("d.BillID", "d.PaymentID", "d.FicheNo");
         return $"""
-              SELECT TOP (@max)
-                     d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
-                     d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+              SELECT x.FicheNo, x.NidFiche, x.BillID, x.PaymentID, x.Payable,
+                     x.PaymentDate, x.BankPaymentDate, x.EumFicheStatus,
                      '' AS NidWorkItem,
                      '' AS District,
                      '' AS BnkAcntNo
               FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
-              INNER JOIN dbo.Duty_Fiche d WITH (NOLOCK)
-                ON {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("d.BillID", "d.PaymentID", "d.FicheNo")}
-              WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
-                    WHERE h.NidFiche = d.NidFiche)
-                AND d.EumDutyFicheStatus <> 2
-              ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
+              CROSS APPLY (
+                  SELECT TOP 1
+                         d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                         d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus
+                  FROM dbo.Duty_Fiche d WITH (NOLOCK)
+                  WHERE {match}
+                    AND NOT EXISTS (
+                          SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                          WHERE h.NidFiche = d.NidFiche)
+                    AND d.EumDutyFicheStatus <> 2
+                  ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
+              ) x
               """;
     }
 
@@ -1086,13 +1156,11 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         SqlConnection conn,
         string sql,
         NormalizedBillPayPair[] pairs,
-        int maxRows,
         bool isDuty,
         CancellationToken ct)
     {
         var items = new List<UnsentFicheListItem>();
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = BillPaySqlCommandTimeoutSeconds };
-        cmd.Parameters.AddWithValue("@max", Math.Clamp(maxRows, 1, 2000));
         for (var i = 0; i < pairs.Length; i++)
         {
             cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
@@ -1117,7 +1185,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     {
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
-        return await ExecuteUnsentPairLookupOnConnectionAsync(conn, sql, pairs, 2000, isDuty, ct);
+        return await ExecuteUnsentPairLookupOnConnectionAsync(conn, sql, pairs, isDuty, ct);
     }
 
     private async Task<List<UnsentFicheListItem>> ExecuteUnsentSearchAsync(
