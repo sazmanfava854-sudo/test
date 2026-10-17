@@ -81,15 +81,22 @@ public static class FicheDateChangeHelper
         || !string.IsNullOrWhiteSpace(req.IdentifierValue)
         || req.EumFicheStatuses is { Count: > 0 };
 
-    public static (string Clause, string ParamName, string Value)? BuildIdentifierFilter(string? raw)
+    public static (string Clause, IReadOnlyList<(string Name, string Value)> Parameters)? BuildIdentifierFilter(string? raw)
     {
         var value = IdentifierText.Normalize(raw);
         if (value.Length == 0) return null;
 
         var type = IdentifierDetector.Detect(value);
-        return type == IdentifierType.BillPaymentKey
-            ? ("f.BillID + f.PaymentID = @idVal", "@idVal", value)
-            : ("f.FicheNo = @idVal", "@idVal", value);
+        if (type == IdentifierType.BillPaymentKey)
+            return ("f.BillID + f.PaymentID = @idVal", new[] { ("@idVal", value) });
+
+        var keys = UnsentBillPayLookupHelper.ExpandFicheNoKeys(value);
+        if (keys.Count == 0)
+            return null;
+
+        var parameters = keys.Select((key, index) => ($"@idVal{index}", key)).ToList();
+        var clause = "f.FicheNo IN (" + string.Join(", ", parameters.Select(p => p.Item1)) + ")";
+        return (clause, parameters);
     }
 
     public static bool HasAnyChange(FicheDateChangeUpdateRequest req) =>

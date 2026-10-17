@@ -47,23 +47,51 @@ public class UnsentBillPayLookupHelperTests
         Assert.Equal("050833533242", IdentifierText.Normalize("٠٥٠٨٣٣٥٣٣٢٤٢"));
         Assert.Equal("101104/9881711", IdentifierText.Normalize("۱۰۱۱۰۴/۹۸۸۱۷۱۱"));
 
-        var filter = FicheDateChangeHelper.BuildIdentifierFilter("۰۵۰۸۳۳۵۳۳۲۴۲");
+        var filter = FicheDateChangeHelper.BuildIdentifierFilter("۵۰۸۳۳۵۳۳۱۹۹");
         Assert.NotNull(filter);
-        Assert.Equal("050833533242", filter.Value.Value);
-        Assert.Equal("f.FicheNo = @idVal", filter.Value.Clause);
+        Assert.Contains("FicheNo IN", filter.Value.Clause);
+        Assert.Contains(filter.Value.Parameters, p => p.Value == "050833533199");
+        Assert.Contains(filter.Value.Parameters, p => p.Value == "50833533199");
+    }
+
+    [Fact]
+    public void ExpandLookupKeys_matches_fiche_without_leading_zero()
+    {
+        var keys = UnsentBillPayLookupHelper.ExpandLookupKeys("۵۰۸۳۳۵۳۳۱۹۹");
+        Assert.Contains("50833533199", keys);
+        Assert.Contains("050833533199", keys);
+        Assert.Contains("0050833533199", keys);
+    }
+
+    [Fact]
+    public void NormalizePairs_accepts_fiche_number_without_bill_and_pay()
+    {
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair { FicheNo = "50833533243" },
+            new UnsentBillPayPair { BillId = "50833533199", PaymentId = "" }
+        ]);
+
+        Assert.Single(pairs);
+        Assert.Equal("50833533243", pairs[0].FicheNo);
+        Assert.Equal("0050833533243", pairs[0].BillId);
     }
 
     [Fact]
     public void Negative_rayvarz_tahator_amount_is_replaced_by_partner()
     {
-        Assert.True(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
-            true, -1027136660m, "050833533242", "050833533243"));
-        Assert.False(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
-            true, 1027136660m, "050833533243", "050833533242"));
-        Assert.False(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
-            false, -1027136660m, "050833533242", "050833533243"));
-        Assert.False(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
-            true, -1m, "050833533242", "050833533242"));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.ReplaceWithPartner,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, true, -1027136660m, true, false));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.RemoveAlreadyInRayvarz,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, true, 3183050000m, true, false));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.RemoveAlreadyInRayvarz,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, true, -1m, true, true));
+        Assert.Equal(
+            UnsentBillPayLookupHelper.TahatorExcelRowAction.Keep,
+            UnsentBillPayLookupHelper.DecideTahatorExcelRow(true, false, null, true, false));
     }
 
     [Fact]
@@ -71,7 +99,7 @@ public class UnsentBillPayLookupHelperTests
     {
         Assert.Equal("درخواست خالی است", UnsentBillPayLookupHelper.ValidateRequest(null));
         Assert.Equal(
-            "فایل اکسل باید حداقل یک ردیف با شناسه قبض و شناسه پرداخت معتبر داشته باشد",
+            "هر ردیف اکسل باید شماره فیش، یا شناسه قبض و شناسه پرداخت داشته باشد",
             UnsentBillPayLookupHelper.ValidateRequest(new UnsentBillPayLookupRequest()));
 
         var tooMany = new UnsentBillPayLookupRequest

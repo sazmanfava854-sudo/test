@@ -29,16 +29,35 @@ public static class UnsentBillPayLookupHelper
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var pair in pairs ?? [])
         {
-            var bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.BillId);
-            var pay = BankInquiryConfirmHelper.NormalizeBillOrPayId(pair.PaymentId);
+            var ficheNo = IdentifierText.Normalize(pair.FicheNo);
+            var billRaw = IdentifierText.Normalize(pair.BillId);
+            var payRaw = IdentifierText.Normalize(pair.PaymentId);
+            var hasBill = billRaw.Length > 0;
+            var hasPay = payRaw.Length > 0;
+            string bill;
+            string pay;
+            if (hasBill && hasPay)
+            {
+                bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(billRaw);
+                pay = BankInquiryConfirmHelper.NormalizeBillOrPayId(payRaw);
+            }
+            else if (!hasBill && !hasPay && ficheNo.Length > 0)
+            {
+                bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(ficheNo);
+                pay = bill;
+            }
+            else
+            {
+                continue;
+            }
+
             if (bill.Length == 0 || pay.Length == 0)
                 continue;
 
-            var key = bill + "|" + pay;
+            var key = bill + "|" + pay + "|" + ficheNo;
             if (!seen.Add(key))
                 continue;
 
-            var ficheNo = IdentifierText.Normalize(pair.FicheNo);
             result.Add(new NormalizedBillPayPair(bill, pay, TrimLeadingZeros(bill), TrimLeadingZeros(pay), ficheNo));
         }
 
@@ -78,6 +97,21 @@ public static class UnsentBillPayLookupHelper
         }
 
         return keys;
+    }
+
+    /// <summary>
+    /// شکل‌های شماره فیش برای برابری ایندکس‌شده.
+    /// رقم بدون صفر اول هم با مقدار ذخیره‌شدهٔ صفر‌دار (۰۵۰۸۳۳۵۳۳۱۹۹) یکی می‌شود.
+    /// شمارهٔ دارای اسلش دست‌نخورده می‌ماند.
+    /// </summary>
+    public static IReadOnlyList<string> ExpandFicheNoKeys(string? value)
+    {
+        var text = IdentifierText.Normalize(value);
+        if (text.Length == 0)
+            return Array.Empty<string>();
+        if (text.Any(ch => !char.IsDigit(ch)))
+            return new[] { text };
+        return ExpandLookupKeys(text);
     }
 
     public static string TrimLeadingZeros(string digits)
@@ -129,22 +163,29 @@ public static class UnsentBillPayLookupHelper
         return $"قابل ارسال نیست{idSuffix}";
     }
 
-    /// <summary>
-    /// فیش تهاتری که در رایورز با مبلغ منفی ثبت شده (مبلغ/۱۵۷) نباید در گرید ارسال اکسل بماند؛
-    /// فیش جفت (درآمدی/۱۵۸) نشان داده می‌شود.
-    /// </summary>
-    public static bool ShouldReplaceWithTahatorPartner(
-        bool isTahator,
-        decimal? rayvarzAmount,
-        string? matchedFicheNo,
-        string? partnerFicheNo)
+    public enum TahatorExcelRowAction
     {
-        if (!isTahator || rayvarzAmount is not < 0)
-            return false;
+        Keep,
+        RemoveAlreadyInRayvarz,
+        ReplaceWithPartner
+    }
 
-        var partner = (partnerFicheNo ?? "").Trim();
-        var matched = (matchedFicheNo ?? "").Trim();
-        return partner.Length > 0 && !string.Equals(partner, matched, StringComparison.Ordinal);
+    /// <summary>
+    /// فیش تهاتر اگر در رایورز باشد در گرید ارسال نمی‌ماند.
+    /// مبلغ منفی (مثل ۱۵۷ / ۰۵۰۸۳۳۵۳۳۲۴۲) با فیش جفتی که هنوز در رایورز نیست عوض می‌شود (۰۵۰۸۳۳۵۳۳۲۴۳).
+    /// </summary>
+    public static TahatorExcelRowAction DecideTahatorExcelRow(
+        bool isTahator,
+        bool existsInRayvarz,
+        decimal? rayvarzAmount,
+        bool hasPartner,
+        bool partnerExistsInRayvarz)
+    {
+        if (!isTahator || !existsInRayvarz)
+            return TahatorExcelRowAction.Keep;
+        if (rayvarzAmount is < 0 && hasPartner && !partnerExistsInRayvarz)
+            return TahatorExcelRowAction.ReplaceWithPartner;
+        return TahatorExcelRowAction.RemoveAlreadyInRayvarz;
     }
 
     public static bool IsSameBillAndPayment(string? billId, string? paymentId)
@@ -171,7 +212,7 @@ public static class UnsentBillPayLookupHelper
 
         var pairs = NormalizePairs(req.Pairs);
         if (pairs.Count == 0)
-            return "فایل اکسل باید حداقل یک ردیف با شناسه قبض و شناسه پرداخت معتبر داشته باشد";
+            return "هر ردیف اکسل باید شماره فیش، یا شناسه قبض و شناسه پرداخت داشته باشد";
 
         if (pairs.Count > MaxPairs)
             return $"حداکثر {MaxPairs} ردیف در هر بارگذاری مجاز است";

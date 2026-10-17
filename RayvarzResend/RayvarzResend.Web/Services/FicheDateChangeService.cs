@@ -319,7 +319,8 @@ public sealed class FicheDateChangeService
         if (identifierFilter != null)
         {
             clauses.Add(identifierFilter.Value.Clause);
-            parameters.Add((identifierFilter.Value.ParamName, identifierFilter.Value.Value));
+            foreach (var (name, value) in identifierFilter.Value.Parameters)
+                parameters.Add((name, value));
         }
 
         if (req.EumFicheStatuses is { Count: > 0 })

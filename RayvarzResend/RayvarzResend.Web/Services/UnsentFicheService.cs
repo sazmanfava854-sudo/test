@@ -133,53 +133,83 @@ public class UnsentFicheService
             };
         }
 
-        await PreferUnsentTahatorPartnerWhenRayvarzAmountIsNegativeAsync(result, ct);
+        await AdjustTahatorExcelRowsAsync(result, ct);
         return result;
     }
 
     /// <summary>
-    /// ردیف اکسلی که فیش مبلغ تهاتر (Val منفی در رایورز) را آورده، با فیش جفت ارسال‌نشده عوض می‌شود.
-    /// نمونه: ۰۵۰۸۳۳۵۳۳۲۴۲ با مبلغ منفی → گرید باید ۰۵۰۸۳۳۵۳۳۲۴۳ را نشان دهد.
+    /// فیش تهاترِ موجود در رایورز از گرید ارسال حذف می‌شود.
+    /// اگر مبلغ آن منفی باشد (۰۵۰۸۳۳۵۳۳۲۴۲) جفتِ غایب (۰۵۰۸۳۳۵۳۳۲۴۳) جای آن می‌آید.
     /// </summary>
-    private async Task PreferUnsentTahatorPartnerWhenRayvarzAmountIsNegativeAsync(
-        UnsentBillPayLookupResult result,
-        CancellationToken ct)
+    private async Task AdjustTahatorExcelRowsAsync(UnsentBillPayLookupResult result, CancellationToken ct)
     {
-        var candidates = result.Items.Where(i => i.IsTahator).Select(i => i.FicheNo).ToList();
-        if (candidates.Count == 0)
+        var tahatorNos = result.Items.Where(i => i.IsTahator).Select(i => i.FicheNo).ToList();
+        if (tahatorNos.Count == 0)
             return;
 
-        var negative = await _repo.FindFicheNosWithNegativeRayvarzAmountAsync(candidates, ct);
-        if (negative.Count == 0)
+        var amounts = await _repo.GetRayvarzMinAmountByFicheNoAsync(tahatorNos, ct);
+        if (amounts.Count == 0)
             return;
 
-        for (var i = 0; i < result.Items.Count; i++)
+        var partnerByFiche = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in result.Items)
         {
-            var item = result.Items[i];
-            if (!negative.Contains(item.FicheNo))
+            if (!item.IsTahator || !amounts.ContainsKey(item.FicheNo))
                 continue;
-
             var pair = await _repo.ResolveTahatorPairAsync(item.FicheNo, ct);
             var partnerNo = OtherTahatorFicheNo(pair, item.FicheNo);
-            if (!UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
-                    item.IsTahator, -1m, item.FicheNo, partnerNo))
-                continue;
-            if (negative.Contains(partnerNo!))
-                continue;
-
-            var partner = await _repo.LoadUnsentIncomeItemByFicheNoAsync(partnerNo!, ct);
-            if (partner == null)
-                continue;
-
-            partner.SourceKind = UnsentFicheKind.Income;
-            result.Items[i] = partner;
+            if (!string.IsNullOrWhiteSpace(partnerNo))
+                partnerByFiche[item.FicheNo] = partnerNo;
         }
 
-        result.Items = result.Items
+        var partnerAmounts = await _repo.GetRayvarzMinAmountByFicheNoAsync(partnerByFiche.Values.ToList(), ct);
+        var kept = new List<UnsentFicheListItem>();
+        foreach (var item in result.Items)
+        {
+            if (!item.IsTahator || !amounts.TryGetValue(item.FicheNo, out var amount))
+            {
+                kept.Add(item);
+                continue;
+            }
+
+            partnerByFiche.TryGetValue(item.FicheNo, out var partnerNo);
+            var hasPartner = !string.IsNullOrWhiteSpace(partnerNo);
+            var partnerInRayvarz = hasPartner && partnerAmounts.ContainsKey(partnerNo!);
+            var action = UnsentBillPayLookupHelper.DecideTahatorExcelRow(
+                item.IsTahator, true, amount, hasPartner, partnerInRayvarz);
+
+            if (action == UnsentBillPayLookupHelper.TahatorExcelRowAction.Keep)
+            {
+                kept.Add(item);
+                continue;
+            }
+
+            if (action == UnsentBillPayLookupHelper.TahatorExcelRowAction.ReplaceWithPartner)
+            {
+                var partner = await _repo.LoadIncomeListItemByFicheNoAsync(partnerNo!, unsentOnly: true, ct)
+                    ?? await _repo.LoadIncomeListItemByFicheNoAsync(partnerNo!, unsentOnly: false, ct);
+                if (partner != null)
+                {
+                    partner.SourceKind = UnsentFicheKind.Income;
+                    kept.Add(partner);
+                    continue;
+                }
+            }
+
+            result.Misses.Add(new UnsentBillPayMiss
+            {
+                BillId = item.BillId,
+                PaymentId = item.PaymentId,
+                Reason = $"فیش {item.FicheNo} قبلاً در رایورز ثبت شده است"
+            });
+        }
+
+        result.Items = kept
             .GroupBy(i => i.FicheNo, StringComparer.Ordinal)
             .Select(g => g.First())
             .ToList();
         result.Found = result.Items.Count;
+        result.NotFound = result.Misses.Count;
     }
 
     private static List<UnsentBatchFicheTarget> ResolveBatchTargets(UnsentBatchSendRequest req)

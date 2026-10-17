@@ -158,8 +158,11 @@ WHERE NidIncome = @nid
 
     private async Task<FicheHeaderDto?> TryLoadIncomeAsync(IdentifierType type, string value, CancellationToken ct)
     {
+        var ficheKeys = type == IdentifierType.FicheNo
+            ? UnsentBillPayLookupHelper.ExpandFicheNoKeys(value)
+            : Array.Empty<string>();
         var where = type == IdentifierType.FicheNo
-            ? "f.FicheNo = @val"
+            ? InClause("f.FicheNo", "fn", ficheKeys)
             : "f.BillID + f.PaymentID = @val";
 
         var sql = $@"
@@ -192,7 +195,10 @@ WHERE {where}";
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@val", value.Trim());
+        if (type == IdentifierType.FicheNo)
+            BindInClause(cmd, "fn", ficheKeys);
+        else
+            cmd.Parameters.AddWithValue("@val", value.Trim());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
@@ -314,8 +320,11 @@ WHERE ic.NidIncome = @nid";
 
     private async Task<FicheHeaderDto?> TryLoadDutyAsync(IdentifierType type, string value, CancellationToken ct)
     {
+        var ficheKeys = type == IdentifierType.FicheNo
+            ? UnsentBillPayLookupHelper.ExpandFicheNoKeys(value)
+            : Array.Empty<string>();
         var where = type == IdentifierType.FicheNo
-            ? "d.FicheNo = @val"
+            ? InClause("d.FicheNo", "fn", ficheKeys)
             : "d.BillID + d.PaymentID = @val";
 
         var sql = $@"
@@ -347,7 +356,10 @@ WHERE {where}";
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
         await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@val", value.Trim());
+        if (type == IdentifierType.FicheNo)
+            BindInClause(cmd, "fn", ficheKeys);
+        else
+            cmd.Parameters.AddWithValue("@val", value.Trim());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
@@ -496,6 +508,101 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         cmd.Parameters.Add(new SqlParameter("@fAlt", System.Data.SqlDbType.NVarChar, 40) { Value = alt });
     }
 
+    private static string InClause(string column, string prefix, IReadOnlyList<string> keys)
+    {
+        if (keys.Count == 0)
+            return "1 = 0";
+        return $"{column} IN ({string.Join(", ", keys.Select((_, i) => $"@{prefix}{i}"))})";
+    }
+
+    private static void BindInClause(SqlCommand cmd, string prefix, IReadOnlyList<string> keys)
+    {
+        for (var i = 0; i < keys.Count; i++)
+            cmd.Parameters.Add(new SqlParameter($"@{prefix}{i}", System.Data.SqlDbType.NVarChar, 40) { Value = keys[i] });
+    }
+
+    /// <summary>کمترین Val هر شماره فیش در incmdocsys. نبودن کلید یعنی ردیفی در رایورز نیست.</summary>
+    public async Task<Dictionary<string, decimal>> GetRayvarzMinAmountByFicheNoAsync(
+        IReadOnlyCollection<string> ficheNos,
+        CancellationToken ct = default)
+    {
+        var byNumber = new Dictionary<decimal, List<string>>();
+        foreach (var raw in ficheNos)
+        {
+            var key = IdentifierText.Normalize(raw);
+            if (key.Length == 0 || !TryFicheDecimal(key, out var number))
+                continue;
+            if (!byNumber.TryGetValue(number, out var owners))
+            {
+                owners = new List<string>();
+                byNumber[number] = owners;
+            }
+            if (!owners.Contains(key))
+                owners.Add(key);
+        }
+
+        var found = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        if (byNumber.Count == 0)
+            return found;
+
+        await using var conn = new SqlConnection(_rayCs);
+        await conn.OpenAsync(ct);
+
+        foreach (var chunk in byNumber.Keys.Chunk(40))
+        {
+            var names = new string[chunk.Length];
+            await using var cmd = new SqlCommand { Connection = conn, CommandTimeout = BillPaySqlCommandTimeoutSeconds };
+            for (var i = 0; i < chunk.Length; i++)
+            {
+                names[i] = $"@n{i}";
+                cmd.Parameters.Add(new SqlParameter(names[i], System.Data.SqlDbType.Decimal)
+                {
+                    Precision = 24,
+                    Scale = 0,
+                    Value = chunk[i]
+                });
+            }
+
+            cmd.CommandText = $"""
+                SELECT TRY_CONVERT(decimal(24, 0), LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo)))) AS DocNum,
+                       Val
+                FROM ray.incmdocsys WITH (NOLOCK)
+                WHERE TRY_CONVERT(decimal(24, 0), LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo)))) IN ({string.Join(", ", names)})
+                """;
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                if (reader.IsDBNull(0) || reader.IsDBNull(1))
+                    continue;
+                var number = Convert.ToDecimal(reader.GetValue(0));
+                var amount = Convert.ToDecimal(reader.GetValue(1));
+                if (!byNumber.TryGetValue(number, out var owners))
+                    continue;
+                foreach (var owner in owners)
+                {
+                    if (!found.TryGetValue(owner, out var existing) || amount < existing)
+                        found[owner] = amount;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private static bool TryFicheDecimal(string key, out decimal number)
+    {
+        var digits = new string(key.Where(char.IsDigit).ToArray()).TrimStart('0');
+        if (digits.Length == 0)
+        {
+            number = 0;
+            return false;
+        }
+
+        return decimal.TryParse(digits, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out number);
+    }
+
     /// <summary>شماره فیش‌هایی که در incmdocsys دست‌کم یک ردیف با Val منفی دارند.</summary>
     public async Task<HashSet<string>> FindFicheNosWithNegativeRayvarzAmountAsync(
         IReadOnlyCollection<string> ficheNos,
@@ -557,8 +664,14 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         return found;
     }
 
-    public async Task<UnsentFicheListItem?> LoadUnsentIncomeItemByFicheNoAsync(
+    public Task<UnsentFicheListItem?> LoadUnsentIncomeItemByFicheNoAsync(
         string ficheNo,
+        CancellationToken ct = default) =>
+        LoadIncomeListItemByFicheNoAsync(ficheNo, unsentOnly: true, ct);
+
+    public async Task<UnsentFicheListItem?> LoadIncomeListItemByFicheNoAsync(
+        string ficheNo,
+        bool unsentOnly,
         CancellationToken ct = default)
     {
         ficheNo = IdentifierText.Normalize(ficheNo);
@@ -571,12 +684,15 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
             UnsentBillPayLookupHelper.TrimLeadingZeros(ficheNo),
             UnsentBillPayLookupHelper.TrimLeadingZeros(ficheNo),
             ficheNo);
-        var batch = await LookupBillPayBatchAsync(
+        await using var conn = new SqlConnection(_saraCs);
+        await conn.OpenAsync(ct);
+        var items = await ExecuteSeekLookupAsync(
+            conn,
             UnsentFicheKind.Income,
             [pair],
-            diagnoseMisses: false,
+            unsentOnly,
             ct);
-        return batch.Items.FirstOrDefault();
+        return items.FirstOrDefault();
     }
 
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)

@@ -604,16 +604,16 @@ function parseUnsentExcelFile(file) {
         }
 
         const col = mapUnsentExcelHeaderIndex(headerRow);
-        if (col.billId == null || col.paymentId == null) {
-          reject(new Error('ستون‌های الزامی اکسل: شناسه قبض و شناسه پرداخت'));
+        if (col.ficheNo == null && (col.billId == null || col.paymentId == null)) {
+          reject(new Error('ستون شماره فیش، یا هر دو ستون شناسه قبض و شناسه پرداخت لازم است'));
           return;
         }
 
         const parsed = [];
         const seen = new Set();
         for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const billId = parseExcelCellValue(sheet, r, col.billId);
-          const paymentId = parseExcelCellValue(sheet, r, col.paymentId);
+          const billId = col.billId != null ? parseExcelCellValue(sheet, r, col.billId) : '';
+          const paymentId = col.paymentId != null ? parseExcelCellValue(sheet, r, col.paymentId) : '';
           const ficheNo = col.ficheNo != null ? parseExcelCellValue(sheet, r, col.ficheNo) : '';
           if (!billId && !paymentId && !ficheNo) continue;
           if (hasScientificNotation(billId) || hasScientificNotation(paymentId)
@@ -628,11 +628,14 @@ function parseUnsentExcelFile(file) {
             paymentId: normalizeSearchId(paymentId),
             ficheNo: normalizeSearchId(ficheNo)
           };
-          if (!item.billId || !item.paymentId) {
-            reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
+          const pairComplete = !!item.billId && !!item.paymentId;
+          if (!item.ficheNo && !pairComplete) {
+            reject(new Error(`ردیف ${r + 1}: یا شماره فیش را وارد کنید، یا شناسه قبض و شناسه پرداخت را با هم`));
             return;
           }
-          const key = `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`;
+          const key = pairComplete
+            ? `${normalizeBillOrPayIdDigits(item.billId)}|${normalizeBillOrPayIdDigits(item.paymentId)}`
+            : `fiche:${normalizeBillOrPayIdDigits(item.ficheNo)}`;
           if (seen.has(key)) continue;
           seen.add(key);
           parsed.push(item);

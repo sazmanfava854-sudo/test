@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-32.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-33.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v32 — نسخه آخر (PR #115)
+echo RayvarzResend v33 — نسخه آخر (PR #115)
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v32 — نسخه آخر (شماره فیش فارسی + فیش جفت به‌جای مبلغ منفی)
+RayvarzResend v33 — نسخه آخر (شماره فیش بدون صفر + مبلغ منفی تهاتر)
 
 نصب روی سرور ویندوز
 --------------------
@@ -47,7 +47,7 @@ RayvarzResend v32 — نسخه آخر (شماره فیش فارسی + فیش ج�
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 32
+     releaseVersion = 33
      accountingDoc.dryRun = false
      dryRun = false
 

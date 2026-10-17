@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v32_pr115()
+    public void ReleaseInfo_is_v33_pr115()
     {
-        Assert.Equal(32, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr115-v32", ReleaseInfo.Tag);
+        Assert.Equal(33, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr115-v33", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,14 +23,14 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v32_doc_lists_persian_digits_and_negative_partner()
+    public void DELIVERY_v33_doc_lists_leading_zero_and_negative_partner()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v32.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v33.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 32", doc);
-        Assert.Contains("فارسی", doc);
+        Assert.Contains("releaseVersion: 33", doc);
+        Assert.Contains("50833533199", doc);
         Assert.Contains("050833533243", doc);
     }
 
@@ -222,7 +222,7 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=97", html);
+        Assert.Contains("js/app.js?v=98", html);
         Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
         Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);
