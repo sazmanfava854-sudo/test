@@ -89,7 +89,52 @@ public class UnsentBillPayLookupHelperTests
             {
                 Found = true,
                 SwappedColumns = true
-            }));
+            },
+            "3091418652060",
+            "1426270355"));
+
+        Assert.DoesNotContain(
+            "جابه‌جا",
+            UnsentBillPayLookupHelper.DescribeMiss(new BillPayMissDiagnostic
+            {
+                Found = true,
+                SwappedColumns = true
+            },
+            "050833533236",
+            "050833533236"));
+    }
+
+    [Fact]
+    public void DescribeMiss_prefers_already_sent_over_swapped_flag()
+    {
+        var reason = UnsentBillPayLookupHelper.DescribeMiss(
+            new BillPayMissDiagnostic
+            {
+                Found = true,
+                FicheNo = "050833533236",
+                AlreadySent = true,
+                SwappedColumns = true
+            },
+            "050833533236",
+            "050833533236");
+        Assert.Contains("قبلاً ارسال شده", reason);
+        Assert.DoesNotContain("جابه‌جا", reason);
+    }
+
+    [Fact]
+    public void NormalizePairs_carries_optional_fiche_no()
+    {
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair
+            {
+                BillId = "050833533236",
+                PaymentId = "050833533236",
+                FicheNo = "050833533236"
+            }
+        ]);
+        Assert.Single(pairs);
+        Assert.Equal("050833533236", pairs[0].FicheNo);
     }
 
     [Fact]

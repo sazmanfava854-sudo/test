@@ -6,7 +6,8 @@ public readonly record struct NormalizedBillPayPair(
     string BillId,
     string PaymentId,
     string BillIdTrim,
-    string PaymentIdTrim);
+    string PaymentIdTrim,
+    string FicheNo);
 
 /// <summary>نرمال‌سازی شناسه قبض/پرداخت فایل اکسل برای جستجوی فیش‌های ارسال‌نشده.</summary>
 public static class UnsentBillPayLookupHelper
@@ -37,7 +38,8 @@ public static class UnsentBillPayLookupHelper
             if (!seen.Add(key))
                 continue;
 
-            result.Add(new NormalizedBillPayPair(bill, pay, TrimLeadingZeros(bill), TrimLeadingZeros(pay)));
+            var ficheNo = (pair.FicheNo ?? "").Trim();
+            result.Add(new NormalizedBillPayPair(bill, pay, TrimLeadingZeros(bill), TrimLeadingZeros(pay), ficheNo));
         }
 
         return result;
@@ -87,16 +89,23 @@ public static class UnsentBillPayLookupHelper
         if (diagnostic == null || !diagnostic.Found)
             return $"قابل ارسال نیست — فیشی با این شناسه‌ها پیدا نشد{idSuffix}";
 
-        if (diagnostic.SwappedColumns)
-            return $"قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده{idSuffix}";
-
         if (diagnostic.AlreadySent)
             return $"فیش {diagnostic.FicheNo}: قبلاً ارسال شده{idSuffix}";
 
         if (diagnostic.Cancelled)
             return $"فیش {diagnostic.FicheNo}: لغو شده{idSuffix}";
 
+        if (diagnostic.SwappedColumns && !IsSameBillAndPayment(displayBillId, displayPaymentId))
+            return $"قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده{idSuffix}";
+
         return $"قابل ارسال نیست{idSuffix}";
+    }
+
+    public static bool IsSameBillAndPayment(string? billId, string? paymentId)
+    {
+        var bill = BankInquiryConfirmHelper.NormalizeBillOrPayId(billId);
+        var pay = BankInquiryConfirmHelper.NormalizeBillOrPayId(paymentId);
+        return bill.Length > 0 && bill == pay;
     }
 
     private static string FormatMissIdSuffix(string? displayBillId, string? displayPaymentId)

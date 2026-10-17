@@ -223,7 +223,7 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=95", html);
+        Assert.Contains("js/app.js?v=96", html);
         Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
         Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);
@@ -238,6 +238,7 @@ public class DeliveryReleaseTests
         Assert.Contains("function getSelectedUnsentBatchTargets(", js);
         Assert.Contains("function appendUnsentItems(", js);
         Assert.Contains("/api/unsent/lookup-by-bill-pay", js);
+        Assert.Contains("map.ficheNo", js);
         Assert.Contains("BuildMixedLookupResult", File.ReadAllText(WebFile("Services", "UnsentBillPayLookupHelper.cs")));
         Assert.Contains("function canAccessRayvarzModule(", js);
         Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);

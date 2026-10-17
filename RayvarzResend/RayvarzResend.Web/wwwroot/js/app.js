@@ -445,6 +445,9 @@ function mapUnsentExcelHeaderIndex(headers) {
     if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
       map.paymentId = idx;
     }
+    if (key === 'شمارهفیش' || key === 'ficheno' || key === 'fiche' || key === 'فیش') {
+      map.ficheNo = idx;
+    }
   });
   return map;
 }
@@ -607,8 +610,10 @@ function parseUnsentExcelFile(file) {
         for (let r = range.s.r + 1; r <= range.e.r; r++) {
           const billId = parseExcelCellValue(sheet, r, col.billId);
           const paymentId = parseExcelCellValue(sheet, r, col.paymentId);
-          if (!billId && !paymentId) continue;
-          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)) {
+          const ficheNo = col.ficheNo != null ? parseExcelCellValue(sheet, r, col.ficheNo) : '';
+          if (!billId && !paymentId && !ficheNo) continue;
+          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)
+            || hasScientificNotation(ficheNo)) {
             reject(new Error(
               `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
             ));
@@ -616,7 +621,8 @@ function parseUnsentExcelFile(file) {
           }
           const item = {
             billId: billId.trim(),
-            paymentId: paymentId.trim()
+            paymentId: paymentId.trim(),
+            ficheNo: ficheNo.trim()
           };
           if (!item.billId || !item.paymentId) {
             reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));

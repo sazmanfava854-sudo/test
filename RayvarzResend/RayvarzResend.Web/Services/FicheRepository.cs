@@ -971,6 +971,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             cmd.Parameters.AddWithValue($"@p{i}", pairs[i].PaymentId);
             cmd.Parameters.AddWithValue($"@bt{i}", pairs[i].BillIdTrim);
             cmd.Parameters.AddWithValue($"@pt{i}", pairs[i].PaymentIdTrim);
+            cmd.Parameters.AddWithValue($"@fn{i}", pairs[i].FicheNo ?? "");
         }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -998,7 +999,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
     private static string BuildBillPayDiagnoseIncomeSql(int pairCount)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
         return $"""
                 SELECT p.BillId AS PairBill,
                        p.PaymentId AS PairPay,
@@ -1007,19 +1008,19 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                              SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                              WHERE h.NidFiche = f.NidFiche) THEN 1 ELSE 0 END AS Sent,
                        CASE WHEN f.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
-                       CASE WHEN (
-                             {BillPayIdSqlHelper.Norm13("f.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
-                             AND {BillPayIdSqlHelper.Norm13("f.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
-                            ) THEN 1 ELSE 0 END AS Swapped
+                       {BillPayIdSqlHelper.SwappedColumnsCaseSql("f.BillID", "f.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
                 FROM dbo.Income_Fiche f WITH (NOLOCK)
-                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                  ON {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
+                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
+                  ON (
+                    {BillPayIdSqlHelper.PairMatchOnTable("f.BillID", "f.PaymentID")}
+                    OR {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("f.BillID", "f.PaymentID", "f.FicheNo")}
+                  )
                 """;
     }
 
     private static string BuildBillPayDiagnoseDutySql(int pairCount)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
         return $"""
                 SELECT p.BillId AS PairBill,
                        p.PaymentId AS PairPay,
@@ -1028,19 +1029,19 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                              SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                              WHERE h.NidFiche = d.NidFiche) THEN 1 ELSE 0 END AS Sent,
                        CASE WHEN d.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
-                       CASE WHEN (
-                             {BillPayIdSqlHelper.Norm13("d.BillID")} = {BillPayIdSqlHelper.Norm13("p.PaymentId")}
-                             AND {BillPayIdSqlHelper.Norm13("d.PaymentID")} = {BillPayIdSqlHelper.Norm13("p.BillId")}
-                            ) THEN 1 ELSE 0 END AS Swapped
+                       {BillPayIdSqlHelper.SwappedColumnsCaseSql("d.BillID", "d.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
                 FROM dbo.Duty_Fiche d WITH (NOLOCK)
-                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
-                  ON {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
+                INNER JOIN (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
+                  ON (
+                    {BillPayIdSqlHelper.PairMatchOnTable("d.BillID", "d.PaymentID")}
+                    OR {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("d.BillID", "d.PaymentID", "d.FicheNo")}
+                  )
                 """;
     }
 
     private static string BuildIncomePairSqlLite(int pairCount)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
         return $"""
               SELECT TOP (@max)
                      f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
@@ -1049,9 +1050,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      '' AS NidWorkItem,
                      '' AS District,
                      '' AS BnkAcntNo
-              FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+              FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
               INNER JOIN dbo.Income_Fiche f WITH (NOLOCK)
-                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("f.BillID", "f.PaymentID")}
+                ON {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("f.BillID", "f.PaymentID", "f.FicheNo")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
@@ -1062,7 +1063,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
 
     private static string BuildDutyPairSqlLite(int pairCount)
     {
-        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+        var values = string.Join(", ", Enumerable.Range(0, pairCount).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i}, @fn{i})"));
         return $"""
               SELECT TOP (@max)
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
@@ -1070,9 +1071,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      '' AS NidWorkItem,
                      '' AS District,
                      '' AS BnkAcntNo
-              FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim)
+              FROM (VALUES {values}) AS p(BillId, PaymentId, BillTrim, PayTrim, FicheNo)
               INNER JOIN dbo.Duty_Fiche d WITH (NOLOCK)
-                ON {BillPayIdSqlHelper.PairMatchStrictOnTable("d.BillID", "d.PaymentID")}
+                ON {BillPayIdSqlHelper.PairMatchStrictForExcelLookup("d.BillID", "d.PaymentID", "d.FicheNo")}
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)
@@ -1098,6 +1099,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
             cmd.Parameters.AddWithValue($"@p{i}", pairs[i].PaymentId);
             cmd.Parameters.AddWithValue($"@bt{i}", pairs[i].BillIdTrim);
             cmd.Parameters.AddWithValue($"@pt{i}", pairs[i].PaymentIdTrim);
+            cmd.Parameters.AddWithValue($"@fn{i}", pairs[i].FicheNo ?? "");
         }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
