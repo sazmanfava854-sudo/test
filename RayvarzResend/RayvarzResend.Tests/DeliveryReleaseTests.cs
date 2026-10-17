@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v28_pr115()
+    public void ReleaseInfo_is_v29_pr115()
     {
-        Assert.Equal(28, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr115-v28", ReleaseInfo.Tag);
+        Assert.Equal(29, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr115-v29", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v28_doc_lists_pr115_release()
+    public void DELIVERY_v29_doc_lists_pr115_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v28.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v29.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
         Assert.Contains("نسخه آخر", doc);
         Assert.Contains("unsent-search-optional-date-4c4a", doc);
-        Assert.Contains("CROSS APPLY", doc);
+        Assert.Contains("epay", doc, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("تهاتر", doc);
     }
 
@@ -258,11 +258,7 @@ public class DeliveryReleaseTests
         Assert.Contains("EnsurePresentOrThrowAsync", send);
         Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
         var tahatorSend = File.ReadAllText(WebFile("Services", "TahatorResendService.cs"));
-<<<<<<< HEAD
-        Assert.DoesNotContain("CheckAsync", tahatorSend);
-=======
         Assert.DoesNotContain("EpayFichePresenceChecker", tahatorSend);
->>>>>>> e221e0d (fix(tahator): skip epay presence check for tahator fiches)
         Assert.Contains("epay ثبت نمی‌شود", tahatorSend);
     }
 
