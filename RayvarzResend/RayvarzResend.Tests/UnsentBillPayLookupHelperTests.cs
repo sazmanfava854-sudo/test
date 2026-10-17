@@ -122,6 +122,15 @@ public class UnsentBillPayLookupHelperTests
     }
 
     [Fact]
+    public void ExpandLookupKeys_includes_stored_width_and_padded_form()
+    {
+        var keys = UnsentBillPayLookupHelper.ExpandLookupKeys("050833533236");
+        Assert.Contains("050833533236", keys);
+        Assert.Contains("0050833533236", keys);
+        Assert.Contains("50833533236", keys);
+    }
+
+    [Fact]
     public void NormalizePairs_carries_optional_fiche_no()
     {
         var pairs = UnsentBillPayLookupHelper.NormalizePairs(

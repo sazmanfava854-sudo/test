@@ -850,9 +850,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         List<UnsentFicheListItem> Items,
         Dictionary<string, BillPayMissDiagnostic> Diagnostics);
 
-    private const int BillPayLookupChunkSize = 40;
-    private const int BillPayDiagnoseChunkSize = 30;
-    private const int BillPaySqlCommandTimeoutSeconds = 120;
+    private const int BillPayLookupChunkSize = 80;
+    private const int BillPaySqlCommandTimeoutSeconds = 20;
 
     /// <summary>جستجوی سریع اکسل: یک اتصال SQL، بدون join نوسازی؛ diagnose اختیاری.</summary>
     public async Task<BillPayBatchLookupResult> LookupBillPayBatchAsync(
@@ -872,25 +871,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         foreach (var chunk in pairs.Chunk(BillPayLookupChunkSize))
         {
             var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
-            var distinct = chunkArray.Where(p => p.BillId != p.PaymentId).ToArray();
-            var tahator = chunkArray.Where(p => p.BillId == p.PaymentId).ToArray();
-            if (distinct.Length > 0)
-            {
-                var sqlDistinct = kind == UnsentFicheKind.Duty
-                    ? BuildDutyPairApplySql(distinct.Length, tahatorSameBillPay: false)
-                    : BuildIncomePairApplySql(distinct.Length, tahatorSameBillPay: false);
-                items.AddRange(await ExecuteUnsentPairLookupOnConnectionAsync(
-                    conn, sqlDistinct, distinct, isDuty: kind == UnsentFicheKind.Duty, ct));
-            }
-
-            if (tahator.Length > 0)
-            {
-                var sqlTahator = kind == UnsentFicheKind.Duty
-                    ? BuildDutyPairApplySql(tahator.Length, tahatorSameBillPay: true)
-                    : BuildIncomePairApplySql(tahator.Length, tahatorSameBillPay: true);
-                items.AddRange(await ExecuteUnsentPairLookupOnConnectionAsync(
-                    conn, sqlTahator, tahator, isDuty: kind == UnsentFicheKind.Duty, ct));
-            }
+            items.AddRange(await ExecuteSeekLookupAsync(
+                conn, kind, chunkArray, unsentOnly: true, ct));
         }
 
         items = items
@@ -953,45 +935,281 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         Dictionary<string, BillPayMissDiagnostic> diagnostics,
         CancellationToken ct)
     {
-        foreach (var chunk in pairs.Chunk(BillPayDiagnoseChunkSize))
+        foreach (var chunk in pairs.Chunk(BillPayLookupChunkSize))
         {
             var chunkArray = chunk as NormalizedBillPayPair[] ?? chunk.ToArray();
-            await AppendBillPayDiagnoseChunkAsync(conn, kind, chunkArray, diagnostics, tahatorSameBillPay: false, ct);
-            var tahator = chunkArray.Where(p => p.BillId == p.PaymentId).ToArray();
-            if (tahator.Length > 0)
-                await AppendBillPayDiagnoseChunkAsync(conn, kind, tahator, diagnostics, tahatorSameBillPay: true, ct);
-        }
-    }
-
-    private async Task AppendBillPayDiagnoseChunkAsync(
-        SqlConnection conn,
-        UnsentFicheKind kind,
-        NormalizedBillPayPair[] chunkArray,
-        Dictionary<string, BillPayMissDiagnostic> diagnostics,
-        bool tahatorSameBillPay,
-        CancellationToken ct)
-    {
-        if (chunkArray.Length == 0)
-            return;
-
-        var pairs = tahatorSameBillPay
-            ? chunkArray
-            : chunkArray.Where(p => p.BillId != p.PaymentId).ToArray();
-        if (pairs.Length == 0)
-            return;
-
-        var sql = kind == UnsentFicheKind.Duty
-            ? BuildBillPayDiagnoseDutySql(pairs.Length, tahatorSameBillPay)
-            : BuildBillPayDiagnoseIncomeSql(pairs.Length, tahatorSameBillPay);
-        var rows = await ExecuteBillPayDiagnoseOnConnectionAsync(conn, sql, pairs, ct);
-        foreach (var row in rows)
-        {
-            if (!diagnostics.ContainsKey(row.PairKey))
-                diagnostics[row.PairKey] = row.Diagnostic;
+            var rows = await ExecuteSeekDiagnoseAsync(conn, kind, chunkArray, ct);
+            foreach (var row in rows)
+            {
+                if (!diagnostics.ContainsKey(row.PairKey))
+                    diagnostics[row.PairKey] = row.Diagnostic;
+            }
         }
     }
 
     private sealed record BillPayDiagnoseRow(string PairKey, BillPayMissDiagnostic Diagnostic);
+
+    private async Task<List<UnsentFicheListItem>> ExecuteSeekLookupAsync(
+        SqlConnection conn,
+        UnsentFicheKind kind,
+        NormalizedBillPayPair[] pairs,
+        bool unsentOnly,
+        CancellationToken ct)
+    {
+        var items = new List<UnsentFicheListItem>();
+        var isDuty = kind == UnsentFicheKind.Duty;
+        var ficheKeys = BuildFicheSeekKeys(pairs);
+        if (ficheKeys.Count > 0)
+        {
+            var sql = BuildFicheNoSeekSql(ficheKeys.Count, isDuty, unsentOnly);
+            items.AddRange(await ExecuteUnsentPairLookupOnConnectionAsync(
+                conn, sql, BindFicheSeek(ficheKeys), isDuty, ct));
+        }
+
+        var direct = BuildDirectSeekKeys(pairs.Where(p => p.BillId != p.PaymentId));
+        if (direct.Count > 0)
+        {
+            var sql = BuildBillPaySeekSql(direct.Count, isDuty, unsentOnly, swapped: false);
+            items.AddRange(await ExecuteUnsentPairLookupOnConnectionAsync(
+                conn, sql, BindBillPaySeek(direct), isDuty, ct));
+        }
+
+        return items;
+    }
+
+    private async Task<List<BillPayDiagnoseRow>> ExecuteSeekDiagnoseAsync(
+        SqlConnection conn,
+        UnsentFicheKind kind,
+        NormalizedBillPayPair[] pairs,
+        CancellationToken ct)
+    {
+        var rows = new List<BillPayDiagnoseRow>();
+        var isDuty = kind == UnsentFicheKind.Duty;
+        var ficheKeys = BuildFicheSeekKeys(pairs);
+        if (ficheKeys.Count > 0)
+            rows.AddRange(await ReadDiagnoseAsync(conn, BuildFicheNoDiagnoseSql(ficheKeys.Count, isDuty), BindFicheSeek(ficheKeys), ct));
+
+        var distinct = pairs.Where(p => p.BillId != p.PaymentId).ToArray();
+        var direct = BuildDirectSeekKeys(distinct);
+        if (direct.Count > 0)
+            rows.AddRange(await ReadDiagnoseAsync(conn, BuildBillPayDiagnoseSeekSql(direct.Count, isDuty, swapped: false), BindBillPaySeek(direct), ct));
+
+        var found = new HashSet<string>(rows.Select(r => r.PairKey), StringComparer.Ordinal);
+        var missingDistinct = distinct.Where(p => !found.Contains(UnsentBillPayLookupHelper.PairKey(p))).ToArray();
+        var swapped = BuildDirectSeekKeys(missingDistinct);
+        if (swapped.Count > 0)
+            rows.AddRange(await ReadDiagnoseAsync(conn, BuildBillPayDiagnoseSeekSql(swapped.Count, isDuty, swapped: true), BindBillPaySeek(swapped), ct));
+
+        return rows;
+    }
+
+    private sealed record FicheSeekKey(string PairBill, string PairPay, string KeyNo);
+    private sealed record BillPaySeekKey(string PairBill, string PairPay, string KeyBill, string KeyPay);
+
+    private static List<FicheSeekKey> BuildFicheSeekKeys(IEnumerable<NormalizedBillPayPair> pairs)
+    {
+        var keys = new List<FicheSeekKey>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pair in pairs.Where(p => p.BillId == p.PaymentId))
+        {
+            var source = string.IsNullOrWhiteSpace(pair.FicheNo) ? pair.BillId : pair.FicheNo;
+            foreach (var key in UnsentBillPayLookupHelper.ExpandLookupKeys(source)
+                         .Concat(UnsentBillPayLookupHelper.ExpandLookupKeys(pair.BillId)))
+            {
+                if (!seen.Add(pair.BillId + "|" + key))
+                    continue;
+                keys.Add(new FicheSeekKey(pair.BillId, pair.PaymentId, key));
+            }
+        }
+
+        return keys;
+    }
+
+    private static List<BillPaySeekKey> BuildDirectSeekKeys(IEnumerable<NormalizedBillPayPair> pairs)
+    {
+        var keys = new List<BillPaySeekKey>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pair in pairs)
+        {
+            foreach (var bill in UnsentBillPayLookupHelper.ExpandLookupKeys(pair.BillId))
+            foreach (var pay in UnsentBillPayLookupHelper.ExpandLookupKeys(pair.PaymentId))
+            {
+                if (!seen.Add(pair.BillId + "|" + pair.PaymentId + "|" + bill + "|" + pay))
+                    continue;
+                keys.Add(new BillPaySeekKey(pair.BillId, pair.PaymentId, bill, pay));
+            }
+        }
+
+        return keys;
+    }
+
+    private static NormalizedBillPayPair[] BindFicheSeek(IReadOnlyList<FicheSeekKey> keys) =>
+        keys.Select(k => new NormalizedBillPayPair(k.PairBill, k.PairPay, "", "", k.KeyNo)).ToArray();
+
+    private static NormalizedBillPayPair[] BindBillPaySeek(IReadOnlyList<BillPaySeekKey> keys) =>
+        keys.Select(k => new NormalizedBillPayPair(k.PairBill, k.PairPay, k.KeyBill, k.KeyPay, "")).ToArray();
+
+    private static string Values3(int count) =>
+        string.Join(", ", Enumerable.Range(0, count).Select(i => $"(@b{i}, @p{i}, @fn{i})"));
+
+    private static string Values4(int count) =>
+        string.Join(", ", Enumerable.Range(0, count).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
+
+    private static string UnsentIncomeFilter(bool unsentOnly) => unsentOnly
+        ? """
+          AND f.EumFicheStatus <> 4
+          AND NOT EXISTS (
+                SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                WHERE h.NidFiche = f.NidFiche)
+          """
+        : "";
+
+    private static string UnsentDutyFilter(bool unsentOnly) => unsentOnly
+        ? """
+          AND d.EumDutyFicheStatus <> 2
+          AND NOT EXISTS (
+                SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                WHERE h.NidFiche = d.NidFiche)
+          """
+        : "";
+
+    private static string BuildFicheNoSeekSql(int count, bool isDuty, bool unsentOnly)
+    {
+        var values = Values3(count);
+        if (isDuty)
+        {
+            return $"""
+                SELECT d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                       d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                       '' AS NidWorkItem, '' AS District, '' AS BnkAcntNo
+                FROM (VALUES {values}) AS k(PairBill, PairPay, KeyNo)
+                INNER JOIN dbo.Duty_Fiche d WITH (NOLOCK) ON d.FicheNo = k.KeyNo
+                WHERE 1 = 1
+                {UnsentDutyFilter(unsentOnly)}
+                """;
+        }
+
+        return $"""
+            SELECT f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                   f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                   f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                   '' AS NidWorkItem, '' AS District, '' AS BnkAcntNo
+            FROM (VALUES {values}) AS k(PairBill, PairPay, KeyNo)
+            INNER JOIN dbo.Income_Fiche f WITH (NOLOCK) ON f.FicheNo = k.KeyNo
+            WHERE 1 = 1
+            {UnsentIncomeFilter(unsentOnly)}
+            """;
+    }
+
+    private static string BuildBillPaySeekSql(int count, bool isDuty, bool unsentOnly, bool swapped)
+    {
+        var values = Values4(count);
+        var on = swapped
+            ? "f.BillID = k.KeyPay AND f.PaymentID = k.KeyBill"
+            : "f.BillID = k.KeyBill AND f.PaymentID = k.KeyPay";
+        var onDuty = swapped
+            ? "d.BillID = k.KeyPay AND d.PaymentID = k.KeyBill"
+            : "d.BillID = k.KeyBill AND d.PaymentID = k.KeyPay";
+        if (isDuty)
+        {
+            return $"""
+                SELECT d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
+                       d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
+                       '' AS NidWorkItem, '' AS District, '' AS BnkAcntNo
+                FROM (VALUES {values}) AS k(PairBill, PairPay, KeyBill, KeyPay)
+                INNER JOIN dbo.Duty_Fiche d WITH (NOLOCK) ON {onDuty}
+                WHERE 1 = 1
+                {UnsentDutyFilter(unsentOnly)}
+                """;
+        }
+
+        return $"""
+            SELECT f.FicheNo, f.NidFiche, f.BillID, f.PaymentID, f.Payable,
+                   f.PaymentDate, f.BankPaymentDate, f.EumFicheStatus,
+                   f.CI_IncomeAccountGroup AS IncomeAccountGroup,
+                   '' AS NidWorkItem, '' AS District, '' AS BnkAcntNo
+            FROM (VALUES {values}) AS k(PairBill, PairPay, KeyBill, KeyPay)
+            INNER JOIN dbo.Income_Fiche f WITH (NOLOCK) ON {on}
+            WHERE 1 = 1
+            {UnsentIncomeFilter(unsentOnly)}
+            """;
+    }
+
+    private static string BuildFicheNoDiagnoseSql(int count, bool isDuty)
+    {
+        var values = Values3(count);
+        var status = isDuty ? "d.EumDutyFicheStatus = 2" : "f.EumFicheStatus = 4";
+        var table = isDuty ? "dbo.Duty_Fiche d" : "dbo.Income_Fiche f";
+        var alias = isDuty ? "d" : "f";
+        return $"""
+            SELECT k.PairBill, k.PairPay, {alias}.FicheNo,
+                   CASE WHEN EXISTS (
+                         SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                         WHERE h.NidFiche = {alias}.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                   CASE WHEN {status} THEN 1 ELSE 0 END AS Cancelled,
+                   0 AS Swapped
+            FROM (VALUES {values}) AS k(PairBill, PairPay, KeyNo)
+            INNER JOIN {table} WITH (NOLOCK) ON {alias}.FicheNo = k.KeyNo
+            """;
+    }
+
+    private static string BuildBillPayDiagnoseSeekSql(int count, bool isDuty, bool swapped)
+    {
+        var values = Values4(count);
+        var alias = isDuty ? "d" : "f";
+        var table = isDuty ? "dbo.Duty_Fiche d" : "dbo.Income_Fiche f";
+        var status = isDuty ? "d.EumDutyFicheStatus = 2" : "f.EumFicheStatus = 4";
+        var on = swapped
+            ? $"{alias}.BillID = k.KeyPay AND {alias}.PaymentID = k.KeyBill"
+            : $"{alias}.BillID = k.KeyBill AND {alias}.PaymentID = k.KeyPay";
+        var swappedFlag = swapped ? "1" : "0";
+        return $"""
+            SELECT k.PairBill, k.PairPay, {alias}.FicheNo,
+                   CASE WHEN EXISTS (
+                         SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
+                         WHERE h.NidFiche = {alias}.NidFiche) THEN 1 ELSE 0 END AS Sent,
+                   CASE WHEN {status} THEN 1 ELSE 0 END AS Cancelled,
+                   {swappedFlag} AS Swapped
+            FROM (VALUES {values}) AS k(PairBill, PairPay, KeyBill, KeyPay)
+            INNER JOIN {table} WITH (NOLOCK) ON {on}
+            """;
+    }
+
+    private async Task<List<BillPayDiagnoseRow>> ReadDiagnoseAsync(
+        SqlConnection conn,
+        string sql,
+        NormalizedBillPayPair[] bound,
+        CancellationToken ct)
+    {
+        var rows = new List<BillPayDiagnoseRow>();
+        await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = BillPaySqlCommandTimeoutSeconds };
+        for (var i = 0; i < bound.Length; i++)
+        {
+            cmd.Parameters.Add(new SqlParameter($"@b{i}", System.Data.SqlDbType.NVarChar, 40) { Value = bound[i].BillId });
+            cmd.Parameters.Add(new SqlParameter($"@p{i}", System.Data.SqlDbType.NVarChar, 40) { Value = bound[i].PaymentId });
+            cmd.Parameters.Add(new SqlParameter($"@bt{i}", System.Data.SqlDbType.NVarChar, 40) { Value = bound[i].BillIdTrim ?? "" });
+            cmd.Parameters.Add(new SqlParameter($"@pt{i}", System.Data.SqlDbType.NVarChar, 40) { Value = bound[i].PaymentIdTrim ?? "" });
+            cmd.Parameters.Add(new SqlParameter($"@fn{i}", System.Data.SqlDbType.NVarChar, 40) { Value = bound[i].FicheNo ?? "" });
+        }
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var pairKey = UnsentBillPayLookupHelper.MatchKey(
+                reader.GetString(reader.GetOrdinal("PairBill")),
+                reader.GetString(reader.GetOrdinal("PairPay")));
+            rows.Add(new BillPayDiagnoseRow(pairKey, new BillPayMissDiagnostic
+            {
+                Found = true,
+                FicheNo = reader.GetString(reader.GetOrdinal("FicheNo")).Trim(),
+                AlreadySent = reader.GetInt32(reader.GetOrdinal("Sent")) != 0,
+                Cancelled = reader.GetInt32(reader.GetOrdinal("Cancelled")) != 0,
+                SwappedColumns = reader.GetInt32(reader.GetOrdinal("Swapped")) != 0
+            }));
+        }
+
+        return rows;
+    }
 
     private async Task<List<BillPayDiagnoseRow>> ExecuteBillPayDiagnoseOnConnectionAsync(
         SqlConnection conn,
@@ -1003,11 +1221,11 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = BillPaySqlCommandTimeoutSeconds };
         for (var i = 0; i < pairs.Length; i++)
         {
-            cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
-            cmd.Parameters.AddWithValue($"@p{i}", pairs[i].PaymentId);
-            cmd.Parameters.AddWithValue($"@bt{i}", pairs[i].BillIdTrim);
-            cmd.Parameters.AddWithValue($"@pt{i}", pairs[i].PaymentIdTrim);
-            cmd.Parameters.AddWithValue($"@fn{i}", pairs[i].FicheNo ?? "");
+            cmd.Parameters.Add(new SqlParameter($"@b{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].BillId });
+            cmd.Parameters.Add(new SqlParameter($"@p{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].PaymentId });
+            cmd.Parameters.Add(new SqlParameter($"@bt{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].BillIdTrim ?? "" });
+            cmd.Parameters.Add(new SqlParameter($"@pt{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].PaymentIdTrim ?? "" });
+            cmd.Parameters.Add(new SqlParameter($"@fn{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].FicheNo ?? "" });
         }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -1163,11 +1381,11 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = BillPaySqlCommandTimeoutSeconds };
         for (var i = 0; i < pairs.Length; i++)
         {
-            cmd.Parameters.AddWithValue($"@b{i}", pairs[i].BillId);
-            cmd.Parameters.AddWithValue($"@p{i}", pairs[i].PaymentId);
-            cmd.Parameters.AddWithValue($"@bt{i}", pairs[i].BillIdTrim);
-            cmd.Parameters.AddWithValue($"@pt{i}", pairs[i].PaymentIdTrim);
-            cmd.Parameters.AddWithValue($"@fn{i}", pairs[i].FicheNo ?? "");
+            cmd.Parameters.Add(new SqlParameter($"@b{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].BillId });
+            cmd.Parameters.Add(new SqlParameter($"@p{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].PaymentId });
+            cmd.Parameters.Add(new SqlParameter($"@bt{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].BillIdTrim ?? "" });
+            cmd.Parameters.Add(new SqlParameter($"@pt{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].PaymentIdTrim ?? "" });
+            cmd.Parameters.Add(new SqlParameter($"@fn{i}", System.Data.SqlDbType.NVarChar, 40) { Value = pairs[i].FicheNo ?? "" });
         }
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);

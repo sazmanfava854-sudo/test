@@ -52,6 +52,34 @@ public static class UnsentBillPayLookupHelper
         return bill.Length == 0 || pay.Length == 0 ? "" : bill + "|" + pay;
     }
 
+    /// <summary>
+    /// شکل‌های ذخیره‌شدهٔ ممکن یک شناسه (۱۳ رقم، بدون یک صفر، بدون همهٔ صفرها)
+    /// تا مقایسهٔ مستقیم ستون ایندکس‌شده ممکن شود.
+    /// </summary>
+    public static IReadOnlyList<string> ExpandLookupKeys(string? value)
+    {
+        var keys = new List<string>();
+        void Add(string? candidate)
+        {
+            var text = (candidate ?? "").Trim();
+            if (text.Length == 0 || keys.Exists(existing => existing == text))
+                return;
+            keys.Add(text);
+        }
+
+        Add(value);
+        var normalized = BankInquiryConfirmHelper.NormalizeBillOrPayId(value);
+        Add(normalized);
+        var current = normalized;
+        while (current.Length > 1 && current[0] == '0' && keys.Count < 8)
+        {
+            current = current[1..];
+            Add(current);
+        }
+
+        return keys;
+    }
+
     public static string TrimLeadingZeros(string digits)
     {
         if (string.IsNullOrEmpty(digits))
