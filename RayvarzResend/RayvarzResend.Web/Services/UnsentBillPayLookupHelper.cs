@@ -38,7 +38,7 @@ public static class UnsentBillPayLookupHelper
             if (!seen.Add(key))
                 continue;
 
-            var ficheNo = (pair.FicheNo ?? "").Trim();
+            var ficheNo = IdentifierText.Normalize(pair.FicheNo);
             result.Add(new NormalizedBillPayPair(bill, pay, TrimLeadingZeros(bill), TrimLeadingZeros(pay), ficheNo));
         }
 
@@ -127,6 +127,24 @@ public static class UnsentBillPayLookupHelper
             return $"قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده{idSuffix}";
 
         return $"قابل ارسال نیست{idSuffix}";
+    }
+
+    /// <summary>
+    /// فیش تهاتری که در رایورز با مبلغ منفی ثبت شده (مبلغ/۱۵۷) نباید در گرید ارسال اکسل بماند؛
+    /// فیش جفت (درآمدی/۱۵۸) نشان داده می‌شود.
+    /// </summary>
+    public static bool ShouldReplaceWithTahatorPartner(
+        bool isTahator,
+        decimal? rayvarzAmount,
+        string? matchedFicheNo,
+        string? partnerFicheNo)
+    {
+        if (!isTahator || rayvarzAmount is not < 0)
+            return false;
+
+        var partner = (partnerFicheNo ?? "").Trim();
+        var matched = (matchedFicheNo ?? "").Trim();
+        return partner.Length > 0 && !string.Equals(partner, matched, StringComparison.Ordinal);
     }
 
     public static bool IsSameBillAndPayment(string? billId, string? paymentId)

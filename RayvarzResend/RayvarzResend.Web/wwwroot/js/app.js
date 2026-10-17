@@ -478,6 +478,10 @@ function normalizeDigits(value) {
   });
 }
 
+function normalizeSearchId(value) {
+  return normalizeDigits(String(value ?? '')).trim();
+}
+
 function normalizeBillOrPayIdDigits(value) {
   const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
   if (!digits) return '';
@@ -547,7 +551,7 @@ function parseInstallmentExcelFile(file) {
           }
 
           const item = {
-            identifier: identifier.trim(),
+            identifier: normalizeSearchId(identifier),
             paymentCost: paymentCost.trim(),
             paymentDate: paymentDate.trim()
           };
@@ -620,9 +624,9 @@ function parseUnsentExcelFile(file) {
             return;
           }
           const item = {
-            billId: billId.trim(),
-            paymentId: paymentId.trim(),
-            ficheNo: ficheNo.trim()
+            billId: normalizeSearchId(billId),
+            paymentId: normalizeSearchId(paymentId),
+            ficheNo: normalizeSearchId(ficheNo)
           };
           if (!item.billId || !item.paymentId) {
             reject(new Error(`ردیف ${r + 1}: هر دو ستون شناسه قبض و شناسه پرداخت الزامی است`));
@@ -753,7 +757,7 @@ function getInstallmentPayload() {
   const raw = ($('installmentValues')?.value || '').trim();
   return {
     ...base,
-    valuesText: raw
+    valuesText: normalizeSearchId(raw)
   };
 }
 
@@ -1183,7 +1187,7 @@ function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
   const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 25;
   ficheDateSearchState.pageSize = pageSize;
   return {
-    identifierValue: ($('ficheDateIdentifier')?.value || '').trim(),
+    identifierValue: normalizeSearchId($('ficheDateIdentifier')?.value),
     permanentFromDate: ($('ficheDatePermanentFrom')?.value || '').trim(),
     permanentToDate: ($('ficheDatePermanentTo')?.value || '').trim(),
     temporaryFromDate: ($('ficheDateTemporaryFrom')?.value || '').trim(),
@@ -1412,9 +1416,9 @@ function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
   const pageSize = parseInt($('bankInquiryPageSize')?.value || bankInquirySearchState.pageSize, 10) || 25;
   bankInquirySearchState.pageSize = pageSize;
   return {
-    ficheNo: ($('bankInquiryFicheNo')?.value || '').trim(),
-    billId: ($('bankInquiryBillId')?.value || '').trim(),
-    paymentId: ($('bankInquiryPaymentId')?.value || '').trim(),
+    ficheNo: normalizeSearchId($('bankInquiryFicheNo')?.value),
+    billId: normalizeSearchId($('bankInquiryBillId')?.value),
+    paymentId: normalizeSearchId($('bankInquiryPaymentId')?.value),
     page,
     pageSize
   };
@@ -1614,7 +1618,7 @@ function renderShahkarTable(items) {
 
 async function fetchShahkarResults({ clearSelection = false } = {}) {
   const userName = ($('shahkarUserName')?.value || '').trim();
-  const nationalCode = ($('shahkarNationalCode')?.value || '').trim();
+  const nationalCode = normalizeSearchId($('shahkarNationalCode')?.value);
   if (!userName && !nationalCode) {
     return showAppWarning('نام کاربری یا کد ملی را وارد کنید');
   }
@@ -1889,11 +1893,11 @@ function getUnsentSearchFilters() {
   const toDate = ($('unsentToDate')?.value || '').trim();
   return {
     ficheKind: $('unsentFicheKind').value,
-    ficheNo: ($('unsentFicheNo')?.value || '').trim(),
+    ficheNo: normalizeSearchId($('unsentFicheNo')?.value),
     fromDate: fromDate || null,
     toDate: toDate || null,
-    billId: ($('unsentBillId')?.value || '').trim(),
-    paymentId: ($('unsentPaymentId')?.value || '').trim(),
+    billId: normalizeSearchId($('unsentBillId')?.value),
+    paymentId: normalizeSearchId($('unsentPaymentId')?.value),
     district: branchIdToDistrict($('unsentDistrict')?.value)
   };
 }
@@ -3046,7 +3050,7 @@ function setupEventHandlers() {
 
   bindClick('btnLoad', async () => {
   const kind = getSingleFicheKind();
-  const value = $('identifierValue').value.trim();
+  const value = normalizeSearchId($('identifierValue').value);
   if (!value) return showAppWarning('شناسه فیش را وارد کنید');
 
   $('btnLoad').disabled = true;

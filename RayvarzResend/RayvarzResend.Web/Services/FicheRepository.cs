@@ -50,6 +50,7 @@ public class FicheRepository
 
     public async Task<FicheHeaderDto?> LoadAsync(IdentifierType type, string value, CancellationToken ct = default)
     {
+        value = IdentifierText.Normalize(value);
         var income = await TryLoadIncomeAsync(type, value, ct);
         if (income != null) return income;
         return await TryLoadDutyAsync(type, value, ct);
@@ -65,7 +66,7 @@ public class FicheRepository
     public async Task<(FicheHeaderDto? Fiche, IdentifierType UsedType)> LoadByKindWithAutoDetectAsync(
         UnsentFicheKind kind, string rawValue, CancellationToken ct = default)
     {
-        var value = rawValue.Trim();
+        var value = IdentifierText.Normalize(rawValue);
         var primary = IdentifierDetector.Detect(value);
         var fiche = await LoadByKindAsync(kind, primary, value, ct);
         if (fiche != null)
@@ -493,6 +494,89 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
             alt = ficheNo;
         cmd.Parameters.Add(new SqlParameter("@f", System.Data.SqlDbType.NVarChar, 40) { Value = ficheNo });
         cmd.Parameters.Add(new SqlParameter("@fAlt", System.Data.SqlDbType.NVarChar, 40) { Value = alt });
+    }
+
+    /// <summary>شماره فیش‌هایی که در incmdocsys دست‌کم یک ردیف با Val منفی دارند.</summary>
+    public async Task<HashSet<string>> FindFicheNosWithNegativeRayvarzAmountAsync(
+        IReadOnlyCollection<string> ficheNos,
+        CancellationToken ct = default)
+    {
+        var keys = ficheNos
+            .Select(IdentifierText.Normalize)
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        if (keys.Length == 0)
+            return found;
+
+        await using var conn = new SqlConnection(_rayCs);
+        await conn.OpenAsync(ct);
+
+        foreach (var chunk in keys.Chunk(40))
+        {
+            var predicates = new List<string>(chunk.Length);
+            await using var cmd = new SqlCommand { Connection = conn, CommandTimeout = BillPaySqlCommandTimeoutSeconds };
+            for (var i = 0; i < chunk.Length; i++)
+            {
+                var alt = chunk[i].TrimStart('0');
+                if (alt.Length == 0)
+                    alt = chunk[i];
+                predicates.Add(
+                    $"(LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo))) = @f{i} OR LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo))) = @a{i})");
+                cmd.Parameters.Add(new SqlParameter($"@f{i}", System.Data.SqlDbType.NVarChar, 40) { Value = chunk[i] });
+                cmd.Parameters.Add(new SqlParameter($"@a{i}", System.Data.SqlDbType.NVarChar, 40) { Value = alt });
+            }
+
+            cmd.CommandText = $"""
+                SELECT LTRIM(RTRIM(CONVERT(nvarchar(40), RowDocNo))) AS DocNo, Val
+                FROM ray.incmdocsys WITH (NOLOCK)
+                WHERE {string.Join(" OR ", predicates)}
+                """;
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                if (reader.IsDBNull(1))
+                    continue;
+                var amount = Convert.ToDecimal(reader.GetValue(1));
+                if (amount >= 0)
+                    continue;
+
+                var docNo = reader.GetString(0).Trim();
+                var docAlt = docNo.TrimStart('0');
+                foreach (var key in chunk)
+                {
+                    var keyAlt = key.TrimStart('0');
+                    if (docNo == key || docNo == keyAlt || docAlt == key || (docAlt.Length > 0 && docAlt == keyAlt))
+                        found.Add(key);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    public async Task<UnsentFicheListItem?> LoadUnsentIncomeItemByFicheNoAsync(
+        string ficheNo,
+        CancellationToken ct = default)
+    {
+        ficheNo = IdentifierText.Normalize(ficheNo);
+        if (ficheNo.Length == 0)
+            return null;
+
+        var pair = new NormalizedBillPayPair(
+            ficheNo,
+            ficheNo,
+            UnsentBillPayLookupHelper.TrimLeadingZeros(ficheNo),
+            UnsentBillPayLookupHelper.TrimLeadingZeros(ficheNo),
+            ficheNo);
+        var batch = await LookupBillPayBatchAsync(
+            UnsentFicheKind.Income,
+            [pair],
+            diagnoseMisses: false,
+            ct);
+        return batch.Items.FirstOrDefault();
     }
 
     public async Task<bool> ExistsInRayvarzAsync(string ficheNo, int? shamsiYear = null, CancellationToken ct = default)
@@ -1427,9 +1511,9 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         bool isDuty = false, bool hasDateRange = false)
     {
         var items = new List<UnsentFicheListItem>();
-        var ficheNo = (req.FicheNo ?? "").Trim();
-        var billId = (req.BillId ?? "").Trim();
-        var paymentId = (req.PaymentId ?? "").Trim();
+        var ficheNo = IdentifierText.Normalize(req.FicheNo);
+        var billId = IdentifierText.Normalize(req.BillId);
+        var paymentId = IdentifierText.Normalize(req.PaymentId);
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);

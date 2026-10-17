@@ -24,6 +24,49 @@ public class UnsentBillPayLookupHelperTests
     }
 
     [Fact]
+    public void NormalizePairs_converts_persian_fiche_number()
+    {
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair
+            {
+                BillId = "۰۵۰۸۳۳۵۳۳۲۴۲",
+                PaymentId = "۰۵۰۸۳۳۵۳۳۲۴۲",
+                FicheNo = "۰۵۰۸۳۳۵۳۳۲۴۲"
+            }
+        ]);
+
+        Assert.Equal("050833533242", pairs[0].FicheNo);
+        Assert.Equal("0050833533242", pairs[0].BillId);
+    }
+
+    [Fact]
+    public void Identifier_search_converts_persian_and_arabic_digits()
+    {
+        Assert.Equal("050833533242", IdentifierText.Normalize("۰۵۰۸۳۳۵۳۳۲۴۲"));
+        Assert.Equal("050833533242", IdentifierText.Normalize("٠٥٠٨٣٣٥٣٣٢٤٢"));
+        Assert.Equal("101104/9881711", IdentifierText.Normalize("۱۰۱۱۰۴/۹۸۸۱۷۱۱"));
+
+        var filter = FicheDateChangeHelper.BuildIdentifierFilter("۰۵۰۸۳۳۵۳۳۲۴۲");
+        Assert.NotNull(filter);
+        Assert.Equal("050833533242", filter.Value.Value);
+        Assert.Equal("f.FicheNo = @idVal", filter.Value.Clause);
+    }
+
+    [Fact]
+    public void Negative_rayvarz_tahator_amount_is_replaced_by_partner()
+    {
+        Assert.True(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
+            true, -1027136660m, "050833533242", "050833533243"));
+        Assert.False(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
+            true, 1027136660m, "050833533243", "050833533242"));
+        Assert.False(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
+            false, -1027136660m, "050833533242", "050833533243"));
+        Assert.False(UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
+            true, -1m, "050833533242", "050833533242"));
+    }
+
+    [Fact]
     public void ValidateRequest_requires_valid_pairs_and_max()
     {
         Assert.Equal("درخواست خالی است", UnsentBillPayLookupHelper.ValidateRequest(null));

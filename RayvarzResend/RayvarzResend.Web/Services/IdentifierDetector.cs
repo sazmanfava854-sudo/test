@@ -12,7 +12,7 @@ public static class IdentifierDetector
 
     public static IdentifierType Detect(string? raw)
     {
-        var value = (raw ?? "").Trim();
+        var value = IdentifierText.Normalize(raw);
         if (value.Length == 0)
             return IdentifierType.FicheNo;
 

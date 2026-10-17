@@ -187,6 +187,17 @@ public static class NumericHelper
     }
 }
 
+/// <summary>شماره فیش و شناسه‌های عددی ورودی کاربر — رقم فارسی/عربی به انگلیسی، بقیهٔ نویسه‌ها دست‌نخورده.</summary>
+public static class IdentifierText
+{
+    public static string Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+        return NumericHelper.NormalizeDigits(value.Trim());
+    }
+}
+
 public static class FundResolver
 {
     public static int Resolve(IConfiguration config, int branch, string bankCode)

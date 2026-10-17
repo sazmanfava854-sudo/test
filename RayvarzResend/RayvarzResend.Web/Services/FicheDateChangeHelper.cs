@@ -83,7 +83,7 @@ public static class FicheDateChangeHelper
 
     public static (string Clause, string ParamName, string Value)? BuildIdentifierFilter(string? raw)
     {
-        var value = (raw ?? "").Trim();
+        var value = IdentifierText.Normalize(raw);
         if (value.Length == 0) return null;
 
         var type = IdentifierDetector.Detect(value);

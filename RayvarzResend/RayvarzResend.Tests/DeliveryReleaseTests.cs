@@ -222,7 +222,7 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=96", html);
+        Assert.Contains("js/app.js?v=97", html);
         Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
         Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);

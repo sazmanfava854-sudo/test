@@ -133,7 +133,53 @@ public class UnsentFicheService
             };
         }
 
+        await PreferUnsentTahatorPartnerWhenRayvarzAmountIsNegativeAsync(result, ct);
         return result;
+    }
+
+    /// <summary>
+    /// ردیف اکسلی که فیش مبلغ تهاتر (Val منفی در رایورز) را آورده، با فیش جفت ارسال‌نشده عوض می‌شود.
+    /// نمونه: ۰۵۰۸۳۳۵۳۳۲۴۲ با مبلغ منفی → گرید باید ۰۵۰۸۳۳۵۳۳۲۴۳ را نشان دهد.
+    /// </summary>
+    private async Task PreferUnsentTahatorPartnerWhenRayvarzAmountIsNegativeAsync(
+        UnsentBillPayLookupResult result,
+        CancellationToken ct)
+    {
+        var candidates = result.Items.Where(i => i.IsTahator).Select(i => i.FicheNo).ToList();
+        if (candidates.Count == 0)
+            return;
+
+        var negative = await _repo.FindFicheNosWithNegativeRayvarzAmountAsync(candidates, ct);
+        if (negative.Count == 0)
+            return;
+
+        for (var i = 0; i < result.Items.Count; i++)
+        {
+            var item = result.Items[i];
+            if (!negative.Contains(item.FicheNo))
+                continue;
+
+            var pair = await _repo.ResolveTahatorPairAsync(item.FicheNo, ct);
+            var partnerNo = OtherTahatorFicheNo(pair, item.FicheNo);
+            if (!UnsentBillPayLookupHelper.ShouldReplaceWithTahatorPartner(
+                    item.IsTahator, -1m, item.FicheNo, partnerNo))
+                continue;
+            if (negative.Contains(partnerNo!))
+                continue;
+
+            var partner = await _repo.LoadUnsentIncomeItemByFicheNoAsync(partnerNo!, ct);
+            if (partner == null)
+                continue;
+
+            partner.SourceKind = UnsentFicheKind.Income;
+            result.Items[i] = partner;
+        }
+
+        result.Items = result.Items
+            .GroupBy(i => i.FicheNo, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
+        result.Found = result.Items.Count;
     }
 
     private static List<UnsentBatchFicheTarget> ResolveBatchTargets(UnsentBatchSendRequest req)
@@ -144,7 +190,7 @@ public class UnsentFicheService
                 .Where(t => !string.IsNullOrWhiteSpace(t.FicheNo))
                 .Select(t => new UnsentBatchFicheTarget
                 {
-                    FicheNo = t.FicheNo.Trim(),
+                    FicheNo = IdentifierText.Normalize(t.FicheNo),
                     SourceKind = t.SourceKind
                 })
                 .ToList();
@@ -154,7 +200,7 @@ public class UnsentFicheService
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Select(n => new UnsentBatchFicheTarget
             {
-                FicheNo = n.Trim(),
+                FicheNo = IdentifierText.Normalize(n),
                 SourceKind = req.FicheKind
             })
             .ToList();

@@ -70,13 +70,13 @@ public static class BankInquiryConfirmHelper
         if (!string.IsNullOrWhiteSpace(req.FicheNo))
         {
             clauses.Add("f.FicheNo = @ficheNo");
-            parameters.Add(("@ficheNo", req.FicheNo.Trim()));
+            parameters.Add(("@ficheNo", IdentifierText.Normalize(req.FicheNo)));
         }
         else if (!string.IsNullOrWhiteSpace(req.BillId) && !string.IsNullOrWhiteSpace(req.PaymentId))
         {
             clauses.Add("f.BillID = @billId AND f.PaymentID = @paymentId");
-            parameters.Add(("@billId", req.BillId.Trim()));
-            parameters.Add(("@paymentId", req.PaymentId.Trim()));
+            parameters.Add(("@billId", IdentifierText.Normalize(req.BillId)));
+            parameters.Add(("@paymentId", IdentifierText.Normalize(req.PaymentId)));
         }
         else if (!string.IsNullOrWhiteSpace(req.IdentifierValue))
         {

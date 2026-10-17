@@ -158,7 +158,7 @@ public static class TahatorRowBuilder
     /// </summary>
     public static string NormalizeFicheNo(string? ficheNo)
     {
-        var f = (ficheNo ?? "").Trim();
+        var f = IdentifierText.Normalize(ficheNo);
         if (string.IsNullOrWhiteSpace(f))
             throw new ArgumentException("شماره فیش تهاتر الزامی است.");
         return f;
