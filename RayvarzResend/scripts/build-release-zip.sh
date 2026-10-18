@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-39.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-40.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -47,7 +47,7 @@ RayvarzResend v39 — نسخه آخر (Qty کل فیش + قابلیت‌های �
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 39
+     releaseVersion = 40
      accountingDoc.dryRun = false
      dryRun = false
 

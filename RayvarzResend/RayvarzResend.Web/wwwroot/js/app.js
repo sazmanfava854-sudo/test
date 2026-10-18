@@ -2175,9 +2175,22 @@ function updateIdentifierHint() {
   hint.textContent = `تشخیص سیستم: ${identifierTypeLabels[t]}`;
 }
 
-function isTahatorIncomeFiche(f) {
+function isTahatorFiche(f) {
   const g = f?.incomeAccountGroup;
   return g === 157 || g === 158;
+}
+
+function isTahatorAmountFiche(f) {
+  return f?.incomeAccountGroup === 157;
+}
+
+function isTahatorIncomeDetailFiche(f) {
+  return f?.incomeAccountGroup === 158;
+}
+
+/** هر دو فیش تهاتر (۱۵۷+۱۵۸) از API /api/tahator/send استفاده می‌کنند. */
+function isTahatorIncomeFiche(f) {
+  return isTahatorFiche(f);
 }
 
 let datePickersReady = false;
@@ -3263,7 +3276,7 @@ function renderFiche(f) {
     </div>
     <div class="stat-card">
       <span class="stat-label">نوع</span>
-      <span class="stat-value">${isTahatorIncomeFiche(f) ? 'تهاتر (درآمد)' : (categoryLabels[f.category] || f.category)}</span>
+      <span class="stat-value">${isTahatorAmountFiche(f) ? 'تهاتر (مبلغ — گروه ۱۵۷)' : isTahatorIncomeDetailFiche(f) ? 'تهاتر (درآمد — گروه ۱۵۸)' : (categoryLabels[f.category] || f.category)}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">مبلغ قابل پرداخت</span>
@@ -3280,6 +3293,15 @@ function renderFiche(f) {
   `;
 
   renderMappingTable(f);
+
+  const rowsTitle = $('incomeRowsTitle');
+  if (rowsTitle) {
+    rowsTitle.textContent = isTahatorAmountFiche(f)
+      ? 'ردیف تهاتر مبلغ (تک‌ردیف — بدون جزئیات Income_Calculation)'
+      : isTahatorIncomeDetailFiche(f)
+        ? 'ردیف‌های درآمد (جزئیات تهاتر)'
+        : 'ردیف‌های درآمد';
+  }
 
   const tbody = $('rowsTable').querySelector('tbody');
   tbody.innerHTML = '';
