@@ -268,8 +268,6 @@ WHERE {where}";
 
         if (isTahatorAmount)
             TahatorRowBuilder.ApplyTahatorAmountRows(dto);
-        else if (isTahatorIncome)
-            TahatorRowBuilder.ApplyTahatorIncomeRows(dto);
         else
         {
             dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);

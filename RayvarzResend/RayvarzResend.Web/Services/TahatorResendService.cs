@@ -435,7 +435,8 @@ public sealed class TahatorResendService
                  && (fiche.Rows.Count != 1
                      || fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther)))
             TahatorRowBuilder.ApplyTahatorAmountRows(fiche);
-        else if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche))
+        else if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
+                 && !TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche))
             TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
         else
             ApplyTahatorDocTyp(fiche);
