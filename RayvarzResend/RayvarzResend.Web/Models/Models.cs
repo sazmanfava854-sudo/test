@@ -84,6 +84,10 @@ public class FicheHeaderDto
     public string StatusMessage { get; set; } = "";
     /// <summary>هشدار بارگذاری (مثلاً خطای SQL در GetNosaziNickName) — ارسال ممکن است ادامه یابد.</summary>
     public string? Warning { get; set; }
+    /// <summary>CI_IncomeCalculation → IncomeCode (برای نگاشت IncmNo رایورز در تهاتر ۱۵۸).</summary>
+    public Dictionary<int, string> IncomeCodeByCalculation { get; set; } = new();
+    /// <summary>ردیف‌ها از Accounting_DocDetails خوانده شده‌اند — دوباره از Income_Calculation ساخته نشوند.</summary>
+    public bool TahatorRowsFromAccountingDoc { get; set; }
     /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
     public List<IncomeOddmentDto> Oddments { get; set; } = new();
     /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>

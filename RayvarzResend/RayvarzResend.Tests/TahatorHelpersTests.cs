@@ -217,8 +217,8 @@ public class TahatorHelpersTests
         Assert.Equal(5510918, fiche.Center);
         Assert.Equal(205, fiche.ResolvedDistrictBranch);
         Assert.Equal(35, fiche.SuggestedFund);
-        Assert.All(fiche.Rows, r => Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1));
-        Assert.Equal(100m, fiche.Rows.Sum(r => r.Val));
+        // DTL از Income_Calculation / Accounting_DocDetails — بدون ردیف مبدأ خالی می‌ماند.
+        Assert.Empty(fiche.Rows);
     }
 
     [Fact]

@@ -268,6 +268,29 @@ WHERE {where}";
 
         if (isTahatorAmount)
             TahatorRowBuilder.ApplyTahatorAmountRows(dto);
+        else if (isTahatorIncome)
+        {
+            var fromAccountingDoc = await AccountingDocDetailsRowLoader.TryLoadAsync(_saraCs, dto.FicheNo, ct);
+            if (fromAccountingDoc is { Count: > 0 })
+            {
+                dto.Rows = fromAccountingDoc;
+                dto.TahatorRowsFromAccountingDoc = true;
+            }
+            else
+            {
+                var allowedFor158 = await IncomeAccountGroupCalculationFilter.LoadAllowedCalculationIdsAsync(
+                    _saraCs, TahatorRowBuilder.IncomeAccountGroupTahatorIncome, ct);
+                dto.Rows = await LoadIncomeRowsAsync(
+                    dto.NidIncome!.Value,
+                    ct,
+                    mapRayvarzIncmNo: true,
+                    incomeCodeByCalculation: dto.IncomeCodeByCalculation,
+                    allowedCalculationIds: allowedFor158);
+            }
+
+            await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, LoadIncomeRowsAsync, ct);
+            IncomeMember1388RowBuilder.Apply(dto);
+        }
         else
         {
             dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
@@ -283,15 +306,25 @@ WHERE {where}";
         return dto;
     }
 
-    private async Task<List<IncmRowDto>> LoadIncomeRowsAsync(Guid nidIncome, CancellationToken ct)
+    private Task<List<IncmRowDto>> LoadIncomeRowsAsync(Guid nidIncome, CancellationToken ct) =>
+        LoadIncomeRowsAsync(nidIncome, ct, mapRayvarzIncmNo: false);
+
+    private async Task<List<IncmRowDto>> LoadIncomeRowsAsync(
+        Guid nidIncome,
+        CancellationToken ct,
+        bool mapRayvarzIncmNo,
+        Dictionary<int, string>? incomeCodeByCalculation = null,
+        HashSet<int>? allowedCalculationIds = null)
     {
-        const string sql = @"
-SELECT ic.CI_IncomeCalculation AS IncmNo,
-       COALESCE(ic.SysValue, ic.Value) AS Val,
-       ISNULL(c.Title, '') AS IncmRowDsc
-FROM dbo.Income_Calculation ic
-LEFT JOIN dbo.CI_IncomeCalculation c ON c.ID = ic.CI_IncomeCalculation
-WHERE ic.NidIncome = @nid";
+        const string sql = """
+            SELECT ic.CI_IncomeCalculation AS CalcId,
+                   COALESCE(ic.SysValue, ic.Value) AS Val,
+                   ISNULL(c.Title, '') AS IncmRowDsc,
+                   ISNULL(LTRIM(RTRIM(CAST(c.IncomeCode AS nvarchar(30)))), '') AS IncomeCode
+            FROM dbo.Income_Calculation ic
+            LEFT JOIN dbo.CI_IncomeCalculation c ON c.ID = ic.CI_IncomeCalculation
+            WHERE ic.NidIncome = @nid
+            """;
 
         var rows = new List<IncmRowDto>();
         await using var conn = new SqlConnection(_saraCs);
@@ -301,8 +334,22 @@ WHERE ic.NidIncome = @nid";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var incmNo = ReadInt32(reader, "IncmNo");
-            if (IncomeExcludedCodes.Codes.Contains(incmNo)) continue;
+            var calcId = ReadInt32(reader, "CalcId");
+            if (allowedCalculationIds is { Count: > 0 } && !allowedCalculationIds.Contains(calcId))
+                continue;
+
+            var incomeCode = reader.IsDBNull(reader.GetOrdinal("IncomeCode"))
+                ? ""
+                : reader.GetString(reader.GetOrdinal("IncomeCode"));
+            if (incomeCodeByCalculation != null)
+                incomeCodeByCalculation[calcId] = incomeCode;
+
+            var incmNo = mapRayvarzIncmNo
+                ? IncomeRayvarzIncmNoResolver.Resolve(calcId, incomeCode)
+                : calcId;
+            if (incmNo <= 0 || IncomeExcludedCodes.Codes.Contains(calcId))
+                continue;
+
             var val = ReadDecimal(reader, "Val");
             if (val == 0) continue;
             rows.Add(new IncmRowDto

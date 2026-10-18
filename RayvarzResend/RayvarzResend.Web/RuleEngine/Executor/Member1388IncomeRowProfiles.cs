@@ -46,13 +46,6 @@ public static class Member1388IncomeRowProfiles
         ApplyBedeHi = false
     };
 
-    private static readonly Member1388IncomeRowOptions TahatorIncomeOptions = new()
-    {
-        ApplyOddments = true,
-        ApplyBedeHi = false,
-        RowNumFromDepositId = true
-    };
-
     public static void ApplyIncome(FicheHeaderDto fiche) =>
         Member1388IncomeRowBuilderCore.ApplyStandard(fiche, IncomeOptions);
 
@@ -104,7 +97,11 @@ public static class Member1388IncomeRowProfiles
             return;
         }
 
-        Member1388IncomeRowBuilderCore.ApplyStandard(fiche, TahatorIncomeOptions);
+        if (fiche.TahatorRowsFromAccountingDoc)
+            IncomeMember1388RowBuilder.ReconcileSoapRows(fiche.Rows, fiche.Payable);
+        else
+            TahatorIncomeCalculationBuilder.Apply(fiche);
+
         TahatorRowBuilder.ApplyTahatorIncomeRowSoapMetadata(fiche);
     }
 
