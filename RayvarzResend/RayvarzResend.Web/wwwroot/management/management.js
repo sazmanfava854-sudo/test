@@ -32,6 +32,14 @@ const MODULES = [
     can: (user) => isAdminUser(user) || !!user?.canAccessBankInquiryConfirm
   },
   {
+    key: 'costCenter',
+    title: 'مرکز هزینه',
+    description: '',
+    icon: '🏛️',
+    href: '/?tab=costCenter',
+    can: (user) => isAdminUser(user) || !!user?.canAccessCostCenter
+  },
+  {
     key: 'shahkar',
     title: 'شاهکار',
     description: '',
@@ -66,6 +74,7 @@ function normalizeAuthSession(user) {
     user.canAccessInstallment = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
+    user.canAccessCostCenter = true;
     user.canAccessShahkar = true;
     user.canManageUsers = true;
   }
@@ -83,6 +92,7 @@ function hasAnyModulePermission(user) {
     || user?.canAccessInstallment
     || user?.canAccessFicheDateChange
     || user?.canAccessBankInquiryConfirm
+    || user?.canAccessCostCenter
     || user?.canAccessShahkar
     || user?.canManageUsers
   );

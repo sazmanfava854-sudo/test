@@ -742,6 +742,71 @@ public class BankInquiryConfirmResult
     public List<BankInquiryConfirmItemResult> Results { get; set; } = new();
 }
 
+/// <summary>تب مرکز هزینه — جستجو.</summary>
+public class CostCenterSearchRequest
+{
+    public string? FicheNo { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 25;
+}
+
+public class CostCenterListItem
+{
+    public string FicheNo { get; set; } = "";
+    public long? Deposit { get; set; }
+    public long? CreditorPapers { get; set; }
+    public string BillId { get; set; } = "";
+    public string PaymentId { get; set; } = "";
+    public string NosaziCode { get; set; } = "";
+}
+
+public class CostCenterSearchResult
+{
+    public int Count { get; set; }
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+    public string? Error { get; set; }
+    public List<CostCenterListItem> Items { get; set; } = new();
+}
+
+public class CostCenterUpdateRequest
+{
+    public List<string>? FicheNos { get; set; }
+    /// <summary>Income_Fiche.Deposit — مرکز یک.</summary>
+    public string? CenterOne { get; set; }
+    /// <summary>Income_Fiche.CreditorPapers — مرکز دو.</summary>
+    public string? CenterTwo { get; set; }
+    public string PerformedByUser { get; set; } = "";
+}
+
+public class CostCenterUpdateItemResult
+{
+    public string FicheNo { get; set; } = "";
+    public bool Success { get; set; }
+    public bool Found { get; set; }
+    public int RowsAffected { get; set; }
+    public int WouldUpdate { get; set; }
+    public string? Message { get; set; }
+}
+
+public class CostCenterUpdateResult
+{
+    public bool DryRun { get; set; }
+    public bool Success { get; set; }
+    public long Deposit { get; set; }
+    public long CreditorPapers { get; set; }
+    public int Total { get; set; }
+    public int Updated { get; set; }
+    public int WouldUpdate { get; set; }
+    public int NotFound { get; set; }
+    public int Failed { get; set; }
+    public string? Error { get; set; }
+    public string? Message { get; set; }
+    public List<CostCenterUpdateItemResult> Results { get; set; } = new();
+}
+
 public class TahatorSendResult
 {
     public bool Success { get; set; }

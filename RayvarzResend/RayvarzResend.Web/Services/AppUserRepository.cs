@@ -13,6 +13,7 @@ public sealed class AppUserRepository
     private bool _groupTablesReady;
     /// <summary>اگر کاربر SQL مجوز ALTER نداشته باشد ستون جدید اضافه نمی‌شود — کوئری‌های گروه بدون آن ساخته می‌شوند.</summary>
     private bool _hasShahkarColumn;
+    private bool _hasCostCenterColumn;
 
     public AppUserRepository(IConfiguration config, InMemoryAppUserStore memory, ILogger<AppUserRepository> logger)
     {
@@ -84,6 +85,7 @@ public sealed class AppUserRepository
                     CanAccessFicheDateChange BIT             NOT NULL CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0),
                     CanAccessBankInquiryConfirm BIT          NOT NULL CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0),
                     CanAccessShahkar          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0),
+                    CanAccessCostCenter       BIT              NOT NULL CONSTRAINT DF_AppUserGroup_CostCenter DEFAULT (0),
                     CanManageUsers          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Users DEFAULT (0),
                     CreatedAtUtc            DATETIME2(3)     NOT NULL CONSTRAINT DF_AppUserGroup_Created DEFAULT (SYSUTCDATETIME())
                 );
@@ -123,6 +125,20 @@ public sealed class AppUserRepository
                AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessShahkar') IS NULL
                 EXEC(N'ALTER TABLE dbo.AppUserGroup ADD CanAccessShahkar BIT NOT NULL
                     CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0)');
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUserGroup.CanAccessCostCenter", """
+            IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessCostCenter') IS NULL
+                EXEC(N'ALTER TABLE dbo.AppUserGroup ADD CanAccessCostCenter BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_CostCenter DEFAULT (0)');
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUser.DirectCanAccessCostCenter", """
+            IF OBJECT_ID(N'dbo.AppUser', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUser', N'DirectCanAccessCostCenter') IS NULL
+                ALTER TABLE dbo.AppUser ADD DirectCanAccessCostCenter BIT NOT NULL
+                    CONSTRAINT DF_AppUser_DirectCostCenter DEFAULT (0);
             """, ct);
 
         await TryRunSchemaUpgradeAsync(conn, "AppUser.Domain", """
@@ -170,11 +186,19 @@ public sealed class AppUserRepository
         _groupTablesReady = await TableExistsAsync(conn, "dbo.AppUserGroup", ct);
         _hasShahkarColumn = _groupTablesReady
             && await ColumnExistsAsync(conn, "dbo.AppUserGroup", "CanAccessShahkar", ct);
+        _hasCostCenterColumn = _groupTablesReady
+            && await ColumnExistsAsync(conn, "dbo.AppUserGroup", "CanAccessCostCenter", ct);
         if (_groupTablesReady && !_hasShahkarColumn)
         {
             _logger.LogWarning(
                 "ستون CanAccessShahkar در dbo.AppUserGroup نیست و افزوده نشد (احتمالاً کاربر SQL مجوز ALTER ندارد). " +
                 "برنامه بدون دسترسی گروهی «شاهکار» کار می‌کند؛ اسکریپت database/09_AppUserGroup_Shahkar.sql را با کاربر dbo اجرا کنید.");
+        }
+        if (_groupTablesReady && !_hasCostCenterColumn)
+        {
+            _logger.LogWarning(
+                "ستون CanAccessCostCenter در dbo.AppUserGroup نیست و افزوده نشد. " +
+                "اسکریپت database/13_AppUserGroup_CostCenter.sql را با کاربر dbo اجرا کنید.");
         }
 
         if (!_groupTablesReady)
@@ -186,9 +210,10 @@ public sealed class AppUserRepository
 
         _schemaEnsured = true;
         _logger.LogInformation(
-            "AppUser schema ensured (groupTables={GroupTables}, shahkarColumn={HasShahkar})",
+            "AppUser schema ensured (groupTables={GroupTables}, shahkarColumn={HasShahkar}, costCenterColumn={HasCostCenter})",
             _groupTablesReady,
-            _hasShahkarColumn);
+            _hasShahkarColumn,
+            _hasCostCenterColumn);
     }
 
     /// <summary>ارتقای schema نباید ورود کاربران را قطع کند — نبود مجوز ALTER فقط هشدار می‌دهد.</summary>
@@ -300,7 +325,7 @@ public sealed class AppUserRepository
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc,
                    DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
-                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE Username = @u OR NationalId = @u
             ORDER BY CASE WHEN Username = @u THEN 0 ELSE 1 END, IsActive DESC, CreatedAtUtc
@@ -328,7 +353,7 @@ public sealed class AppUserRepository
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc,
                    DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
-                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE (@d <> N'' AND [Domain] = @d)
                OR (@d <> N'' AND CHARINDEX(N',' + @d + N',', N',' + REPLACE([Domain], N' ', N'') + N',') > 0)
@@ -362,7 +387,7 @@ public sealed class AppUserRepository
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc,
                    DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
-                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE Id = @id
             """;
@@ -383,7 +408,7 @@ public sealed class AppUserRepository
         const string sql = """
             SELECT Id, Username, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc,
                    DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
-                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers
+                   DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             ORDER BY CreatedAtUtc DESC, Username
             """;
@@ -421,8 +446,9 @@ public sealed class AppUserRepository
             return [];
 
         var shahkarColumn = _hasShahkarColumn ? "CanAccessShahkar" : "CAST(0 AS bit) AS CanAccessShahkar";
+        var costCenterColumn = _hasCostCenterColumn ? "CanAccessCostCenter" : "CAST(0 AS bit) AS CanAccessCostCenter";
         var sql = $"""
-            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, {shahkarColumn}, CanManageUsers, CreatedAtUtc
+            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, {shahkarColumn}, {costCenterColumn}, CanManageUsers, CreatedAtUtc
             FROM dbo.AppUserGroup
             ORDER BY Name
             """;
@@ -454,10 +480,12 @@ public sealed class AppUserRepository
         var group = NewGroupRecord(req);
         var shahkarColumn = _hasShahkarColumn ? ", CanAccessShahkar" : "";
         var shahkarValue = _hasShahkarColumn ? ", @shahkar" : "";
+        var costCenterColumn = _hasCostCenterColumn ? ", CanAccessCostCenter" : "";
+        var costCenterValue = _hasCostCenterColumn ? ", @costCenter" : "";
         var sql = $"""
             INSERT INTO dbo.AppUserGroup
-                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm{shahkarColumn}, CanManageUsers, CreatedAtUtc)
-            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry{shahkarValue}, @users, @created)
+                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm{shahkarColumn}{costCenterColumn}, CanManageUsers, CreatedAtUtc)
+            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry{shahkarValue}{costCenterValue}, @users, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -472,6 +500,10 @@ public sealed class AppUserRepository
             cmd.Parameters.AddWithValue("@shahkar", group.CanAccessShahkar);
         else
             group.CanAccessShahkar = false;
+        if (_hasCostCenterColumn)
+            cmd.Parameters.AddWithValue("@costCenter", group.CanAccessCostCenter);
+        else
+            group.CanAccessCostCenter = false;
         cmd.Parameters.AddWithValue("@users", group.CanManageUsers);
         cmd.Parameters.AddWithValue("@created", group.CreatedAtUtc);
         try
@@ -494,6 +526,7 @@ public sealed class AppUserRepository
 
         await EnsureSchemaAsync(ct);
         var shahkarAssignment = _hasShahkarColumn ? "CanAccessShahkar = @shahkar," : "";
+        var costCenterAssignment = _hasCostCenterColumn ? "CanAccessCostCenter = @costCenter," : "";
         var sql = $"""
             UPDATE dbo.AppUserGroup
             SET Name = @name,
@@ -502,6 +535,7 @@ public sealed class AppUserRepository
                 CanAccessFicheDateChange = @ficheDate,
                 CanAccessBankInquiryConfirm = @bankInquiry,
                 {shahkarAssignment}
+                {costCenterAssignment}
                 CanManageUsers = @users
             WHERE Id = @id
             """;
@@ -516,6 +550,8 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@bankInquiry", req.CanAccessBankInquiryConfirm);
         if (_hasShahkarColumn)
             cmd.Parameters.AddWithValue("@shahkar", req.CanAccessShahkar);
+        if (_hasCostCenterColumn)
+            cmd.Parameters.AddWithValue("@costCenter", req.CanAccessCostCenter);
         cmd.Parameters.AddWithValue("@users", req.CanManageUsers);
         var affected = await cmd.ExecuteNonQueryAsync(ct);
         if (affected == 0)
@@ -614,6 +650,7 @@ public sealed class AppUserRepository
                 DirectCanAccessFicheDateChange = @dFicheDate,
                 DirectCanAccessBankInquiryConfirm = @dBank,
                 DirectCanAccessShahkar = @dShahkar,
+                DirectCanAccessCostCenter = @dCostCenter,
                 DirectCanManageUsers = @dUsers
             WHERE Id = @id
             """;
@@ -724,6 +761,7 @@ public sealed class AppUserRepository
         CanAccessFicheDateChange = req.CanAccessFicheDateChange,
         CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
         CanAccessShahkar = req.CanAccessShahkar,
+        CanAccessCostCenter = req.CanAccessCostCenter,
         CanManageUsers = req.CanManageUsers,
         CreatedAtUtc = DateTime.UtcNow
     };
@@ -737,6 +775,7 @@ public sealed class AppUserRepository
         CanAccessFicheDateChange = group.CanAccessFicheDateChange,
         CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
         CanAccessShahkar = group.CanAccessShahkar,
+        CanAccessCostCenter = group.CanAccessCostCenter,
         CanManageUsers = group.CanManageUsers,
         CreatedAtUtc = group.CreatedAtUtc.ToString("O")
     };
@@ -750,6 +789,7 @@ public sealed class AppUserRepository
         CanAccessFicheDateChange = ReadOptionalBoolean(reader, "CanAccessFicheDateChange"),
         CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "CanAccessBankInquiryConfirm"),
         CanAccessShahkar = ReadOptionalBoolean(reader, "CanAccessShahkar"),
+        CanAccessCostCenter = ReadOptionalBoolean(reader, "CanAccessCostCenter"),
         CanManageUsers = reader.GetBoolean(reader.GetOrdinal("CanManageUsers")),
         CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")).ToString("O")
     };
@@ -786,10 +826,10 @@ public sealed class AppUserRepository
             INSERT INTO dbo.AppUser
                 (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc,
                  DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
-                 DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanManageUsers)
+                 DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers)
             VALUES
                 (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @domain, @admin, 1, @created,
-                 @dUnsent, @dInstallment, @dFicheDate, @dBank, @dShahkar, @dUsers)
+                 @dUnsent, @dInstallment, @dFicheDate, @dBank, @dShahkar, @dCostCenter, @dUsers)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -910,6 +950,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@dFicheDate", direct.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@dBank", direct.CanAccessBankInquiryConfirm);
         cmd.Parameters.AddWithValue("@dShahkar", direct.CanAccessShahkar);
+        cmd.Parameters.AddWithValue("@dCostCenter", direct.CanAccessCostCenter);
         cmd.Parameters.AddWithValue("@dUsers", direct.CanManageUsers);
     }
 
@@ -924,6 +965,7 @@ public sealed class AppUserRepository
                 CanAccessFicheDateChange = ReadOptionalBoolean(reader, "DirectCanAccessFicheDateChange"),
                 CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "DirectCanAccessBankInquiryConfirm"),
                 CanAccessShahkar = ReadOptionalBoolean(reader, "DirectCanAccessShahkar"),
+                CanAccessCostCenter = ReadOptionalBoolean(reader, "DirectCanAccessCostCenter"),
                 CanManageUsers = ReadOptionalBoolean(reader, "DirectCanManageUsers")
             };
         }

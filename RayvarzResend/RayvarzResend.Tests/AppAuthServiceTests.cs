@@ -37,6 +37,7 @@ public class AppAuthServiceTests
         var session = await auth.ToSessionAsync(user);
         Assert.True(session.IsAdmin);
         Assert.True(session.CanAccessShahkar);
+        Assert.True(session.CanAccessCostCenter);
         Assert.True(session.CanManageUsers);
     }
 }

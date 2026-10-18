@@ -11,6 +11,7 @@ internal sealed class AppUserGroupRecord
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

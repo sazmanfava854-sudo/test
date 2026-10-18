@@ -288,6 +288,7 @@ function setupMainTabs() {
     installment: $('tabInstallment'),
     ficheDate: $('tabFicheDate'),
     bankInquiry: $('tabBankInquiry'),
+    costCenter: $('tabCostCenter'),
     shahkar: $('tabShahkar'),
     users: $('tabUsers')
   };
@@ -306,6 +307,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
   installment: $('tabInstallment'),
   ficheDate: $('tabFicheDate'),
   bankInquiry: $('tabBankInquiry'),
+  costCenter: $('tabCostCenter'),
   shahkar: $('tabShahkar'),
   users: $('tabUsers')
 }) {
@@ -1694,6 +1696,208 @@ async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}
   }
 }
 
+let costCenterItems = [];
+const selectedCostCenterNos = new Set();
+const costCenterSelectedItems = new Map();
+const costCenterSearchState = {
+  page: 1,
+  pageSize: 25,
+  totalCount: 0,
+  totalPages: 0
+};
+
+function getCostCenterSearchPayload(page = costCenterSearchState.page) {
+  const pageSize = parseInt($('costCenterPageSize')?.value || costCenterSearchState.pageSize, 10) || 25;
+  costCenterSearchState.pageSize = pageSize;
+  return {
+    ficheNo: normalizeSearchId($('costCenterFicheNo')?.value),
+    page,
+    pageSize
+  };
+}
+
+function validateCostCenterSearchPayload(payload) {
+  if (!payload.ficheNo) return 'شماره فیش را وارد کنید';
+  return null;
+}
+
+function updateCostCenterPaginationUi() {
+  const bar = $('costCenterPagination');
+  const label = $('costCenterPageLabel');
+  const prevBtn = $('btnCostCenterPrevPage');
+  const nextBtn = $('btnCostCenterNextPage');
+  if (!bar || !label || !prevBtn || !nextBtn) return;
+
+  const { page, totalPages, totalCount } = costCenterSearchState;
+  const show = totalCount > 0;
+  bar.hidden = !show;
+  if (!show) return;
+
+  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${Math.max(totalPages, 1).toLocaleString('fa-IR')}`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
+}
+
+function syncCostCenterUpdateButton() {
+  const btn = $('btnCostCenterUpdate');
+  if (!btn) return;
+  const centerOne = ($('costCenterOne')?.value || '').trim();
+  const centerTwo = ($('costCenterTwo')?.value || '').trim();
+  const hasCenters = !!centerOne && !!centerTwo;
+  btn.disabled = selectedCostCenterNos.size === 0 || !hasCenters;
+  const applySection = $('costCenterApplySection');
+  if (applySection) applySection.hidden = selectedCostCenterNos.size === 0;
+}
+
+function updateCostCenterCountLabel() {
+  const countLabel = $('costCenterCountLabel');
+  if (!countLabel) return;
+  const selectedTotal = selectedCostCenterNos.size;
+  const pageInfo = `${costCenterItems.length.toLocaleString('fa-IR')} مورد در این صفحه — ${costCenterSearchState.totalCount.toLocaleString('fa-IR')} مورد کل`;
+  countLabel.textContent = selectedTotal > 0
+    ? `${pageInfo} — ${selectedTotal.toLocaleString('fa-IR')} انتخاب‌شده`
+    : pageInfo;
+}
+
+function formatCostCenterValue(value) {
+  if (value == null || value === '') return '-';
+  return toPersianDigits(String(value));
+}
+
+function renderCostCenterTable(items, meta = {}) {
+  costCenterItems = items || [];
+  if (meta.page != null) costCenterSearchState.page = meta.page;
+  if (meta.pageSize != null) costCenterSearchState.pageSize = meta.pageSize;
+  if (meta.totalCount != null) costCenterSearchState.totalCount = meta.totalCount;
+  if (meta.totalPages != null) costCenterSearchState.totalPages = meta.totalPages;
+
+  const section = $('costCenterResultsSection');
+  const tbody = $('costCenterTable')?.querySelector('tbody');
+  const selectAll = $('costCenterSelectAll');
+  if (!section || !tbody) return;
+
+  section.hidden = false;
+
+  if (costCenterItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">موردی یافت نشد</td></tr>';
+    updateCostCenterCountLabel();
+    updateCostCenterPaginationUi();
+    syncCostCenterUpdateButton();
+    return;
+  }
+
+  tbody.innerHTML = costCenterItems.map((item) => {
+    const checked = selectedCostCenterNos.has(item.ficheNo) ? ' checked' : '';
+    return `<tr>
+      <td class="col-check"><input type="checkbox" class="cost-center-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
+      <td>${toPersianDigits(item.ficheNo || '-')}</td>
+      <td>${formatCostCenterValue(item.deposit)}</td>
+      <td>${formatCostCenterValue(item.creditorPapers)}</td>
+      <td>${formatNosaziCode(item.nosaziCode)}</td>
+      <td>${toPersianDigits(item.billId || '-')}</td>
+      <td>${toPersianDigits(item.paymentId || '-')}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.cost-center-row-check').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const ficheNo = cb.dataset.ficheNo;
+      const item = costCenterItems.find((row) => row.ficheNo === ficheNo);
+      setGridRowSelected(selectedCostCenterNos, costCenterSelectedItems, item || { ficheNo }, cb.checked);
+      syncCostCenterUpdateButton();
+      if (selectAll) {
+        const all = tbody.querySelectorAll('.cost-center-row-check');
+        selectAll.checked = all.length > 0 && Array.from(all).every((x) => x.checked);
+      }
+      updateCostCenterCountLabel();
+    });
+  });
+
+  updateCostCenterCountLabel();
+  if (selectAll) {
+    const selectedOnPage = costCenterItems.filter((item) => selectedCostCenterNos.has(item.ficheNo)).length;
+    selectAll.checked = costCenterItems.length > 0 && selectedOnPage === costCenterItems.length;
+  }
+  updateCostCenterPaginationUi();
+  syncCostCenterUpdateButton();
+}
+
+async function fetchCostCenterResults(page = 1, { clearSelection = false } = {}) {
+  const payload = getCostCenterSearchPayload(page);
+  const validationError = validateCostCenterSearchPayload(payload);
+  if (validationError) return showAppWarning(validationError);
+
+  if (clearSelection) clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
+  costCenterSearchState.page = page;
+
+  const btn = $('btnCostCenterSearch');
+  const prevBtn = $('btnCostCenterPrevPage');
+  const nextBtn = $('btnCostCenterNextPage');
+  const box = $('costCenterResultBox');
+  if (btn) btn.disabled = true;
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+
+  try {
+    const res = await apiFetch('/api/cost-center/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    renderCostCenterTable(data.items || [], {
+      page: data.page,
+      pageSize: data.pageSize,
+      totalCount: data.totalCount,
+      totalPages: data.totalPages
+    });
+    if (box) box.hidden = true;
+  } catch (e) {
+    renderCostCenterTable([], { page: 1, pageSize: payload.pageSize, totalCount: 0, totalPages: 0 });
+    if (box) {
+      box.hidden = false;
+      box.textContent = e.message;
+    }
+    showAppError(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    updateCostCenterPaginationUi();
+  }
+}
+
+function getCostCenterUpdatePayload() {
+  return {
+    ficheNos: Array.from(selectedCostCenterNos),
+    centerOne: ($('costCenterOne')?.value || '').trim(),
+    centerTwo: ($('costCenterTwo')?.value || '').trim()
+  };
+}
+
+function validateCostCenterUpdatePayload(payload) {
+  if (!payload.ficheNos.length) return 'حداقل یک فیش از نتایج انتخاب کنید';
+  if (!payload.centerOne) return 'مرکز یک را وارد کنید';
+  if (!payload.centerTwo) return 'مرکز دو را وارد کنید';
+  if (!/^\d+$/.test(normalizeSearchId(payload.centerOne))) return 'مرکز یک باید عدد باشد';
+  if (!/^\d+$/.test(normalizeSearchId(payload.centerTwo))) return 'مرکز دو باید عدد باشد';
+  return null;
+}
+
+function formatCostCenterUpdateResult(data) {
+  const lines = (data.results || []).map((r) => `${r.ficheNo}: ${r.success ? 'OK' : 'FAIL'} — ${r.message || ''}`);
+  return [
+    '=== نتیجه UPDATE Income_Fiche (مرکز هزینه) ===',
+    `DryRun: ${data.dryRun}`,
+    `Deposit (مرکز یک): ${data.deposit ?? '-'}`,
+    `CreditorPapers (مرکز دو): ${data.creditorPapers ?? '-'}`,
+    data.dryRun
+      ? `شبیه‌سازی — ${data.wouldUpdate || 0} فیش UPDATE می‌شد | بدون نتیجه: ${data.notFound}`
+      : `به‌روز: ${data.updated || 0} | بدون نتیجه: ${data.notFound} | خطا: ${data.failed}`,
+    '',
+    ...lines
+  ].join('\n');
+}
+
 function getBankInquiryConfirmPayload() {
   return {
     ficheNos: Array.from(selectedBankInquiryNos),
@@ -2172,6 +2376,7 @@ function normalizeAuthSession(user) {
     user.canAccessInstallment = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
+    user.canAccessCostCenter = true;
     user.canAccessShahkar = true;
     user.canManageUsers = true;
   }
@@ -2193,6 +2398,7 @@ function hasAnyModulePermission() {
     || currentUser?.canAccessInstallment
     || currentUser?.canAccessFicheDateChange
     || currentUser?.canAccessBankInquiryConfirm
+    || currentUser?.canAccessCostCenter
     || currentUser?.canAccessShahkar
     || currentUser?.canManageUsers
   );
@@ -2210,6 +2416,7 @@ const MAIN_TAB_ACCESS_ORDER = [
   { key: 'installment', can: () => canAccessInstallment() },
   { key: 'ficheDate', can: () => canAccessFicheDateChange() },
   { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
+  { key: 'costCenter', can: () => canAccessCostCenter() },
   { key: 'shahkar', can: () => canAccessShahkar() },
   { key: 'users', can: () => canManageUsers() }
 ];
@@ -2224,6 +2431,10 @@ function canAccessFicheDateChange() {
 
 function canAccessBankInquiryConfirm() {
   return isAdminUser() || !!currentUser?.canAccessBankInquiryConfirm;
+}
+
+function canAccessCostCenter() {
+  return isAdminUser() || !!currentUser?.canAccessCostCenter;
 }
 
 function canAccessShahkar() {
@@ -2253,6 +2464,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-bank-inquiry').forEach((el) => {
     el.hidden = !canAccessBankInquiryConfirm();
+  });
+  document.querySelectorAll('.perm-cost-center').forEach((el) => {
+    el.hidden = !canAccessCostCenter();
   });
   document.querySelectorAll('.perm-shahkar').forEach((el) => {
     el.hidden = !canAccessShahkar();
@@ -2441,6 +2655,7 @@ function renderGroupsTableBody() {
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessShahkar ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessCostCenter ? 'بله' : 'خیر'}</td>
       <td class="group-actions-cell">
         <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${g.id}">ذخیره</button>` : ''}
       </td>
@@ -2459,6 +2674,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
+  if ($('newGroupCostCenter')) $('newGroupCostCenter').checked = group.canAccessCostCenter;
   if ($('newGroupUsers')) $('newGroupUsers').checked = group.canManageUsers;
   updateUserGroupPermsTriggerLabel();
   syncGroupFormActions();
@@ -2474,6 +2690,7 @@ function resetGroupForm() {
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
+  if ($('newGroupCostCenter')) $('newGroupCostCenter').checked = false;
   if ($('newGroupUsers')) $('newGroupUsers').checked = false;
   updateUserGroupPermsTriggerLabel();
   syncGroupFormActions();
@@ -2488,6 +2705,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
     canAccessShahkar: !!$('newGroupShahkar')?.checked,
+    canAccessCostCenter: !!$('newGroupCostCenter')?.checked,
     canManageUsers: !!$('newGroupUsers')?.checked
   };
   if (!payload.name) return alert('نام گروه الزامی است');
@@ -2586,6 +2804,7 @@ function readDirectPermissionsFromForm(prefix) {
     canAccessFicheDateChange: !!$(`${prefix}FicheDate`)?.checked,
     canAccessBankInquiryConfirm: !!$(`${prefix}BankInquiry`)?.checked,
     canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
+    canAccessCostCenter: !!$(`${prefix}CostCenter`)?.checked,
     canManageUsers: !!$(`${prefix}Users`)?.checked
   };
 }
@@ -2597,6 +2816,7 @@ function allDirectPermissionsGranted() {
     canAccessFicheDateChange: true,
     canAccessBankInquiryConfirm: true,
     canAccessShahkar: true,
+    canAccessCostCenter: true,
     canManageUsers: true
   };
 }
@@ -2618,6 +2838,7 @@ function setDirectPermissionsOnForm(prefix, perms) {
   if ($(`${prefix}FicheDate`)) $(`${prefix}FicheDate`).checked = !!p.canAccessFicheDateChange;
   if ($(`${prefix}BankInquiry`)) $(`${prefix}BankInquiry`).checked = !!p.canAccessBankInquiryConfirm;
   if ($(`${prefix}Shahkar`)) $(`${prefix}Shahkar`).checked = !!p.canAccessShahkar;
+  if ($(`${prefix}CostCenter`)) $(`${prefix}CostCenter`).checked = !!p.canAccessCostCenter;
   if ($(`${prefix}Users`)) $(`${prefix}Users`).checked = !!p.canManageUsers;
   const menu = $(`${prefix}PermsMenu`);
   const labelEl = $(`${prefix}PermsTriggerLabel`);
@@ -3492,6 +3713,87 @@ function setupEventHandlers() {
 
   bindClick('btnBankInquirySearch', async () => {
     await fetchBankInquiryResults(1, { clearSelection: true });
+  });
+
+  bindClick('btnCostCenterSearch', async () => {
+    await fetchCostCenterResults(1, { clearSelection: true });
+  });
+
+  bindClick('btnCostCenterPrevPage', async () => {
+    if (costCenterSearchState.page <= 1) return;
+    await fetchCostCenterResults(costCenterSearchState.page - 1);
+  });
+
+  bindClick('btnCostCenterNextPage', async () => {
+    if (costCenterSearchState.page >= costCenterSearchState.totalPages) return;
+    await fetchCostCenterResults(costCenterSearchState.page + 1);
+  });
+
+  $('costCenterPageSize')?.addEventListener('change', async () => {
+    await fetchCostCenterResults(1);
+  });
+
+  $('costCenterSelectAll')?.addEventListener('change', (e) => {
+    const tbody = $('costCenterTable')?.querySelector('tbody');
+    const selectAll = e.target;
+    if (!tbody || !selectAll) return;
+    costCenterItems.forEach((item) => {
+      setGridRowSelected(selectedCostCenterNos, costCenterSelectedItems, item, selectAll.checked);
+    });
+    tbody.querySelectorAll('.cost-center-row-check').forEach((cb) => {
+      cb.checked = selectAll.checked;
+    });
+    updateCostCenterCountLabel();
+    syncCostCenterUpdateButton();
+  });
+
+  ['costCenterOne', 'costCenterTwo'].forEach((id) => {
+    $(id)?.addEventListener('input', syncCostCenterUpdateButton);
+  });
+
+  bindClick('btnCostCenterUpdate', async () => {
+    const payload = getCostCenterUpdatePayload();
+    const validationError = validateCostCenterUpdatePayload(payload);
+    if (validationError) return showAppWarning(validationError);
+
+    const dry = config?.costCenter?.dryRun ?? config?.dryRun ?? false;
+    const warn = dry
+      ? `DryRun فعال — به‌روزرسانی مرکز هزینه برای ${payload.ficheNos.length} فیش فقط شبیه‌سازی می‌شود. ادامه؟`
+      : `مرکز یک=${payload.centerOne} و مرکز دو=${payload.centerTwo} برای ${payload.ficheNos.length} فیش ثبت شود؟`;
+    if (!confirm(warn)) return;
+
+    const btn = $('btnCostCenterUpdate');
+    const box = $('costCenterResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال به‌روزرسانی…';
+    }
+    try {
+      const res = await apiFetch('/api/cost-center/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) box.textContent = formatCostCenterUpdateResult(data);
+      if (data.dryRun) {
+        showAppInfo('مرکز هزینه — DryRun؛ تغییری در دیتابیس اعمال نشد.');
+      } else if (data.success && (data.updated || 0) > 0) {
+        showAppSuccess(data.message || `${data.updated} فیش به‌روز شد`);
+        clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
+        await fetchCostCenterResults(costCenterSearchState.page);
+      } else {
+        showAppError(data.message || 'به‌روزرسانی ناموفق بود');
+      }
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+      syncCostCenterUpdateButton();
+    }
   });
 
   bindClick('btnBankInquiryPrevPage', async () => {

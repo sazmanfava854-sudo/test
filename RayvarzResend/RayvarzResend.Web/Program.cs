@@ -109,6 +109,7 @@ builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
 builder.Services.AddSingleton<BankInquiryConfirmService>();
+builder.Services.AddSingleton<CostCenterService>();
 builder.Services.AddSingleton<ShahkarService>();
 builder.Services.AddSingleton<RuleEngineStateRepository>();
 builder.Services.AddSingleton<IRuleSendGateStore>(sp => sp.GetRequiredService<RuleEngineStateRepository>());
@@ -725,7 +726,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         isAdmin = AppAuthService.IsAdmin(http.User),
         shimas = shimas.GetStatus()
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true, shahkar = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true, costCenter = true, shahkar = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
@@ -755,6 +756,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         table = "dbo.Income_Fiche",
         defaultStatus = 1,
         statusLabels = FicheDateChangeHelper.FicheStatusLabels
+    },
+    costCenter = new
+    {
+        dryRun = config.GetValue<bool?>("CostCenter:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Income_Fiche",
+        depositColumn = "Deposit",
+        creditorPapersColumn = "CreditorPapers"
     },
     bankInquiryConfirm = new
     {
@@ -1367,6 +1377,63 @@ app.MapPost("/api/fiche-date/update", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/cost-center/search", async (
+    CostCenterSearchRequest? req,
+    CostCenterService costCenter,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessCostCenter(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await costCenter.SearchAsync(req, http.User, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/cost-center/update", async (
+    CostCenterUpdateRequest? req,
+    CostCenterService costCenter,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessCostCenter(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
+    try
+    {
+        var result = await costCenter.UpdateAsync(req, http.User, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error, result });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
 app.MapPost("/api/shahkar/search", async (
     ShahkarSearchRequest? req,
     ShahkarService shahkar,
@@ -1526,6 +1593,14 @@ static async Task<IResult?> DenyUnlessShahkar(HttpContext http, AppPermissionSer
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
     if (!AppPermissionService.Allows(p, x => x.CanAccessShahkar))
         return Results.Json(new { error = "دسترسی به شاهکار مجاز نیست" }, statusCode: 403);
+    return null;
+}
+
+static async Task<IResult?> DenyUnlessCostCenter(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessCostCenter))
+        return Results.Json(new { error = "دسترسی به مرکز هزینه مجاز نیست" }, statusCode: 403);
     return null;
 }
 

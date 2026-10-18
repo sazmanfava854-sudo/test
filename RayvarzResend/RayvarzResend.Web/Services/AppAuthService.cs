@@ -120,6 +120,7 @@ public sealed class AppAuthService
             CanAccessFicheDateChange = perms.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = perms.CanAccessBankInquiryConfirm,
             CanAccessShahkar = perms.CanAccessShahkar,
+            CanAccessCostCenter = perms.CanAccessCostCenter,
             CanManageUsers = perms.CanManageUsers,
             GroupIds = perms.GroupIds
         };

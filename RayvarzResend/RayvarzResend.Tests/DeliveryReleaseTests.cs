@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v33_pr115()
+    public void ReleaseInfo_is_v34_pr116()
     {
-        Assert.Equal(33, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr115-v33", ReleaseInfo.Tag);
+        Assert.Equal(34, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr116-v34", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v33_doc_lists_leading_zero_and_negative_partner()
+    public void DELIVERY_v34_doc_lists_cost_center_module()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v33.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v34.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 33", doc);
-        Assert.Contains("50833533199", doc);
-        Assert.Contains("050833533243", doc);
+        Assert.Contains("releaseVersion: 34", doc);
+        Assert.Contains("مرکز هزینه", doc);
+        Assert.Contains("/api/cost-center/update", doc);
     }
 
     [Fact]
@@ -56,6 +56,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"Rayvarz\"", json);
         Assert.Contains("\"Installment\"", json);
         Assert.Contains("\"FicheDateChange\"", json);
+        Assert.Contains("\"CostCenter\"", json);
         Assert.Contains("\"BankInquiryConfirm\"", json);
         Assert.Contains("\"ServiceUrl\"", json);
         Assert.Contains("epay_EstelamOnLineBank", json);
@@ -222,7 +223,9 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=98", html);
+        Assert.Contains("js/app.js?v=99", html);
+        Assert.Contains("id=\"tabCostCenter\"", html);
+        Assert.Contains("btnCostCenterSearch", html);
         Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
         Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);

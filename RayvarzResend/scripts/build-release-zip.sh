@@ -47,7 +47,7 @@ RayvarzResend v33 — نسخه آخر (شماره فیش بدون صفر + مب�
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 33
+     releaseVersion = 34
      accountingDoc.dryRun = false
      dryRun = false
 
