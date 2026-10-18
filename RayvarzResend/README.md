@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۳۴ — PR #116)** — ماژول مرکز هزینه (`Deposit` / `CreditorPapers`).
+**نسخه آخر (تحویل: ۳۵ — تهاتر درآمدی DTL)** — گروه ۱۵۸ از `Income_Calculation` به رایورز.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-pr116-v34` |
-| Zip publish | `RayvarzResend-34.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v35` |
+| Zip publish | `RayvarzResend-35.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
 | Zip سورس | `RayvarzResend-source.zip` |
-| شاخه | [`cursor/cost-center-pr116-9665`](https://github.com/sazmanfava854-sudo/test/tree/cursor/cost-center-pr116-9665) |
-| جزئیات | [`DELIVERY-v34.md`](DELIVERY-v34.md) |
+| شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
+| جزئیات | [`DELIVERY-v35.md`](DELIVERY-v35.md) |
+| v34 قبلی | [`DELIVERY-v34.md`](DELIVERY-v34.md) |
 | v26 قبلی | [`DELIVERY-v26.md`](DELIVERY-v26.md) |
 | v25 قبلی | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
 | v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
@@ -18,7 +19,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 34` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 35` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 
