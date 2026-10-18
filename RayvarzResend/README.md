@@ -1,17 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۳۳ — PR #115)** — جستجوی شماره فیش بدون صفر اول، و جایگزینی مبلغ منفی تهاتر در اکسل.
+**نسخه آخر (تحویل: ۳۴ — PR #116)** — ماژول مرکز هزینه (`Deposit` / `CreditorPapers`).
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-pr115-v33` |
-| Zip publish | `RayvarzResend-33.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| **Tag نسخه** | `rayvarzresend-pr116-v34` |
+| Zip publish | `RayvarzResend-34.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
 | Zip سورس | `RayvarzResend-source.zip` |
-| شاخه | [`cursor/unsent-search-optional-date-4c4a`](https://github.com/sazmanfava854-sudo/test/tree/cursor/unsent-search-optional-date-4c4a) |
-| جزئیات | [`DELIVERY-v33.md`](DELIVERY-v33.md) |
-| v32 قبلی | [`DELIVERY-v32.md`](DELIVERY-v32.md) |
-| v31 قبلی | [`DELIVERY-v31.md`](DELIVERY-v31.md) |
-| v30 قبلی | [`DELIVERY-v30.md`](DELIVERY-v30.md) |
+| شاخه | [`cursor/cost-center-pr116-9665`](https://github.com/sazmanfava854-sudo/test/tree/cursor/cost-center-pr116-9665) |
+| جزئیات | [`DELIVERY-v34.md`](DELIVERY-v34.md) |
+| v26 قبلی | [`DELIVERY-v26.md`](DELIVERY-v26.md) |
 | v25 قبلی | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
 | v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
 | v23 جزئیات | [`DELIVERY-v23.md`](DELIVERY-v23.md) |
@@ -20,7 +18,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 33` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 34` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

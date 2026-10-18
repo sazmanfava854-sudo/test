@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-33.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-34.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v33 — نسخه آخر (PR #115)
+echo RayvarzResend v34 — نسخه آخر (PR #116 — مرکز هزینه)
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v33 — نسخه آخر (شماره فیش بدون صفر + مبلغ منفی تهاتر)
+RayvarzResend v34 — نسخه آخر (مرکز هزینه + قابلیت‌های v26 به بعد در شاخه PR #116)
 
 نصب روی سرور ویندوز
 --------------------
@@ -59,7 +59,7 @@ Accounting_DocHeader / Accounting_DocDetails بعد از ارسال موفق ب�
   sso-loginkey-curl-only.ps1 — فقط curl (اگر PowerShell timeout می‌دهد)
 
 سورس روی GitHub است — داخل Zip نیست:
-https://github.com/sazmanfava854-sudo/test/tree/cursor/unsent-search-optional-date-4c4a
+https://github.com/sazmanfava854-sudo/test/tree/cursor/cost-center-pr116-9665
 EOF
 
 # Zip با root = RayvarzResend (یک پوشه)

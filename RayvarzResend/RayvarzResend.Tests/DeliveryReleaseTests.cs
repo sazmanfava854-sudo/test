@@ -32,6 +32,21 @@ public class DeliveryReleaseTests
         Assert.Contains("releaseVersion: 34", doc);
         Assert.Contains("مرکز هزینه", doc);
         Assert.Contains("/api/cost-center/update", doc);
+        Assert.Contains("RayvarzResend-34.zip", doc);
+    }
+
+    [Fact]
+    public void Intermediate_delivery_docs_v27_through_v33_are_removed()
+    {
+        var root = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", ".."));
+        for (var v = 27; v <= 33; v++)
+        {
+            var delivery = Path.Combine(root, $"DELIVERY-v{v}.md");
+            var zip = Path.Combine(root, "..", $"RayvarzResend-{v}.zip");
+            Assert.False(File.Exists(delivery), delivery);
+            Assert.False(File.Exists(zip), zip);
+        }
     }
 
     [Fact]
