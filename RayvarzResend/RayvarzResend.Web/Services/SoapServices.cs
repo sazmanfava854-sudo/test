@@ -439,7 +439,8 @@ public class SoapBuilder
         var incmRefRowDocNo = isTahator
             ? detailRefRow
             : detailRefRow;
-        var dutyQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
+        // README / VB: Qty = مبلغ کل فیش (Payable) در هر ردیف؛ Val = مبلغ همان ردیف.
+        var headerQty = FormatRayvarzMoney(Math.Abs(fiche.Payable));
 
         return rows.Select((r, i) =>
         {
@@ -449,7 +450,7 @@ public class SoapBuilder
                 return new IncmContext(
                     r,
                     incmRow,
-                    dutyQty,
+                    headerQty,
                     dueDateRay,
                     0,
                     null,
@@ -469,7 +470,7 @@ public class SoapBuilder
             return new IncmContext(
                 r,
                 incmRow,
-                FormatRayvarzMoney(Math.Abs(r.Val)),
+                headerQty,
                 dueDateRay,
                 1,
                 string.IsNullOrWhiteSpace(r.IncmRowDsc) ? "فیش" : r.IncmRowDsc,

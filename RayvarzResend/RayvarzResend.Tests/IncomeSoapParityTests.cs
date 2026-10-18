@@ -179,6 +179,37 @@ public class IncomeSoapParityTests
     }
 
     [Fact]
+    public void Tahator_multi_row_qty_is_payable_on_every_line()
+    {
+        const decimal payable = 2_350_000_000m;
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.Income,
+            IncomeAccountGroup = 158,
+            FicheNo = "050833533237",
+            Payable = payable,
+            BankCode = "4",
+            DepositId = 10865999,
+            BnkAcntNo = "8-4-49-2-1-0-0",
+            DocTyp = 17,
+            RayvarzDocDate = "14050726",
+            RayvarzActDate = "14050726",
+            RayvarzDueDate = "14050726",
+            Rows =
+            {
+                new IncmRowDto { IncmNo = 1025, Val = 2_001_734_525m, Ref = "4", Num = "10865999" },
+                new IncmRowDto { IncmNo = 1275, Val = 159_795_492m, Ref = "4", Num = "10865999" },
+                new IncmRowDto { IncmNo = 1267, Val = 4_027_447m, Ref = "4", Num = "10865999" }
+            }
+        };
+
+        var xml = BuildSoap(fiche, 208, 200208010);
+        var qty = payable.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(xml, $"<b:Qty>{qty}</b:Qty>").Count);
+        Assert.Contains("<b:Val>2001734525</b:Val>", xml);
+    }
+
+    [Fact]
     public void Valid_income_never_emits_incmNo_zero()
     {
         var fiche = MakeIncomeFiche("058033501915", 218, 200218011, "80-2-14-11-1-0-2",
