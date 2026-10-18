@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v37_accounting_doc_load_fix()
+    public void ReleaseInfo_is_v38_tahator_vb_incm_no()
     {
-        Assert.Equal(37, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v37", ReleaseInfo.Tag);
+        Assert.Equal(38, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v38", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v37_doc_lists_accounting_doc_load_fix()
+    public void DELIVERY_v38_doc_lists_tahator_vb_incm_no()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v37.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v38.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 37", doc);
-        Assert.Contains("Accounting_DocDetails", doc);
-        Assert.Contains("RayvarzResend-37.zip", doc);
+        Assert.Contains("releaseVersion: 38", doc);
+        Assert.Contains("CI_IncomeCalculation", doc);
+        Assert.Contains("RayvarzResend-38.zip", doc);
     }
 
     [Fact]

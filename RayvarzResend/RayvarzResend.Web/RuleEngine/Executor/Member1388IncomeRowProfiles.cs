@@ -97,10 +97,7 @@ public static class Member1388IncomeRowProfiles
             return;
         }
 
-        if (fiche.TahatorRowsFromAccountingDoc)
-            IncomeMember1388RowBuilder.ReconcileSoapRows(fiche.Rows, fiche.Payable);
-        else
-            TahatorIncomeCalculationBuilder.Apply(fiche);
+        TahatorIncomeCalculationBuilder.Apply(fiche);
 
         TahatorRowBuilder.ApplyTahatorIncomeRowSoapMetadata(fiche);
     }

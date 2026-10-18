@@ -1,10 +1,10 @@
 namespace RayvarzResend.Web;
 
-/// <summary>نسخه آخر — v37: اصلاح بارگذاری Accounting_DocDetails (ستون‌های legacy).</summary>
+/// <summary>نسخه آخر — v38: تهاتر ۱۵۸ — IncmNo = CI_IncomeCalculation (۶ ردیف VB).</summary>
 public static class ReleaseInfo
 {
-    public const int Number = 37;
-    public const string Label = "37";
-    public const string Tag = "rayvarzresend-tahator-dtl-v37";
+    public const int Number = 38;
+    public const string Label = "38";
+    public const string Tag = "rayvarzresend-tahator-dtl-v38";
     public const string DisplayName = "نسخه آخر";
 }

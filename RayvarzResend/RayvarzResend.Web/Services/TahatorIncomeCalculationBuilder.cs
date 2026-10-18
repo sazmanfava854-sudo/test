@@ -33,7 +33,6 @@ public static class TahatorIncomeCalculationBuilder
         }
 
         ScaleToPayableLikeVbTahator(working, fiche.Payable);
-        working = MergeRowsByIncmNo(working);
 
         fiche.Rows.Clear();
         fiche.Rows.AddRange(working);
@@ -60,30 +59,6 @@ public static class TahatorIncomeCalculationBuilder
         }
     }
 
-    private static List<IncmRowDto> MergeRowsByIncmNo(IEnumerable<IncmRowDto> rows)
-    {
-        return rows
-            .GroupBy(r => r.IncmNo)
-            .Select(g =>
-            {
-                var first = g.First();
-                return new IncmRowDto
-                {
-                    IncmNo = g.Key,
-                    IncmRowDsc = g.Select(x => x.IncmRowDsc).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? first.IncmRowDsc,
-                    Val = g.Sum(x => x.Val),
-                    Center1 = first.Center1,
-                    Center2 = first.Center2,
-                    Center3 = first.Center3,
-                    Ref = first.Ref,
-                    Num = first.Num
-                };
-            })
-            .Where(r => r.Val != 0)
-            .OrderBy(r => r.IncmNo)
-            .ToList();
-    }
-
     private static void AppendTahatorOddmentRows(
         IList<IncmRowDto> rows,
         IReadOnlyList<IncomeOddmentDto> oddments,
@@ -101,11 +76,12 @@ public static class TahatorIncomeCalculationBuilder
             var incomeCode = incomeCodeByCalculation != null && incomeCodeByCalculation.TryGetValue(odd.IncmNo, out var c)
                 ? c
                 : null;
+            // VB Tahator LstOdd_1: WrapperAccountNo = CI_IncomeCalculation؛ فقط IncomeCode 0/1 رد می‌شود.
             if (IncomeRayvarzIncmNoResolver.IsMetaIncomeCode(incomeCode))
                 continue;
 
-            var rayIncm = IncomeRayvarzIncmNoResolver.Resolve(odd.IncmNo, incomeCode);
-            if (rayIncm <= 0 || existing.Contains(rayIncm))
+            var incmNo = odd.IncmNo;
+            if (incmNo <= 0 || existing.Contains(incmNo))
                 continue;
 
             var subtract = odd.OddmentType is 2 or 3 or 6 or 7;
@@ -115,11 +91,11 @@ public static class TahatorIncomeCalculationBuilder
 
             rows.Add(new IncmRowDto
             {
-                IncmNo = rayIncm,
+                IncmNo = incmNo,
                 Val = price,
                 IncmRowDsc = $"Oddment-{odd.IncmNo}"
             });
-            existing.Add(rayIncm);
+            existing.Add(incmNo);
         }
     }
 

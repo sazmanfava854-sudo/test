@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۳۷ — رفع بارگذاری Accounting_DocDetails)** — شامل تهاتر IncomeCode v36.
+**نسخه آخر (تحویل: ۳۸ — تهاتر ۱۵۸ parity VB)** — `IncmNo` = `CI_IncomeCalculation` (۶ ردیف نمونه 050833533237).
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v37` |
-| Zip publish | `RayvarzResend-37.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v38` |
+| Zip publish | `RayvarzResend-38.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v37.md`](DELIVERY-v37.md) |
+| جزئیات | [`DELIVERY-v38.md`](DELIVERY-v38.md) |
+| v37 قبلی | [`DELIVERY-v37.md`](DELIVERY-v37.md) |
 | v36 قبلی | [`DELIVERY-v36.md`](DELIVERY-v36.md) |
 | v35 قبلی | [`DELIVERY-v35.md`](DELIVERY-v35.md) |
 | v34 قبلی | [`DELIVERY-v34.md`](DELIVERY-v34.md) |
@@ -21,7 +22,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 37` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 38` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

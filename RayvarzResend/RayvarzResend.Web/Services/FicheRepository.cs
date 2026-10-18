@@ -270,23 +270,8 @@ WHERE {where}";
             TahatorRowBuilder.ApplyTahatorAmountRows(dto);
         else if (isTahatorIncome)
         {
-            var fromAccountingDoc = await AccountingDocDetailsRowLoader.TryLoadAsync(_saraCs, dto.FicheNo, ct);
-            if (fromAccountingDoc is { Count: > 0 })
-            {
-                dto.Rows = fromAccountingDoc;
-                dto.TahatorRowsFromAccountingDoc = true;
-            }
-            else
-            {
-                var allowedFor158 = await IncomeAccountGroupCalculationFilter.LoadAllowedCalculationIdsAsync(
-                    _saraCs, TahatorRowBuilder.IncomeAccountGroupTahatorIncome, ct);
-                dto.Rows = await LoadIncomeRowsAsync(
-                    dto.NidIncome!.Value,
-                    ct,
-                    mapRayvarzIncmNo: true,
-                    incomeCodeByCalculation: dto.IncomeCodeByCalculation,
-                    allowedCalculationIds: allowedFor158);
-            }
+            // VB Tahator(): TmpDT از Income_Calculation — WrapperAccountNo = CI_IncomeCalculation (نه IncomeCode).
+            dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct, mapRayvarzIncmNo: false);
 
             await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, LoadIncomeRowsAsync, ct);
             IncomeMember1388RowBuilder.Apply(dto);
