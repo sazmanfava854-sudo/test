@@ -1461,6 +1461,26 @@ tbody tr:last-child td {
   justify-self: start;
 }
 
+.cost-center-search-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: end;
+}
+
+.cost-center-fiche-field {
+  max-width: none;
+}
+
+.cost-center-fiche-input {
+  width: 100%;
+  max-width: 44rem;
+  min-height: 3.25rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
 .bank-inquiry-search-grid {
   display: grid;
   grid-template-columns: max-content minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(12rem, 1fr);

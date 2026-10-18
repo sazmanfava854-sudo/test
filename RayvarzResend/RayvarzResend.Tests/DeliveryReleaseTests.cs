@@ -120,7 +120,8 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
-        Assert.Contains("hoseine-sh", html);
+        Assert.Contains(">دامین<", html);
+        Assert.DoesNotContain("hoseine-sh", html);
         Assert.DoesNotContain("alidoost-pa", html);
         Assert.DoesNotContain("login-sso-hint", html);
         Assert.DoesNotContain("ورود یکپارچه سازمانی (رمز در login.mashhad.ir", html);
@@ -135,7 +136,7 @@ public class DeliveryReleaseTests
     public void Unpublished_login_page_has_no_national_id_hint()
     {
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
-        Assert.Contains("کد ملی", html);
+        Assert.DoesNotContain("کد ملی", html);
         Assert.Contains("رمز عبور", html);
         Assert.DoesNotContain("ورود با کد ملی و رمز عبور", html);
         Assert.DoesNotContain("با کد ملی وارد شود", html);
@@ -241,6 +242,8 @@ public class DeliveryReleaseTests
         Assert.Contains("js/app.js?v=99", html);
         Assert.Contains("id=\"tabCostCenter\"", html);
         Assert.Contains("btnCostCenterSearch", html);
+        Assert.Contains("cost-center-fiche-input", html);
+        Assert.Contains("placeholder=\"050533547469،050533547470\"", html);
         Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
         Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);
