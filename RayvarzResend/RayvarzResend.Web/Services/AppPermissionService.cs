@@ -26,6 +26,7 @@ public sealed class AppPermissionService
             CanAccessFicheDateChange = direct.CanAccessFicheDateChange || memberGroups.Any(g => g.CanAccessFicheDateChange),
             CanAccessBankInquiryConfirm = direct.CanAccessBankInquiryConfirm || memberGroups.Any(g => g.CanAccessBankInquiryConfirm),
             CanAccessShahkar = direct.CanAccessShahkar || memberGroups.Any(g => g.CanAccessShahkar),
+            CanAccessCostCenter = direct.CanAccessCostCenter || memberGroups.Any(g => g.CanAccessCostCenter),
             CanManageUsers = direct.CanManageUsers || memberGroups.Any(g => g.CanManageUsers),
             GroupIds = groupIds
         };

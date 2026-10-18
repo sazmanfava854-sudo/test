@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v33_pr115()
+    public void ReleaseInfo_is_v34_pr116()
     {
-        Assert.Equal(33, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr115-v33", ReleaseInfo.Tag);
+        Assert.Equal(34, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-pr116-v34", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,30 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v33_doc_lists_leading_zero_and_negative_partner()
+    public void DELIVERY_v34_doc_lists_cost_center_module()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v33.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v34.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 33", doc);
-        Assert.Contains("50833533199", doc);
-        Assert.Contains("050833533243", doc);
+        Assert.Contains("releaseVersion: 34", doc);
+        Assert.Contains("مرکز هزینه", doc);
+        Assert.Contains("/api/cost-center/update", doc);
+        Assert.Contains("RayvarzResend-34.zip", doc);
+    }
+
+    [Fact]
+    public void Intermediate_delivery_docs_v27_through_v33_are_removed()
+    {
+        var root = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", ".."));
+        for (var v = 27; v <= 33; v++)
+        {
+            var delivery = Path.Combine(root, $"DELIVERY-v{v}.md");
+            var zip = Path.Combine(root, "..", $"RayvarzResend-{v}.zip");
+            Assert.False(File.Exists(delivery), delivery);
+            Assert.False(File.Exists(zip), zip);
+        }
     }
 
     [Fact]
@@ -56,6 +71,7 @@ public class DeliveryReleaseTests
         Assert.Contains("\"Rayvarz\"", json);
         Assert.Contains("\"Installment\"", json);
         Assert.Contains("\"FicheDateChange\"", json);
+        Assert.Contains("\"CostCenter\"", json);
         Assert.Contains("\"BankInquiryConfirm\"", json);
         Assert.Contains("\"ServiceUrl\"", json);
         Assert.Contains("epay_EstelamOnLineBank", json);
@@ -104,7 +120,8 @@ public class DeliveryReleaseTests
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
         Assert.Contains("loginSsoBlock", html);
         Assert.Contains("ورود سازمانی (SSO)", html);
-        Assert.Contains("hoseine-sh", html);
+        Assert.Contains(">دامین<", html);
+        Assert.DoesNotContain("hoseine-sh", html);
         Assert.DoesNotContain("alidoost-pa", html);
         Assert.DoesNotContain("login-sso-hint", html);
         Assert.DoesNotContain("ورود یکپارچه سازمانی (رمز در login.mashhad.ir", html);
@@ -119,7 +136,7 @@ public class DeliveryReleaseTests
     public void Unpublished_login_page_has_no_national_id_hint()
     {
         var html = File.ReadAllText(WebFile("wwwroot", "login.html"));
-        Assert.Contains("کد ملی", html);
+        Assert.DoesNotContain("کد ملی", html);
         Assert.Contains("رمز عبور", html);
         Assert.DoesNotContain("ورود با کد ملی و رمز عبور", html);
         Assert.DoesNotContain("با کد ملی وارد شود", html);
@@ -222,7 +239,13 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=98", html);
+        Assert.Contains("js/app.js?v=100", html);
+        Assert.Contains("btnChangePassword", html);
+        Assert.Contains("change-password.js", html);
+        Assert.Contains("id=\"tabCostCenter\"", html);
+        Assert.Contains("btnCostCenterSearch", html);
+        Assert.Contains("cost-center-fiche-input", html);
+        Assert.Contains("placeholder=\"050533547469،050533547470\"", html);
         Assert.DoesNotContain("بازه تاریخ (از و تا) برای جستجوی فیش‌های ارسال‌نشده الزامی است", html);
         Assert.DoesNotContain("field-required\">\n          <span class=\"field-label\">از تاریخ</span>", html);
         Assert.Contains("perm-rayvarz", html);

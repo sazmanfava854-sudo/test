@@ -26,6 +26,7 @@ public sealed class AppUserDirectPermissions
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
 
     public static AppUserDirectPermissions AllGranted() => new()
@@ -35,6 +36,7 @@ public sealed class AppUserDirectPermissions
         CanAccessFicheDateChange = true,
         CanAccessBankInquiryConfirm = true,
         CanAccessShahkar = true,
+        CanAccessCostCenter = true,
         CanManageUsers = true
     };
 }
@@ -94,6 +96,7 @@ public sealed class AuthSessionDto
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
     public List<Guid> GroupIds { get; set; } = [];
 }
@@ -106,6 +109,7 @@ public sealed class UserPermissionsDto
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
     public List<Guid> GroupIds { get; set; } = [];
 
@@ -117,6 +121,7 @@ public sealed class UserPermissionsDto
         CanAccessFicheDateChange = true,
         CanAccessBankInquiryConfirm = true,
         CanAccessShahkar = true,
+        CanAccessCostCenter = true,
         CanManageUsers = true
     };
 }
@@ -130,6 +135,7 @@ public sealed class AppUserGroupDto
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
     public string CreatedAtUtc { get; set; } = "";
 }
@@ -142,6 +148,7 @@ public sealed class CreateAppUserGroupRequest
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
 }
 
@@ -153,6 +160,7 @@ public sealed class UpdateAppUserGroupRequest
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }
+    public bool CanAccessCostCenter { get; set; }
     public bool CanManageUsers { get; set; }
 }
 
@@ -168,6 +176,12 @@ public sealed class UpdateAppUserRequest
 public sealed class ResetAppUserPasswordRequest
 {
     public string? Password { get; set; }
+}
+
+public sealed class ChangePasswordRequest
+{
+    public string? CurrentPassword { get; set; }
+    public string? NewPassword { get; set; }
 }
 
 public static class AuthPolicies

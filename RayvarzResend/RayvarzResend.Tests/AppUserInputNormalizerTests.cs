@@ -14,7 +14,7 @@ public class AppUserInputNormalizerTests
             NationalId = "1234567890",
             FirstName = "علی",
             LastName = "رضایی",
-            Password = "secret1",
+            Password = "Secret@123",
             Domain = "hoseine-sh",
             District = "2"
         };
@@ -31,7 +31,7 @@ public class AppUserInputNormalizerTests
             NationalId = "1234567890",
             FirstName = "علی",
             LastName = "رضایی",
-            Password = "secret1",
+            Password = "Secret@123",
             Domain = @"MASHHAD\hoseine-sh",
             District = "2"
         };
@@ -47,7 +47,7 @@ public class AppUserInputNormalizerTests
             NationalId = "1234567890",
             FirstName = "علی",
             LastName = "رضایی",
-            Password = "secret1",
+            Password = "Secret@123",
             District = "2"
         };
         var ex = Assert.Throws<ArgumentException>(() => AppUserInputNormalizer.ValidateAndApply(req));
@@ -62,7 +62,7 @@ public class AppUserInputNormalizerTests
             NationalId = "123",
             FirstName = "علی",
             LastName = "رضایی",
-            Password = "secret1",
+            Password = "Secret@123",
             District = "2"
         };
         Assert.Throws<ArgumentException>(() => AppUserInputNormalizer.ValidateAndApply(req));

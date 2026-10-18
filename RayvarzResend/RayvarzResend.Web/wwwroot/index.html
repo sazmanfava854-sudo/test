@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=45" />
+  <link rel="stylesheet" href="css/style.css?v=47" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -32,7 +32,10 @@
             <span id="userDisplayName" class="user-name"></span>
             <span id="userRoleBadge" class="user-badge"></span>
           </div>
-          <button id="btnLogout" class="btn secondary btn-sm" type="button">خروج</button>
+          <div class="hero-user-actions">
+            <button id="btnChangePassword" class="btn secondary btn-sm" type="button">تغییر رمز</button>
+            <button id="btnLogout" class="btn secondary btn-sm" type="button">خروج</button>
+          </div>
         </div>
       </div>
     </header>
@@ -44,6 +47,7 @@
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
+      <button type="button" class="main-tab perm-cost-center" data-tab="costCenter" role="tab" aria-selected="false" hidden>مرکز هزینه</button>
       <button type="button" class="main-tab perm-shahkar" data-tab="shahkar" role="tab" aria-selected="false" hidden>شاهکار</button>
       <button type="button" class="main-tab perm-users" data-tab="users" role="tab" aria-selected="false" hidden>مدیریت کاربران</button>
     </nav>
@@ -567,6 +571,79 @@
     </section>
     </div>
 
+    <div id="tabCostCenter" class="tab-panel perm-cost-center" role="tabpanel" hidden>
+    <section class="card card-enter cost-center-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">🏛️</span>
+        <h2>مرکز هزینه</h2>
+      </div>
+      <div class="cost-center-search-grid unsent-form-grid">
+        <label class="field field-required cost-center-fiche-field">
+          <span class="field-label">شماره فیش</span>
+          <input id="costCenterFicheNo" class="cost-center-fiche-input" type="text" placeholder="050533547469،050533547470" autocomplete="off" dir="ltr" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="btnCostCenterSearch" class="btn primary" type="button">جستجو</button>
+      </div>
+      <div class="subsection" id="costCenterResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <label class="check-all-label">
+            <input id="costCenterSelectAll" type="checkbox" />
+            <span>انتخاب همه</span>
+          </label>
+          <span id="costCenterCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="costCenterTable">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th>شماره فیش</th>
+                <th>مرکز یک (Deposit)</th>
+                <th>مرکز دو (CreditorPapers)</th>
+                <th>کد نوسازی</th>
+                <th>شناسه قبض</th>
+                <th>شناسه پرداخت</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="unsent-pagination" id="costCenterPagination" hidden>
+          <button id="btnCostCenterPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
+          <span id="costCenterPageLabel" class="unsent-page-label"></span>
+          <button id="btnCostCenterNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
+          <label class="unsent-page-size">
+            <span>در هر صفحه</span>
+            <select id="costCenterPageSize">
+              <option value="25" selected>۲۵</option>
+              <option value="50">۵۰</option>
+              <option value="100">۱۰۰</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="subsection fiche-date-change-panel" id="costCenterApplySection" hidden>
+        <h3>ثبت مراکز هزینه</h3>
+        <div class="form-grid unsent-form-grid">
+          <label class="field field-required">
+            <span class="field-label">مرکز یک</span>
+            <input id="costCenterOne" type="text" inputmode="numeric" placeholder="301202530" autocomplete="off" />
+          </label>
+          <label class="field field-required">
+            <span class="field-label">مرکز دو</span>
+            <input id="costCenterTwo" type="text" inputmode="numeric" placeholder="5519990" autocomplete="off" />
+          </label>
+        </div>
+        <div class="actions fiche-date-apply-actions">
+          <button id="btnCostCenterUpdate" class="btn danger" type="button" disabled>به‌روزرسانی فیش‌های انتخاب‌شده</button>
+        </div>
+      </div>
+      <pre id="costCenterResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
     <div id="tabShahkar" class="tab-panel perm-shahkar" role="tabpanel" hidden>
     <section class="card card-enter shahkar-card">
       <div class="card-head">
@@ -655,6 +732,10 @@
                   <span class="fiche-date-ms-option-text">شاهکار</span>
                 </label>
                 <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupCostCenter" type="checkbox" class="user-group-perm-check" data-perm-label="مرکز هزینه" />
+                  <span class="fiche-date-ms-option-text">مرکز هزینه</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
                   <input id="newGroupUsers" type="checkbox" class="user-group-perm-check" data-perm-label="مدیریت کاربران" />
                   <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
                 </label>
@@ -679,6 +760,7 @@
                   <th>تغییر تاریخ فیش</th>
                   <th>خدمات الکترونیک</th>
                   <th>شاهکار</th>
+                  <th>مرکز هزینه</th>
                   <th>عملیات</th>
                 </tr>
               </thead>
@@ -758,6 +840,10 @@
                 <label class="fiche-date-ms-option user-group-perm-option" role="option">
                   <input id="newUserDirectShahkar" type="checkbox" class="user-direct-perm-check" data-perm-label="شاهکار" />
                   <span class="fiche-date-ms-option-text">شاهکار</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectCostCenter" type="checkbox" class="user-direct-perm-check" data-perm-label="مرکز هزینه" />
+                  <span class="fiche-date-ms-option-text">مرکز هزینه</span>
                 </label>
                 <label class="fiche-date-ms-option user-group-perm-option" role="option">
                   <input id="newUserDirectUsers" type="checkbox" class="user-direct-perm-check" data-perm-label="مدیریت کاربران" />
@@ -844,6 +930,10 @@
                     <span class="fiche-date-ms-option-text">شاهکار</span>
                   </label>
                   <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectCostCenter" type="checkbox" class="user-direct-perm-check" data-perm-label="مرکز هزینه" />
+                    <span class="fiche-date-ms-option-text">مرکز هزینه</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
                     <input id="editUserDirectUsers" type="checkbox" class="user-direct-perm-check" data-perm-label="مدیریت کاربران" />
                     <span class="fiche-date-ms-option-text">مدیریت کاربران</span>
                   </label>
@@ -875,8 +965,32 @@
       </section>
     </div>
   </div>
+  <dialog id="changePasswordDialog" class="change-password-dialog" dir="rtl">
+    <form method="dialog" class="change-password-dialog-inner" onsubmit="return false;">
+      <h2 class="change-password-title">تغییر رمز عبور</h2>
+      <p class="field-hint change-password-hint">حداقل ۸ کاراکتر، حرف انگلیسی کوچک و بزرگ، و علامت (مثل @)</p>
+      <label class="field field-required">
+        <span class="field-label">رمز فعلی</span>
+        <input id="changePasswordCurrent" type="password" autocomplete="current-password" dir="ltr" />
+      </label>
+      <label class="field field-required">
+        <span class="field-label">رمز جدید</span>
+        <input id="changePasswordNew" type="password" autocomplete="new-password" dir="ltr" />
+      </label>
+      <label class="field field-required">
+        <span class="field-label">تکرار رمز جدید</span>
+        <input id="changePasswordConfirm" type="password" autocomplete="new-password" dir="ltr" />
+      </label>
+      <p id="changePasswordError" class="login-error" hidden></p>
+      <div class="actions change-password-actions">
+        <button id="btnChangePasswordSubmit" class="btn primary" type="button">ثبت رمز جدید</button>
+        <button id="btnChangePasswordClose" class="btn secondary" type="button">انصراف</button>
+      </div>
+    </form>
+  </dialog>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=98"></script>
+  <script src="js/change-password.js?v=1"></script>
+  <script src="js/app.js?v=100"></script>
 </body>
 </html>

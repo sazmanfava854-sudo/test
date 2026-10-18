@@ -25,8 +25,9 @@ public static class AppUserInputNormalizer
             throw new ArgumentException("کد ملی باید ۱۰ رقم باشد");
         if (!AppUserDomainNormalizer.IsValidList(req.Domain))
             throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh)");
-        if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
-            throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
+        var passwordError = PasswordPolicy.Validate(req.Password);
+        if (passwordError != null)
+            throw new ArgumentException(passwordError);
         if (!req.IsAdmin && string.IsNullOrWhiteSpace(req.District))
             throw new ArgumentException("برای کاربر منطقه‌ای، انتخاب منطقه، شعبه مرکز یا فاوا الزامی است");
         if (string.Equals(req.District, DistrictAccessService.FavaDistrictCode, StringComparison.OrdinalIgnoreCase)
