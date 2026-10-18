@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=46" />
+  <link rel="stylesheet" href="css/style.css?v=47" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -32,7 +32,10 @@
             <span id="userDisplayName" class="user-name"></span>
             <span id="userRoleBadge" class="user-badge"></span>
           </div>
-          <button id="btnLogout" class="btn secondary btn-sm" type="button">خروج</button>
+          <div class="hero-user-actions">
+            <button id="btnChangePassword" class="btn secondary btn-sm" type="button">تغییر رمز</button>
+            <button id="btnLogout" class="btn secondary btn-sm" type="button">خروج</button>
+          </div>
         </div>
       </div>
     </header>
@@ -962,8 +965,32 @@
       </section>
     </div>
   </div>
+  <dialog id="changePasswordDialog" class="change-password-dialog" dir="rtl">
+    <form method="dialog" class="change-password-dialog-inner" onsubmit="return false;">
+      <h2 class="change-password-title">تغییر رمز عبور</h2>
+      <p class="field-hint change-password-hint">حداقل ۸ کاراکتر، حرف انگلیسی کوچک و بزرگ، و علامت (مثل @)</p>
+      <label class="field field-required">
+        <span class="field-label">رمز فعلی</span>
+        <input id="changePasswordCurrent" type="password" autocomplete="current-password" dir="ltr" />
+      </label>
+      <label class="field field-required">
+        <span class="field-label">رمز جدید</span>
+        <input id="changePasswordNew" type="password" autocomplete="new-password" dir="ltr" />
+      </label>
+      <label class="field field-required">
+        <span class="field-label">تکرار رمز جدید</span>
+        <input id="changePasswordConfirm" type="password" autocomplete="new-password" dir="ltr" />
+      </label>
+      <p id="changePasswordError" class="login-error" hidden></p>
+      <div class="actions change-password-actions">
+        <button id="btnChangePasswordSubmit" class="btn primary" type="button">ثبت رمز جدید</button>
+        <button id="btnChangePasswordClose" class="btn secondary" type="button">انصراف</button>
+      </div>
+    </form>
+  </dialog>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/app.js?v=99"></script>
+  <script src="js/change-password.js?v=1"></script>
+  <script src="js/app.js?v=100"></script>
 </body>
 </html>

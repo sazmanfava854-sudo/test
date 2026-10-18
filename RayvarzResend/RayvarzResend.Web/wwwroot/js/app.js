@@ -74,6 +74,10 @@ function showAppInfo(message, options) {
   showAppMessage(message, 'info', options);
 }
 
+window.showAppSuccess = showAppSuccess;
+window.showAppError = showAppError;
+window.showAppWarning = showAppWarning;
+
 const categoryLabels = {
   Income: 'درآمد',
   DutyNosazi: 'نوسازی',
@@ -270,6 +274,123 @@ function clearGridSelection(selectionSet, cacheMap) {
   if (cacheMap) cacheMap.clear();
 }
 
+let activeMainTabKey = null;
+
+function clearFieldValue(id) {
+  const el = $(id);
+  if (!el) return;
+  if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+  else if (el.type === 'file') el.value = '';
+  else if (el.tagName === 'SELECT') el.selectedIndex = 0;
+  else el.value = '';
+}
+
+function hideEl(id) {
+  const el = $(id);
+  if (el) el.hidden = true;
+}
+
+function resetMainTabPanelState(tabKey) {
+  if (!tabKey) return;
+  switch (tabKey) {
+    case 'unsent':
+      ['unsentFromDate', 'unsentToDate', 'unsentFicheNo', 'unsentBillId', 'unsentPaymentId'].forEach(clearFieldValue);
+      if ($('unsentDistrict')) $('unsentDistrict').value = '';
+      clearFieldValue('unsentExcelFile');
+      setUnsentExcelStatus('فایل اکسل انتخاب نشده');
+      clearGridSelection(selectedUnsentFicheNos, null);
+      unsentSourceKindByFicheNo.clear();
+      unsentSearchState.page = 1;
+      unsentSearchState.totalCount = 0;
+      unsentSearchState.totalPages = 0;
+      renderUnsentTable([], { page: 1, pageSize: unsentSearchState.pageSize, totalCount: 0, totalPages: 0 });
+      hideEl('unsentResultsSection');
+      hideEl('unsentPagination');
+      hideEl('unsentResultBox');
+      clearFieldValue('identifierValue');
+      hideEl('ficheSection');
+      hideEl('resultSection');
+      hideEl('sendResultCard');
+      if ($('btnSend')) $('btnSend').disabled = true;
+      break;
+    case 'installment':
+      clearFieldValue('installmentValues');
+      clearFieldValue('installmentApplyEndState');
+      clearFieldValue('installmentApplyEndStateExcel');
+      clearFieldValue('installmentExcelFile');
+      if ($('installmentExcelStatus')) $('installmentExcelStatus').textContent = 'فایلی انتخاب نشده';
+      hideEl('installmentPreviewSection');
+      hideEl('installmentResultBox');
+      {
+        const tbody = $('installmentPreviewTable')?.querySelector('tbody');
+        if (tbody) tbody.innerHTML = '';
+      }
+      if ($('installmentPreviewSummary')) $('installmentPreviewSummary').textContent = '';
+      if ($('btnInstallmentUpdate')) $('btnInstallmentUpdate').disabled = true;
+      break;
+    case 'ficheDate':
+      clearFieldValue('ficheDateIdentifier');
+      ['ficheDatePermanentFrom', 'ficheDatePermanentTo', 'ficheDateTemporaryFrom', 'ficheDateTemporaryTo',
+        'ficheDateNewPermanent', 'ficheDateNewTemporary', 'ficheDateNewBreak'].forEach(clearFieldValue);
+      ['ficheDateApplyPermanent', 'ficheDateApplyTemporary', 'ficheDateApplyBreak', 'ficheDateApplyStatus', 'ficheDateSelectAll']
+        .forEach(clearFieldValue);
+      clearGridSelection(selectedFicheDateNos, ficheDateSelectedItems);
+      ficheDateSearchState.page = 1;
+      ficheDateSearchState.totalCount = 0;
+      ficheDateSearchState.totalPages = 0;
+      renderFicheDateTable([], { page: 1, pageSize: ficheDateSearchState.pageSize, totalCount: 0, totalPages: 0 });
+      hideEl('ficheDateResultsSection');
+      hideEl('ficheDatePagination');
+      hideEl('ficheDateResultBox');
+      if (typeof syncFicheDateApplyFields === 'function') syncFicheDateApplyFields();
+      break;
+    case 'bankInquiry':
+      ['bankInquiryFicheNo', 'bankInquiryBillId', 'bankInquiryPaymentId', 'bankInquiryNewPaymentDate'].forEach(clearFieldValue);
+      clearFieldValue('bankInquirySelectAll');
+      clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
+      bankInquirySearchState.page = 1;
+      bankInquirySearchState.totalCount = 0;
+      bankInquirySearchState.totalPages = 0;
+      renderBankInquiryTable([], { page: 1, pageSize: bankInquirySearchState.pageSize, totalCount: 0, totalPages: 0 });
+      hideEl('bankInquiryResultsSection');
+      hideEl('bankInquiryPagination');
+      hideEl('bankInquiryApplySection');
+      hideEl('bankInquiryResultBox');
+      hideEl('bankInquiryDiagnoseBox');
+      break;
+    case 'costCenter':
+      clearFieldValue('costCenterFicheNo');
+      clearFieldValue('costCenterOne');
+      clearFieldValue('costCenterTwo');
+      clearFieldValue('costCenterSelectAll');
+      clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
+      costCenterSearchState.page = 1;
+      costCenterSearchState.totalCount = 0;
+      costCenterSearchState.totalPages = 0;
+      renderCostCenterTable([], { page: 1, pageSize: costCenterSearchState.pageSize, totalCount: 0, totalPages: 0 });
+      hideEl('costCenterResultsSection');
+      hideEl('costCenterPagination');
+      hideEl('costCenterApplySection');
+      hideEl('costCenterResultBox');
+      break;
+    case 'shahkar':
+      ['shahkarUserName', 'shahkarNationalCode'].forEach(clearFieldValue);
+      clearFieldValue('shahkarSelectAll');
+      clearGridSelection(selectedShahkarUserNames, shahkarSelectedItems);
+      renderShahkarTable([]);
+      hideEl('shahkarResultsSection');
+      hideEl('shahkarResultBox');
+      break;
+    case 'users':
+      if (typeof resetGroupForm === 'function') resetGroupForm();
+      if (typeof closeUserEdit === 'function') closeUserEdit();
+      hideEl('usersResultBox');
+      break;
+    default:
+      break;
+  }
+}
+
 function setGridRowSelected(selectionSet, cacheMap, item, selected) {
   if (!item?.ficheNo) return;
   if (selected) {
@@ -311,6 +432,11 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
   shahkar: $('tabShahkar'),
   users: $('tabUsers')
 }) {
+  if (activeMainTabKey && activeMainTabKey !== key) {
+    resetMainTabPanelState(activeMainTabKey);
+  }
+  activeMainTabKey = key;
+
   tabs.forEach((t) => {
     const active = t.dataset.tab === key && !t.hidden;
     t.classList.toggle('active', active);
@@ -2929,7 +3055,8 @@ async function saveUserEdit() {
 async function resetUserPassword() {
   if (!editingUserId) return;
   const password = $('editUserNewPassword')?.value || '';
-  if (!password || password.length < 6) return alert('رمز عبور جدید حداقل ۶ کاراکتر باشد');
+  const policyError = typeof validatePasswordPolicy === 'function' ? validatePasswordPolicy(password) : null;
+  if (policyError) return alert(policyError);
   const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2969,6 +3096,10 @@ async function createUserFromForm() {
   if (!payload.isAdmin && !payload.district) {
     return alert('برای کاربر منطقه‌ای، انتخاب منطقه یا شعبه مرکز الزامی است');
   }
+  const passwordPolicyError = typeof validatePasswordPolicy === 'function'
+    ? validatePasswordPolicy(payload.password)
+    : null;
+  if (passwordPolicyError) return alert(passwordPolicyError);
   const box = $('usersResultBox');
   try {
     const res = await apiFetch('/api/admin/users', {
@@ -3335,9 +3466,11 @@ function setupEventHandlers() {
       showTahatorSendResult(data);
       if (data.dryRun) showAppInfo('ارسال آزمایشی تهاتر — به رایورز ارسال نشد.');
       else if (data.skipped) showAppWarning(data.message);
-      else if (data.success) showAppSuccess(data.message || 'ارسال تهاتر موفق');
-      else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
-      $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else if (data.success) {
+        showAppSuccess(data.message || 'ارسال تهاتر موفق');
+        if (!data.dryRun) resetMainTabPanelState('unsent');
+      } else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
       showAppError(e.message);
     } finally {
@@ -3368,8 +3501,9 @@ function setupEventHandlers() {
       showAppError(data.message || data.docNotSentError || 'ارسال ناموفق');
     } else if (data.success && data.verifiedInRayvarz) {
       showAppSuccess('فیش در رایورز ثبت شد.');
+      resetMainTabPanelState('unsent');
     }
-    $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     showAppError(e.message);
   } finally {
@@ -3538,11 +3672,7 @@ function setupEventHandlers() {
         showAppWarning(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
       } else {
         showAppSuccess(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
-      }
-
-      selectedUnsentFicheNos.clear();
-      if (unsentSearchState.filters) {
-        await fetchUnsentResults(unsentSearchState.page);
+        if (!data.dryRun) resetMainTabPanelState('unsent');
       }
     } catch (e) {
       box.textContent = e.message;
@@ -3615,8 +3745,8 @@ function setupEventHandlers() {
         showAppInfo(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
       } else {
         showAppSuccess(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+        resetMainTabPanelState('installment');
       }
-      $('btnInstallmentPreview').click();
     } catch (e) {
       if (box) box.textContent = e.message;
       showAppError(e.message);
@@ -3699,8 +3829,7 @@ function setupEventHandlers() {
         showAppInfo(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
       } else {
         showAppSuccess(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
-        clearGridSelection(selectedFicheDateNos, ficheDateSelectedItems);
-        $('btnFicheDateSearch').click();
+        resetMainTabPanelState('ficheDate');
       }
     } catch (e) {
       if (box) box.textContent = e.message;
@@ -3782,8 +3911,7 @@ function setupEventHandlers() {
         showAppInfo('مرکز هزینه — DryRun؛ تغییری در دیتابیس اعمال نشد.');
       } else if (data.success && (data.updated || 0) > 0) {
         showAppSuccess(data.message || `${data.updated} فیش به‌روز شد`);
-        clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
-        await fetchCostCenterResults(costCenterSearchState.page);
+        resetMainTabPanelState('costCenter');
       } else {
         showAppError(data.message || 'به‌روزرسانی ناموفق بود');
       }
@@ -3873,8 +4001,7 @@ function setupEventHandlers() {
         showAppInfo('شاهکار — DryRun؛ تغییری در دیتابیس اعمال نشد.');
       } else if (data.success && (data.updated || 0) > 0) {
         showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
-        clearGridSelection(selectedShahkarUserNames, shahkarSelectedItems);
-        await fetchShahkarResults();
+        resetMainTabPanelState('shahkar');
       } else {
         showAppError(data.message || 'به‌روزرسانی ناموفق بود');
       }
@@ -3918,9 +4045,7 @@ function setupEventHandlers() {
         showAppInfo('تغییر تاریخ پرداخت — تغییری روی سرور اعمال نشد (DryRun).');
       } else if (data.success && (data.updated || 0) > 0) {
         showAppSuccess(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
-        clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
-        if ($('bankInquiryNewPaymentDate')) $('bankInquiryNewPaymentDate').value = '';
-        await fetchBankInquiryResults(bankInquirySearchState.page);
+        resetMainTabPanelState('bankInquiry');
       } else {
         const firstFail = (data.results || []).find((r) => !r.success);
         const detail = data.message || firstFail?.message || firstFail?.bankInquiryMessage || 'استعلام بانک یا به‌روزرسانی ناموفق بود';

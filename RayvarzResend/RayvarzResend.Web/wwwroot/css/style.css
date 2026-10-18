@@ -1481,6 +1481,45 @@ tbody tr:last-child td {
   letter-spacing: 0.02em;
 }
 
+.hero-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.change-password-dialog {
+  border: none;
+  border-radius: 14px;
+  padding: 0;
+  width: min(100vw - 2rem, 26rem);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+}
+
+.change-password-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.change-password-dialog-inner {
+  padding: 1.25rem 1.35rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.change-password-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.change-password-hint {
+  margin: 0;
+}
+
+.change-password-actions {
+  margin-top: 0.25rem;
+}
+
 .bank-inquiry-search-grid {
   display: grid;
   grid-template-columns: max-content minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(12rem, 1fr);

@@ -680,8 +680,9 @@ public sealed class AppUserRepository
 
     public async Task ResetPasswordAsync(Guid id, string password, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 6)
-            throw new ArgumentException("رمز عبور حداقل ۶ کاراکتر باشد");
+        var passwordError = PasswordPolicy.Validate(password);
+        if (passwordError != null)
+            throw new ArgumentException(passwordError);
 
         if (_useInMemory)
         {

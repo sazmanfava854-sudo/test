@@ -525,6 +525,32 @@ app.MapPost("/api/auth/logout", async (HttpContext http) =>
     return Results.Ok(new { ok = true });
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/auth/change-password", async (
+    ChangePasswordRequest? req,
+    AppAuthService auth,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var userId = AppAuthService.GetUserId(http.User);
+    if (userId == null)
+        return Results.Json(new { error = "نشست منقضی شده" }, statusCode: 401);
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        await auth.ChangePasswordAsync(userId.Value, req.CurrentPassword, req.NewPassword, ct);
+        return Results.Ok(new { ok = true, message = "رمز عبور با موفقیت تغییر کرد" });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).RequireAuthorization(authenticated);
+
 app.MapGet("/api/auth/me", async (HttpContext http, AppAuthService auth, CancellationToken ct) =>
 {
     try

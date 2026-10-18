@@ -178,6 +178,12 @@ public sealed class ResetAppUserPasswordRequest
     public string? Password { get; set; }
 }
 
+public sealed class ChangePasswordRequest
+{
+    public string? CurrentPassword { get; set; }
+    public string? NewPassword { get; set; }
+}
+
 public static class AuthPolicies
 {
     public const string Authenticated = "Authenticated";
