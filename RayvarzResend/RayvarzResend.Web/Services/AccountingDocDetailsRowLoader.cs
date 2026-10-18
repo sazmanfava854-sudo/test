@@ -15,13 +15,13 @@ public static class AccountingDocDetailsRowLoader
             return null;
 
         const string sql = """
-            SELECT d.WrapperAccountNo AS IncmNo,
+            SELECT TRY_CONVERT(int, d.WrapperAccountNo) AS IncmNo,
                    d.Price AS Val,
                    ISNULL(d.AccountNoComments, '') AS IncmRowDsc
             FROM dbo.Accounting_DocDetails d
             WHERE d.FicheNo = @f
-              AND d.WrapperAccountNo > 0
-              AND d.Price <> 0
+              AND TRY_CONVERT(int, d.WrapperAccountNo) > 0
+              AND TRY_CONVERT(decimal(38, 0), d.Price) <> 0
             ORDER BY d.IncmRow
             """;
 
@@ -35,15 +35,27 @@ public static class AccountingDocDetailsRowLoader
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
+                var incmNo = SqlDataReaderCoercion.ReadInt32(reader, "IncmNo");
+                if (incmNo <= 0)
+                    continue;
+
+                var val = SqlDataReaderCoercion.ReadDecimal(reader, "Val");
+                if (val == 0)
+                    continue;
+
                 rows.Add(new IncmRowDto
                 {
-                    IncmNo = reader.GetInt32(reader.GetOrdinal("IncmNo")),
-                    Val = reader.GetDecimal(reader.GetOrdinal("Val")),
-                    IncmRowDsc = reader.GetString(reader.GetOrdinal("IncmRowDsc"))
+                    IncmNo = incmNo,
+                    Val = val,
+                    IncmRowDsc = SqlDataReaderCoercion.ReadString(reader, "IncmRowDsc")
                 });
             }
         }
         catch (SqlException)
+        {
+            return null;
+        }
+        catch (InvalidCastException)
         {
             return null;
         }

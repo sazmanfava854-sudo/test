@@ -25,7 +25,13 @@ public static class IncomeAccountGroupCalculationFilter
             cmd.Parameters.AddWithValue("@g", incomeAccountGroup);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
-                set.Add(reader.GetInt32(0));
+            {
+                if (reader.IsDBNull(0))
+                    continue;
+                var id = SqlDataReaderCoercion.ToInt32(reader.GetValue(0));
+                if (id > 0)
+                    set.Add(id);
+            }
         }
         catch (SqlException)
         {
