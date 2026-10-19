@@ -577,6 +577,53 @@ public class InstallmentCheckUpdateResult
     public List<InstallmentCheckUpdateItemResult> Results { get; set; } = new();
 }
 
+/// <summary>تب تغییر تاریخ چک — dbo.Installment_List با TrackingNo.</summary>
+public class InstallmentCheckDateSearchRequest
+{
+    public string TrackingNo { get; set; } = "";
+}
+
+public class InstallmentCheckDateListItem
+{
+    public long NidInstallmentList { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public decimal? PaymentCost { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string CI_InstallmentStatus { get; set; } = "";
+    public string EndStateDesc { get; set; } = "";
+    public string EndStateCode { get; set; } = "";
+    public string Comments { get; set; } = "";
+}
+
+public class InstallmentCheckDateSearchResult
+{
+    public string? Error { get; set; }
+    public string TrackingNo { get; set; } = "";
+    public int Total { get; set; }
+    public List<InstallmentCheckDateListItem> Items { get; set; } = new();
+}
+
+public class InstallmentCheckDateUpdateRequest
+{
+    public long NidInstallmentList { get; set; }
+    public string NewPaymentDate { get; set; } = "";
+    public string PerformedByUser { get; set; } = "";
+}
+
+public class InstallmentCheckDateUpdateResult
+{
+    public string? Error { get; set; }
+    public bool DryRun { get; set; }
+    public bool Success { get; set; }
+    public long NidInstallmentList { get; set; }
+    public string TrackingNo { get; set; } = "";
+    public string? PaymentDateBefore { get; set; }
+    public string? PaymentDateAfter { get; set; }
+    public string NewPaymentDate { get; set; } = "";
+    public string? Message { get; set; }
+}
+
 /// <summary>تب تغییر تاریخ فیش — dbo.Income_Fiche.</summary>
 public class FicheDateChangeSearchRequest
 {

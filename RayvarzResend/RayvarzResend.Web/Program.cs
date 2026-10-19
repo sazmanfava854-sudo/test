@@ -105,6 +105,7 @@ builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
+builder.Services.AddSingleton<InstallmentCheckDateService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
@@ -752,7 +753,7 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         isAdmin = AppAuthService.IsAdmin(http.User),
         shimas = shimas.GetStatus()
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true, costCenter = true, shahkar = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, installmentCheckDate = true, ficheDateChange = true, bankInquiryConfirm = true, costCenter = true, shahkar = true },
     tahator = new
     {
         dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
@@ -770,6 +771,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     installment = new
     {
         dryRun = config.GetValue<bool?>("Installment:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Installment_List"
+    },
+    installmentCheckDate = new
+    {
+        dryRun = config.GetValue<bool?>("InstallmentCheckDate:DryRun")
+            ?? config.GetValue<bool?>("Installment:DryRun")
+            ?? config.GetValue("Rayvarz:DryRun", true),
         connection = "ConnectionStrings:Sara",
         database = "Sara8M03",
         table = "dbo.Installment_List"
@@ -1323,6 +1333,63 @@ app.MapPost("/api/installment/update", async (
     try
     {
         var result = await installment.UpdateAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/installment-check-date/search", async (
+    InstallmentCheckDateSearchRequest? req,
+    InstallmentCheckDateService checkDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessInstallment(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await checkDate.SearchAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/installment-check-date/update", async (
+    InstallmentCheckDateUpdateRequest? req,
+    InstallmentCheckDateService checkDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessInstallment(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
+    try
+    {
+        var result = await checkDate.UpdateAsync(req, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error });
         return Results.Ok(result);

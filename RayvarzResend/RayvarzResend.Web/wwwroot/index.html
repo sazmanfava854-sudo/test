@@ -45,6 +45,7 @@
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
       <button type="button" class="main-tab perm-rayvarz active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
+      <button type="button" class="main-tab perm-installment" data-tab="checkDate" role="tab" aria-selected="false" hidden>تغییر تاریخ چک</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
       <button type="button" class="main-tab perm-cost-center" data-tab="costCenter" role="tab" aria-selected="false" hidden>مرکز هزینه</button>
@@ -331,6 +332,56 @@
         </div>
       </div>
       <pre id="installmentResultBox" class="code-block" hidden></pre>
+    </section>
+    </div>
+
+    <div id="tabCheckDate" class="tab-panel perm-installment" role="tabpanel" hidden>
+    <section class="card card-enter installment-card">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">📆</span>
+        <h2>تغییر تاریخ چک</h2>
+      </div>
+      <p class="field-hint">جستجو در <code>dbo.Installment_List</code> با <strong>TrackingNo</strong> (کد پیگیری)</p>
+      <div class="installment-single-row">
+        <label class="field field-required installment-values-field">
+          <span class="field-label">کد پیگیری (TrackingNo)</span>
+          <input id="checkDateTrackingNo" type="text" inputmode="numeric" autocomplete="off" placeholder="9907200614003461" />
+        </label>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnCheckDateSearch" class="btn primary">جستجو</button>
+        <button type="button" id="btnCheckDateUpdate" class="btn secondary" disabled>اعمال تاریخ جدید</button>
+      </div>
+      <div class="subsection" id="checkDateResultsSection" hidden>
+        <div class="unsent-toolbar">
+          <span id="checkDateCountLabel" class="unsent-count"></span>
+        </div>
+        <div class="table-wrap installment-preview-table-wrap">
+          <table id="checkDateTable" class="installment-preview-table">
+            <thead>
+              <tr>
+                <th class="col-check-date-select">انتخاب</th>
+                <th>شماره سند</th>
+                <th>کد پیگیری</th>
+                <th>مبلغ</th>
+                <th>تاریخ چک</th>
+                <th>وضعیت</th>
+                <th>EndState</th>
+                <th>توضیحات</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <label class="field field-required">
+        <span class="field-label">تاریخ چک جدید (PaymentDate)</span>
+        <div class="date-input-wrap">
+          <input id="checkDateNewPaymentDate" data-jdp type="text" placeholder="1405/01/01" autocomplete="off" />
+          <button type="button" class="btn-date-icon" data-for="checkDateNewPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+        </div>
+      </label>
+      <pre id="checkDateResultBox" class="code-block" hidden></pre>
     </section>
     </div>
 

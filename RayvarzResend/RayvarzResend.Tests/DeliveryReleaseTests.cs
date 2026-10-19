@@ -177,7 +177,7 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("جفت مرجع", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
         Assert.DoesNotContain("جزئیات فیش", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
         Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnSend'")[1].Split("bindClick('btnUnsentSearch'")[0]);
-        Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnUnsentSend'")[1].Split("bindClick('btnInstallmentPreview'")[0]);
+        Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnUnsentSend'")[1].Split("bindClick('btnCheckDateSearch'")[0]);
     }
 
     [Fact]
@@ -217,6 +217,21 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("جفت تهاتر قبلاً در همین دسته پردازش می‌شود", src);
         Assert.DoesNotContain("جفت ۱۵۷+۱۵۸ کامل نیست", src);
         Assert.Contains("فقط همین فیش", src);
+    }
+
+    [Fact]
+    public void Installment_check_date_tab_is_wired()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.Contains("data-tab=\"checkDate\"", html);
+        Assert.Contains("تغییر تاریخ چک", html);
+        Assert.Contains("id=\"checkDateTrackingNo\"", html);
+        Assert.Contains("btnCheckDateSearch", js);
+        Assert.Contains("/api/installment-check-date/search", js);
+        Assert.Contains("installmentCheckDate", program);
+        Assert.Contains("InstallmentCheckDateService", program);
     }
 
     [Fact]
