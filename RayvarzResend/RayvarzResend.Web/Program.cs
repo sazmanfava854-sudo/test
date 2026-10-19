@@ -928,10 +928,26 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
         if (districtDenied != null)
             return Results.Json(new { error = districtDenied }, statusCode: 403);
 
+        fiche.ExistsInAccountingDocHeader = await repo.ExistsInAccountingDocHeaderAsync(fiche.FicheNo, ct);
         try
         {
             var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
-            fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, yr > 0 ? yr : null, ct);
+            if (TahatorRowBuilder.IsTahatorFiche(fiche))
+            {
+                var tahatorYears = RayvarzYearResolver.CollectCandidates(
+                    fiche.RayvarzDocDate, fiche.RayvarzActDate, fiche.RayvarzDueDate).ToList();
+                if (yr > 0 && !tahatorYears.Contains(yr))
+                    tahatorYears.Add(yr);
+                fiche.ExistsInRayvarz = await repo.ExistsTahatorDocumentInRayvarzRobustAsync(
+                    fiche.FicheNo,
+                    TahatorRowBuilder.IsTahatorAmountFiche(fiche),
+                    tahatorYears,
+                    ct);
+            }
+            else
+            {
+                fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, yr > 0 ? yr : null, ct);
+            }
         }
         catch (Exception rayEx)
         {

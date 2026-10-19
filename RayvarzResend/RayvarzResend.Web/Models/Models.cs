@@ -77,6 +77,7 @@ public class FicheHeaderDto
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
+    public bool ExistsInAccountingDocHeader { get; set; }
     /// <summary>آیا فیش از نظر اعتبارسنجی قابل ارسال است.</summary>
     public bool CanSend { get; set; }
     /// <summary>دلیل عدم ارسال — برای نمایش در UI.</summary>

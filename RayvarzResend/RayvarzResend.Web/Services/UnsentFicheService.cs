@@ -373,14 +373,6 @@ public class UnsentFicheService
         var sourceKind = target.SourceKind;
         var item = new UnsentBatchPlanItem { FicheNo = ficheNo };
 
-        if (await _repo.ExistsInAccountingDocHeaderAsync(ficheNo, ct))
-        {
-            item.SendPath = "Skip";
-            item.Detail = "Accounting_DocHeader";
-            item.BlockReason = "فیش در Accounting_DocHeader موجود است";
-            return item;
-        }
-
         var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
         if (fiche == null)
         {
@@ -416,6 +408,30 @@ public class UnsentFicheService
         {
             item.SendPath = "Skip";
             item.BlockReason = "نوع فیش با نوسازی/صنفی مطابقت ندارد";
+            return item;
+        }
+
+        var shamsiYear = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
+        var eligibility = await FicheSendEligibility.CheckAsync(
+            _repo, fiche, ficheNo, shamsiYear > 0 ? shamsiYear : null, ct);
+        if (eligibility.RayvarzQueryFailed)
+        {
+            item.SendPath = "Skip";
+            item.Detail = "Rayvarz";
+            item.BlockReason = "بررسی تکراری رایورز ناموفق — ارسال نشد";
+            return item;
+        }
+
+        var duplicateBlock = FicheSendEligibility.BuildBlockReason(eligibility);
+        if (duplicateBlock != null)
+        {
+            item.SendPath = TahatorRowBuilder.IsTahatorFiche(fiche) ? "Tahator" : "Skip";
+            item.Detail = eligibility.InRayvarz && eligibility.InAccountingDocHeader
+                ? "Rayvarz+Accounting_DocHeader"
+                : eligibility.InRayvarz
+                    ? "Rayvarz"
+                    : "Accounting_DocHeader";
+            item.BlockReason = duplicateBlock;
             return item;
         }
 

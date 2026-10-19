@@ -465,18 +465,20 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void TahatorSendPolicy_resend_when_in_doc_header_but_not_rayvarz()
+    public void TahatorSendPolicy_blocks_when_in_doc_header_or_rayvarz()
     {
-        Assert.True(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: false));
-        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false));
-        Assert.False(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: true));
+        Assert.True(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: false, inAccountingDocHeader: false));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: false));
+        Assert.False(TahatorSendPolicy.ShouldSendMember(force: true, inRayvarz: false, inAccountingDocHeader: true));
+        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: true));
+        Assert.False(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: true, inAccountingDocHeader: false));
     }
 
     [Fact]
     public void TahatorSendPolicy_rayvarz_check_failure_does_not_imply_needs_send()
     {
-        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, rayvarzCheckFailed: true));
-        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, rayvarzCheckFailed: false));
+        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: false, rayvarzCheckFailed: true));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: false, rayvarzCheckFailed: false));
     }
 
     [Fact]

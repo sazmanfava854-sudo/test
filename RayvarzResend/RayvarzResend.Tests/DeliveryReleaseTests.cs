@@ -203,7 +203,7 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("هر دو فیش با همان NidIncome لازم است", src);
         Assert.DoesNotContain("فقط فیش دیگر ارسال می‌شود", src);
         Assert.DoesNotContain("force=true برای ارسال اجباری", src);
-        Assert.Contains("این فیش قبلاً در رایورز ثبت شده است.", src);
+        Assert.Contains("FicheSendEligibility.BuildBlockReason", src);
     }
 
     [Fact]
