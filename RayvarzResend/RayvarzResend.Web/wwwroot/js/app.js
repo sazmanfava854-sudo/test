@@ -3290,6 +3290,18 @@ function renderFiche(f) {
       <span class="stat-label">کد نوسازی</span>
       <span class="stat-value">${f.bnkAcntNo || '-'}</span>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">رایورز (incmdocsys)</span>
+      <span class="stat-value">${f.existsInRayvarz ? 'موجود — ارسال نشود' : 'نیست'}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Accounting_DocHeader</span>
+      <span class="stat-value">${f.existsInAccountingDocHeader ? 'موجود — ارسال نشود' : 'نیست'}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">وضعیت</span>
+      <span class="stat-value">${f.statusMessage || (f.canSend ? 'آماده ارسال' : '—')}</span>
+    </div>
   `;
 
   renderMappingTable(f);

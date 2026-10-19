@@ -181,12 +181,14 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void Fiche_summary_hides_duplicate_rayvarz_status()
+    public void Fiche_summary_shows_rayvarz_and_accounting_header_before_send()
     {
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         var summary = js.Split("function renderFiche(")[1].Split("function init(")[0];
-        Assert.DoesNotContain("stat-label\">وضعیت", summary);
-        Assert.DoesNotContain("stat-label\">در رایورز", summary);
+        Assert.Contains("existsInRayvarz", summary);
+        Assert.Contains("existsInAccountingDocHeader", summary);
+        Assert.Contains("stat-label\">رایورز (incmdocsys)", summary);
+        Assert.Contains("stat-label\">Accounting_DocHeader", summary);
         Assert.DoesNotContain("بله — تکراری", summary);
     }
 
@@ -276,7 +278,15 @@ public class DeliveryReleaseTests
         Assert.Contains("EpayFichePresenceChecker", program);
 
         var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
+        Assert.Contains("FicheSendEligibility.CheckAsync", send);
+        Assert.Contains("TryWriteAfterSendAsync", send);
         Assert.Contains("EnsurePresentOrThrowAsync", send);
+
+        var unsent = File.ReadAllText(WebFile("Services", "UnsentFicheService.cs"));
+        Assert.Contains("FicheSendEligibility.CheckAsync", unsent);
+        Assert.Contains("ارسال نوسازی/صنفی", unsent);
+        Assert.Contains("ارسال درآمدی شهرسازی", unsent);
+        Assert.Contains("_send.SendAsync", unsent);
         Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
         var tahatorSend = File.ReadAllText(WebFile("Services", "TahatorResendService.cs"));
         Assert.DoesNotContain("EpayFichePresenceChecker", tahatorSend);

@@ -4,7 +4,8 @@ using RayvarzResend.Web.Models;
 namespace RayvarzResend.Web.Services;
 
 /// <summary>
-/// قبل از ارسال (تکی/جمعی/تهاتر): اول رایورز، بعد Accounting_DocHeader — در هر دو نباید فیش باشد.
+/// قبل از ارسال (تکی/جمعی): درآمد شهرسازی، نوسازی/صنفی، تهاتر — اول رایورز (incmdocsys)، بعد Accounting_DocHeader.
+/// در هر دو نباید فیش باشد.
 /// </summary>
 public static class FicheSendEligibility
 {
@@ -35,7 +36,10 @@ public static class FicheSendEligibility
         FicheHeaderDto? fiche,
         string ficheNo,
         int? shamsiYear = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? soapDocDate = null,
+        string? soapActDate = null,
+        string? soapDueDate = null)
     {
         ficheNo = TahatorRowBuilder.NormalizeFicheNo(ficheNo.Trim());
 
@@ -46,6 +50,9 @@ public static class FicheSendEligibility
             if (fiche != null && TahatorRowBuilder.IsTahatorFiche(fiche))
             {
                 var years = RayvarzYearResolver.CollectCandidates(
+                    soapDocDate,
+                    soapActDate,
+                    soapDueDate,
                     fiche.RayvarzDocDate,
                     fiche.RayvarzActDate,
                     fiche.RayvarzDueDate).ToList();

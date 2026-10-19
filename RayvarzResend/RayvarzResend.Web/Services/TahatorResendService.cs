@@ -114,22 +114,16 @@ public sealed class TahatorResendService
             if (string.Equals(no, ficheNo, StringComparison.Ordinal))
                 inputSnapshot ??= await TryLoadIncomeFicheStateAsync(no, ct);
 
-            var inHeader = await ExistsInAccountingDocHeaderAsync(no, ct);
-            var inRayvarz = false;
-            var rayvarzCheckFailed = false;
-            try
-            {
-                inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, reqDates: null, ct);
-            }
-            catch (SqlException ex)
-            {
-                inRayvarz = false;
-                rayvarzCheckFailed = true;
-                rayvarzCheckWarnings.Add($"incmdocsys {no}: {ex.Message}");
-            }
+            var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
+            var elig = await FicheSendEligibility.CheckAsync(
+                _fiches, fiche, no, yr > 0 ? yr : null, ct);
+            if (elig.RayvarzQueryFailed)
+                rayvarzCheckWarnings.Add($"incmdocsys {no}: اتصال SQL رایورز ناموفق");
 
-            var notSent = !inRayvarz && !rayvarzCheckFailed ? await TryGetDocNotSentAsync(no, ct) : null;
-            var needs = TahatorSendPolicy.NeedsSend(inRayvarz, inHeader, rayvarzCheckFailed);
+            var inRayvarz = elig.InRayvarz;
+            var inHeader = elig.InAccountingDocHeader;
+            var notSent = !inRayvarz && !elig.RayvarzQueryFailed ? await TryGetDocNotSentAsync(no, ct) : null;
+            var needs = TahatorSendPolicy.NeedsSend(inRayvarz, inHeader, elig.RayvarzQueryFailed);
 
             members.Add(new TahatorPairMemberStatus
             {
@@ -226,29 +220,37 @@ public sealed class TahatorResendService
 
         try
         {
+            var todayRay = DateHelper.CurrentShamsiRayvarzDate();
+            var planDocDate = FirstDateOrToday(req.DocDate, todayRay);
+            var planActDate = FirstDateOrToday(req.ActDate, todayRay);
+            var planDueDate = FirstDateOrToday(req.DueDate, todayRay);
+
             foreach (var fiche in ordered)
             {
                 var no = fiche.FicheNo.Trim();
-                var inHeader = await ExistsInAccountingDocHeaderAsync(no, ct);
-                bool inRayvarz;
-                try
-                {
-                    inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, req, ct);
-                }
-                catch (SqlException ex)
-                {
-                    inRayvarz = false;
-                    steps.Add($"⚠ incmdocsys {no}: {ex.Message}");
-                }
+                var yr = DateHelper.ExtractShamsiYear(planDocDate);
+                var elig = await FicheSendEligibility.CheckAsync(
+                    _fiches, fiche, no, yr > 0 ? yr : null, ct,
+                    planDocDate, planActDate, planDueDate);
+                var inHeader = elig.InAccountingDocHeader;
+                var inRayvarz = elig.InRayvarz;
+                if (elig.RayvarzQueryFailed)
+                    steps.Add($"⚠ incmdocsys {no}: اتصال SQL رایورز ناموفق — ارسال انجام نمی‌شود");
 
-                var shouldSend = TahatorSendPolicy.ShouldSendMember(force, inRayvarz, inHeader);
+                var shouldSend = TahatorSendPolicy.NeedsSend(inRayvarz, inHeader, elig.RayvarzQueryFailed);
                 steps.Add(
                     $"1) {fiche.IncomeAccountGroup} FicheNo={no} DocTyp={fiche.DocTyp} " +
                     $"Header={inHeader} Rayvarz={inRayvarz} → send={shouldSend}");
 
                 if (!shouldSend)
                 {
-                    var skipReason = inRayvarz ? "InRayvarz" : inHeader ? "InAccountingDocHeader" : "Blocked";
+                    var skipReason = inRayvarz
+                        ? "InRayvarz"
+                        : inHeader
+                            ? "InAccountingDocHeader"
+                            : elig.RayvarzQueryFailed
+                                ? "RayvarzQueryFailed"
+                                : "Blocked";
                     ficheResults.Add(new TahatorFicheSendDetail
                     {
                         FicheNo = no,
@@ -305,10 +307,9 @@ public sealed class TahatorResendService
                 };
             }
 
-            var todayRay = DateHelper.CurrentShamsiRayvarzDate();
-            var docDate = FirstDateOrToday(req.DocDate, todayRay);
-            var actDate = FirstDateOrToday(req.ActDate, todayRay);
-            var dueDate = FirstDateOrToday(req.DueDate, todayRay);
+            var docDate = planDocDate;
+            var actDate = planActDate;
+            var dueDate = planDueDate;
             steps.Add($"2) تاریخ SOAP: DocDate/ActDate/Due={docDate} (امروز مگر override)");
 
             for (var i = 0; i < toSend.Count; i++)

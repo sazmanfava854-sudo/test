@@ -5,7 +5,7 @@ using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
-/// <summary>اعتبارسنجی ارسال و ارسال تکی — مسیر تهاتر جدا از ارسال عادی.</summary>
+/// <summary>اعتبارسنجی و ارسال تکی درآمد شهرسازی / نوسازی·صنفی — تهاتر از مسیر جدا.</summary>
 public class FicheSendService
 {
     private readonly FicheRepository _repo;
