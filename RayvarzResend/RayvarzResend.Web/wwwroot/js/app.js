@@ -317,7 +317,7 @@ function resetMainTabPanelState(tabKey) {
       clearFieldValue('checkDateTrackingNo');
       clearFieldValue('checkDateNewPaymentDate');
       checkDateItems = [];
-      checkDateSelectedNid = 0;
+      checkDateSelectedRow = null;
       hideEl('checkDateResultsSection');
       hideEl('checkDateResultBox');
       {
@@ -497,7 +497,7 @@ const installmentLookupLabels = {
 
 let installmentMode = 'single';
 let checkDateItems = [];
-let checkDateSelectedNid = 0;
+let checkDateSelectedRow = null;
 let installmentExcelRows = [];
 
 const ficheDateStatusLabels = {
@@ -993,7 +993,7 @@ function updateCheckDateApplyButton() {
   const btn = $('btnCheckDateUpdate');
   if (!btn) return;
   const date = ($('checkDateNewPaymentDate')?.value || '').trim();
-  btn.disabled = !(checkDateSelectedNid > 0 && date.length > 0);
+  btn.disabled = !(checkDateSelectedRow && date.length > 0);
 }
 
 function renderCheckDateTable(data) {
@@ -1003,7 +1003,7 @@ function renderCheckDateTable(data) {
   if (!section || !tbody) return;
 
   checkDateItems = data.items || [];
-  checkDateSelectedNid = 0;
+  checkDateSelectedRow = null;
   updateCheckDateApplyButton();
   section.hidden = false;
 
@@ -1014,12 +1014,12 @@ function renderCheckDateTable(data) {
   }
 
   tbody.innerHTML = '';
-  checkDateItems.forEach((row) => {
+  checkDateItems.forEach((row, index) => {
     const tr = document.createElement('tr');
-    const nid = row.nidInstallmentList || 0;
+    const nid = row.nidInstallment || 0;
     tr.innerHTML = `
       <td class="col-check-date-select">
-        <input type="radio" name="checkDateRow" value="${nid}" aria-label="انتخاب ردیف" />
+        <input type="radio" name="checkDateRow" value="${index}" aria-label="انتخاب ردیف" />
       </td>
       <td>${toPersianDigits(row.noDocument || '—')}</td>
       <td>${toPersianDigits(row.trackingNo || '—')}</td>
@@ -1032,7 +1032,11 @@ function renderCheckDateTable(data) {
     const radio = tr.querySelector('input[type="radio"]');
     radio?.addEventListener('change', () => {
       if (radio.checked) {
-        checkDateSelectedNid = nid;
+        checkDateSelectedRow = {
+          nidInstallment: row.nidInstallment,
+          noDocument: row.noDocument || '',
+          trackingNo: row.trackingNo || data.trackingNo || ''
+        };
         updateCheckDateApplyButton();
       }
     });
@@ -1043,7 +1047,12 @@ function renderCheckDateTable(data) {
     const onlyRadio = tbody.querySelector('input[type="radio"]');
     if (onlyRadio) {
       onlyRadio.checked = true;
-      checkDateSelectedNid = checkDateItems[0].nidInstallmentList || 0;
+      const row = checkDateItems[0];
+      checkDateSelectedRow = {
+        nidInstallment: row.nidInstallment,
+        noDocument: row.noDocument || '',
+        trackingNo: row.trackingNo || data.trackingNo || ''
+      };
       updateCheckDateApplyButton();
     }
   }
@@ -3824,10 +3833,12 @@ function setupEventHandlers() {
   });
 
   bindClick('btnCheckDateUpdate', async () => {
-    if (checkDateSelectedNid <= 0) return showAppWarning('یک ردیف از گرید انتخاب کنید');
+    if (!checkDateSelectedRow?.nidInstallment) return showAppWarning('یک ردیف از گرید انتخاب کنید');
     const newPaymentDate = ($('checkDateNewPaymentDate')?.value || '').trim();
     if (!newPaymentDate) return showAppWarning('تاریخ چک جدید را وارد کنید');
 
+    const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value)
+      || checkDateSelectedRow.trackingNo;
     const dry = config?.installmentCheckDate?.dryRun ?? config?.installment?.dryRun ?? config?.dryRun ?? false;
     const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';
     if (!confirm(`${dryNote ? dryNote + '\n\n' : ''}تاریخ چک به ${newPaymentDate} تغییر کند؟`)) return;
@@ -3844,7 +3855,9 @@ function setupEventHandlers() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nidInstallmentList: checkDateSelectedNid,
+          nidInstallment: checkDateSelectedRow.nidInstallment,
+          noDocument: checkDateSelectedRow.noDocument,
+          trackingNo,
           newPaymentDate
         })
       });

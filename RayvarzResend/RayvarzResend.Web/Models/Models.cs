@@ -585,7 +585,7 @@ public class InstallmentCheckDateSearchRequest
 
 public class InstallmentCheckDateListItem
 {
-    public long NidInstallmentList { get; set; }
+    public long NidInstallment { get; set; }
     public string NoDocument { get; set; } = "";
     public string TrackingNo { get; set; } = "";
     public decimal? PaymentCost { get; set; }
@@ -606,7 +606,9 @@ public class InstallmentCheckDateSearchResult
 
 public class InstallmentCheckDateUpdateRequest
 {
-    public long NidInstallmentList { get; set; }
+    public long NidInstallment { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
     public string NewPaymentDate { get; set; } = "";
     public string PerformedByUser { get; set; } = "";
 }
@@ -616,7 +618,8 @@ public class InstallmentCheckDateUpdateResult
     public string? Error { get; set; }
     public bool DryRun { get; set; }
     public bool Success { get; set; }
-    public long NidInstallmentList { get; set; }
+    public long NidInstallment { get; set; }
+    public string NoDocument { get; set; } = "";
     public string TrackingNo { get; set; } = "";
     public string? PaymentDateBefore { get; set; }
     public string? PaymentDateAfter { get; set; }

@@ -61,31 +61,37 @@ public sealed class InstallmentCheckDateService
         InstallmentCheckDateUpdateRequest req,
         CancellationToken ct = default)
     {
-        if (req.NidInstallmentList <= 0)
+        var trackingDigits = InstallmentIdentifierDetector.ExtractDigits(req.TrackingNo);
+        if (req.NidInstallment <= 0 || string.IsNullOrWhiteSpace(req.NoDocument))
             return new InstallmentCheckDateUpdateResult { Error = "ردیف انتخاب نشده است" };
+
+        if (trackingDigits.Length < InstallmentIdentifierDetector.TrackingNoMinDigitLength)
+            return new InstallmentCheckDateUpdateResult { Error = "کد پیگیری برای به‌روزرسانی معتبر نیست" };
 
         if (!BankInquiryConfirmHelper.TryNormalizeSlashDate(req.NewPaymentDate, out var slashDate))
             return new InstallmentCheckDateUpdateResult { Error = "تاریخ چک معتبر نیست (مثال: 1405/01/01)" };
 
+        var noDocument = req.NoDocument.Trim();
         var dryRun = IsDryRun;
         var result = new InstallmentCheckDateUpdateResult
         {
             DryRun = dryRun,
-            NidInstallmentList = req.NidInstallmentList,
+            NidInstallment = req.NidInstallment,
+            NoDocument = noDocument,
+            TrackingNo = trackingDigits,
             NewPaymentDate = slashDate
         };
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
 
-        var existing = await LoadOneAsync(conn, req.NidInstallmentList, ct);
+        var existing = await LoadOneAsync(conn, req.NidInstallment, noDocument, trackingDigits, ct);
         if (existing == null)
         {
             result.Error = "ردیف در Installment_List یافت نشد";
             return result;
         }
 
-        result.TrackingNo = existing.TrackingNo;
         result.PaymentDateBefore = existing.PaymentDate;
 
         if (dryRun)
@@ -98,47 +104,33 @@ public sealed class InstallmentCheckDateService
         }
 
         var prefix = InstallmentCheckDateHelper.BuildCommentPrefix(req.PerformedByUser, slashDate);
-        const string sql = """
-            UPDATE dbo.Installment_List
-            SET PaymentDate = @paymentDate,
-                Comments = @prefix + ISNULL(Comments, '')
-            WHERE NidInstallmentList = @id
-            """;
-
-        await using var cmd = new SqlCommand(sql, conn);
+        await using var cmd = new SqlCommand(InstallmentListDirectQuery.BuildUpdatePaymentDateSql(), conn);
         cmd.Parameters.AddWithValue("@paymentDate", slashDate);
         cmd.Parameters.AddWithValue("@prefix", prefix);
-        cmd.Parameters.AddWithValue("@id", req.NidInstallmentList);
+        cmd.Parameters.AddWithValue("@nid", req.NidInstallment);
+        cmd.Parameters.AddWithValue("@noDoc", noDocument);
+        cmd.Parameters.AddWithValue("@v", trackingDigits);
         var affected = await cmd.ExecuteNonQueryAsync(ct);
 
         result.Success = affected > 0;
         result.PaymentDateAfter = slashDate;
         result.Message = affected > 0
-            ? $"تاریخ چک به {slashDate} به‌روز شد"
+            ? $"تاریخ چک به {slashDate} به‌روز شد ({affected} ردیف)"
             : "UPDATE انجام نشد";
         return result;
     }
 
     private static async Task<InstallmentCheckDateListItem?> LoadOneAsync(
         SqlConnection conn,
-        long nidInstallmentList,
+        long nidInstallment,
+        string noDocument,
+        string trackingDigits,
         CancellationToken ct)
     {
-        const string sql = """
-            SELECT il.NidInstallmentList,
-                   il.NoDocument,
-                   il.TrackingNo,
-                   il.PaymentCost,
-                   CAST(il.PaymentDate AS varchar(20)) AS PaymentDate,
-                   CAST(il.CI_InstallmentStatus AS varchar(20)) AS CI_InstallmentStatus,
-                   il.EndStateDesc,
-                   il.EndStateCode,
-                   il.Comments
-            FROM dbo.Installment_List il
-            WHERE il.NidInstallmentList = @id
-            """;
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", nidInstallmentList);
+        await using var cmd = new SqlCommand(InstallmentListDirectQuery.BuildSelectOneRowSql(), conn);
+        cmd.Parameters.AddWithValue("@nid", nidInstallment);
+        cmd.Parameters.AddWithValue("@noDoc", noDocument);
+        cmd.Parameters.AddWithValue("@v", trackingDigits);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
             return null;
@@ -147,9 +139,9 @@ public sealed class InstallmentCheckDateService
 
     private static InstallmentCheckDateListItem MapRow(SqlDataReader reader) => new()
     {
-        NidInstallmentList = reader["NidInstallmentList"] is DBNull
+        NidInstallment = reader["NidInstallment"] is DBNull
             ? 0
-            : Convert.ToInt64(reader["NidInstallmentList"]),
+            : Convert.ToInt64(reader["NidInstallment"]),
         NoDocument = reader["NoDocument"]?.ToString() ?? "",
         TrackingNo = reader["TrackingNo"]?.ToString() ?? "",
         PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
