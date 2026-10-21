@@ -62,7 +62,7 @@ public sealed class InstallmentCheckDateService
         CancellationToken ct = default)
     {
         var trackingDigits = InstallmentIdentifierDetector.ExtractDigits(req.TrackingNo);
-        if (req.NidInstallment <= 0 || string.IsNullOrWhiteSpace(req.NoDocument))
+        if (req.NidInstallment == Guid.Empty || string.IsNullOrWhiteSpace(req.NoDocument))
             return new InstallmentCheckDateUpdateResult { Error = "ردیف انتخاب نشده است" };
 
         if (trackingDigits.Length < InstallmentIdentifierDetector.TrackingNoMinDigitLength)
@@ -122,7 +122,7 @@ public sealed class InstallmentCheckDateService
 
     private static async Task<InstallmentCheckDateListItem?> LoadOneAsync(
         SqlConnection conn,
-        long nidInstallment,
+        Guid nidInstallment,
         string noDocument,
         string trackingDigits,
         CancellationToken ct)
@@ -139,9 +139,7 @@ public sealed class InstallmentCheckDateService
 
     private static InstallmentCheckDateListItem MapRow(SqlDataReader reader) => new()
     {
-        NidInstallment = reader["NidInstallment"] is DBNull
-            ? 0
-            : Convert.ToInt64(reader["NidInstallment"]),
+        NidInstallment = InstallmentListKeyReader.ReadNidInstallment(reader),
         NoDocument = reader["NoDocument"]?.ToString() ?? "",
         TrackingNo = reader["TrackingNo"]?.ToString() ?? "",
         PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),

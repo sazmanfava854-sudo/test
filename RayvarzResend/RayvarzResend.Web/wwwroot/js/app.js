@@ -989,11 +989,21 @@ function renderInstallmentPreview(data) {
   }
 }
 
+function isInstallmentListKeyEmpty(id) {
+  if (id == null || id === '') return true;
+  const compact = String(id).replace(/-/g, '').toLowerCase();
+  return compact === '0' || compact === '00000000000000000000000000000000';
+}
+
 function updateCheckDateApplyButton() {
   const btn = $('btnCheckDateUpdate');
   if (!btn) return;
   const date = ($('checkDateNewPaymentDate')?.value || '').trim();
-  btn.disabled = !(checkDateSelectedRow && date.length > 0);
+  btn.disabled = !(
+    checkDateSelectedRow
+    && !isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)
+    && date.length > 0
+  );
 }
 
 function renderCheckDateTable(data) {
@@ -1016,7 +1026,6 @@ function renderCheckDateTable(data) {
   tbody.innerHTML = '';
   checkDateItems.forEach((row, index) => {
     const tr = document.createElement('tr');
-    const nid = row.nidInstallment || 0;
     tr.innerHTML = `
       <td class="col-check-date-select">
         <input type="radio" name="checkDateRow" value="${index}" aria-label="انتخاب ردیف" />
@@ -3874,7 +3883,9 @@ function setupEventHandlers() {
   });
 
   bindClick('btnCheckDateUpdate', async () => {
-    if (!checkDateSelectedRow?.nidInstallment) return showAppWarning('یک ردیف از گرید انتخاب کنید');
+    if (!checkDateSelectedRow || isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)) {
+      return showAppWarning('یک ردیف از گرید انتخاب کنید');
+    }
     const newPaymentDate = ($('checkDateNewPaymentDate')?.value || '').trim();
     if (!newPaymentDate) return showAppWarning('تاریخ چک جدید را وارد کنید');
 
