@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۴۱ — چک رایورز + واسط قبل از ارسال)** — همه نوع فیش + ثبت Header/Details پس از SOAP.
+**نسخه آخر (تحویل: ۴۲ — تاریخ چک + مدیریت رمز)** — شامل v41 (چک رایورز/واسط قبل از ارسال).
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v41` |
-| Zip publish | `RayvarzResend-41.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v42` |
+| Zip publish | `RayvarzResend-42.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v41.md`](DELIVERY-v41.md) |
+| جزئیات | [`DELIVERY-v42.md`](DELIVERY-v42.md) |
+| v41 قبلی | [`DELIVERY-v41.md`](DELIVERY-v41.md) |
 | v40 قبلی | [`DELIVERY-v40.md`](DELIVERY-v40.md) |
 | v38 قبلی | [`DELIVERY-v38.md`](DELIVERY-v38.md) |
 | v37 قبلی | [`DELIVERY-v37.md`](DELIVERY-v37.md) |
@@ -24,7 +25,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 41` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 42` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

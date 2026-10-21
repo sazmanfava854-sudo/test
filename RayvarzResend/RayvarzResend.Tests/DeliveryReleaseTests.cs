@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v41_eligibility()
+    public void ReleaseInfo_is_v42_release()
     {
-        Assert.Equal(41, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v41", ReleaseInfo.Tag);
+        Assert.Equal(42, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v42", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v41_doc_lists_eligibility_release()
+    public void DELIVERY_v42_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v41.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v42.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 41", doc);
-        Assert.Contains("Accounting_DocHeader", doc);
-        Assert.Contains("RayvarzResend-41.zip", doc);
+        Assert.Contains("releaseVersion: 42", doc);
+        Assert.Contains("تغییر تاریخ چک", doc);
+        Assert.Contains("RayvarzResend-42.zip", doc);
     }
 
     [Fact]
@@ -259,7 +259,7 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=100", html);
+        Assert.Contains("js/app.js?v=101", html);
         Assert.Contains("btnChangePassword", html);
         Assert.Contains("change-password.js", html);
         Assert.Contains("password-fields.js", html);
