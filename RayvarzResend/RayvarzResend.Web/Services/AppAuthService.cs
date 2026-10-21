@@ -138,6 +138,7 @@ public sealed class AppAuthService
             IsAdmin = user.IsAdmin,
             CanAccessUnsentFiches = perms.CanAccessUnsentFiches,
             CanAccessInstallment = perms.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = perms.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = perms.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = perms.CanAccessBankInquiryConfirm,
             CanAccessShahkar = perms.CanAccessShahkar,

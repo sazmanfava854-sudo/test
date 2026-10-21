@@ -128,6 +128,7 @@ public sealed class InMemoryAppUserStore
                 Name = g.Name,
                 CanAccessUnsentFiches = g.CanAccessUnsentFiches,
                 CanAccessInstallment = g.CanAccessInstallment,
+                CanAccessInstallmentCheckDate = g.CanAccessInstallmentCheckDate,
                 CanAccessFicheDateChange = g.CanAccessFicheDateChange,
                 CanAccessBankInquiryConfirm = g.CanAccessBankInquiryConfirm,
                 CanAccessShahkar = g.CanAccessShahkar,
@@ -151,6 +152,7 @@ public sealed class InMemoryAppUserStore
             Name = name,
             CanAccessUnsentFiches = req.CanAccessUnsentFiches,
             CanAccessInstallment = req.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = req.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = req.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
             CanAccessShahkar = req.CanAccessShahkar,
@@ -165,6 +167,7 @@ public sealed class InMemoryAppUserStore
             Name = group.Name,
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = group.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanAccessShahkar = group.CanAccessShahkar,
@@ -186,6 +189,7 @@ public sealed class InMemoryAppUserStore
         group.Name = name;
         group.CanAccessUnsentFiches = req.CanAccessUnsentFiches;
         group.CanAccessInstallment = req.CanAccessInstallment;
+        group.CanAccessInstallmentCheckDate = req.CanAccessInstallmentCheckDate;
         group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
         group.CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm;
         group.CanAccessShahkar = req.CanAccessShahkar;
@@ -198,6 +202,7 @@ public sealed class InMemoryAppUserStore
             Name = group.Name,
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = group.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanAccessShahkar = group.CanAccessShahkar,

@@ -16,6 +16,14 @@ const MODULES = [
     can: (user) => isAdminUser(user) || !!user?.canAccessInstallment
   },
   {
+    key: 'checkDate',
+    title: 'تغییر تاریخ چک',
+    description: '',
+    icon: '📝',
+    href: '/?tab=checkDate',
+    can: (user) => isAdminUser(user) || !!user?.canAccessInstallmentCheckDate
+  },
+  {
     key: 'ficheDate',
     title: 'تغییر تاریخ فیش',
     description: '',
@@ -72,6 +80,7 @@ function normalizeAuthSession(user) {
     user.isAdmin = true;
     user.canAccessUnsentFiches = true;
     user.canAccessInstallment = true;
+    user.canAccessInstallmentCheckDate = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
     user.canAccessCostCenter = true;
@@ -90,6 +99,7 @@ function hasAnyModulePermission(user) {
   return !!(
     user?.canAccessUnsentFiches
     || user?.canAccessInstallment
+    || user?.canAccessInstallmentCheckDate
     || user?.canAccessFicheDateChange
     || user?.canAccessBankInquiryConfirm
     || user?.canAccessCostCenter

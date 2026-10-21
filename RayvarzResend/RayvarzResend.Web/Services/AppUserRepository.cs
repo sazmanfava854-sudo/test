@@ -82,6 +82,7 @@ public sealed class AppUserRepository
                     Name                    NVARCHAR(100)    NOT NULL,
                     CanAccessUnsentFiches   BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Unsent DEFAULT (0),
                     CanAccessInstallment    BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Installment DEFAULT (0),
+                    CanAccessInstallmentCheckDate BIT        NOT NULL CONSTRAINT DF_AppUserGroup_InstallmentCheckDate DEFAULT (0),
                     CanAccessFicheDateChange BIT             NOT NULL CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0),
                     CanAccessBankInquiryConfirm BIT          NOT NULL CONSTRAINT DF_AppUserGroup_BankInquiry DEFAULT (0),
                     CanAccessShahkar          BIT              NOT NULL CONSTRAINT DF_AppUserGroup_Shahkar DEFAULT (0),
@@ -113,6 +114,13 @@ public sealed class AppUserRepository
                     CONSTRAINT DF_AppUserGroup_FicheDate DEFAULT (0)');
             """, ct);
 
+        await TryRunSchemaUpgradeAsync(conn, "AppUserGroup.CanAccessInstallmentCheckDate", """
+            IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessInstallmentCheckDate') IS NULL
+                EXEC(N'ALTER TABLE dbo.AppUserGroup ADD CanAccessInstallmentCheckDate BIT NOT NULL
+                    CONSTRAINT DF_AppUserGroup_InstallmentCheckDate DEFAULT (0)');
+            """, ct);
+
         await TryRunSchemaUpgradeAsync(conn, "AppUserGroup.CanAccessBankInquiryConfirm", """
             IF OBJECT_ID(N'dbo.AppUserGroup', N'U') IS NOT NULL
                AND COL_LENGTH(N'dbo.AppUserGroup', N'CanAccessBankInquiryConfirm') IS NULL
@@ -139,6 +147,13 @@ public sealed class AppUserRepository
                AND COL_LENGTH(N'dbo.AppUser', N'DirectCanAccessCostCenter') IS NULL
                 ALTER TABLE dbo.AppUser ADD DirectCanAccessCostCenter BIT NOT NULL
                     CONSTRAINT DF_AppUser_DirectCostCenter DEFAULT (0);
+            """, ct);
+
+        await TryRunSchemaUpgradeAsync(conn, "AppUser.DirectCanAccessInstallmentCheckDate", """
+            IF OBJECT_ID(N'dbo.AppUser', N'U') IS NOT NULL
+               AND COL_LENGTH(N'dbo.AppUser', N'DirectCanAccessInstallmentCheckDate') IS NULL
+                ALTER TABLE dbo.AppUser ADD DirectCanAccessInstallmentCheckDate BIT NOT NULL
+                    CONSTRAINT DF_AppUser_DirectInstallmentCheckDate DEFAULT (0);
             """, ct);
 
         await TryRunSchemaUpgradeAsync(conn, "AppUser.Domain", """
@@ -177,6 +192,7 @@ public sealed class AppUserRepository
                 ALTER TABLE dbo.AppUser ADD
                     DirectCanAccessUnsentFiches BIT NOT NULL CONSTRAINT DF_AppUser_DirectUnsent DEFAULT (0),
                     DirectCanAccessInstallment BIT NOT NULL CONSTRAINT DF_AppUser_DirectInstallment DEFAULT (0),
+                    DirectCanAccessInstallmentCheckDate BIT NOT NULL CONSTRAINT DF_AppUser_DirectInstallmentCheckDate DEFAULT (0),
                     DirectCanAccessFicheDateChange BIT NOT NULL CONSTRAINT DF_AppUser_DirectFicheDate DEFAULT (0),
                     DirectCanAccessBankInquiryConfirm BIT NOT NULL CONSTRAINT DF_AppUser_DirectBankInquiry DEFAULT (0),
                     DirectCanAccessShahkar BIT NOT NULL CONSTRAINT DF_AppUser_DirectShahkar DEFAULT (0),
@@ -324,7 +340,7 @@ public sealed class AppUserRepository
         const string sql = """
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc,
-                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessInstallmentCheckDate, DirectCanAccessFicheDateChange,
                    DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE Username = @u OR NationalId = @u
@@ -352,7 +368,7 @@ public sealed class AppUserRepository
         const string sql = """
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc,
-                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessInstallmentCheckDate, DirectCanAccessFicheDateChange,
                    DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE (@d <> N'' AND [Domain] = @d)
@@ -386,7 +402,7 @@ public sealed class AppUserRepository
         const string sql = """
             SELECT TOP 1 Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain,
                    IsAdmin, IsActive, CreatedAtUtc,
-                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessInstallmentCheckDate, DirectCanAccessFicheDateChange,
                    DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             WHERE Id = @id
@@ -407,7 +423,7 @@ public sealed class AppUserRepository
         await EnsureSchemaAsync(ct);
         const string sql = """
             SELECT Id, Username, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc,
-                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                   DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessInstallmentCheckDate, DirectCanAccessFicheDateChange,
                    DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers
             FROM dbo.AppUser
             ORDER BY CreatedAtUtc DESC, Username
@@ -448,7 +464,7 @@ public sealed class AppUserRepository
         var shahkarColumn = _hasShahkarColumn ? "CanAccessShahkar" : "CAST(0 AS bit) AS CanAccessShahkar";
         var costCenterColumn = _hasCostCenterColumn ? "CanAccessCostCenter" : "CAST(0 AS bit) AS CanAccessCostCenter";
         var sql = $"""
-            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, {shahkarColumn}, {costCenterColumn}, CanManageUsers, CreatedAtUtc
+            SELECT Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessInstallmentCheckDate, CanAccessFicheDateChange, CanAccessBankInquiryConfirm, {shahkarColumn}, {costCenterColumn}, CanManageUsers, CreatedAtUtc
             FROM dbo.AppUserGroup
             ORDER BY Name
             """;
@@ -484,8 +500,8 @@ public sealed class AppUserRepository
         var costCenterValue = _hasCostCenterColumn ? ", @costCenter" : "";
         var sql = $"""
             INSERT INTO dbo.AppUserGroup
-                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessFicheDateChange, CanAccessBankInquiryConfirm{shahkarColumn}{costCenterColumn}, CanManageUsers, CreatedAtUtc)
-            VALUES (@id, @name, @unsent, @installment, @ficheDate, @bankInquiry{shahkarValue}{costCenterValue}, @users, @created)
+                (Id, Name, CanAccessUnsentFiches, CanAccessInstallment, CanAccessInstallmentCheckDate, CanAccessFicheDateChange, CanAccessBankInquiryConfirm{shahkarColumn}{costCenterColumn}, CanManageUsers, CreatedAtUtc)
+            VALUES (@id, @name, @unsent, @installment, @installmentCheckDate, @ficheDate, @bankInquiry{shahkarValue}{costCenterValue}, @users, @created)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -494,6 +510,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@name", group.Name);
         cmd.Parameters.AddWithValue("@unsent", group.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@installment", group.CanAccessInstallment);
+        cmd.Parameters.AddWithValue("@installmentCheckDate", group.CanAccessInstallmentCheckDate);
         cmd.Parameters.AddWithValue("@ficheDate", group.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@bankInquiry", group.CanAccessBankInquiryConfirm);
         if (_hasShahkarColumn)
@@ -532,6 +549,7 @@ public sealed class AppUserRepository
             SET Name = @name,
                 CanAccessUnsentFiches = @unsent,
                 CanAccessInstallment = @installment,
+                CanAccessInstallmentCheckDate = @installmentCheckDate,
                 CanAccessFicheDateChange = @ficheDate,
                 CanAccessBankInquiryConfirm = @bankInquiry,
                 {shahkarAssignment}
@@ -546,6 +564,7 @@ public sealed class AppUserRepository
         cmd.Parameters.AddWithValue("@name", req.Name!.Trim());
         cmd.Parameters.AddWithValue("@unsent", req.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@installment", req.CanAccessInstallment);
+        cmd.Parameters.AddWithValue("@installmentCheckDate", req.CanAccessInstallmentCheckDate);
         cmd.Parameters.AddWithValue("@ficheDate", req.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@bankInquiry", req.CanAccessBankInquiryConfirm);
         if (_hasShahkarColumn)
@@ -647,6 +666,7 @@ public sealed class AppUserRepository
             SET IsAdmin = @admin, IsActive = @active, [Domain] = @domain,
                 DirectCanAccessUnsentFiches = @dUnsent,
                 DirectCanAccessInstallment = @dInstallment,
+                DirectCanAccessInstallmentCheckDate = @dInstallmentCheckDate,
                 DirectCanAccessFicheDateChange = @dFicheDate,
                 DirectCanAccessBankInquiryConfirm = @dBank,
                 DirectCanAccessShahkar = @dShahkar,
@@ -759,6 +779,7 @@ public sealed class AppUserRepository
         Name = req.Name!.Trim(),
         CanAccessUnsentFiches = req.CanAccessUnsentFiches,
         CanAccessInstallment = req.CanAccessInstallment,
+        CanAccessInstallmentCheckDate = req.CanAccessInstallmentCheckDate,
         CanAccessFicheDateChange = req.CanAccessFicheDateChange,
         CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
         CanAccessShahkar = req.CanAccessShahkar,
@@ -773,6 +794,7 @@ public sealed class AppUserRepository
         Name = group.Name,
         CanAccessUnsentFiches = group.CanAccessUnsentFiches,
         CanAccessInstallment = group.CanAccessInstallment,
+        CanAccessInstallmentCheckDate = group.CanAccessInstallmentCheckDate,
         CanAccessFicheDateChange = group.CanAccessFicheDateChange,
         CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
         CanAccessShahkar = group.CanAccessShahkar,
@@ -787,6 +809,7 @@ public sealed class AppUserRepository
         Name = reader.GetString(reader.GetOrdinal("Name")),
         CanAccessUnsentFiches = reader.GetBoolean(reader.GetOrdinal("CanAccessUnsentFiches")),
         CanAccessInstallment = reader.GetBoolean(reader.GetOrdinal("CanAccessInstallment")),
+        CanAccessInstallmentCheckDate = ReadOptionalBoolean(reader, "CanAccessInstallmentCheckDate"),
         CanAccessFicheDateChange = ReadOptionalBoolean(reader, "CanAccessFicheDateChange"),
         CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "CanAccessBankInquiryConfirm"),
         CanAccessShahkar = ReadOptionalBoolean(reader, "CanAccessShahkar"),
@@ -826,11 +849,11 @@ public sealed class AppUserRepository
         const string sql = """
             INSERT INTO dbo.AppUser
                 (Id, Username, PasswordHash, FirstName, LastName, NationalId, Position, District, Domain, IsAdmin, IsActive, CreatedAtUtc,
-                 DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessFicheDateChange,
+                 DirectCanAccessUnsentFiches, DirectCanAccessInstallment, DirectCanAccessInstallmentCheckDate, DirectCanAccessFicheDateChange,
                  DirectCanAccessBankInquiryConfirm, DirectCanAccessShahkar, DirectCanAccessCostCenter, DirectCanManageUsers)
             VALUES
                 (@id, @u, @hash, @fn, @ln, @nid, @pos, @dist, @domain, @admin, 1, @created,
-                 @dUnsent, @dInstallment, @dFicheDate, @dBank, @dShahkar, @dCostCenter, @dUsers)
+                 @dUnsent, @dInstallment, @dInstallmentCheckDate, @dFicheDate, @dBank, @dShahkar, @dCostCenter, @dUsers)
             """;
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -948,6 +971,7 @@ public sealed class AppUserRepository
     {
         cmd.Parameters.AddWithValue("@dUnsent", direct.CanAccessUnsentFiches);
         cmd.Parameters.AddWithValue("@dInstallment", direct.CanAccessInstallment);
+        cmd.Parameters.AddWithValue("@dInstallmentCheckDate", direct.CanAccessInstallmentCheckDate);
         cmd.Parameters.AddWithValue("@dFicheDate", direct.CanAccessFicheDateChange);
         cmd.Parameters.AddWithValue("@dBank", direct.CanAccessBankInquiryConfirm);
         cmd.Parameters.AddWithValue("@dShahkar", direct.CanAccessShahkar);
@@ -963,6 +987,7 @@ public sealed class AppUserRepository
             {
                 CanAccessUnsentFiches = ReadOptionalBoolean(reader, "DirectCanAccessUnsentFiches"),
                 CanAccessInstallment = ReadOptionalBoolean(reader, "DirectCanAccessInstallment"),
+                CanAccessInstallmentCheckDate = ReadOptionalBoolean(reader, "DirectCanAccessInstallmentCheckDate"),
                 CanAccessFicheDateChange = ReadOptionalBoolean(reader, "DirectCanAccessFicheDateChange"),
                 CanAccessBankInquiryConfirm = ReadOptionalBoolean(reader, "DirectCanAccessBankInquiryConfirm"),
                 CanAccessShahkar = ReadOptionalBoolean(reader, "DirectCanAccessShahkar"),

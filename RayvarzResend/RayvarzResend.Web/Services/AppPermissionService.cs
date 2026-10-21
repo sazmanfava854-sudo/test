@@ -23,6 +23,7 @@ public sealed class AppPermissionService
             IsAdmin = false,
             CanAccessUnsentFiches = direct.CanAccessUnsentFiches || memberGroups.Any(g => g.CanAccessUnsentFiches),
             CanAccessInstallment = direct.CanAccessInstallment || memberGroups.Any(g => g.CanAccessInstallment),
+            CanAccessInstallmentCheckDate = direct.CanAccessInstallmentCheckDate || memberGroups.Any(g => g.CanAccessInstallmentCheckDate),
             CanAccessFicheDateChange = direct.CanAccessFicheDateChange || memberGroups.Any(g => g.CanAccessFicheDateChange),
             CanAccessBankInquiryConfirm = direct.CanAccessBankInquiryConfirm || memberGroups.Any(g => g.CanAccessBankInquiryConfirm),
             CanAccessShahkar = direct.CanAccessShahkar || memberGroups.Any(g => g.CanAccessShahkar),

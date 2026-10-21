@@ -2600,6 +2600,7 @@ function normalizeAuthSession(user) {
     user.isAdmin = true;
     user.canAccessUnsentFiches = true;
     user.canAccessInstallment = true;
+    user.canAccessInstallmentCheckDate = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
     user.canAccessCostCenter = true;
@@ -2622,6 +2623,7 @@ function hasAnyModulePermission() {
   return !!(
     currentUser?.canAccessUnsentFiches
     || currentUser?.canAccessInstallment
+    || currentUser?.canAccessInstallmentCheckDate
     || currentUser?.canAccessFicheDateChange
     || currentUser?.canAccessBankInquiryConfirm
     || currentUser?.canAccessCostCenter
@@ -2640,7 +2642,7 @@ function canAccessRayvarzModule() {
 const MAIN_TAB_ACCESS_ORDER = [
   { key: 'unsent', can: () => canAccessRayvarzModule() },
   { key: 'installment', can: () => canAccessInstallment() },
-  { key: 'checkDate', can: () => canAccessInstallment() },
+  { key: 'checkDate', can: () => canAccessInstallmentCheckDate() },
   { key: 'ficheDate', can: () => canAccessFicheDateChange() },
   { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
   { key: 'costCenter', can: () => canAccessCostCenter() },
@@ -2650,6 +2652,10 @@ const MAIN_TAB_ACCESS_ORDER = [
 
 function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
+}
+
+function canAccessInstallmentCheckDate() {
+  return isAdminUser() || !!currentUser?.canAccessInstallmentCheckDate;
 }
 
 function canAccessFicheDateChange() {
@@ -2685,6 +2691,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-installment').forEach((el) => {
     el.hidden = !canAccessInstallment();
+  });
+  document.querySelectorAll('.perm-installment-check-date').forEach((el) => {
+    el.hidden = !canAccessInstallmentCheckDate();
   });
   document.querySelectorAll('.perm-fiche-date').forEach((el) => {
     el.hidden = !canAccessFicheDateChange();
@@ -2878,6 +2887,7 @@ function renderGroupsTableBody() {
       <td>${g.name}</td>
       <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessInstallmentCheckDate ? 'بله' : 'خیر'}</td>
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
@@ -2898,6 +2908,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
+  if ($('newGroupInstallmentCheckDate')) $('newGroupInstallmentCheckDate').checked = group.canAccessInstallmentCheckDate;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
@@ -2914,6 +2925,7 @@ function resetGroupForm() {
   if ($('newGroupName')) $('newGroupName').value = '';
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
+  if ($('newGroupInstallmentCheckDate')) $('newGroupInstallmentCheckDate').checked = false;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
@@ -2929,6 +2941,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
     name: ($('newGroupName')?.value || '').trim(),
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canAccessInstallmentCheckDate: !!$('newGroupInstallmentCheckDate')?.checked,
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
     canAccessShahkar: !!$('newGroupShahkar')?.checked,
@@ -3028,6 +3041,7 @@ function readDirectPermissionsFromForm(prefix) {
   return {
     canAccessUnsentFiches: !!$(`${prefix}Unsent`)?.checked,
     canAccessInstallment: !!$(`${prefix}Installment`)?.checked,
+    canAccessInstallmentCheckDate: !!$(`${prefix}InstallmentCheckDate`)?.checked,
     canAccessFicheDateChange: !!$(`${prefix}FicheDate`)?.checked,
     canAccessBankInquiryConfirm: !!$(`${prefix}BankInquiry`)?.checked,
     canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
@@ -3040,6 +3054,7 @@ function allDirectPermissionsGranted() {
   return {
     canAccessUnsentFiches: true,
     canAccessInstallment: true,
+    canAccessInstallmentCheckDate: true,
     canAccessFicheDateChange: true,
     canAccessBankInquiryConfirm: true,
     canAccessShahkar: true,
@@ -3062,6 +3077,7 @@ function setDirectPermissionsOnForm(prefix, perms) {
   const p = perms || {};
   if ($(`${prefix}Unsent`)) $(`${prefix}Unsent`).checked = !!p.canAccessUnsentFiches;
   if ($(`${prefix}Installment`)) $(`${prefix}Installment`).checked = !!p.canAccessInstallment;
+  if ($(`${prefix}InstallmentCheckDate`)) $(`${prefix}InstallmentCheckDate`).checked = !!p.canAccessInstallmentCheckDate;
   if ($(`${prefix}FicheDate`)) $(`${prefix}FicheDate`).checked = !!p.canAccessFicheDateChange;
   if ($(`${prefix}BankInquiry`)) $(`${prefix}BankInquiry`).checked = !!p.canAccessBankInquiryConfirm;
   if ($(`${prefix}Shahkar`)) $(`${prefix}Shahkar`).checked = !!p.canAccessShahkar;

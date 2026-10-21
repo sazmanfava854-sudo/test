@@ -45,7 +45,7 @@
     <nav class="main-tabs" role="tablist" aria-label="بخش‌های اصلی">
       <button type="button" class="main-tab perm-rayvarz active" data-tab="unsent" role="tab" aria-selected="true">ارسال به رایورز</button>
       <button type="button" class="main-tab perm-installment" data-tab="installment" role="tab" aria-selected="false" hidden>چک خزانه</button>
-      <button type="button" class="main-tab perm-installment" data-tab="checkDate" role="tab" aria-selected="false" hidden>تغییر تاریخ چک</button>
+      <button type="button" class="main-tab perm-installment-check-date" data-tab="checkDate" role="tab" aria-selected="false" hidden>تغییر تاریخ چک</button>
       <button type="button" class="main-tab perm-fiche-date" data-tab="ficheDate" role="tab" aria-selected="false" hidden>تغییر تاریخ فیش</button>
       <button type="button" class="main-tab perm-bank-inquiry" data-tab="bankInquiry" role="tab" aria-selected="false" hidden>خدمات الکترونیک</button>
       <button type="button" class="main-tab perm-cost-center" data-tab="costCenter" role="tab" aria-selected="false" hidden>مرکز هزینه</button>
@@ -335,7 +335,7 @@
     </section>
     </div>
 
-    <div id="tabCheckDate" class="tab-panel perm-installment" role="tabpanel" hidden>
+    <div id="tabCheckDate" class="tab-panel perm-installment-check-date" role="tabpanel" hidden>
     <section class="card card-enter installment-card">
       <div class="card-head">
         <span class="card-icon" aria-hidden="true">📆</span>
@@ -771,6 +771,10 @@
                   <span class="fiche-date-ms-option-text">چک خزانه</span>
                 </label>
                 <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newGroupInstallmentCheckDate" type="checkbox" class="user-group-perm-check" data-perm-label="تغییر تاریخ چک" />
+                  <span class="fiche-date-ms-option-text">تغییر تاریخ چک</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
                   <input id="newGroupFicheDate" type="checkbox" class="user-group-perm-check" data-perm-label="تغییر تاریخ فیش" />
                   <span class="fiche-date-ms-option-text">تغییر تاریخ فیش</span>
                 </label>
@@ -807,6 +811,7 @@
                   <th>نام گروه</th>
                   <th>ارسال به رایورز</th>
                   <th>چک خزانه</th>
+                  <th>تغییر تاریخ چک</th>
                   <th>مدیریت کاربران</th>
                   <th>تغییر تاریخ فیش</th>
                   <th>خدمات الکترونیک</th>
@@ -879,6 +884,10 @@
                 <label class="fiche-date-ms-option user-group-perm-option" role="option">
                   <input id="newUserDirectInstallment" type="checkbox" class="user-direct-perm-check" data-perm-label="چک خزانه" />
                   <span class="fiche-date-ms-option-text">چک خزانه</span>
+                </label>
+                <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                  <input id="newUserDirectInstallmentCheckDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ چک" />
+                  <span class="fiche-date-ms-option-text">تغییر تاریخ چک</span>
                 </label>
                 <label class="fiche-date-ms-option user-group-perm-option" role="option">
                   <input id="newUserDirectFicheDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ فیش" />
@@ -967,6 +976,10 @@
                   <label class="fiche-date-ms-option user-group-perm-option" role="option">
                     <input id="editUserDirectInstallment" type="checkbox" class="user-direct-perm-check" data-perm-label="چک خزانه" />
                     <span class="fiche-date-ms-option-text">چک خزانه</span>
+                  </label>
+                  <label class="fiche-date-ms-option user-group-perm-option" role="option">
+                    <input id="editUserDirectInstallmentCheckDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ چک" />
+                    <span class="fiche-date-ms-option-text">تغییر تاریخ چک</span>
                   </label>
                   <label class="fiche-date-ms-option user-group-perm-option" role="option">
                     <input id="editUserDirectFicheDate" type="checkbox" class="user-direct-perm-check" data-perm-label="تغییر تاریخ فیش" />

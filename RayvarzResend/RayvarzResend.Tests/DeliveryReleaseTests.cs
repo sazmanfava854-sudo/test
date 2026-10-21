@@ -232,6 +232,10 @@ public class DeliveryReleaseTests
         Assert.Contains("/api/installment-check-date/search", js);
         Assert.Contains("installmentCheckDate", program);
         Assert.Contains("InstallmentCheckDateService", program);
+        Assert.Contains("perm-installment-check-date", html);
+        Assert.Contains("id=\"newGroupInstallmentCheckDate\"", html);
+        Assert.Contains("canAccessInstallmentCheckDate", js);
+        Assert.Contains("DenyUnlessInstallmentCheckDate", program);
     }
 
     [Fact]

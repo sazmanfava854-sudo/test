@@ -1354,7 +1354,7 @@ app.MapPost("/api/installment-check-date/search", async (
     HttpContext http,
     CancellationToken ct) =>
 {
-    var denied = await DenyUnlessInstallment(http, perms, ct);
+    var denied = await DenyUnlessInstallmentCheckDate(http, perms, ct);
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
@@ -1382,7 +1382,7 @@ app.MapPost("/api/installment-check-date/update", async (
     HttpContext http,
     CancellationToken ct) =>
 {
-    var denied = await DenyUnlessInstallment(http, perms, ct);
+    var denied = await DenyUnlessInstallmentCheckDate(http, perms, ct);
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
@@ -1742,6 +1742,14 @@ static async Task<IResult?> DenyUnlessInstallment(HttpContext http, AppPermissio
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
     if (!AppPermissionService.Allows(p, x => x.CanAccessInstallment))
         return Results.Json(new { error = "دسترسی به چک خزانه مجاز نیست" }, statusCode: 403);
+    return null;
+}
+
+static async Task<IResult?> DenyUnlessInstallmentCheckDate(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessInstallmentCheckDate))
+        return Results.Json(new { error = "دسترسی به تغییر تاریخ چک مجاز نیست" }, statusCode: 403);
     return null;
 }
 
