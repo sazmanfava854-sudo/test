@@ -5,10 +5,9 @@ public static class InstallmentCheckDateHelper
     public static string BuildCommentPrefix(string performedByUser, string newPaymentDate)
     {
         var user = (performedByUser ?? "").Trim();
-        var date = (newPaymentDate ?? "").Trim();
-        var baseText = string.IsNullOrEmpty(user)
-            ? $"تغییر تاریخ چک به {date}"
-            : $"تغییر تاریخ چک به {date} توسط {user}";
-        return baseText + " ";
+        var paymentDate = (newPaymentDate ?? "").Trim();
+        var actionDate = DateHelper.CurrentShamsiSlashDate();
+        var actor = string.IsNullOrEmpty(user) ? "کاربر" : user;
+        return $"تغییر تاریخ چک به {paymentDate} توسط {actor} مورخ {actionDate} — ";
     }
 }

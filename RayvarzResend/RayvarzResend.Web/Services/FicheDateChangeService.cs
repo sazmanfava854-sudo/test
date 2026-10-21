@@ -208,7 +208,6 @@ public sealed class FicheDateChangeService
             return result;
         }
 
-        var commentPrefix = FicheDateChangeHelper.BuildCommentPrefix(req.PerformedByUser);
         var setClauses = new List<string> { "Comments = @prefix + ISNULL(Comments, N'')" };
         if (req.ApplyExportPermanentDate)
             setClauses.Add("ExportPermanentDate = @epd");
@@ -233,6 +232,22 @@ public sealed class FicheDateChangeService
             var item = new FicheDateChangeUpdateItemResult { FicheNo = ficheNo };
             try
             {
+                int? previousStatus = null;
+                if (req.ApplyEumFicheStatus)
+                    previousStatus = await LoadCurrentFicheStatusAsync(conn, ficheNo, ct);
+
+                var commentPrefix = FicheDateChangeHelper.BuildCommentPrefix(
+                    req.PerformedByUser,
+                    req.ApplyExportPermanentDate,
+                    newPermanent,
+                    req.ApplyExportTemporaryDate,
+                    newTemporary,
+                    req.ApplyPaymentBreakDate,
+                    newBreak,
+                    req.ApplyEumFicheStatus,
+                    previousStatus,
+                    newStatus);
+
                 await using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@prefix", commentPrefix);
                 cmd.Parameters.AddWithValue("@ficheNo", ficheNo);
@@ -369,6 +384,20 @@ public sealed class FicheDateChangeService
                 parameters.Add(($"@{toParamPrefix}", to));
             }
         }
+    }
+
+    private static async Task<int?> LoadCurrentFicheStatusAsync(
+        SqlConnection conn,
+        string ficheNo,
+        CancellationToken ct)
+    {
+        const string sql = "SELECT TOP 1 EumFicheStatus FROM dbo.Income_Fiche WHERE FicheNo = @f";
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null or DBNull)
+            return null;
+        return Convert.ToInt32(scalar);
     }
 
     private static void AppendUpdateItemResult(FicheDateChangeUpdateResult result, FicheDateChangeUpdateItemResult item)
