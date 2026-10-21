@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۴۳ — رفع Guid در تب تاریخ چک)** — شامل v42 و v41.
+**نسخه آخر (تحویل: ۴۴ — UI تب تاریخ چک)** — شامل v43 (Guid) و v42/v41.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v43` |
-| **دانلود Zip** | [**RayvarzResend-43.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-43.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v44` |
+| **دانلود Zip** | [**RayvarzResend-44.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-44.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v43.md`](DELIVERY-v43.md) |
+| جزئیات | [`DELIVERY-v44.md`](DELIVERY-v44.md) |
+| v43 قبلی | [`DELIVERY-v43.md`](DELIVERY-v43.md) |
 | v42 قبلی | [`DELIVERY-v42.md`](DELIVERY-v42.md) |
 | v41 قبلی | [`DELIVERY-v41.md`](DELIVERY-v41.md) |
 | v40 قبلی | [`DELIVERY-v40.md`](DELIVERY-v40.md) |
@@ -26,7 +27,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 43` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 44` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 
