@@ -98,26 +98,26 @@ public sealed class AppAuthService
         return user;
     }
 
-    public async Task ChangePasswordAsync(
-        Guid userId,
-        string? currentPassword,
-        string? newPassword,
-        CancellationToken ct = default)
+    public async Task SetPasswordForUserAsync(Guid userId, string? newPassword, CancellationToken ct = default)
     {
-        var policyError = PasswordPolicy.Validate(newPassword);
+        var trimmed = (newPassword ?? "").Trim();
+        var policyError = PasswordPolicy.Validate(trimmed);
         if (policyError != null)
             throw new ArgumentException(policyError);
-        if (string.IsNullOrWhiteSpace(currentPassword))
-            throw new ArgumentException("رمز عبور فعلی الزامی است");
 
         var user = await _users.FindByIdAsync(userId, ct);
         if (user == null || !user.IsActive)
             throw new InvalidOperationException("کاربر یافت نشد");
-        if (!PasswordHasherUtil.Verify(currentPassword, user.PasswordHash))
-            throw new ArgumentException("رمز عبور فعلی اشتباه است");
 
-        await _users.ResetPasswordAsync(userId, newPassword!, ct);
+        await _users.ResetPasswordAsync(userId, trimmed, ct);
     }
+
+    public Task ChangePasswordAsync(
+        Guid userId,
+        string? currentPassword,
+        string? newPassword,
+        CancellationToken ct = default) =>
+        SetPasswordForUserAsync(userId, newPassword, ct);
 
     public async Task<AuthSessionDto> ToSessionAsync(AppUserRecord user, CancellationToken ct = default)
     {

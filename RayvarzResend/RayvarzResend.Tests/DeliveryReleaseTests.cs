@@ -262,6 +262,8 @@ public class DeliveryReleaseTests
         Assert.Contains("js/app.js?v=100", html);
         Assert.Contains("btnChangePassword", html);
         Assert.Contains("change-password.js", html);
+        Assert.Contains("password-fields.js", html);
+        Assert.DoesNotContain("changePasswordCurrent", html);
         Assert.Contains("id=\"tabCostCenter\"", html);
         Assert.Contains("btnCostCenterSearch", html);
         Assert.Contains("cost-center-fiche-input", html);

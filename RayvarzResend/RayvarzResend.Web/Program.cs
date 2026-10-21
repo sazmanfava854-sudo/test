@@ -652,8 +652,8 @@ app.MapPost("/api/admin/users/{id:guid}/reset-password", async (
         return Results.BadRequest(new { error = "رمز عبور جدید الزامی است" });
     try
     {
-        await users.ResetPasswordAsync(id, req.Password, ct);
-        return Results.Ok(new { ok = true });
+        await users.ResetPasswordAsync(id, req.Password.Trim(), ct);
+        return Results.Ok(new { ok = true, message = "رمز عبور با موفقیت تغییر کرد" });
     }
     catch (ArgumentException ex)
     {

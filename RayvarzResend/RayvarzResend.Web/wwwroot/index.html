@@ -849,7 +849,10 @@
           </label>
           <label class="field field-required">
             <span class="field-label">رمز عبور</span>
-            <input id="newUserPassword" type="password" autocomplete="new-password" />
+            <div class="password-field-wrap">
+              <input id="newUserPassword" type="password" autocomplete="new-password" dir="ltr" />
+              <button type="button" class="password-toggle-btn" aria-label="نمایش رمز" aria-pressed="false">👁</button>
+            </div>
           </label>
           <label class="field">
             <span class="field-label">سمت</span>
@@ -1016,7 +1019,10 @@
             </div>
             <label class="field">
               <span class="field-label">رمز عبور جدید</span>
-              <input id="editUserNewPassword" type="password" autocomplete="new-password" />
+              <div class="password-field-wrap">
+                <input id="editUserNewPassword" type="password" autocomplete="new-password" dir="ltr" />
+                <button type="button" class="password-toggle-btn" aria-label="نمایش رمز" aria-pressed="false">👁</button>
+              </div>
             </label>
           </div>
           <div class="actions user-edit-actions">
@@ -1034,16 +1040,18 @@
       <h2 class="change-password-title">تغییر رمز عبور</h2>
       <p class="field-hint change-password-hint">حداقل ۸ کاراکتر، حرف انگلیسی کوچک و بزرگ، و علامت (مثل @)</p>
       <label class="field field-required">
-        <span class="field-label">رمز فعلی</span>
-        <input id="changePasswordCurrent" type="password" autocomplete="current-password" dir="ltr" />
-      </label>
-      <label class="field field-required">
         <span class="field-label">رمز جدید</span>
-        <input id="changePasswordNew" type="password" autocomplete="new-password" dir="ltr" />
+        <div class="password-field-wrap">
+          <input id="changePasswordNew" type="password" autocomplete="new-password" dir="ltr" />
+          <button type="button" class="password-toggle-btn" aria-label="نمایش رمز" aria-pressed="false">👁</button>
+        </div>
       </label>
       <label class="field field-required">
         <span class="field-label">تکرار رمز جدید</span>
-        <input id="changePasswordConfirm" type="password" autocomplete="new-password" dir="ltr" />
+        <div class="password-field-wrap">
+          <input id="changePasswordConfirm" type="password" autocomplete="new-password" dir="ltr" />
+          <button type="button" class="password-toggle-btn" aria-label="نمایش رمز" aria-pressed="false">👁</button>
+        </div>
       </label>
       <p id="changePasswordError" class="login-error" hidden></p>
       <div class="actions change-password-actions">
@@ -1054,7 +1062,8 @@
   </dialog>
   <script src="lib/jalalidatepicker/jalalidatepicker.min.js"></script>
   <script src="lib/xlsx/xlsx.full.min.js"></script>
-  <script src="js/change-password.js?v=1"></script>
-  <script src="js/app.js?v=100"></script>
+  <script src="js/password-fields.js?v=1"></script>
+  <script src="js/change-password.js?v=2"></script>
+  <script src="js/app.js?v=101"></script>
 </body>
 </html>

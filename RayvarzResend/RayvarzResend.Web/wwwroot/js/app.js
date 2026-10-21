@@ -3165,24 +3165,49 @@ async function saveUserEdit() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  const pendingPassword = ($('editUserNewPassword')?.value || '').trim();
+  if (pendingPassword) {
+    await resetUserPassword({ skipConfirm: true });
+  }
   closeUserEdit();
   await loadUsersTable();
 }
 
-async function resetUserPassword() {
-  if (!editingUserId) return;
-  const password = $('editUserNewPassword')?.value || '';
-  const policyError = typeof validatePasswordPolicy === 'function' ? validatePasswordPolicy(password) : null;
-  if (policyError) return alert(policyError);
+async function resetUserPassword({ skipConfirm = false } = {}) {
+  if (!editingUserId) {
+    alert('ابتدا کاربر را از لیست انتخاب و ویرایش کنید');
+    return;
+  }
+  const password = ($('editUserNewPassword')?.value || '').trim();
+  const policyError = typeof window.validatePasswordPolicy === 'function'
+    ? window.validatePasswordPolicy(password)
+    : (password ? null : 'رمز عبور الزامی است');
+  if (policyError) {
+    alert(policyError);
+    return;
+  }
+  if (!skipConfirm && !window.confirm('رمز عبور این کاربر با مقدار وارد شده جایگزین شود؟')) {
+    return;
+  }
   const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password })
   });
-  const data = await parseJsonResponse(res);
+  const text = await res.text();
+  let data = {};
+  if (text && text.trim()) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`پاسخ نامعتبر از سرور (HTTP ${res.status})`);
+    }
+  }
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  alert('رمز عبور با موفقیت تغییر کرد');
+  const msg = data.message || 'رمز عبور با موفقیت تغییر کرد';
+  if (typeof showAppSuccess === 'function') showAppSuccess(msg);
+  else alert(msg);
 }
 
 async function createUserFromForm() {

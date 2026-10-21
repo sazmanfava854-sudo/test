@@ -183,6 +183,7 @@ public sealed class UpdateAppUserRequest
 
 public sealed class ResetAppUserPasswordRequest
 {
+    [System.Text.Json.Serialization.JsonPropertyName("password")]
     public string? Password { get; set; }
 }
 

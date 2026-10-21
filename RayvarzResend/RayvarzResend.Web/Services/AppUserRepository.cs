@@ -700,6 +700,7 @@ public sealed class AppUserRepository
 
     public async Task ResetPasswordAsync(Guid id, string password, CancellationToken ct = default)
     {
+        password = (password ?? "").Trim();
         var passwordError = PasswordPolicy.Validate(password);
         if (passwordError != null)
             throw new ArgumentException(passwordError);
