@@ -1554,6 +1554,11 @@ tbody tr:last-child td {
   outline-offset: 2px;
 }
 
+.password-toggle-btn.is-revealed {
+  opacity: 0.65;
+  background: var(--surface-3, #e2e8f0);
+}
+
 .bank-inquiry-search-grid {
   display: grid;
   grid-template-columns: max-content minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(12rem, 1fr);

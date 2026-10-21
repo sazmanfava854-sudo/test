@@ -9,9 +9,9 @@ function setupPasswordVisibilityToggles(root = document) {
     btn.addEventListener('click', () => {
       const revealing = input.type === 'password';
       input.type = revealing ? 'text' : 'password';
+      btn.classList.toggle('is-revealed', revealing);
       btn.setAttribute('aria-pressed', revealing ? 'true' : 'false');
       btn.setAttribute('aria-label', revealing ? hideLabel : showLabel);
-      btn.textContent = revealing ? '🙈' : '👁';
     });
   });
 }

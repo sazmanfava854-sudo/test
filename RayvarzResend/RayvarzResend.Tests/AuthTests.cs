@@ -52,9 +52,9 @@ public class AuthTests
             memory,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<AppUserRepository>.Instance);
         var auth = new AppAuthService(
-            config,
             repo,
             new AppPermissionService(repo),
+            config,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<AppAuthService>.Instance);
 
         var user = await repo.CreateUserAsync(new CreateAppUserRequest
