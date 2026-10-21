@@ -341,16 +341,14 @@
         <span class="card-icon" aria-hidden="true">📆</span>
         <h2>تغییر تاریخ چک</h2>
       </div>
-      <p class="field-hint">جستجو در <code>dbo.Installment_List</code> با <strong>TrackingNo</strong> (کد پیگیری)</p>
       <div class="installment-single-row">
         <label class="field field-required installment-values-field">
-          <span class="field-label">کد پیگیری (TrackingNo)</span>
+          <span class="field-label">کد پیگیری</span>
           <input id="checkDateTrackingNo" type="text" inputmode="numeric" autocomplete="off" placeholder="9907200614003461" />
         </label>
       </div>
       <div class="actions">
         <button type="button" id="btnCheckDateSearch" class="btn primary">جستجو</button>
-        <button type="button" id="btnCheckDateUpdate" class="btn secondary" disabled>اعمال تاریخ جدید</button>
       </div>
       <div class="subsection" id="checkDateResultsSection" hidden>
         <div class="unsent-toolbar">
@@ -359,28 +357,37 @@
         <div class="table-wrap installment-preview-table-wrap">
           <table id="checkDateTable" class="installment-preview-table">
             <thead>
-              <tr>
-                <th class="col-check-date-select">انتخاب</th>
+              <tr id="checkDatePreviewHeader">
+                <th class="col-check"></th>
+                <th>ردیف</th>
+                <th>تشخیص</th>
                 <th>شماره سند</th>
                 <th>کد پیگیری</th>
                 <th>مبلغ</th>
-                <th>تاریخ چک</th>
+                <th>تاریخ پرداخت</th>
+                <th>شناسه پرونده</th>
+                <th>کد نوسازی</th>
+                <th>عودت</th>
                 <th>وضعیت</th>
-                <th>EndState</th>
-                <th>توضیحات</th>
+                <th>توضیحات پیشنهادی</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
       </div>
-      <label class="field field-required">
-        <span class="field-label">تاریخ چک جدید (PaymentDate)</span>
-        <div class="date-input-wrap">
-          <input id="checkDateNewPaymentDate" data-jdp type="text" placeholder="1405/01/01" autocomplete="off" />
-          <button type="button" class="btn-date-icon" data-for="checkDateNewPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+      <div id="checkDateApplySection" class="subsection check-date-apply-section" hidden>
+        <label class="field field-required">
+          <span class="field-label">تاریخ پرداخت جدید</span>
+          <div class="date-input-wrap">
+            <input id="checkDateNewPaymentDate" data-jdp type="text" placeholder="1405/01/01" autocomplete="off" />
+            <button type="button" class="btn-date-icon" data-for="checkDateNewPaymentDate" title="تقویم" aria-label="تقویم">📅</button>
+          </div>
+        </label>
+        <div class="actions check-date-apply-actions">
+          <button type="button" id="btnCheckDateUpdate" class="btn danger" disabled>اعمال</button>
         </div>
-      </label>
+      </div>
       <pre id="checkDateResultBox" class="code-block" hidden></pre>
     </section>
     </div>
@@ -1064,6 +1071,6 @@
   <script src="lib/xlsx/xlsx.full.min.js"></script>
   <script src="js/password-fields.js?v=2"></script>
   <script src="js/change-password.js?v=2"></script>
-  <script src="js/app.js?v=102"></script>
+  <script src="js/app.js?v=103"></script>
 </body>
 </html>

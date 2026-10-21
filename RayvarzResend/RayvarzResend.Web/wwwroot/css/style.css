@@ -1554,6 +1554,16 @@ tbody tr:last-child td {
   outline-offset: 2px;
 }
 
+.check-date-apply-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.check-date-apply-actions {
+  margin-top: 0.75rem;
+}
+
 .password-toggle-btn.is-revealed {
   opacity: 0.65;
   background: var(--surface-3, #e2e8f0);

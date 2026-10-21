@@ -259,7 +259,9 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=102", html);
+        Assert.Contains("js/app.js?v=103", html);
+        Assert.DoesNotContain("dbo.Installment_List", html);
+        Assert.Contains("checkDateApplySection", html);
         Assert.Contains("btnChangePassword", html);
         Assert.Contains("change-password.js", html);
         Assert.Contains("password-fields.js", html);
