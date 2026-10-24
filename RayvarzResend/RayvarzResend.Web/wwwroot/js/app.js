@@ -1899,7 +1899,10 @@ async function fetchShahkarResults({ clearSelection = false } = {}) {
       body: JSON.stringify({ userName, nationalCode })
     });
     const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    if (!res.ok) {
+      const hint = data.hint ? `\n\n${data.hint}` : '';
+      throw new Error((data.error || `خطا (HTTP ${res.status})`) + hint);
+    }
     renderShahkarTable(data.items || []);
     if (box) box.hidden = true;
   } catch (e) {

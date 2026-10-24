@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۴۴ — UI تب تاریخ چک)** — شامل v43 (Guid) و v42/v41.
+**نسخه آخر (تحویل: ۴۵ — اتصال شاهکار security10)** — شامل v44 (UI تاریخ چک) و v43 (Guid).
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v44` |
-| **دانلود Zip** | [**RayvarzResend-44.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-44.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v45` |
+| **دانلود Zip** | [**RayvarzResend-45.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-45.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v44.md`](DELIVERY-v44.md) |
+| جزئیات | [`DELIVERY-v45.md`](DELIVERY-v45.md) |
+| v44 قبلی | [`DELIVERY-v44.md`](DELIVERY-v44.md) |
 | v43 قبلی | [`DELIVERY-v43.md`](DELIVERY-v43.md) |
 | v42 قبلی | [`DELIVERY-v42.md`](DELIVERY-v42.md) |
 | v41 قبلی | [`DELIVERY-v41.md`](DELIVERY-v41.md) |

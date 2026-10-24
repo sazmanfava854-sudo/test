@@ -826,8 +826,20 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     {
         dryRun = config.GetValue<bool?>("Shahkar:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
         connection = $"ConnectionStrings:{config["Shahkar:ConnectionStringName"] ?? "Security"}",
+        sqlServer = config["Shahkar:SqlServer"],
+        sqlInstance = config["Shahkar:SqlInstance"],
+        dataSource = SqlConnectionStringResolver.Summarize(
+            SqlConnectionStringResolver.Get(
+                config,
+                config["Shahkar:ConnectionStringName"] ?? "Security",
+                config["Shahkar:SqlServer"],
+                config["Shahkar:SqlInstance"])).DataSource,
         table = $"{config["Shahkar:Schema"] ?? "dbo"}.{config["Shahkar:TableName"] ?? "Users"}",
-        configured = !string.IsNullOrWhiteSpace(config.GetConnectionString(config["Shahkar:ConnectionStringName"] ?? "Security"))
+        configured = !string.IsNullOrWhiteSpace(SqlConnectionStringResolver.Get(
+            config,
+            config["Shahkar:ConnectionStringName"] ?? "Security",
+            config["Shahkar:SqlServer"],
+            config["Shahkar:SqlInstance"]))
     },
     ruleEngine = new
     {
@@ -857,9 +869,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
 app.MapGet("/api/db-test", async (IConfiguration config) =>
 {
     var results = new List<object>();
-    foreach (var name in new[] { "Sara", "Rayvarz" })
+    foreach (var name in new[] { "Sara", "Rayvarz", "Security" })
     {
-        var cs = config.GetConnectionString(name);
+        var cs = name == "Security"
+            ? SqlConnectionStringResolver.Get(
+                config,
+                config["Shahkar:ConnectionStringName"] ?? "Security",
+                config["Shahkar:SqlServer"],
+                config["Shahkar:SqlInstance"])
+            : config.GetConnectionString(name);
         if (string.IsNullOrWhiteSpace(cs))
         {
             results.Add(new { name, ok = false, error = "Connection string تنظیم نشده" });
@@ -869,9 +887,12 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
         {
             await using var conn = new SqlConnection(cs);
             await conn.OpenAsync();
-            var sql = name == "Sara"
-                ? "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche"
-                : "SELECT TOP 1 Ref FROM ray.incmdocsys";
+            var sql = name switch
+            {
+                "Sara" => "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche",
+                "Security" => "SELECT DB_NAME()",
+                _ => "SELECT TOP 1 Ref FROM ray.incmdocsys"
+            };
             await using var cmd = new SqlCommand(sql, conn);
             var sample = (await cmd.ExecuteScalarAsync())?.ToString();
             results.Add(new { name, ok = true, server = conn.DataSource, database = conn.Database, sample });
@@ -1557,8 +1578,32 @@ app.MapPost("/api/shahkar/search", async (
 
     var result = await shahkar.SearchAsync(req, ct);
     if (!string.IsNullOrWhiteSpace(result.Error) && !result.Success)
-        return Results.BadRequest(new { error = result.Error });
+        return Results.BadRequest(new { error = result.Error, hint = result.Hint });
     return Results.Ok(result);
+}).RequireAuthorization(authenticated);
+
+app.MapGet("/api/shahkar/connection-test", async (
+    ShahkarService shahkar,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessShahkar(http, perms, ct);
+    if (denied != null) return denied;
+
+    var summary = shahkar.ConnectionSummary;
+    var (ok, error, hint) = await shahkar.TestConnectionAsync(ct);
+    return Results.Ok(new
+    {
+        ok,
+        error,
+        hint,
+        connectionKey = "ConnectionStrings:Security",
+        dataSource = summary.DataSource,
+        database = summary.Database,
+        userId = summary.IntegratedSecurity ? null : summary.UserId,
+        hasPassword = summary.HasPassword
+    });
 }).RequireAuthorization(authenticated);
 
 app.MapPost("/api/shahkar/confirm", async (
@@ -1575,7 +1620,7 @@ app.MapPost("/api/shahkar/confirm", async (
 
     var result = await shahkar.ConfirmAsync(req, ct);
     if (!string.IsNullOrWhiteSpace(result.Error))
-        return Results.BadRequest(new { error = result.Error });
+        return Results.BadRequest(new { error = result.Error, hint = result.Hint });
     return Results.Ok(result);
 }).RequireAuthorization(authenticated);
 
@@ -1778,6 +1823,8 @@ static string? ConnectionHint(string name, string cs, Exception ex)
         return "خطای خواندن appsettings.json — ویرگول/کاما/گیومه در Password یا ساختار JSON را چک کنید.";
     if (name == "Rayvarz" && msg.Contains("login failed"))
         return "User Id یا Password رایورز اشتباه است. اگر Password کاراکتر ; یا \" دارد، در JSON باید escape شود.";
+    if (name == "Security" && msg.Contains("login failed"))
+        return "ConnectionStrings:Security — User Id/Password را با SSMS مقایسه کنید. برای instance نام‌دار از Shahkar:SqlServer و Shahkar:SqlInstance استفاده کنید یا Server=IP\\\\sql2012 در JSON.";
     return null;
 }
 

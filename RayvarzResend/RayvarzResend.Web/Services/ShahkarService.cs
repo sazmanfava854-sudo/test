@@ -23,6 +23,33 @@ public sealed class ShahkarService
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ResolveConnectionString());
 
+    public ConnectionStringSummary ConnectionSummary => SqlConnectionStringResolver.Summarize(ResolveConnectionString());
+
+    public async Task<(bool Ok, string? Error, string? Hint)> TestConnectionAsync(CancellationToken ct = default)
+    {
+        var cs = ResolveConnectionString();
+        var summary = SqlConnectionStringResolver.Summarize(cs);
+        if (string.IsNullOrWhiteSpace(cs))
+            return (false, "ConnectionStrings:Security (یا Shahkar:ConnectionStringName) پیکربندی نشده است", null);
+
+        try
+        {
+            await using var conn = new SqlConnection(cs);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand("SELECT DB_NAME()", conn);
+            _ = await cmd.ExecuteScalarAsync(ct);
+            return (true, null, null);
+        }
+        catch (SqlException ex)
+        {
+            var hint = SqlConnectionStringResolver.BuildLoginFailedHint(
+                ResolveConnectionStringName(),
+                summary,
+                ex);
+            return (false, ex.Message, hint);
+        }
+    }
+
     public async Task<ShahkarSearchResult> SearchAsync(ShahkarSearchRequest req, CancellationToken ct = default)
     {
         var result = new ShahkarSearchResult();
@@ -79,8 +106,13 @@ public sealed class ShahkarService
         }
         catch (SqlException ex)
         {
-            _logger.LogError(ex, "Shahkar search failed");
+            _logger.LogError(ex, "Shahkar search failed (dataSource={DataSource}, database={Database})",
+                ConnectionSummary.DataSource, ConnectionSummary.Database);
             result.Error = ex.Message;
+            result.Hint = SqlConnectionStringResolver.BuildLoginFailedHint(
+                ResolveConnectionStringName(),
+                ConnectionSummary,
+                ex);
             return result;
         }
     }
@@ -160,15 +192,23 @@ public sealed class ShahkarService
         {
             _logger.LogError(ex, "Shahkar confirm failed");
             result.Error = ex.Message;
+            result.Hint = SqlConnectionStringResolver.BuildLoginFailedHint(
+                ResolveConnectionStringName(),
+                ConnectionSummary,
+                ex);
             return result;
         }
     }
 
-    private string? ResolveConnectionString()
-    {
-        var name = string.IsNullOrWhiteSpace(_options.ConnectionStringName)
+    private string ResolveConnectionStringName() =>
+        string.IsNullOrWhiteSpace(_options.ConnectionStringName)
             ? "Security"
             : _options.ConnectionStringName.Trim();
-        return _config.GetConnectionString(name);
-    }
+
+    private string? ResolveConnectionString() =>
+        SqlConnectionStringResolver.Get(
+            _config,
+            ResolveConnectionStringName(),
+            _options.SqlServer,
+            _options.SqlInstance);
 }
