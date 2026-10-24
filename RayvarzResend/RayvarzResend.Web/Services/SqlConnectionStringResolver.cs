@@ -12,7 +12,11 @@ public static class SqlConnectionStringResolver
         IConfiguration config,
         string connectionStringName,
         string? sqlServerOverride = null,
-        string? sqlInstanceOverride = null)
+        string? sqlInstanceOverride = null,
+        int sqlPort = 0,
+        string? databaseOverride = null,
+        string? userIdOverride = null,
+        string? passwordOverride = null)
     {
         var name = (connectionStringName ?? "").Trim();
         if (name.Length == 0)
@@ -20,20 +24,56 @@ public static class SqlConnectionStringResolver
 
         var server = (sqlServerOverride ?? config["Shahkar:SqlServer"])?.Trim();
         var instance = (sqlInstanceOverride ?? config["Shahkar:SqlInstance"])?.Trim();
+        var port = sqlPort > 0 ? sqlPort : config.GetValue("Shahkar:SqlPort", 0);
+        var database = (databaseOverride ?? config["Shahkar:Database"])?.Trim();
+        var userId = (userIdOverride ?? config["Shahkar:UserId"])?.Trim();
+        var password = string.IsNullOrEmpty(passwordOverride) ? config["Shahkar:Password"] : passwordOverride;
 
         var cs = config.GetConnectionString(name);
         if (string.IsNullOrWhiteSpace(cs))
         {
-            if (string.IsNullOrEmpty(server))
+            if (string.IsNullOrEmpty(server) && string.IsNullOrEmpty(userId))
                 return null;
             cs = "";
         }
 
         var builder = new SqlConnectionStringBuilder(cs);
-        ApplyServerAndInstance(builder, server, instance);
+        ApplyServerAndInstance(builder, server, instance, port);
+        if (!string.IsNullOrEmpty(database))
+            builder.InitialCatalog = database;
+        if (!string.IsNullOrEmpty(userId))
+        {
+            builder.UserID = userId;
+            builder.IntegratedSecurity = false;
+        }
+        if (!string.IsNullOrEmpty(password))
+        {
+            builder.Password = password;
+            builder.IntegratedSecurity = false;
+        }
         EnsureLegacySqlDefaults(builder);
+        builder.TrustServerCertificate = true;
         return builder.ConnectionString;
     }
+
+    public static string WithDatabase(string connectionString, string database)
+    {
+        var builder = new SqlConnectionStringBuilder(connectionString)
+        {
+            InitialCatalog = database
+        };
+        return builder.ConnectionString;
+    }
+
+    public static int PasswordLength(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return 0;
+        return new SqlConnectionStringBuilder(connectionString).Password?.Length ?? 0;
+    }
+
+    public static string TargetLine(ConnectionStringSummary summary, int passwordLength) =>
+        $"سرور مؤثر: {summary.DataSource} | پایگاه: {summary.Database} | کاربر: {summary.UserId} | طول رمز: {passwordLength}";
 
     public static ConnectionStringSummary Summarize(string? connectionString)
     {
@@ -92,8 +132,17 @@ public static class SqlConnectionStringResolver
     private static void ApplyServerAndInstance(
         SqlConnectionStringBuilder builder,
         string? server,
-        string? instance)
+        string? instance,
+        int port)
     {
+        if (port > 0)
+        {
+            var host = !string.IsNullOrEmpty(server) ? server : HostOnly(builder.DataSource);
+            if (!string.IsNullOrEmpty(host))
+                builder.DataSource = host + "," + port;
+            return;
+        }
+
         if (!string.IsNullOrEmpty(server))
         {
             builder.DataSource = string.IsNullOrEmpty(instance) ? server : $"{server}\\{instance}";
@@ -119,11 +168,23 @@ public static class SqlConnectionStringResolver
         builder.DataSource = ds + "\\" + instance;
     }
 
+    private static string HostOnly(string? dataSource)
+    {
+        var ds = (dataSource ?? "").Trim();
+        var slash = ds.IndexOf('\\');
+        if (slash > 0)
+            ds = ds[..slash];
+        var comma = ds.IndexOf(',');
+        if (comma > 0)
+            ds = ds[..comma];
+        return ds.Trim();
+    }
+
     private static void EnsureLegacySqlDefaults(SqlConnectionStringBuilder builder)
     {
-        // SQL Server 2012 و پایین‌تر: Encrypt پیش‌فرض در SqlClient جدید گاهی مانع اتصال می‌شود.
-        if (!builder.ContainsKey("Encrypt"))
-            builder.Encrypt = false;
+        // SqlClient 5 پیش‌فرض Encrypt=true است. روی SQL Server 2012 باید خاموش بماند،
+        // و ContainsKey("Encrypt") حتی وقتی در رشته نیست true برمی‌گرداند.
+        builder.Encrypt = false;
     }
 }
 

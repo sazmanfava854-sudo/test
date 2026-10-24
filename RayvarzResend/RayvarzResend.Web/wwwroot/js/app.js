@@ -465,6 +465,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
     panel.hidden = !show;
     panel.classList.toggle('active', show);
   });
+  if (key === 'shahkar') refreshShahkarConnectionStatus();
 }
 
 function getSingleFicheKind() {
@@ -1878,6 +1879,23 @@ function renderShahkarTable(items) {
     selectAll.checked = shahkarItems.length > 0 && selectedOnPage === shahkarItems.length;
   }
   syncShahkarConfirmButton();
+}
+
+async function refreshShahkarConnectionStatus() {
+  const el = $('shahkarConnectionStatus');
+  if (!el) return;
+  el.textContent = 'در حال بررسی اتصال security10...';
+  try {
+    const res = await apiFetch('/api/shahkar/connection-test');
+    const data = await parseJsonResponse(res);
+    if (data.ok) {
+      el.textContent = `متصل به ${data.dataSource || ''} / ${data.database || ''} با کاربر ${data.userId || ''}`;
+      return;
+    }
+    el.textContent = [data.error, data.hint].filter(Boolean).join('\n\n');
+  } catch (e) {
+    el.textContent = e.message;
+  }
 }
 
 async function fetchShahkarResults({ clearSelection = false } = {}) {

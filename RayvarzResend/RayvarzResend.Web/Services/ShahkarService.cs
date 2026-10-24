@@ -34,11 +34,14 @@ public sealed class ShahkarService
 
         try
         {
-            await using var conn = new SqlConnection(cs);
-            await conn.OpenAsync(ct);
+            await using var conn = await ShahkarConnectionOpener.OpenAsync(cs, ct);
             await using var cmd = new SqlCommand("SELECT DB_NAME()", conn);
             _ = await cmd.ExecuteScalarAsync(ct);
             return (true, null, null);
+        }
+        catch (ShahkarDatabaseAccessException ex)
+        {
+            return (false, ex.Message, ex.Hint);
         }
         catch (SqlException ex)
         {
@@ -46,7 +49,8 @@ public sealed class ShahkarService
                 ResolveConnectionStringName(),
                 summary,
                 ex);
-            return (false, ex.Message, hint);
+            var target = SqlConnectionStringResolver.TargetLine(summary, SqlConnectionStringResolver.PasswordLength(cs));
+            return (false, target + "\n" + ex.Message, hint);
         }
     }
 
@@ -83,8 +87,7 @@ public sealed class ShahkarService
 
         try
         {
-            await using var conn = new SqlConnection(cs);
-            await conn.OpenAsync(ct);
+            await using var conn = await ShahkarConnectionOpener.OpenAsync(cs, ct);
             await using var cmd = new SqlCommand(sql, conn);
             foreach (var (key, value) in parameters)
                 cmd.Parameters.AddWithValue("@" + key, value);
@@ -104,11 +107,19 @@ public sealed class ShahkarService
             result.Success = true;
             return result;
         }
+        catch (ShahkarDatabaseAccessException ex)
+        {
+            _logger.LogWarning(ex, "Shahkar search refused database (dataSource={DataSource})", ConnectionSummary.DataSource);
+            result.Error = ex.Message;
+            result.Hint = ex.Hint;
+            return result;
+        }
         catch (SqlException ex)
         {
             _logger.LogError(ex, "Shahkar search failed (dataSource={DataSource}, database={Database})",
                 ConnectionSummary.DataSource, ConnectionSummary.Database);
-            result.Error = ex.Message;
+            result.Error = SqlConnectionStringResolver.TargetLine(ConnectionSummary, SqlConnectionStringResolver.PasswordLength(cs))
+                + "\n" + ex.Message;
             result.Hint = SqlConnectionStringResolver.BuildLoginFailedHint(
                 ResolveConnectionStringName(),
                 ConnectionSummary,
@@ -144,8 +155,7 @@ public sealed class ShahkarService
 
         try
         {
-            await using var conn = new SqlConnection(cs);
-            await conn.OpenAsync(ct);
+            await using var conn = await ShahkarConnectionOpener.OpenAsync(cs, ct);
 
             foreach (var userName in names)
             {
@@ -188,10 +198,18 @@ public sealed class ShahkarService
                 : $"{result.Updated} از {names.Count} کاربر به‌روز شد";
             return result;
         }
+        catch (ShahkarDatabaseAccessException ex)
+        {
+            _logger.LogWarning(ex, "Shahkar confirm refused database");
+            result.Error = ex.Message;
+            result.Hint = ex.Hint;
+            return result;
+        }
         catch (SqlException ex)
         {
             _logger.LogError(ex, "Shahkar confirm failed");
-            result.Error = ex.Message;
+            result.Error = SqlConnectionStringResolver.TargetLine(ConnectionSummary, SqlConnectionStringResolver.PasswordLength(cs))
+                + "\n" + ex.Message;
             result.Hint = SqlConnectionStringResolver.BuildLoginFailedHint(
                 ResolveConnectionStringName(),
                 ConnectionSummary,
@@ -210,5 +228,9 @@ public sealed class ShahkarService
             _config,
             ResolveConnectionStringName(),
             _options.SqlServer,
-            _options.SqlInstance);
+            _options.SqlInstance,
+            _options.SqlPort,
+            _options.Database,
+            _options.UserId,
+            _options.Password);
 }

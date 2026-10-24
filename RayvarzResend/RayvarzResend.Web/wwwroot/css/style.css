@@ -685,6 +685,11 @@ input:focus, select:focus {
   line-height: 1.6;
 }
 
+pre.hint {
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
 .mapping-table {
   display: grid;
   gap: 7px;
