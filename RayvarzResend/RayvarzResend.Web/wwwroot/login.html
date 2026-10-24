@@ -24,7 +24,10 @@
         </label>
         <label class="field field-required">
           <span class="field-label">رمز عبور</span>
-          <input id="loginPassword" type="password" autocomplete="current-password" required />
+          <div class="password-field-wrap">
+            <input id="loginPassword" type="password" autocomplete="current-password" required dir="ltr" />
+            <button type="button" class="password-toggle-btn" aria-label="نمایش رمز" aria-pressed="false">👁</button>
+          </div>
         </label>
         <div class="actions">
           <button id="btnLogin" class="btn primary" type="submit">ورود با رمز سامانه</button>
@@ -36,6 +39,7 @@
       </form>
     </section>
   </div>
+  <script src="js/password-fields.js?v=2"></script>
   <script src="js/login.js?v=7"></script>
 </body>
 </html>

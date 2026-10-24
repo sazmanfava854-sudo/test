@@ -7,16 +7,46 @@ namespace RayvarzResend.Tests;
 public class FicheDateChangeHelperTests
 {
     [Fact]
-    public void BuildCommentPrefix_includes_today_and_user_once()
+    public void BuildCommentPrefix_status_only_shows_from_to_labels()
     {
-        var prefix = FicheDateChangeHelper.BuildCommentPrefix("karimi");
         var today = DateHelper.CurrentShamsiSlashDate();
+        var prefix = FicheDateChangeHelper.BuildCommentPrefix(
+            "شادی امینی",
+            applyExportPermanentDate: false,
+            newExportPermanentDate: null,
+            applyExportTemporaryDate: false,
+            newExportTemporaryDate: null,
+            applyPaymentBreakDate: false,
+            newPaymentBreakDate: null,
+            applyEumFicheStatus: true,
+            previousEumFicheStatus: 5,
+            newEumFicheStatus: 4);
 
+        Assert.Contains("تغییر وضعیت از تایید بانک به ابطال", prefix);
+        Assert.Contains("شادی امینی", prefix);
+        Assert.Contains($"مورخ {today}", prefix);
+        Assert.DoesNotContain("صدور دایم", prefix);
+        Assert.DoesNotContain("مهلت پرداخت", prefix);
+    }
+
+    [Fact]
+    public void BuildCommentPrefix_permanent_date_only()
+    {
+        var prefix = FicheDateChangeHelper.BuildCommentPrefix(
+            "karimi",
+            applyExportPermanentDate: true,
+            newExportPermanentDate: "1405/08/01",
+            applyExportTemporaryDate: false,
+            newExportTemporaryDate: null,
+            applyPaymentBreakDate: false,
+            newPaymentBreakDate: null,
+            applyEumFicheStatus: false,
+            previousEumFicheStatus: null,
+            newEumFicheStatus: null);
+
+        Assert.Contains("تغییر تاریخ صدور دایم به 1405/08/01", prefix);
         Assert.Contains("karimi", prefix);
-        Assert.Contains("تاریخ مهلت پرداخت و تاریخ صدور و وضعیت فیش", prefix);
-        Assert.Contains($"در مورخ {today}", prefix);
-        Assert.Equal(1, prefix.Split(today, StringSplitOptions.None).Length - 1);
-        Assert.DoesNotContain($"({today})", prefix);
+        Assert.DoesNotContain("وضعیت", prefix);
     }
 
     [Fact]

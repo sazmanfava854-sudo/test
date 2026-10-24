@@ -77,6 +77,7 @@ public class FicheHeaderDto
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
     public bool ExistsInRayvarz { get; set; }
+    public bool ExistsInAccountingDocHeader { get; set; }
     /// <summary>آیا فیش از نظر اعتبارسنجی قابل ارسال است.</summary>
     public bool CanSend { get; set; }
     /// <summary>دلیل عدم ارسال — برای نمایش در UI.</summary>
@@ -84,6 +85,10 @@ public class FicheHeaderDto
     public string StatusMessage { get; set; } = "";
     /// <summary>هشدار بارگذاری (مثلاً خطای SQL در GetNosaziNickName) — ارسال ممکن است ادامه یابد.</summary>
     public string? Warning { get; set; }
+    /// <summary>CI_IncomeCalculation → IncomeCode (برای نگاشت IncmNo رایورز در تهاتر ۱۵۸).</summary>
+    public Dictionary<int, string> IncomeCodeByCalculation { get; set; } = new();
+    /// <summary>ردیف‌ها از Accounting_DocDetails خوانده شده‌اند — دوباره از Income_Calculation ساخته نشوند.</summary>
+    public bool TahatorRowsFromAccountingDoc { get; set; }
     /// <summary>رندمان Income_OddmentAccount — اگر خالی باشد Oddment اعمال نمی‌شود.</summary>
     public List<IncomeOddmentDto> Oddments { get; set; } = new();
     /// <summary>رندمان Duty_OddmentAccount — از NidFK فیش نوسازی.</summary>
@@ -570,6 +575,56 @@ public class InstallmentCheckUpdateResult
     public int SkippedMismatch { get; set; }
     public string? Error { get; set; }
     public List<InstallmentCheckUpdateItemResult> Results { get; set; } = new();
+}
+
+/// <summary>تب تغییر تاریخ چک — dbo.Installment_List با TrackingNo.</summary>
+public class InstallmentCheckDateSearchRequest
+{
+    public string TrackingNo { get; set; } = "";
+}
+
+public class InstallmentCheckDateListItem
+{
+    public Guid NidInstallment { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public decimal? PaymentCost { get; set; }
+    public string PaymentDate { get; set; } = "";
+    public string CI_InstallmentStatus { get; set; } = "";
+    public string EndStateDesc { get; set; } = "";
+    public string EndStateCode { get; set; } = "";
+    public string Comments { get; set; } = "";
+}
+
+public class InstallmentCheckDateSearchResult
+{
+    public string? Error { get; set; }
+    public string TrackingNo { get; set; } = "";
+    public int Total { get; set; }
+    public List<InstallmentCheckDateListItem> Items { get; set; } = new();
+}
+
+public class InstallmentCheckDateUpdateRequest
+{
+    public Guid NidInstallment { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public string NewPaymentDate { get; set; } = "";
+    public string PerformedByUser { get; set; } = "";
+}
+
+public class InstallmentCheckDateUpdateResult
+{
+    public string? Error { get; set; }
+    public bool DryRun { get; set; }
+    public bool Success { get; set; }
+    public Guid NidInstallment { get; set; }
+    public string NoDocument { get; set; } = "";
+    public string TrackingNo { get; set; } = "";
+    public string? PaymentDateBefore { get; set; }
+    public string? PaymentDateAfter { get; set; }
+    public string NewPaymentDate { get; set; } = "";
+    public string? Message { get; set; }
 }
 
 /// <summary>تب تغییر تاریخ فیش — dbo.Income_Fiche.</summary>

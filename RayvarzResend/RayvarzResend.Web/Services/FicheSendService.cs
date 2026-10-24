@@ -5,7 +5,7 @@ using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
-/// <summary>اعتبارسنجی ارسال و ارسال تکی — مسیر تهاتر جدا از ارسال عادی.</summary>
+/// <summary>اعتبارسنجی و ارسال تکی درآمد شهرسازی / نوسازی·صنفی — تهاتر از مسیر جدا.</summary>
 public class FicheSendService
 {
     private readonly FicheRepository _repo;
@@ -49,25 +49,19 @@ public class FicheSendService
             throw new InvalidOperationException("ردیف IncmNo یافت نشد — ارسال نشد");
 
         var incmdocsysYear = ResolveIncmdocsysYear(req);
+        var shamsiYear = incmdocsysYear > 0 ? incmdocsysYear : (int?)null;
 
-        bool existsInRayvarz;
         string? sendWarning = null;
-        try
-        {
-            existsInRayvarz = fiche.ExistsInRayvarz
-                || await _repo.ExistsInRayvarzAsync(fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
-        }
-        catch (SqlException ex)
-        {
-            if (_config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
-                throw new InvalidOperationException($"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}", ex);
+        var eligibility = await FicheSendEligibility.CheckAsync(_repo, fiche, fiche.FicheNo, shamsiYear, ct);
+        if (eligibility.RayvarzQueryFailed && _config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
+            throw new InvalidOperationException("اتصال SQL رایورز (Ray_CityHall) ناموفق — چک تکراری انجام نشد");
 
-            existsInRayvarz = fiche.ExistsInRayvarz;
-            sendWarning = $"چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت: {ex.Message}";
-        }
+        if (eligibility.RayvarzQueryFailed)
+            sendWarning = "چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت";
 
-        if (existsInRayvarz)
-            throw new InvalidOperationException("فیش در رایورز موجود است — ارسال نشد");
+        var duplicateBlock = FicheSendEligibility.BuildBlockReason(eligibility);
+        if (duplicateBlock != null)
+            throw new InvalidOperationException(duplicateBlock);
 
         await _epay.EnsurePresentOrThrowAsync(fiche, ct);
 
@@ -126,8 +120,12 @@ public class FicheSendService
 
     public static string? ValidateSendable(FicheHeaderDto fiche)
     {
-        if (fiche.ExistsInRayvarz)
-            return "فیش در رایورز موجود است — ارسال نشد";
+        var duplicateBlock = FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
+            fiche.ExistsInRayvarz,
+            fiche.ExistsInAccountingDocHeader,
+            false));
+        if (duplicateBlock != null)
+            return duplicateBlock;
 
         if (TahatorRowBuilder.IsTahatorFiche(fiche))
             return "فیش تهاتر — از مسیر تهاتر ارسال کنید";
@@ -150,11 +148,19 @@ public class FicheSendService
     {
         if (TahatorRowBuilder.IsTahatorFiche(fiche))
         {
-            if (fiche.ExistsInRayvarz)
+            var duplicateBlock = FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
+                fiche.ExistsInRayvarz,
+                fiche.ExistsInAccountingDocHeader,
+                false));
+            if (duplicateBlock != null)
             {
                 fiche.CanSend = false;
-                fiche.BlockReason = "فیش در رایورز موجود است — ارسال نشد";
-                fiche.StatusMessage = "تکراری — در رایورز موجود است";
+                fiche.BlockReason = duplicateBlock;
+                fiche.StatusMessage = fiche.ExistsInRayvarz && fiche.ExistsInAccountingDocHeader
+                    ? "تکراری — در رایورز و Accounting_DocHeader"
+                    : fiche.ExistsInRayvarz
+                        ? "تکراری — در رایورز موجود است"
+                        : "تکراری — در Accounting_DocHeader موجود است";
                 return;
             }
 

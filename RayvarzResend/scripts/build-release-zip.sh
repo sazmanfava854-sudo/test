@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-34.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-46.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v34 — نسخه آخر (PR #116 — مرکز هزینه)
+echo RayvarzResend v46 — تشخیص security10 شاهکار
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v34 — نسخه آخر (مرکز هزینه + قابلیت‌های v26 به بعد در شاخه PR #116)
+RayvarzResend v46 — تشخیص باز نشدن security10 + v45
 
 نصب روی سرور ویندوز
 --------------------
@@ -47,7 +47,8 @@ RayvarzResend v34 — نسخه آخر (مرکز هزینه + قابلیت‌ها
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 34
+     releaseVersion = 46
+     shahkar.dataSource = 172.16.8.138\sql2012
      accountingDoc.dryRun = false
      dryRun = false
 
@@ -59,7 +60,7 @@ Accounting_DocHeader / Accounting_DocDetails بعد از ارسال موفق ب�
   sso-loginkey-curl-only.ps1 — فقط curl (اگر PowerShell timeout می‌دهد)
 
 سورس روی GitHub است — داخل Zip نیست:
-https://github.com/sazmanfava854-sudo/test/tree/cursor/cost-center-pr116-9665
+https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2
 EOF
 
 # Zip با root = RayvarzResend (یک پوشه)

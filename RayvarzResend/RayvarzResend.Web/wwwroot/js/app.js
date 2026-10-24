@@ -313,6 +313,21 @@ function resetMainTabPanelState(tabKey) {
       hideEl('sendResultCard');
       if ($('btnSend')) $('btnSend').disabled = true;
       break;
+    case 'checkDate':
+      clearFieldValue('checkDateTrackingNo');
+      clearFieldValue('checkDateNewPaymentDate');
+      checkDateItems = [];
+      checkDateSelectedRow = null;
+      hideEl('checkDateResultsSection');
+      hideEl('checkDateApplySection');
+      hideEl('checkDateResultBox');
+      {
+        const tbody = $('checkDateTable')?.querySelector('tbody');
+        if (tbody) tbody.innerHTML = '';
+      }
+      if ($('checkDateCountLabel')) $('checkDateCountLabel').textContent = '';
+      if ($('btnCheckDateUpdate')) $('btnCheckDateUpdate').disabled = true;
+      break;
     case 'installment':
       clearFieldValue('installmentValues');
       clearFieldValue('installmentApplyEndState');
@@ -407,6 +422,7 @@ function setupMainTabs() {
   const panels = {
     unsent: $('tabUnsent'),
     installment: $('tabInstallment'),
+    checkDate: $('tabCheckDate'),
     ficheDate: $('tabFicheDate'),
     bankInquiry: $('tabBankInquiry'),
     costCenter: $('tabCostCenter'),
@@ -426,6 +442,7 @@ function setupMainTabs() {
 function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
   unsent: $('tabUnsent'),
   installment: $('tabInstallment'),
+  checkDate: $('tabCheckDate'),
   ficheDate: $('tabFicheDate'),
   bankInquiry: $('tabBankInquiry'),
   costCenter: $('tabCostCenter'),
@@ -448,6 +465,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
     panel.hidden = !show;
     panel.classList.toggle('active', show);
   });
+  if (key === 'shahkar') refreshShahkarConnectionStatus();
 }
 
 function getSingleFicheKind() {
@@ -480,6 +498,8 @@ const installmentLookupLabels = {
 };
 
 let installmentMode = 'single';
+let checkDateItems = [];
+let checkDateSelectedRow = null;
 let installmentExcelRows = [];
 
 const ficheDateStatusLabels = {
@@ -968,6 +988,120 @@ function renderInstallmentPreview(data) {
   if (updateBtn) {
     updateBtn.disabled = !(data.matchedCount > 0);
     updateBtn.textContent = 'اعمال';
+  }
+}
+
+function isInstallmentListKeyEmpty(id) {
+  if (id == null || id === '') return true;
+  const compact = String(id).replace(/-/g, '').toLowerCase();
+  return compact === '0' || compact === '00000000000000000000000000000000';
+}
+
+function setCheckDateApplySectionVisible(visible) {
+  const applySection = $('checkDateApplySection');
+  if (applySection) applySection.hidden = !visible;
+}
+
+function formatCheckDateRowStatus(row) {
+  const statusCode = row.ci_InstallmentStatus ?? row.cI_InstallmentStatus;
+  const statusPart = statusCode != null && statusCode !== ''
+    ? toPersianDigits(String(statusCode))
+    : '';
+  const endPart = (row.endStateDesc || '').trim();
+  const endCode = row.endStateCode != null && row.endStateCode !== ''
+    ? toPersianDigits(String(row.endStateCode))
+    : '';
+  if (endPart && endCode) return `${endPart} (${endCode})`;
+  if (endPart) return endPart;
+  if (statusPart) return statusPart;
+  return '—';
+}
+
+function setCheckDateSelectedRow(row, trackingFallback) {
+  if (!row || isInstallmentListKeyEmpty(row.nidInstallment)) {
+    checkDateSelectedRow = null;
+    return;
+  }
+  checkDateSelectedRow = {
+    nidInstallment: row.nidInstallment,
+    noDocument: row.noDocument || '',
+    trackingNo: row.trackingNo || trackingFallback || ''
+  };
+}
+
+function updateCheckDateApplyButton() {
+  const btn = $('btnCheckDateUpdate');
+  if (!btn) return;
+  const date = ($('checkDateNewPaymentDate')?.value || '').trim();
+  btn.disabled = !(
+    checkDateSelectedRow
+    && !isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)
+    && date.length > 0
+  );
+}
+
+function renderCheckDateTable(data) {
+  const section = $('checkDateResultsSection');
+  const tbody = $('checkDateTable')?.querySelector('tbody');
+  const countLabel = $('checkDateCountLabel');
+  if (!section || !tbody) return;
+
+  checkDateItems = data.items || [];
+  checkDateSelectedRow = null;
+  updateCheckDateApplyButton();
+  const hasRows = checkDateItems.length > 0;
+  section.hidden = !hasRows;
+  setCheckDateApplySectionVisible(hasRows);
+
+  if (countLabel) {
+    countLabel.textContent = hasRows
+      ? `ردیف یافت شد: ${checkDateItems.length.toLocaleString('fa-IR')}`
+      : 'ردیفی یافت نشد';
+  }
+
+  tbody.innerHTML = '';
+  if (!hasRows) return;
+
+  const trackingFallback = data.trackingNo || '';
+  checkDateItems.forEach((row, index) => {
+    const tr = document.createElement('tr');
+    const rowNum = index + 1;
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" class="check-date-row-check" aria-label="انتخاب ردیف ${toPersianDigits(rowNum)}" /></td>
+      <td class="col-installment-row">${toPersianDigits(rowNum)}</td>
+      <td class="col-installment-detect">${installmentLookupLabels.TrackingNo}</td>
+      <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '—')}</td>
+      <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '—')}</td>
+      <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
+      <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
+      <td class="col-installment-workitem">—</td>
+      <td class="col-installment-nosazi">—</td>
+      <td class="col-installment-odooat">—</td>
+      <td class="col-installment-status">${formatCheckDateRowStatus(row)}</td>
+      <td class="col-installment-comments">${row.comments || '—'}</td>
+    `;
+    const checkbox = tr.querySelector('.check-date-row-check');
+    checkbox?.addEventListener('change', () => {
+      if (checkbox.checked) {
+        tbody.querySelectorAll('.check-date-row-check').forEach((cb) => {
+          if (cb !== checkbox) cb.checked = false;
+        });
+        setCheckDateSelectedRow(row, trackingFallback);
+      } else {
+        checkDateSelectedRow = null;
+      }
+      updateCheckDateApplyButton();
+    });
+    tbody.appendChild(tr);
+  });
+
+  if (checkDateItems.length === 1) {
+    const onlyCheck = tbody.querySelector('.check-date-row-check');
+    if (onlyCheck) {
+      onlyCheck.checked = true;
+      setCheckDateSelectedRow(checkDateItems[0], trackingFallback);
+      updateCheckDateApplyButton();
+    }
   }
 }
 
@@ -1747,6 +1881,23 @@ function renderShahkarTable(items) {
   syncShahkarConfirmButton();
 }
 
+async function refreshShahkarConnectionStatus() {
+  const el = $('shahkarConnectionStatus');
+  if (!el) return;
+  el.textContent = 'در حال بررسی اتصال security10...';
+  try {
+    const res = await apiFetch('/api/shahkar/connection-test');
+    const data = await parseJsonResponse(res);
+    if (data.ok) {
+      el.textContent = `متصل به ${data.dataSource || ''} / ${data.database || ''} با کاربر ${data.userId || ''}`;
+      return;
+    }
+    el.textContent = [data.error, data.hint].filter(Boolean).join('\n\n');
+  } catch (e) {
+    el.textContent = e.message;
+  }
+}
+
 async function fetchShahkarResults({ clearSelection = false } = {}) {
   const userName = ($('shahkarUserName')?.value || '').trim();
   const nationalCode = normalizeSearchId($('shahkarNationalCode')?.value);
@@ -1766,7 +1917,10 @@ async function fetchShahkarResults({ clearSelection = false } = {}) {
       body: JSON.stringify({ userName, nationalCode })
     });
     const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    if (!res.ok) {
+      const hint = data.hint ? `\n\n${data.hint}` : '';
+      throw new Error((data.error || `خطا (HTTP ${res.status})`) + hint);
+    }
     renderShahkarTable(data.items || []);
     if (box) box.hidden = true;
   } catch (e) {
@@ -2175,9 +2329,22 @@ function updateIdentifierHint() {
   hint.textContent = `تشخیص سیستم: ${identifierTypeLabels[t]}`;
 }
 
-function isTahatorIncomeFiche(f) {
+function isTahatorFiche(f) {
   const g = f?.incomeAccountGroup;
   return g === 157 || g === 158;
+}
+
+function isTahatorAmountFiche(f) {
+  return f?.incomeAccountGroup === 157;
+}
+
+function isTahatorIncomeDetailFiche(f) {
+  return f?.incomeAccountGroup === 158;
+}
+
+/** هر دو فیش تهاتر (۱۵۷+۱۵۸) از API /api/tahator/send استفاده می‌کنند. */
+function isTahatorIncomeFiche(f) {
+  return isTahatorFiche(f);
 }
 
 let datePickersReady = false;
@@ -2500,6 +2667,7 @@ function normalizeAuthSession(user) {
     user.isAdmin = true;
     user.canAccessUnsentFiches = true;
     user.canAccessInstallment = true;
+    user.canAccessInstallmentCheckDate = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
     user.canAccessCostCenter = true;
@@ -2522,6 +2690,7 @@ function hasAnyModulePermission() {
   return !!(
     currentUser?.canAccessUnsentFiches
     || currentUser?.canAccessInstallment
+    || currentUser?.canAccessInstallmentCheckDate
     || currentUser?.canAccessFicheDateChange
     || currentUser?.canAccessBankInquiryConfirm
     || currentUser?.canAccessCostCenter
@@ -2540,6 +2709,7 @@ function canAccessRayvarzModule() {
 const MAIN_TAB_ACCESS_ORDER = [
   { key: 'unsent', can: () => canAccessRayvarzModule() },
   { key: 'installment', can: () => canAccessInstallment() },
+  { key: 'checkDate', can: () => canAccessInstallmentCheckDate() },
   { key: 'ficheDate', can: () => canAccessFicheDateChange() },
   { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
   { key: 'costCenter', can: () => canAccessCostCenter() },
@@ -2549,6 +2719,10 @@ const MAIN_TAB_ACCESS_ORDER = [
 
 function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
+}
+
+function canAccessInstallmentCheckDate() {
+  return isAdminUser() || !!currentUser?.canAccessInstallmentCheckDate;
 }
 
 function canAccessFicheDateChange() {
@@ -2584,6 +2758,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-installment').forEach((el) => {
     el.hidden = !canAccessInstallment();
+  });
+  document.querySelectorAll('.perm-installment-check-date').forEach((el) => {
+    el.hidden = !canAccessInstallmentCheckDate();
   });
   document.querySelectorAll('.perm-fiche-date').forEach((el) => {
     el.hidden = !canAccessFicheDateChange();
@@ -2777,6 +2954,7 @@ function renderGroupsTableBody() {
       <td>${g.name}</td>
       <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
+      <td>${g.canAccessInstallmentCheckDate ? 'بله' : 'خیر'}</td>
       <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
       <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
@@ -2797,6 +2975,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
+  if ($('newGroupInstallmentCheckDate')) $('newGroupInstallmentCheckDate').checked = group.canAccessInstallmentCheckDate;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
@@ -2813,6 +2992,7 @@ function resetGroupForm() {
   if ($('newGroupName')) $('newGroupName').value = '';
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
+  if ($('newGroupInstallmentCheckDate')) $('newGroupInstallmentCheckDate').checked = false;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
@@ -2828,6 +3008,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
     name: ($('newGroupName')?.value || '').trim(),
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canAccessInstallmentCheckDate: !!$('newGroupInstallmentCheckDate')?.checked,
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
     canAccessShahkar: !!$('newGroupShahkar')?.checked,
@@ -2927,6 +3108,7 @@ function readDirectPermissionsFromForm(prefix) {
   return {
     canAccessUnsentFiches: !!$(`${prefix}Unsent`)?.checked,
     canAccessInstallment: !!$(`${prefix}Installment`)?.checked,
+    canAccessInstallmentCheckDate: !!$(`${prefix}InstallmentCheckDate`)?.checked,
     canAccessFicheDateChange: !!$(`${prefix}FicheDate`)?.checked,
     canAccessBankInquiryConfirm: !!$(`${prefix}BankInquiry`)?.checked,
     canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
@@ -2939,6 +3121,7 @@ function allDirectPermissionsGranted() {
   return {
     canAccessUnsentFiches: true,
     canAccessInstallment: true,
+    canAccessInstallmentCheckDate: true,
     canAccessFicheDateChange: true,
     canAccessBankInquiryConfirm: true,
     canAccessShahkar: true,
@@ -2961,6 +3144,7 @@ function setDirectPermissionsOnForm(prefix, perms) {
   const p = perms || {};
   if ($(`${prefix}Unsent`)) $(`${prefix}Unsent`).checked = !!p.canAccessUnsentFiches;
   if ($(`${prefix}Installment`)) $(`${prefix}Installment`).checked = !!p.canAccessInstallment;
+  if ($(`${prefix}InstallmentCheckDate`)) $(`${prefix}InstallmentCheckDate`).checked = !!p.canAccessInstallmentCheckDate;
   if ($(`${prefix}FicheDate`)) $(`${prefix}FicheDate`).checked = !!p.canAccessFicheDateChange;
   if ($(`${prefix}BankInquiry`)) $(`${prefix}BankInquiry`).checked = !!p.canAccessBankInquiryConfirm;
   if ($(`${prefix}Shahkar`)) $(`${prefix}Shahkar`).checked = !!p.canAccessShahkar;
@@ -3048,24 +3232,49 @@ async function saveUserEdit() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  const pendingPassword = ($('editUserNewPassword')?.value || '').trim();
+  if (pendingPassword) {
+    await resetUserPassword({ skipConfirm: true });
+  }
   closeUserEdit();
   await loadUsersTable();
 }
 
-async function resetUserPassword() {
-  if (!editingUserId) return;
-  const password = $('editUserNewPassword')?.value || '';
-  const policyError = typeof validatePasswordPolicy === 'function' ? validatePasswordPolicy(password) : null;
-  if (policyError) return alert(policyError);
+async function resetUserPassword({ skipConfirm = false } = {}) {
+  if (!editingUserId) {
+    alert('ابتدا کاربر را از لیست انتخاب و ویرایش کنید');
+    return;
+  }
+  const password = ($('editUserNewPassword')?.value || '').trim();
+  const policyError = typeof window.validatePasswordPolicy === 'function'
+    ? window.validatePasswordPolicy(password)
+    : (password ? null : 'رمز عبور الزامی است');
+  if (policyError) {
+    alert(policyError);
+    return;
+  }
+  if (!skipConfirm && !window.confirm('رمز عبور این کاربر با مقدار وارد شده جایگزین شود؟')) {
+    return;
+  }
   const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password })
   });
-  const data = await parseJsonResponse(res);
+  const text = await res.text();
+  let data = {};
+  if (text && text.trim()) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`پاسخ نامعتبر از سرور (HTTP ${res.status})`);
+    }
+  }
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  alert('رمز عبور با موفقیت تغییر کرد');
+  const msg = data.message || 'رمز عبور با موفقیت تغییر کرد';
+  if (typeof showAppSuccess === 'function') showAppSuccess(msg);
+  else alert(msg);
 }
 
 async function createUserFromForm() {
@@ -3263,7 +3472,7 @@ function renderFiche(f) {
     </div>
     <div class="stat-card">
       <span class="stat-label">نوع</span>
-      <span class="stat-value">${isTahatorIncomeFiche(f) ? 'تهاتر (درآمد)' : (categoryLabels[f.category] || f.category)}</span>
+      <span class="stat-value">${isTahatorAmountFiche(f) ? 'تهاتر (مبلغ — گروه ۱۵۷)' : isTahatorIncomeDetailFiche(f) ? 'تهاتر (درآمد — گروه ۱۵۸)' : (categoryLabels[f.category] || f.category)}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">مبلغ قابل پرداخت</span>
@@ -3277,9 +3486,30 @@ function renderFiche(f) {
       <span class="stat-label">کد نوسازی</span>
       <span class="stat-value">${f.bnkAcntNo || '-'}</span>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">رایورز (incmdocsys)</span>
+      <span class="stat-value">${f.existsInRayvarz ? 'موجود — ارسال نشود' : 'نیست'}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Accounting_DocHeader</span>
+      <span class="stat-value">${f.existsInAccountingDocHeader ? 'موجود — ارسال نشود' : 'نیست'}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">وضعیت</span>
+      <span class="stat-value">${f.statusMessage || (f.canSend ? 'آماده ارسال' : '—')}</span>
+    </div>
   `;
 
   renderMappingTable(f);
+
+  const rowsTitle = $('incomeRowsTitle');
+  if (rowsTitle) {
+    rowsTitle.textContent = isTahatorAmountFiche(f)
+      ? 'ردیف تهاتر مبلغ (تک‌ردیف — بدون جزئیات Income_Calculation)'
+      : isTahatorIncomeDetailFiche(f)
+        ? 'ردیف‌های درآمد (جزئیات تهاتر)'
+        : 'ردیف‌های درآمد';
+  }
 
   const tbody = $('rowsTable').querySelector('tbody');
   tbody.innerHTML = '';
@@ -3679,6 +3909,102 @@ function setupEventHandlers() {
       showAppError(e.message);
     } finally {
       updateUnsentSendButton();
+    }
+  });
+
+  $('checkDateNewPaymentDate')?.addEventListener('input', updateCheckDateApplyButton);
+
+  bindClick('btnCheckDateSearch', async () => {
+    const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value);
+    if (!trackingNo) return showAppWarning('کد پیگیری را وارد کنید');
+    const btn = $('btnCheckDateSearch');
+    const box = $('checkDateResultBox');
+    btn.disabled = true;
+    if (box) box.hidden = true;
+    try {
+      const res = await apiFetch('/api/installment-check-date/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingNo })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      renderCheckDateTable(data);
+      if (!data.items?.length) {
+        renderCheckDateTable(data);
+        showAppWarning('ردیفی یافت نشد');
+      } else {
+        showAppSuccess(`${data.items.length} ردیف یافت شد`);
+      }
+    } catch (e) {
+      hideEl('checkDateResultsSection');
+      hideEl('checkDateApplySection');
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  bindClick('btnCheckDateUpdate', async () => {
+    if (!checkDateSelectedRow || isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)) {
+      return showAppWarning('یک ردیف از گرید انتخاب کنید');
+    }
+    const newPaymentDate = ($('checkDateNewPaymentDate')?.value || '').trim();
+    if (!newPaymentDate) return showAppWarning('تاریخ پرداخت جدید را وارد کنید');
+
+    const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value)
+      || checkDateSelectedRow.trackingNo;
+    const dry = config?.installmentCheckDate?.dryRun ?? config?.installment?.dryRun ?? config?.dryRun ?? false;
+    const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';
+    if (!confirm(`${dryNote ? dryNote + '\n\n' : ''}تاریخ چک به ${newPaymentDate} تغییر کند؟`)) return;
+
+    const btn = $('btnCheckDateUpdate');
+    const box = $('checkDateResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال اعمال…';
+    }
+    try {
+      const res = await apiFetch('/api/installment-check-date/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nidInstallment: checkDateSelectedRow.nidInstallment,
+          noDocument: checkDateSelectedRow.noDocument,
+          trackingNo,
+          newPaymentDate
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) {
+        box.textContent = [
+          data.message || '',
+          `قبل: ${data.paymentDateBefore || '—'}`,
+          `بعد: ${data.paymentDateAfter || data.newPaymentDate || '—'}`,
+          `DryRun: ${data.dryRun}`
+        ].filter(Boolean).join('\n');
+      }
+      if (data.dryRun) showAppInfo(data.message || 'DryRun — تغییری اعمال نشد');
+      else if (data.success) {
+        showAppSuccess(data.message || 'تاریخ چک به‌روز شد');
+        const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value);
+        if (trackingNo) {
+          const searchRes = await apiFetch('/api/installment-check-date/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trackingNo })
+          });
+          const searchData = await parseJsonResponse(searchRes);
+          if (searchRes.ok) renderCheckDateTable(searchData);
+        }
+      } else showAppWarning(data.message || 'به‌روزرسانی ناموفق');
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      updateCheckDateApplyButton();
     }
   });
 

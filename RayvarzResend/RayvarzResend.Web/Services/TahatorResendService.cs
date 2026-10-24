@@ -58,18 +58,48 @@ public sealed class TahatorResendService
         if (pair == null)
         {
             var lone = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
-            var canSendLone = lone != null && TahatorRowBuilder.IsTahatorFiche(lone);
+            if (lone == null)
+            {
+                return new TahatorCheckResult
+                {
+                    FicheNo = ficheNo,
+                    ExistsInIncomeFiche = false,
+                    Message = "فیش در Income_Fiche یافت نشد."
+                };
+            }
+
+            if (!TahatorRowBuilder.IsTahatorFiche(lone))
+            {
+                return new TahatorCheckResult
+                {
+                    FicheNo = ficheNo,
+                    ExistsInIncomeFiche = true,
+                    Fiche = lone,
+                    NeedsSend = false,
+                    Message = "این فیش تهاتر (۱۵۷/۱۵۸) نیست."
+                };
+            }
+
+            var yr = DateHelper.ExtractShamsiYear(lone.RayvarzDocDate);
+            var loneElig = await FicheSendEligibility.CheckAsync(
+                _fiches, lone, ficheNo, yr > 0 ? yr : null, ct);
+            var loneNeeds = TahatorSendPolicy.NeedsSend(
+                loneElig.InRayvarz, loneElig.InAccountingDocHeader, loneElig.RayvarzQueryFailed);
+            var loneMsg = FicheSendEligibility.BuildBlockReason(loneElig)
+                ?? (loneNeeds
+                    ? "آماده ارسال همین فیش — فیش دیگر به‌صورت خودکار ارسال نمی‌شود."
+                    : loneElig.RayvarzQueryFailed
+                        ? "بررسی رایورز ناموفق — ارسال انجام نمی‌شود."
+                        : "وضعیت این فیش برای ارسال مشخص نیست.");
             return new TahatorCheckResult
             {
                 FicheNo = ficheNo,
-                ExistsInIncomeFiche = lone != null,
+                ExistsInIncomeFiche = true,
+                ExistsInAccountingDocHeader = loneElig.InAccountingDocHeader,
+                ExistsInRayvarz = loneElig.InRayvarz,
                 Fiche = lone,
-                NeedsSend = canSendLone,
-                Message = lone == null
-                    ? "فیش در Income_Fiche یافت نشد."
-                    : canSendLone
-                        ? "آماده ارسال همین فیش — فیش دیگر به‌صورت خودکار ارسال نمی‌شود."
-                        : "این فیش تهاتر (۱۵۷/۱۵۸) نیست."
+                NeedsSend = loneNeeds,
+                Message = loneMsg
             };
         }
 
@@ -84,22 +114,16 @@ public sealed class TahatorResendService
             if (string.Equals(no, ficheNo, StringComparison.Ordinal))
                 inputSnapshot ??= await TryLoadIncomeFicheStateAsync(no, ct);
 
-            var inHeader = await ExistsInAccountingDocHeaderAsync(no, ct);
-            var inRayvarz = false;
-            var rayvarzCheckFailed = false;
-            try
-            {
-                inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, reqDates: null, ct);
-            }
-            catch (SqlException ex)
-            {
-                inRayvarz = false;
-                rayvarzCheckFailed = true;
-                rayvarzCheckWarnings.Add($"incmdocsys {no}: {ex.Message}");
-            }
+            var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
+            var elig = await FicheSendEligibility.CheckAsync(
+                _fiches, fiche, no, yr > 0 ? yr : null, ct);
+            if (elig.RayvarzQueryFailed)
+                rayvarzCheckWarnings.Add($"incmdocsys {no}: اتصال SQL رایورز ناموفق");
 
-            var notSent = !inRayvarz && !rayvarzCheckFailed ? await TryGetDocNotSentAsync(no, ct) : null;
-            var needs = TahatorSendPolicy.NeedsSend(inRayvarz, rayvarzCheckFailed);
+            var inRayvarz = elig.InRayvarz;
+            var inHeader = elig.InAccountingDocHeader;
+            var notSent = !inRayvarz && !elig.RayvarzQueryFailed ? await TryGetDocNotSentAsync(no, ct) : null;
+            var needs = TahatorSendPolicy.NeedsSend(inRayvarz, inHeader, elig.RayvarzQueryFailed);
 
             members.Add(new TahatorPairMemberStatus
             {
@@ -125,11 +149,19 @@ public sealed class TahatorResendService
         var requestedMember = members.FirstOrDefault(m =>
             string.Equals(m.FicheNo, ficheNo, StringComparison.Ordinal));
         var requestedNeedsSend = requestedMember?.NeedsSend == true;
-        var msg = requestedMember?.ExistsInRayvarz == true
-            ? "این فیش در رایورز ثبت شده است — ارسال لازم نیست."
+        var requestedBlock = requestedMember == null
+            ? null
+            : FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
+                requestedMember.ExistsInRayvarz,
+                requestedMember.ExistsInAccountingDocHeader,
+                false));
+        var msg = requestedBlock != null
+            ? requestedBlock.Replace(" — ارسال نشد", " — ارسال لازم نیست.")
             : requestedNeedsSend
                 ? "آماده ارسال همین فیش — فیش دیگر به‌صورت خودکار ارسال نمی‌شود."
-                : "وضعیت این فیش برای ارسال مشخص نیست.";
+                : rayvarzCheckWarnings.Count > 0
+                    ? "بررسی رایورز ناموفق — ارسال انجام نمی‌شود."
+                    : "وضعیت این فیش برای ارسال مشخص نیست.";
         var warning = rayvarzCheckWarnings.Count > 0
             ? string.Join(" | ", rayvarzCheckWarnings)
             : null;
@@ -188,30 +220,37 @@ public sealed class TahatorResendService
 
         try
         {
+            var todayRay = DateHelper.CurrentShamsiRayvarzDate();
+            var planDocDate = FirstDateOrToday(req.DocDate, todayRay);
+            var planActDate = FirstDateOrToday(req.ActDate, todayRay);
+            var planDueDate = FirstDateOrToday(req.DueDate, todayRay);
+
             foreach (var fiche in ordered)
             {
                 var no = fiche.FicheNo.Trim();
-                var inHeader = await ExistsInAccountingDocHeaderAsync(no, ct);
-                bool inRayvarz;
-                try
-                {
-                    inRayvarz = await TryExistsTahatorInRayvarzAsync(fiche, req, ct);
-                }
-                catch (SqlException ex)
-                {
-                    inRayvarz = false;
-                    steps.Add($"⚠ incmdocsys {no}: {ex.Message}");
-                }
+                var yr = DateHelper.ExtractShamsiYear(planDocDate);
+                var elig = await FicheSendEligibility.CheckAsync(
+                    _fiches, fiche, no, yr > 0 ? yr : null, ct,
+                    planDocDate, planActDate, planDueDate);
+                var inHeader = elig.InAccountingDocHeader;
+                var inRayvarz = elig.InRayvarz;
+                if (elig.RayvarzQueryFailed)
+                    steps.Add($"⚠ incmdocsys {no}: اتصال SQL رایورز ناموفق — ارسال انجام نمی‌شود");
 
-                var shouldSend = TahatorSendPolicy.ShouldSendMember(force, inRayvarz);
-                if (inHeader && !inRayvarz)
-                    steps.Add($"⚠ {no}: در واسط (Accounting_DocHeader) هست ولی در رایورز نیست — ارسال مجدد");
+                var shouldSend = TahatorSendPolicy.NeedsSend(inRayvarz, inHeader, elig.RayvarzQueryFailed);
                 steps.Add(
                     $"1) {fiche.IncomeAccountGroup} FicheNo={no} DocTyp={fiche.DocTyp} " +
                     $"Header={inHeader} Rayvarz={inRayvarz} → send={shouldSend}");
 
                 if (!shouldSend)
                 {
+                    var skipReason = inRayvarz
+                        ? "InRayvarz"
+                        : inHeader
+                            ? "InAccountingDocHeader"
+                            : elig.RayvarzQueryFailed
+                                ? "RayvarzQueryFailed"
+                                : "Blocked";
                     ficheResults.Add(new TahatorFicheSendDetail
                     {
                         FicheNo = no,
@@ -221,7 +260,7 @@ public sealed class TahatorResendService
                         Fund = ResolveFund(fiche, req.Fund),
                         Success = inHeader || inRayvarz,
                         Skipped = true,
-                        SkipReason = "InRayvarz",
+                        SkipReason = skipReason,
                         ExistsInAccountingDocHeaderAfter = inHeader,
                         ExistsInRayvarz = inRayvarz
                     });
@@ -243,7 +282,13 @@ public sealed class TahatorResendService
             if (toSend.Count == 0)
             {
                 var allSkipped = ficheResults.All(r => r.Skipped);
-                steps.Add($"1x) فیش {ficheNo} قبلاً در رایورز است — ارسال نشد");
+                var allInRay = ficheResults.All(r => r.ExistsInRayvarz);
+                var allInHeader = ficheResults.All(r => r.ExistsInAccountingDocHeaderAfter);
+                steps.Add(allInRay && allInHeader
+                    ? $"1x) فیش {ficheNo} در رایورز و Accounting_DocHeader است — ارسال نشد"
+                    : allInHeader
+                        ? $"1x) فیش {ficheNo} در Accounting_DocHeader است — ارسال نشد"
+                        : $"1x) فیش {ficheNo} قبلاً در رایورز است — ارسال نشد");
                 return new TahatorSendResult
                 {
                     Success = allSkipped && ficheResults.All(r => r.Success),
@@ -253,17 +298,18 @@ public sealed class TahatorResendService
                     Pair = pair,
                     FicheResults = ficheResults,
                     Steps = steps,
-                    SkipReason = "AllInRayvarz",
+                    SkipReason = allInHeader && !allInRay ? "InAccountingDocHeader" : "AllInRayvarz",
                     Message = dryRun
-                        ? "ارسال آزمایشی انجام نشد — این فیش قبلاً در رایورز ثبت شده است."
-                        : "این فیش قبلاً در رایورز ثبت شده است."
+                        ? "ارسال آزمایشی انجام نشد — فیش تکراری (رایورز یا Accounting_DocHeader)."
+                        : FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
+                            allInRay, allInHeader, false))
+                          ?? "فیش تکراری — ارسال نشد."
                 };
             }
 
-            var todayRay = DateHelper.CurrentShamsiRayvarzDate();
-            var docDate = FirstDateOrToday(req.DocDate, todayRay);
-            var actDate = FirstDateOrToday(req.ActDate, todayRay);
-            var dueDate = FirstDateOrToday(req.DueDate, todayRay);
+            var docDate = planDocDate;
+            var actDate = planActDate;
+            var dueDate = planDueDate;
             steps.Add($"2) تاریخ SOAP: DocDate/ActDate/Due={docDate} (امروز مگر override)");
 
             for (var i = 0; i < toSend.Count; i++)
@@ -435,7 +481,8 @@ public sealed class TahatorResendService
                  && (fiche.Rows.Count != 1
                      || fiche.Rows[0].IncmNo is not (TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther)))
             TahatorRowBuilder.ApplyTahatorAmountRows(fiche);
-        else if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche))
+        else if (TahatorRowBuilder.IsTahatorIncomeFiche(fiche)
+                 && !TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche))
             TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
         else
             ApplyTahatorDocTyp(fiche);
