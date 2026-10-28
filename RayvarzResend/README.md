@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۴۸ — رفع باگ‌های بازبینی: امنیت ورود و مدیریت، ارسال امن، محدوده منطقه، XSS)** — شامل v47 و v46.
+**نسخه آخر (تحویل: ۴۹ — اکسل ارسال جمعی: شناسه قبض+پرداخت ۲۶ رقمی چسبیده)** — شامل v48 و v47.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v48` |
-| **دانلود Zip** | [**RayvarzResend-48.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-48.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v49` |
+| **دانلود Zip** | [**RayvarzResend-49.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-49.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v48.md`](DELIVERY-v48.md) |
+| جزئیات | [`DELIVERY-v49.md`](DELIVERY-v49.md) |
+| v48 قبلی | [`DELIVERY-v48.md`](DELIVERY-v48.md) |
 | v47 قبلی | [`DELIVERY-v47.md`](DELIVERY-v47.md) |
 | v46 قبلی | [`DELIVERY-v46.md`](DELIVERY-v46.md) |
 | v45 قبلی | [`DELIVERY-v45.md`](DELIVERY-v45.md) |

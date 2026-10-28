@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-48.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-49.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v48 — رفع باگ‌های بازبینی
+echo RayvarzResend v49 — اکسل ۲۶ رقم قبض+پرداخت
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v48 — رفع باگ‌های بازبینی (ورود، ارسال، منطقه، XSS) + v47
+RayvarzResend v49 — اکسل چسبیده ۲۶ رقم + v48
 
 نصب روی سرور ویندوز
 --------------------
@@ -47,7 +47,7 @@ RayvarzResend v48 — رفع باگ‌های بازبینی (ورود، ارسا
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 48
+     releaseVersion = 49
      shahkar.dataSource = 172.16.8.138\sql2012
      accountingDoc.dryRun = false
      dryRun = false
