@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="lib/jalalidatepicker/jalalidatepicker.min.css" />
-  <link rel="stylesheet" href="css/style.css?v=51" />
+  <link rel="stylesheet" href="css/style.css?v=52" />
   <style>
     body:not(.app-authenticated) .container,
     body:not(.app-authenticated) .page-bg {
@@ -160,13 +160,11 @@
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
         <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
         <label id="btnUnsentExcel" for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
-        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
+        <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx?v=50" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
       <div class="unsent-excel-status-row">
-        <span id="unsentExcelStatus" class="installment-excel-status" aria-live="polite">فایل اکسل انتخاب نشده</span>
-        <span class="field-hint unsent-excel-hint">اکسل: سه ستون جدا (قبض، پرداخت، فیش) یا یک ستون «شناسه قبض و پرداخت» با ۲۶ رقم چسبیده (۱۳+۱۳) — مثلاً 90000813520650000809662537</span>
-      </div>
+        <span id="unsentExcelStatus" class="installment-excel-status" aria-live="polite">فایل اکسل انتخاب نشده</span>      </div>
       <div class="subsection" id="unsentResultsSection" hidden>
         <div class="unsent-toolbar">
           <label class="check-all-label">
@@ -1063,6 +1061,6 @@
   <script src="lib/xlsx/xlsx.full.min.js"></script>
   <script src="js/password-fields.js?v=2"></script>
   <script src="js/change-password.js?v=2"></script>
-  <script src="js/app.js?v=108"></script>
+  <script src="js/app.js?v=109"></script>
 </body>
 </html>
