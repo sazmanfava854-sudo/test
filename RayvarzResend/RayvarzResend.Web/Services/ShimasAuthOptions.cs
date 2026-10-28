@@ -21,10 +21,13 @@ public sealed class ShimasAuthOptions
     /// <summary>نام کاربری ثبت‌شده در SSO (جدول ۱ ردیف ۲) — هدر apiName؛ **نه** ClientId/lkey.</summary>
     public string ApiName { get; set; } = "";
     public string LoginKeyParameter { get; set; } = "loginKey";
-    /// <summary>همان State در RuleEngine (معمولاً test). فقط با UseFixedLoginState=true ارسال می‌شود؛ پیش‌فرض state تصادفی هر ورود است.</summary>
+    /// <summary>همان State در RuleEngine (معمولاً test).</summary>
     public string LoginState { get; set; } = "test";
-    /// <summary>true = همیشه LoginState ثابت (بدون محافظت CSRF ورود) — فقط اگر SSO مقدار تصادفی را نپذیرد.</summary>
-    public bool UseFixedLoginState { get; set; }
+    /// <summary>
+    /// true (پیش‌فرض، مثل v47) = همان LoginState ثابت ارسال می‌شود. false = state تصادفی هر ورود
+    /// (فقط اگر SSO مشهد state دلخواه را برگرداند).
+    /// </summary>
+    public bool UseFixedLoginState { get; set; } = true;
     /// <summary>true = بدون ClientSecret و ValidateTokenUrl هم ورود SSO پذیرفته شود (ناامن؛ فقط محیط تست).</summary>
     public bool AllowUnverifiedRefreshToken { get; set; }
     /// <summary>lower = SHA256 hex lowercase (پیش‌فرض RuleEngine) — upper در صورت خطای Client info.</summary>

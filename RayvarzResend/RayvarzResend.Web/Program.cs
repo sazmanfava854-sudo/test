@@ -191,6 +191,10 @@ async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationT
         return Results.Redirect($"/login.html?error={error}");
     }
 
+    // کاربران با دامین برگشتی از SSO ثبت شده‌اند؛ refresh_token قبلاً نزد API مشهد تأیید شده است.
+    if (!string.IsNullOrWhiteSpace(callback.Domain))
+        validation.Profile.Domain = callback.Domain;
+
     var user = await shimas.ResolveOrCreateUserAsync(validation.Profile, ct);
     if (user == null)
     {
