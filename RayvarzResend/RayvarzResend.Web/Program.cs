@@ -788,6 +788,11 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         shimas = shimas.GetStatus()
     },
     features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, installmentCheckDate = true, ficheDateChange = true, bankInquiryConfirm = true, costCenter = true, shahkar = true },
+    unsentBatch = new
+    {
+        chunkSize = Math.Clamp(config.GetValue("Rayvarz:UnsentBatchChunkSize", 4), 1, 20),
+        sendDelayMs = config.GetValue("Rayvarz:SendDelayMs", 2000)
+    },
     tahator = new
     {
         dryRun = SendDryRun.Tahator(config),

@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v50_release()
+    public void ReleaseInfo_is_v51_release()
     {
-        Assert.Equal(50, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v50", ReleaseInfo.Tag);
+        Assert.Equal(51, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v51", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,16 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v50_doc_lists_current_release()
+    public void DELIVERY_v51_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v50.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v51.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 50", doc);
-        Assert.Contains("SSO", doc);
-        Assert.Contains("UseFixedLoginState", doc);
-        Assert.Contains("RayvarzResend-50.zip", doc);
+        Assert.Contains("releaseVersion: 51", doc);
+        Assert.Contains("504", doc);
+        Assert.Contains("UnsentBatchChunkSize", doc);
+        Assert.Contains("RayvarzResend-51.zip", doc);
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=109", html);
+        Assert.Contains("js/app.js?v=110", html);
         Assert.Contains("css/style.css?v=52", html);
         Assert.Contains("id=\"btnUnsentExcel\"", html);
         Assert.DoesNotContain("btnUnsentNextPage", html);
@@ -298,6 +298,7 @@ public class DeliveryReleaseTests
         Assert.Contains("function canAccessRayvarzModule(", js);
         Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);
         Assert.Contains("function formatUnsentBatchSendResult(", js);
+        Assert.Contains("function sendUnsentBatchInChunks(", js);
         Assert.Contains("<th>شناسه قبض</th>", html);
         Assert.Contains("<th>شناسه پرداخت</th>", html);
 

@@ -921,6 +921,85 @@ function setUnsentExcelStatus(message, loading = false) {
   el.classList.toggle('is-loading', loading);
 }
 
+function chunkArray(items, size) {
+  const n = Math.max(1, size | 0);
+  const out = [];
+  for (let i = 0; i < items.length; i += n) out.push(items.slice(i, i + n));
+  return out;
+}
+
+/** زیر سقف timeout درگاه (معمولاً ~۶۰ث) — هر فیش SendDelayMs + SOAP دارد. */
+function resolveUnsentBatchChunkSize() {
+  const n = Number(config?.unsentBatch?.chunkSize);
+  if (Number.isFinite(n) && n >= 1 && n <= 20) return Math.floor(n);
+  return 4;
+}
+
+function mergeUnsentBatchSendResults(parts) {
+  const merged = {
+    total: 0,
+    succeeded: 0,
+    failed: 0,
+    skipped: 0,
+    dryRun: false,
+    results: []
+  };
+  (parts || []).forEach((data) => {
+    merged.total += data.total ?? 0;
+    merged.succeeded += data.succeeded ?? 0;
+    merged.failed += data.failed ?? 0;
+    merged.skipped += data.skipped ?? 0;
+    merged.dryRun = merged.dryRun || !!data.dryRun;
+    merged.results.push(...(data.results || []));
+  });
+  return merged;
+}
+
+async function sendUnsentBatchInChunks(targets, onProgress) {
+  const chunks = chunkArray(targets, resolveUnsentBatchChunkSize());
+  const parts = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const progressText = chunks.length > 1
+      ? `در حال ارسال دسته ${i + 1} از ${chunks.length} (${chunk.length} فیش از ${targets.length})…`
+      : `در حال ارسال ${chunk.length} فیش…`;
+    onProgress?.(progressText);
+
+    const res = await apiFetch('/api/unsent/send-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targets: chunk })
+    });
+    let data;
+    try {
+      data = await parseJsonResponse(res);
+    } catch (parseErr) {
+      if (res.status === 504 && parts.length > 0) {
+        const done = mergeUnsentBatchSendResults(parts);
+        throw new Error(
+          `${parseErr.message}\n\n${done.succeeded} فیش در ${parts.length} دستهٔ قبل ثبت شد — قبل از ارسال مجدد وضعیت را در رایورز بررسی کنید.`
+        );
+      }
+      if (res.status === 504) {
+        throw new Error(
+          'زمان پاسخ درگاه (HTTP 504) تمام شد. ممکن است فیش‌ها ارسال شده باشند — قبل از تکرار، وضعیت را در رایورز بررسی کنید.'
+        );
+      }
+      throw parseErr;
+    }
+    if (!res.ok) {
+      const err = data.error || `خطا (HTTP ${res.status})`;
+      if (parts.length > 0) {
+        const done = mergeUnsentBatchSendResults(parts);
+        throw new Error(`${err}\n\n${done.succeeded} فیش در دسته‌های قبلی ثبت شد.`);
+      }
+      throw new Error(err);
+    }
+    parts.push(data);
+  }
+  return mergeUnsentBatchSendResults(parts);
+}
+
 function formatUnsentBatchSendResult(data) {
   const total = data.total ?? 0;
   const ok = data.succeeded ?? 0;
@@ -4084,13 +4163,9 @@ function setupEventHandlers() {
     box.textContent = `در حال ارسال ${targets.length} فیش…`;
 
     try {
-      const res = await apiFetch('/api/unsent/send-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targets })
+      const data = await sendUnsentBatchInChunks(targets, (msg) => {
+        box.textContent = msg;
       });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
       const resultText = formatUnsentBatchSendResult(data);
       const summary = `ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`;
