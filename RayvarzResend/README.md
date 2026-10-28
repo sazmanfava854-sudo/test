@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۴۶ — تشخیص باز نشدن security10 در شاهکار)** — شامل v45 و v44.
+**نسخه آخر (تحویل: ۴۷ — جستجوی جمعی نوسازی، قالب تاریخ، سرستون اکسل)** — شامل v46 و v45.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v46` |
-| **دانلود Zip** | [**RayvarzResend-46.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-46.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v47` |
+| **دانلود Zip** | [**RayvarzResend-47.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-47.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v46.md`](DELIVERY-v46.md) |
+| جزئیات | [`DELIVERY-v47.md`](DELIVERY-v47.md) |
+| v46 قبلی | [`DELIVERY-v46.md`](DELIVERY-v46.md) |
 | v45 قبلی | [`DELIVERY-v45.md`](DELIVERY-v45.md) |
 | v44 قبلی | [`DELIVERY-v44.md`](DELIVERY-v44.md) |
 | v43 قبلی | [`DELIVERY-v43.md`](DELIVERY-v43.md) |

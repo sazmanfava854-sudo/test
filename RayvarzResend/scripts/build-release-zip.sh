@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-46.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-47.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v46 — تشخیص security10 شاهکار
+echo RayvarzResend v47 — نوسازی جمعی + قالب تاریخ
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v46 — تشخیص باز نشدن security10 + v45
+RayvarzResend v47 — XQuery نوسازی جمعی، تاریخ 1405/08/07، سرستون اکسل + v46
 
 نصب روی سرور ویندوز
 --------------------
@@ -47,7 +47,7 @@ RayvarzResend v46 — تشخیص باز نشدن security10 + v45
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 46
+     releaseVersion = 47
      shahkar.dataSource = 172.16.8.138\sql2012
      accountingDoc.dryRun = false
      dryRun = false
