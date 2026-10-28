@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v49_release()
+    public void ReleaseInfo_is_v50_release()
     {
-        Assert.Equal(49, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v49", ReleaseInfo.Tag);
+        Assert.Equal(50, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v50", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v49_doc_lists_current_release()
+    public void DELIVERY_v50_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v49.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v50.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 49", doc);
-        Assert.Contains("۲۶ رقم", doc);
-        Assert.Contains("RayvarzResend-49.zip", doc);
+        Assert.Contains("releaseVersion: 50", doc);
+        Assert.Contains("SSO", doc);
+        Assert.Contains("UseFixedLoginState", doc);
+        Assert.Contains("RayvarzResend-50.zip", doc);
     }
 
     [Fact]
@@ -259,11 +260,13 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=108", html);
-        Assert.Contains("css/style.css?v=51", html);
+        Assert.Contains("js/app.js?v=109", html);
+        Assert.Contains("css/style.css?v=52", html);
         Assert.Contains("id=\"btnUnsentExcel\"", html);
         Assert.DoesNotContain("btnUnsentNextPage", html);
-        Assert.Contains("unsent-excel-hint", html);
+        Assert.DoesNotContain("unsent-excel-hint", html);
+        Assert.DoesNotContain("سه ستون جدا (قبض، پرداخت، فیش)", html);
+        Assert.Contains("unsent-bill-pay-template.xlsx?v=50", html);
         Assert.Contains("<th class=\"col-unsent-fiche\">شماره فیش</th>", html);
         Assert.DoesNotMatch(@"[\u0400-\u04FF]", html);
         Assert.DoesNotContain("dbo.Installment_List", html);
