@@ -51,6 +51,14 @@ public class StrictShamsiDateTests
     }
 
     [Fact]
+    public void Persian_digit_dates_reach_sql_with_latin_digits()
+    {
+        Assert.Equal("1405/08/07", DateHelper.NormalizeOptionalUserDate("۱۴۰۵/۰۸/۰۷"));
+        Assert.Null(DateHelper.NormalizeOptionalUserDate(null));
+        Assert.Equal("1405/08/07", DateHelper.ToShamsiSlashDate("۱۴۰۵/۰۸/۰۷"));
+    }
+
+    [Fact]
     public void Bank_inquiry_and_check_date_helpers_use_strict_format()
     {
         Assert.True(BankInquiryConfirmHelper.TryNormalizeSlashDate("1405/08/07", out var ok));

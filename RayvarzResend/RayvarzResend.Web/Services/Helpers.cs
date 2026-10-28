@@ -90,6 +90,10 @@ public static class DateHelper
             : $"{label}: «{input.Trim()}» تاریخ معتبر نیست — {StrictShamsiFormatHint}";
     }
 
+    /// <summary>تاریخ معتبر با ارقام لاتین (SQL و SOAP ارقام فارسی را تطبیق نمی‌دهند)؛ نامعتبر بدون تغییر برمی‌گردد.</summary>
+    public static string? NormalizeOptionalUserDate(string? input) =>
+        TryParseStrictShamsiSlash(input, out var slash) ? slash : input;
+
     public static string CurrentShamsiRayvarzDate()
     {
         var pc = new System.Globalization.PersianCalendar();
@@ -131,6 +135,7 @@ public static class DateHelper
     public static string ToShamsiSlashDate(string? input)
     {
         if (string.IsNullOrWhiteSpace(input)) return "";
+        input = NumericHelper.NormalizeDigits(input);
         if (input.Contains('/')) return input.Trim();
         var d = ToRayvarzDate(input);
         return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();
