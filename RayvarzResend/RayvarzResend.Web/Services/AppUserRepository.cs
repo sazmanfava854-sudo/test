@@ -620,14 +620,26 @@ public sealed class AppUserRepository
         await EnsureSchemaAsync(ct);
         await using var conn = new SqlConnection(_cs);
         await conn.OpenAsync(ct);
-        await using var del = new SqlCommand("DELETE FROM dbo.AppUserGroupMember WHERE UserId = @id", conn);
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
+        await ReplaceUserGroupsAsync(conn, tx, userId, groupIds, ct);
+        await tx.CommitAsync(ct);
+    }
+
+    private static async Task ReplaceUserGroupsAsync(
+        SqlConnection conn,
+        SqlTransaction tx,
+        Guid userId,
+        IReadOnlyList<Guid> groupIds,
+        CancellationToken ct)
+    {
+        await using var del = new SqlCommand("DELETE FROM dbo.AppUserGroupMember WHERE UserId = @id", conn, tx);
         del.Parameters.AddWithValue("@id", userId);
         await del.ExecuteNonQueryAsync(ct);
 
         foreach (var groupId in groupIds.Distinct())
         {
             await using var ins = new SqlCommand(
-                "INSERT INTO dbo.AppUserGroupMember (UserId, GroupId) VALUES (@u, @g)", conn);
+                "INSERT INTO dbo.AppUserGroupMember (UserId, GroupId) VALUES (@u, @g)", conn, tx);
             ins.Parameters.AddWithValue("@u", userId);
             ins.Parameters.AddWithValue("@g", groupId);
             await ins.ExecuteNonQueryAsync(ct);
@@ -644,22 +656,7 @@ public sealed class AppUserRepository
         if (user == null)
             throw new InvalidOperationException("کاربر یافت نشد");
 
-        if (req.IsAdmin.HasValue)
-            user.IsAdmin = req.IsAdmin.Value;
-        if (req.IsActive.HasValue)
-            user.IsActive = req.IsActive.Value;
-        if (req.Domain != null)
-        {
-            var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
-            if (!AppUserDomainNormalizer.IsValidList(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
-            user.Domain = domain;
-        }
-
-        if (user.IsAdmin)
-            user.DirectPermissions = AppUserDirectPermissions.AllGranted();
-        else if (req.DirectPermissions != null)
-            user.DirectPermissions = req.DirectPermissions;
+        AppUserUpdateRules.Apply(user, req);
 
         const string sql = """
             UPDATE dbo.AppUser
@@ -674,25 +671,39 @@ public sealed class AppUserRepository
                 DirectCanManageUsers = @dUsers
             WHERE Id = @id
             """;
-        await using var conn = new SqlConnection(_cs);
-        await conn.OpenAsync(ct);
-        await using var cmd = new SqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("@id", id);
-        cmd.Parameters.AddWithValue("@admin", user.IsAdmin);
-        cmd.Parameters.AddWithValue("@active", user.IsActive);
-        cmd.Parameters.AddWithValue("@domain", user.Domain ?? "");
-        AddDirectPermissionParameters(cmd, user.DirectPermissions);
-        try
+        await using (var conn = new SqlConnection(_cs))
         {
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-        catch (SqlException ex) when (ex.Number is 2627 or 2601)
-        {
-            throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
-        }
+            await conn.OpenAsync(ct);
+            await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn, tx);
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.Parameters.AddWithValue("@admin", user.IsAdmin);
+            cmd.Parameters.AddWithValue("@active", user.IsActive);
+            cmd.Parameters.AddWithValue("@domain", user.Domain ?? "");
+            AddDirectPermissionParameters(cmd, user.DirectPermissions);
+            try
+            {
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
+            catch (SqlException ex) when (ex.Number is 2627 or 2601)
+            {
+                throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
+            }
 
-        if (req.GroupIds != null)
-            await SetUserGroupsAsync(id, req.GroupIds, ct);
+            if (req.GroupIds != null)
+            {
+                try
+                {
+                    await ReplaceUserGroupsAsync(conn, tx, id, req.GroupIds, ct);
+                }
+                catch (SqlException ex) when (ex.Number == 547)
+                {
+                    throw new InvalidOperationException("یکی از گروه‌های انتخاب‌شده وجود ندارد — تغییری ذخیره نشد");
+                }
+            }
+
+            await tx.CommitAsync(ct);
+        }
 
         var dto = (await ListUsersWithGroupsAsync(ct)).First(u => u.Id == id);
         return dto;

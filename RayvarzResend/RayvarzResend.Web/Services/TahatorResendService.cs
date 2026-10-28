@@ -47,9 +47,7 @@ public sealed class TahatorResendService
     public int PollIntervalMs => Math.Max(500, _config.GetValue("Tahator:PollIntervalMs", 2000));
     public int PollTimeoutSeconds => Math.Max(5, _config.GetValue("Tahator:PollTimeoutSeconds", 60));
 
-    public bool IsDryRun =>
-        _config.GetValue<bool?>("Tahator:DryRun")
-        ?? _config.GetValue<bool>("Rayvarz:DryRun");
+    public bool IsDryRun => SendDryRun.Tahator(_config);
 
     public async Task<TahatorCheckResult> CheckAsync(string ficheNo, CancellationToken ct = default)
     {
@@ -192,6 +190,9 @@ public sealed class TahatorResendService
         var dryRun = IsDryRun;
         var force = req.Force;
         var ficheNo = NormalizeFicheNo(req.FicheNo);
+        using var sendLock = FicheSendLock.TryAcquire(ficheNo);
+        if (sendLock == null)
+            return Fail(ficheNo, dryRun, steps, FicheSendLock.BusyMessage);
         steps.Add($"0) ارسال تهاتر فقط فیش درخواستی — FicheNo={ficheNo} | DryRun={dryRun} | force={force}");
 
         var loaded = await _fiches.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
@@ -332,20 +333,25 @@ public sealed class TahatorResendService
                     ? $"4) DryRun — SOAP {no} POST نشد"
                     : soapResult.Success
                         ? $"4) SOAP {no} OK — {soapResult.Message}"
-                        : $"4) SOAP {no} FAIL — {soapResult.Message}");
+                        : soapResult.OutcomeUnknown
+                            ? $"4) ⚠ SOAP {no} نامعلوم — {soapResult.Message}"
+                            : $"4) SOAP {no} FAIL — {soapResult.Message}");
 
-                var inHeaderAfter = await ExistsInAccountingDocHeaderAsync(no, ct);
+                // Post-send steps must finish even if the browser disconnects.
+                var postCt = CancellationToken.None;
+                var mayBeInRayvarz = soapResult.Success || soapResult.OutcomeUnknown;
+                var inHeaderAfter = await ExistsInAccountingDocHeaderAsync(no, postCt);
                 var yearCandidates = RayvarzYearResolver.CollectCandidates(
                     docDate, actDate, dueDate,
                     fiche.RayvarzDocDate, fiche.RayvarzActDate, fiche.RayvarzDueDate).ToList();
 
                 AccountingDocWriteResult? accounting = null;
                 var accountingMessage = (string?)null;
-                if (!dryRun && soapResult.Success && !inHeaderAfter)
+                if (!dryRun && mayBeInRayvarz && !inHeaderAfter)
                 {
                     accounting = await _accountingDoc.TryWriteAfterSendAsync(
-                        fiche, soapResult.PursuitDocNo, yearCandidates, ct);
-                    inHeaderAfter = accounting.Written || await ExistsInAccountingDocHeaderAsync(no, ct);
+                        fiche, soapResult.PursuitDocNo, yearCandidates, postCt);
+                    inHeaderAfter = accounting.Written || await ExistsInAccountingDocHeaderAsync(no, postCt);
                     accountingMessage = accounting.Message;
                     steps.Add(accounting.Written
                         ? $"5) واسط Sara {no}: {accounting.Message}"
@@ -355,7 +361,7 @@ public sealed class TahatorResendService
                 }
 
                 var verifiedRay = false;
-                if (!dryRun && soapResult.Success)
+                if (!dryRun && mayBeInRayvarz)
                 {
                     try
                     {
@@ -367,7 +373,7 @@ public sealed class TahatorResendService
                                 ActDate = actDate,
                                 DueDate = dueDate
                             },
-                            ct);
+                            postCt);
                     }
                     catch (SqlException ex)
                     {
@@ -378,7 +384,7 @@ public sealed class TahatorResendService
                 string? notSent = null;
                 if (!dryRun && !inHeaderAfter && !verifiedRay)
                 {
-                    notSent = await TryGetDocNotSentAsync(no, ct);
+                    notSent = await TryGetDocNotSentAsync(no, postCt);
                     if (!string.IsNullOrWhiteSpace(notSent))
                         steps.Add($"6) DocNotSent {no}: {notSent}");
                 }
@@ -386,7 +392,13 @@ public sealed class TahatorResendService
                 var accountingFailed = accounting is { IsFailure: true };
                 var oneOk = dryRun
                     ? soapResult.Success
-                    : soapResult.Success && !accountingFailed && (inHeaderAfter || verifiedRay);
+                    : soapResult.Success
+                        ? !accountingFailed && (inHeaderAfter || verifiedRay)
+                        : soapResult.OutcomeUnknown && verifiedRay && !accountingFailed;
+                if (soapResult.OutcomeUnknown)
+                    steps.Add(verifiedRay
+                        ? $"4b) پاسخ SOAP {no} نرسید ولی سند در رایورز پیدا شد"
+                        : $"4b) ⚠ پاسخ SOAP {no} نرسید و سند هنوز در رایورز دیده نمی‌شود — پیش از ارسال مجدد بررسی کنید");
 
                 ficheResults.Add(new TahatorFicheSendDetail
                 {

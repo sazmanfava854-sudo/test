@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.Data.SqlClient;
 using RayvarzResend.Web.Models;
 
@@ -53,6 +54,7 @@ public sealed class FicheDateChangeService
 
     public async Task<FicheDateChangeSearchResult> SearchAsync(
         FicheDateChangeSearchRequest req,
+        ClaimsPrincipal? user,
         CancellationToken ct = default)
     {
         var result = new FicheDateChangeSearchResult();
@@ -73,6 +75,12 @@ public sealed class FicheDateChangeService
         }
 
         var (whereSql, parameters) = BuildSearchWhere(req);
+        var scope = DistrictAccessService.BuildIncomeFicheScopeClause(user);
+        if (scope is { } s)
+        {
+            whereSql = string.IsNullOrWhiteSpace(whereSql) ? s.Clause : $"{whereSql} AND {s.Clause}";
+            parameters.AddRange(s.Parameters);
+        }
         var page = req.Page > 0 ? req.Page : 1;
         var pageSize = req.PageSize is > 0 and <= 200
             ? req.PageSize
@@ -160,6 +168,7 @@ public sealed class FicheDateChangeService
 
     public async Task<FicheDateChangeUpdateResult> UpdateAsync(
         FicheDateChangeUpdateRequest req,
+        ClaimsPrincipal? user,
         CancellationToken ct = default)
     {
         var result = new FicheDateChangeUpdateResult { DryRun = IsDryRun };
@@ -199,19 +208,33 @@ public sealed class FicheDateChangeService
             : null;
         var newStatus = req.ApplyEumFicheStatus ? req.NewEumFicheStatus : null;
 
+        var scope = DistrictAccessService.BuildIncomeFicheScopeClause(user);
+
         if (result.DryRun)
         {
-            result.Total = ficheNos.Count;
-            result.WouldUpdate = ficheNos.Count;
+            await using var dryConn = new SqlConnection(_saraCs);
+            await dryConn.OpenAsync(ct);
             foreach (var ficheNo in ficheNos)
             {
-                result.Results.Add(new FicheDateChangeUpdateItemResult
+                var access = await CheckFicheAccessAsync(dryConn, ficheNo, scope, ct);
+                AppendUpdateItemResult(result, access switch
                 {
-                    FicheNo = ficheNo,
-                    Success = true,
-                    Found = true,
-                    WouldUpdate = 1,
-                    Message = "DryRun — UPDATE نمی‌شود (FicheDateChange:DryRun=true)"
+                    FicheAccess.NotFound => new FicheDateChangeUpdateItemResult
+                    {
+                        FicheNo = ficheNo, Found = false, Success = false, Message = "یافت نشد"
+                    },
+                    FicheAccess.Denied => new FicheDateChangeUpdateItemResult
+                    {
+                        FicheNo = ficheNo, Found = true, Success = false, Message = FicheOutOfDistrictMessage
+                    },
+                    _ => new FicheDateChangeUpdateItemResult
+                    {
+                        FicheNo = ficheNo,
+                        Success = true,
+                        Found = true,
+                        WouldUpdate = 1,
+                        Message = "DryRun — UPDATE نمی‌شود (FicheDateChange:DryRun=true)"
+                    }
                 });
             }
 
@@ -242,6 +265,16 @@ public sealed class FicheDateChangeService
             var item = new FicheDateChangeUpdateItemResult { FicheNo = ficheNo };
             try
             {
+                var access = await CheckFicheAccessAsync(conn, ficheNo, scope, ct);
+                if (access != FicheAccess.Allowed)
+                {
+                    item.Found = access == FicheAccess.Denied;
+                    item.Success = false;
+                    item.Message = access == FicheAccess.Denied ? FicheOutOfDistrictMessage : "یافت نشد";
+                    AppendUpdateItemResult(result, item);
+                    continue;
+                }
+
                 int? previousStatus = null;
                 if (req.ApplyEumFicheStatus)
                     previousStatus = await LoadCurrentFicheStatusAsync(conn, ficheNo, ct);
@@ -394,6 +427,32 @@ public sealed class FicheDateChangeService
                 parameters.Add(($"@{toParamPrefix}", to));
             }
         }
+    }
+
+    private const string FicheOutOfDistrictMessage = "این فیش متعلق به منطقهٔ شما نیست — تغییر داده نشد";
+
+    private enum FicheAccess { NotFound, Denied, Allowed }
+
+    private static async Task<FicheAccess> CheckFicheAccessAsync(
+        SqlConnection conn,
+        string ficheNo,
+        (string Clause, List<(string Name, object Value)> Parameters)? scope,
+        CancellationToken ct)
+    {
+        var allowedExpr = scope is { } s ? $"CASE WHEN {s.Clause} THEN 1 ELSE 0 END" : "1";
+        var sql = $"SELECT TOP 1 {allowedExpr} FROM dbo.Income_Fiche f WITH (NOLOCK) WHERE f.FicheNo = @f";
+        await using var cmd = new SqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@f", ficheNo);
+        if (scope is { } sc)
+        {
+            foreach (var (name, value) in sc.Parameters)
+                cmd.Parameters.AddWithValue(name, value);
+        }
+
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null or DBNull)
+            return FicheAccess.NotFound;
+        return Convert.ToInt32(scalar) == 1 ? FicheAccess.Allowed : FicheAccess.Denied;
     }
 
     private static async Task<int?> LoadCurrentFicheStatusAsync(

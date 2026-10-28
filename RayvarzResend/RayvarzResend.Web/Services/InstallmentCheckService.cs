@@ -128,12 +128,25 @@ public class InstallmentCheckService
 
             try
             {
+                // Same rule as preview: refuse ambiguous identifiers instead of updating every match.
+                var matches = await LoadRowsForExcelAsync(conn, kind, value, ct);
+                if (matches.Count != 1)
+                {
+                    item.Found = matches.Count > 0;
+                    item.Success = false;
+                    item.Message = matches.Count == 0
+                        ? $"ردیفی با {InstallmentIdentifierDetector.Describe(kind)} یافت نشد"
+                        : $"بیش از یک ردیف ({matches.Count}) با این {InstallmentIdentifierDetector.Describe(kind)} — به‌روز نشد";
+                    AppendUpdateItemResult(result, item);
+                    continue;
+                }
+
                 var sql = BuildUpdateSql(kind, willApplyEndState);
 
                 await using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@prefix", commentPrefix);
                 cmd.Parameters.AddWithValue("@status", InstallmentCheckHelper.TreasuryStatus);
-                cmd.Parameters.AddWithValue("@v", value);
+                cmd.Parameters.AddWithValue("@v", TrackingNoLookupParameter(kind, value));
                 if (willApplyEndState)
                 {
                     cmd.Parameters.AddWithValue("@endDesc", InstallmentCheckHelper.EndStateDescOdooat);
@@ -422,7 +435,7 @@ public class InstallmentCheckService
             var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
             var kind = InstallmentIdentifierDetector.Detect(value);
             var matches = preview.Items
-                .Where(i => i.Found && string.Equals(i.LookupValue, value, StringComparison.OrdinalIgnoreCase))
+                .Where(i => i.Found && i.DataMatches && string.Equals(i.LookupValue, value, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             var item = new InstallmentCheckUpdateItemResult

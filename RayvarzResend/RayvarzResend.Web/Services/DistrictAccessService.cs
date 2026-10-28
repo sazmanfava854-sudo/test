@@ -19,7 +19,10 @@ public static class DistrictAccessService
         if (string.IsNullOrWhiteSpace(value))
             return "";
 
-        var v = value.Trim();
+        var v = NumericHelper.NormalizeDigits(value.Trim());
+        if (string.Equals(v, FavaDistrictCode, StringComparison.OrdinalIgnoreCase)
+            || v == "فاوا")
+            return FavaDistrictCode;
         if (!int.TryParse(v, out var n))
             return v;
 
@@ -31,15 +34,16 @@ public static class DistrictAccessService
             return n.ToString();
         if (n == 102)
             return CenterDistrictCode;
-        if (string.Equals(v, FavaDistrictCode, StringComparison.OrdinalIgnoreCase)
-            || v == "فاوا")
-            return FavaDistrictCode;
         return v;
     }
 
     public static bool IsFavaUser(ClaimsPrincipal? user) =>
         !AppAuthService.IsAdmin(user)
         && NormalizeDistrict(GetUserDistrict(user)) == FavaDistrictCode;
+
+    /// <summary>فقط ادمین و فاوا شعبه/صندوق دلخواه می‌فرستند؛ کاربر منطقه همیشه شعبهٔ خود فیش.</summary>
+    public static bool MayOverrideBranch(ClaimsPrincipal? user) =>
+        AppAuthService.IsAdmin(user) || IsFavaUser(user);
 
     public static int? DistrictToBranchId(string? district)
     {
@@ -137,6 +141,32 @@ public static class DistrictAccessService
 
         parameters.Add(("@userDistrict", userDistrict));
         clauses.Add("CAST(b.District AS nvarchar(20)) = @userDistrict");
+    }
+
+    /// <summary>
+    /// همان محدودیت <see cref="AppendIncomeFicheDistrictFilter"/> برای کوئری‌هایی که فقط alias «f» (Income_Fiche) دارند.
+    /// null = بدون محدودیت (ادمین/فاوا).
+    /// </summary>
+    public static (string Clause, List<(string Name, object Value)> Parameters)? BuildIncomeFicheScopeClause(ClaimsPrincipal? user)
+    {
+        var clauses = new List<string>();
+        var parameters = new List<(string Name, object Value)>();
+        AppendIncomeFicheDistrictFilter(user, clauses, parameters);
+        if (clauses.Count == 0)
+            return null;
+
+        var inner = string.Join(" AND ", clauses);
+        if (!inner.Contains("b.", StringComparison.Ordinal))
+            return ("(" + inner + ")", parameters);
+
+        return ($"""
+            EXISTS (
+                SELECT 1
+                FROM dbo.Income si WITH (NOLOCK)
+                INNER JOIN dbo.Sh_RequestInfo sr WITH (NOLOCK) ON sr.NidProc = si.NidProc
+                INNER JOIN dbo.Base_NosaziCode b WITH (NOLOCK) ON b.NidNosaziCode = sr.NidNosaziCode
+                WHERE si.NidIncome = f.NidIncome AND {inner})
+            """, parameters);
     }
 
     public static string? GetAccessDeniedMessage(ClaimsPrincipal? user, FicheHeaderDto fiche)

@@ -190,7 +190,8 @@ FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
 LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
 LEFT JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
-WHERE {where}";
+WHERE {where}
+{(type == IdentifierType.FicheNo ? InClauseOrderBy("f.FicheNo", "fn", ficheKeys) : "")}";
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
@@ -381,7 +382,8 @@ SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
        ) AS BnkAcntNo,
        NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS DutyRegion
 FROM dbo.Duty_Fiche d
-WHERE {where}";
+WHERE {where}
+{(type == IdentifierType.FicheNo ? InClauseOrderBy("d.FicheNo", "fn", ficheKeys) : "")}";
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
@@ -543,6 +545,15 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         if (keys.Count == 0)
             return "1 = 0";
         return $"{column} IN ({string.Join(", ", keys.Select((_, i) => $"@{prefix}{i}"))})";
+    }
+
+    /// <summary>کلید اول همان شمارهٔ واردشده است — تطبیق دقیق قبل از نسخه‌های بدون صفر ابتدایی.</summary>
+    private static string InClauseOrderBy(string column, string prefix, IReadOnlyList<string> keys)
+    {
+        if (keys.Count <= 1)
+            return "";
+        var whens = string.Join(" ", keys.Select((_, i) => $"WHEN @{prefix}{i} THEN {i}"));
+        return $"ORDER BY CASE {column} {whens} ELSE {keys.Count} END";
     }
 
     private static void BindInClause(SqlCommand cmd, string prefix, IReadOnlyList<string> keys)
@@ -1000,6 +1011,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
+                AND (@restrictAg IS NULL OR f.CI_IncomeAccountGroup = @restrictAg)
                 AND CAST(b.District AS nvarchar(20)) = @district
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               """
@@ -1021,6 +1033,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
+                AND (@restrictAg IS NULL OR f.CI_IncomeAccountGroup = @restrictAg)
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               """;
 
@@ -1677,6 +1690,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : $"%{billId}%");
         cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : $"%{paymentId}%");
         cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
+        cmd.Parameters.AddWithValue("@restrictAg", (object?)req.RestrictIncomeAccountGroup ?? DBNull.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))

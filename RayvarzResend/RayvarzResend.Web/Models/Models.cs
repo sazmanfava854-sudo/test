@@ -154,7 +154,12 @@ public class SendFicheRequest
 
 public class SendResultDto
 {
+    public const string OutcomeUnknownMessage =
+        "پاسخ رایورز در مهلت نرسید یا ارسال قطع شد — ممکن است سند ثبت شده باشد؛ وجود فیش در رایورز بررسی می‌شود. پیش از ارسال مجدد نتیجه را ببینید.";
+
     public bool Success { get; set; }
+    /// <summary>timeout/قطع پس از POST — نه موفق قطعی نه ناموفق قطعی.</summary>
+    public bool OutcomeUnknown { get; set; }
     public string Message { get; set; } = "";
     public string? PursuitDocNo { get; set; }
     public string? SoapResponse { get; set; }
@@ -234,6 +239,9 @@ public class UnsentFicheSearchRequest
     /// <summary>منطقه (۱–۱۲ یا ۲۱۸)</summary>
     public string? District { get; set; }
     public int MaxResults { get; set; } = 500;
+    /// <summary>فقط سمت سرور (کاربر شعبه مرکز → فقط گروه ۱۵۷) — از JSON مرورگر خوانده نمی‌شود.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int? RestrictIncomeAccountGroup { get; set; }
 
     public bool HasDateRange =>
         !string.IsNullOrWhiteSpace(FromDate) && !string.IsNullOrWhiteSpace(ToDate);
@@ -314,6 +322,7 @@ public class UnsentBatchSendRequest
 public class UnsentBatchSendItemResult
 {
     public string FicheNo { get; set; } = "";
+    public bool DryRun { get; set; }
     public string BillId { get; set; } = "";
     public string PaymentId { get; set; } = "";
     public string SendPath { get; set; } = "";

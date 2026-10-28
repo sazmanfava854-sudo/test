@@ -230,25 +230,15 @@ public sealed class InMemoryAppUserStore
         if (!_byId.TryGetValue(id, out var user))
             throw new InvalidOperationException("کاربر یافت نشد");
 
-        if (req.IsAdmin.HasValue)
-            user.IsAdmin = req.IsAdmin.Value;
-        if (req.IsActive.HasValue)
-            user.IsActive = req.IsActive.Value;
         if (req.Domain != null)
         {
             var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
-            if (!AppUserDomainNormalizer.IsValidList(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
             if (_byId.Values.Any(u => u.Id != id && u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
-            user.Domain = domain;
         }
+        AppUserUpdateRules.Apply(user, req);
         if (req.GroupIds != null)
             SetUserGroups(id, req.GroupIds);
-        if (user.IsAdmin)
-            user.DirectPermissions = AppUserDirectPermissions.AllGranted();
-        else if (req.DirectPermissions != null)
-            user.DirectPermissions = req.DirectPermissions;
 
         return List().First(u => u.Id == id);
     }

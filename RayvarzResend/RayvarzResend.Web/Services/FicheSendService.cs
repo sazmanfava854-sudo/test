@@ -34,8 +34,40 @@ public class FicheSendService
         _sendGate = sendGate;
     }
 
+    /// <summary>
+    /// فیش را از دیتابیس دوباره می‌خواند — مبلغ/ردیف/منطقه/گروه از JSON مرورگر قابل اعتماد نیست.
+    /// NidFiche بین Income_Fiche و Duty_Fiche با شماره مشابه تمایز می‌دهد.
+    /// </summary>
+    public async Task<FicheHeaderDto?> ReloadForSendAsync(FicheHeaderDto clientFiche, CancellationToken ct = default)
+    {
+        var ficheNo = IdentifierText.Normalize(clientFiche.FicheNo);
+        if (string.IsNullOrWhiteSpace(ficheNo))
+            return null;
+
+        var candidates = new List<FicheHeaderDto>();
+        foreach (var kind in new[] { UnsentFicheKind.Income, UnsentFicheKind.Duty })
+        {
+            var loaded = await _repo.LoadByKindAsync(kind, IdentifierType.FicheNo, ficheNo, ct);
+            if (loaded != null)
+                candidates.Add(loaded);
+        }
+
+        return PickReloaded(candidates, clientFiche);
+    }
+
+    internal static FicheHeaderDto? PickReloaded(IReadOnlyList<FicheHeaderDto> candidates, FicheHeaderDto clientFiche)
+    {
+        if (candidates.Count == 0)
+            return null;
+        if (clientFiche.NidFiche != Guid.Empty)
+            return candidates.FirstOrDefault(c => c.NidFiche == clientFiche.NidFiche);
+        return candidates[0];
+    }
+
     public async Task<SendResultDto> SendAsync(SendFicheRequest req, CancellationToken ct = default)
     {
+        using var sendLock = FicheSendLock.TryAcquire(req.Fiche.FicheNo)
+            ?? throw new InvalidOperationException(FicheSendLock.BusyMessage);
         await _sendGate.EnsureOpenAsync(ct);
         var fiche = req.Fiche;
         var blockReason = ValidateSendable(fiche);
@@ -66,16 +98,18 @@ public class FicheSendService
         await _epay.EnsurePresentOrThrowAsync(fiche, ct);
 
         var built = await _payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
-        var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
+        var dryRun = SendDryRun.Rayvarz(_config);
         var result = await _client.SendAsync(built.Xml, dryRun, ct);
         result.Warning = CombineWarnings(fiche.Warning, CombineWarnings(sendWarning, built.Warning));
 
-        if (!dryRun && result.Success)
+        // After the POST the document may exist in Rayvarz; closing the browser must not skip the Sara write.
+        var postCt = CancellationToken.None;
+        if (!dryRun && (result.Success || result.OutcomeUnknown))
         {
             try
             {
                 result.VerifiedInRayvarz = await _repo.ExistsInRayvarzAsync(
-                    fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
+                    fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, postCt);
             }
             catch (SqlException ex)
             {
@@ -93,7 +127,14 @@ public class FicheSendService
             var yearList = years.Where(y => y > 0).Distinct().ToList();
 
             var accounting = await _accountingDoc.TryWriteAfterSendAsync(
-                fiche, result.PursuitDocNo, yearList, ct);
+                fiche, result.PursuitDocNo, yearList, postCt);
+            if (result.OutcomeUnknown && (accounting.Written || result.VerifiedInRayvarz))
+            {
+                result.Success = true;
+                result.OutcomeUnknown = false;
+                result.Warning = CombineWarnings(result.Warning,
+                    "پاسخ رایورز در مهلت نرسید ولی سند در رایورز پیدا شد — ارسال موفق حساب شد");
+            }
             result.AccountingDocWritten = accounting.Written;
             result.AccountingDocMessage = accounting.Message;
             if (!accounting.Written && !accounting.WasSkipped)
@@ -103,7 +144,7 @@ public class FicheSendService
             {
                 try
                 {
-                    result.DocNotSentError = await _repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+                    result.DocNotSentError = await _repo.GetDocNotSentErrorAsync(fiche.FicheNo, postCt);
                 }
                 catch (SqlException ex)
                 {

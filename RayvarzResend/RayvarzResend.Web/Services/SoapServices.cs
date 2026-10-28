@@ -1000,6 +1000,22 @@ public class RayvarzClient
                 Message = FormatUserMessage(ex, diagnostics)
             };
         }
+        catch (OperationCanceledException ex)
+        {
+            // Timeout/abort after the POST may have reached Rayvarz — the document can already be saved.
+            sw.Stop();
+            diagnostics = RayvarzDiagnosticsHelper.ClassifyFailure(ex, "PostSoapTimeout", sw.ElapsedMilliseconds, diagnostics);
+            _logger.LogWarning(ex, "Rayvarz SendDocument timeout/cancel after {ElapsedMs}ms — outcome unknown", sw.ElapsedMilliseconds);
+            return new SendResultDto
+            {
+                Success = false,
+                OutcomeUnknown = true,
+                DryRun = false,
+                PreviewXml = soapXml,
+                Diagnostics = diagnostics,
+                Message = SendResultDto.OutcomeUnknownMessage
+            };
+        }
         catch (Exception ex)
         {
             sw.Stop();

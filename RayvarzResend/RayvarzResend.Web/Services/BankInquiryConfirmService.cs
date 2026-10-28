@@ -204,8 +204,8 @@ public sealed class BankInquiryConfirmService
             var inquiry = await _bankInquiryApi.InquireAsync(item.BillId, item.PaymentId, ct);
             item.BankInquiryMessage = inquiry.Message;
             item.BankPaymentDate = inquiry.PaymentDate;
-            item.BankInquiryVerified = inquiry.IsPaid
-                || BankInquiryResponseParser.LooksLikePaidMessage(inquiry.Message);
+            // inquiry.Message also carries the bill-lookup note; only the parsed IsPaid decision may confirm.
+            item.BankInquiryVerified = inquiry.IsPaid;
             item.BankInquirySource = inquiry.InquirySource;
 
             if (!item.BankInquiryVerified)

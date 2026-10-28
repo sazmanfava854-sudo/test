@@ -26,14 +26,46 @@ public class UnsentFicheService
         _sendGate = sendGate;
     }
 
-    public async Task<UnsentFicheSearchResult> SearchAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    public async Task<UnsentFicheSearchResult> SearchAsync(
+        UnsentFicheSearchRequest req,
+        ClaimsPrincipal? user,
+        CancellationToken ct = default)
     {
+        if (!ApplyUserDistrictScope(req, user))
+            return new UnsentFicheSearchResult { FicheKind = req.FicheKind };
+
         var result = req.FicheKind == UnsentFicheKind.Duty
             ? await _repo.SearchUnsentDutyAsync(req, ct)
             : await _repo.SearchUnsentIncomeAsync(req, ct);
         foreach (var item in result.Items)
             item.SourceKind = req.FicheKind;
         return result;
+    }
+
+    /// <summary>
+    /// کاربر منطقه‌ای فقط فیش‌های منطقهٔ خود را می‌بیند (همان قاعدهٔ ارسال)؛ false = هیچ نتیجه‌ای مجاز نیست.
+    /// </summary>
+    internal static bool ApplyUserDistrictScope(UnsentFicheSearchRequest req, ClaimsPrincipal? user)
+    {
+        req.RestrictIncomeAccountGroup = null;
+        if (DistrictAccessService.MayOverrideBranch(user))
+            return true;
+
+        var userDistrict = DistrictAccessService.NormalizeDistrict(DistrictAccessService.GetUserDistrict(user));
+        if (string.IsNullOrEmpty(userDistrict))
+            return false;
+
+        if (userDistrict == DistrictAccessService.CenterDistrictCode)
+        {
+            if (req.FicheKind == UnsentFicheKind.Duty)
+                return false;
+            req.District = null;
+            req.RestrictIncomeAccountGroup = TahatorRowBuilder.IncomeAccountGroupTahatorAmount;
+            return true;
+        }
+
+        req.District = userDistrict;
+        return true;
     }
 
     public async Task<UnsentBillPayLookupResult> LookupByBillPayAsync(
@@ -248,7 +280,8 @@ public class UnsentFicheService
         CancellationToken ct = default)
     {
         await _sendGate.EnsureOpenAsync(ct);
-        var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
+        var dryRun = SendDryRun.Rayvarz(_config);
+        var tahatorDryRun = SendDryRun.Tahator(_config);
         var delayMs = _config.GetValue("Rayvarz:SendDelayMs", 2000);
         var targets = ResolveBatchTargets(req);
         var result = new UnsentBatchSendResult
@@ -280,6 +313,7 @@ public class UnsentFicheService
             {
                 var outcome = await ProcessOneAsync(req, target, user, ct);
                 item.SendPath = outcome.SendPath;
+                item.DryRun = outcome.SendPath == "Tahator" ? tahatorDryRun : dryRun;
                 item.Success = outcome.Success;
                 item.Skipped = outcome.Skipped;
                 item.SkipReason = outcome.SkipReason;
