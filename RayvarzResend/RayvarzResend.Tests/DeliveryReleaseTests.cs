@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v34_pr116()
+    public void ReleaseInfo_is_v51_release()
     {
-        Assert.Equal(34, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-pr116-v34", ReleaseInfo.Tag);
+        Assert.Equal(51, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v51", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,16 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v34_doc_lists_cost_center_module()
+    public void DELIVERY_v51_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v34.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v51.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 34", doc);
-        Assert.Contains("مرکز هزینه", doc);
-        Assert.Contains("/api/cost-center/update", doc);
-        Assert.Contains("RayvarzResend-34.zip", doc);
+        Assert.Contains("releaseVersion: 51", doc);
+        Assert.Contains("504", doc);
+        Assert.Contains("UnsentBatchChunkSize", doc);
+        Assert.Contains("RayvarzResend-51.zip", doc);
     }
 
     [Fact]
@@ -178,16 +178,18 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("جفت مرجع", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
         Assert.DoesNotContain("جزئیات فیش", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
         Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnSend'")[1].Split("bindClick('btnUnsentSearch'")[0]);
-        Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnUnsentSend'")[1].Split("bindClick('btnInstallmentPreview'")[0]);
+        Assert.DoesNotContain("if (!confirm(", js.Split("bindClick('btnUnsentSend'")[1].Split("bindClick('btnCheckDateSearch'")[0]);
     }
 
     [Fact]
-    public void Fiche_summary_hides_duplicate_rayvarz_status()
+    public void Fiche_summary_shows_rayvarz_and_accounting_header_before_send()
     {
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
         var summary = js.Split("function renderFiche(")[1].Split("function init(")[0];
-        Assert.DoesNotContain("stat-label\">وضعیت", summary);
-        Assert.DoesNotContain("stat-label\">در رایورز", summary);
+        Assert.Contains("existsInRayvarz", summary);
+        Assert.Contains("existsInAccountingDocHeader", summary);
+        Assert.Contains("stat-label\">رایورز (incmdocsys)", summary);
+        Assert.Contains("stat-label\">Accounting_DocHeader", summary);
         Assert.DoesNotContain("بله — تکراری", summary);
     }
 
@@ -204,7 +206,7 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("هر دو فیش با همان NidIncome لازم است", src);
         Assert.DoesNotContain("فقط فیش دیگر ارسال می‌شود", src);
         Assert.DoesNotContain("force=true برای ارسال اجباری", src);
-        Assert.Contains("این فیش قبلاً در رایورز ثبت شده است.", src);
+        Assert.Contains("FicheSendEligibility.BuildBlockReason", src);
     }
 
     [Fact]
@@ -216,6 +218,25 @@ public class DeliveryReleaseTests
         Assert.DoesNotContain("جفت تهاتر قبلاً در همین دسته پردازش می‌شود", src);
         Assert.DoesNotContain("جفت ۱۵۷+۱۵۸ کامل نیست", src);
         Assert.Contains("فقط همین فیش", src);
+    }
+
+    [Fact]
+    public void Installment_check_date_tab_is_wired()
+    {
+        var html = File.ReadAllText(WebFile("wwwroot", "index.html"));
+        var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        var program = File.ReadAllText(WebFile("Program.cs"));
+        Assert.Contains("data-tab=\"checkDate\"", html);
+        Assert.Contains("تغییر تاریخ چک", html);
+        Assert.Contains("id=\"checkDateTrackingNo\"", html);
+        Assert.Contains("btnCheckDateSearch", js);
+        Assert.Contains("/api/installment-check-date/search", js);
+        Assert.Contains("installmentCheckDate", program);
+        Assert.Contains("InstallmentCheckDateService", program);
+        Assert.Contains("perm-installment-check-date", html);
+        Assert.Contains("id=\"newGroupInstallmentCheckDate\"", html);
+        Assert.Contains("canAccessInstallmentCheckDate", js);
+        Assert.Contains("DenyUnlessInstallmentCheckDate", program);
     }
 
     [Fact]
@@ -239,9 +260,21 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=100", html);
+        Assert.Contains("js/app.js?v=110", html);
+        Assert.Contains("css/style.css?v=52", html);
+        Assert.Contains("id=\"btnUnsentExcel\"", html);
+        Assert.DoesNotContain("btnUnsentNextPage", html);
+        Assert.DoesNotContain("unsent-excel-hint", html);
+        Assert.DoesNotContain("سه ستون جدا (قبض، پرداخت، فیش)", html);
+        Assert.Contains("unsent-bill-pay-template.xlsx?v=50", html);
+        Assert.Contains("<th class=\"col-unsent-fiche\">شماره فیش</th>", html);
+        Assert.DoesNotMatch(@"[\u0400-\u04FF]", html);
+        Assert.DoesNotContain("dbo.Installment_List", html);
+        Assert.Contains("checkDateApplySection", html);
         Assert.Contains("btnChangePassword", html);
         Assert.Contains("change-password.js", html);
+        Assert.Contains("password-fields.js", html);
+        Assert.DoesNotContain("changePasswordCurrent", html);
         Assert.Contains("id=\"tabCostCenter\"", html);
         Assert.Contains("btnCostCenterSearch", html);
         Assert.Contains("cost-center-fiche-input", html);
@@ -265,6 +298,7 @@ public class DeliveryReleaseTests
         Assert.Contains("function canAccessRayvarzModule(", js);
         Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);
         Assert.Contains("function formatUnsentBatchSendResult(", js);
+        Assert.Contains("function sendUnsentBatchInChunks(", js);
         Assert.Contains("<th>شناسه قبض</th>", html);
         Assert.Contains("<th>شناسه پرداخت</th>", html);
 
@@ -277,7 +311,15 @@ public class DeliveryReleaseTests
         Assert.Contains("EpayFichePresenceChecker", program);
 
         var send = File.ReadAllText(WebFile("Services", "FicheSendService.cs"));
+        Assert.Contains("FicheSendEligibility.CheckAsync", send);
+        Assert.Contains("TryWriteAfterSendAsync", send);
         Assert.Contains("EnsurePresentOrThrowAsync", send);
+
+        var unsent = File.ReadAllText(WebFile("Services", "UnsentFicheService.cs"));
+        Assert.Contains("FicheSendEligibility.CheckAsync", unsent);
+        Assert.Contains("ارسال نوسازی/صنفی", unsent);
+        Assert.Contains("ارسال درآمدی شهرسازی", unsent);
+        Assert.Contains("_send.SendAsync", unsent);
         Assert.Contains("فیش مورد نظر در سامانه epay یافت نشد", File.ReadAllText(WebFile("Services", "EpayFichePresenceChecker.cs")));
         var tahatorSend = File.ReadAllText(WebFile("Services", "TahatorResendService.cs"));
         Assert.DoesNotContain("EpayFichePresenceChecker", tahatorSend);

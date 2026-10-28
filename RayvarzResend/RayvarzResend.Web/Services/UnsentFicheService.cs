@@ -26,14 +26,46 @@ public class UnsentFicheService
         _sendGate = sendGate;
     }
 
-    public async Task<UnsentFicheSearchResult> SearchAsync(UnsentFicheSearchRequest req, CancellationToken ct = default)
+    public async Task<UnsentFicheSearchResult> SearchAsync(
+        UnsentFicheSearchRequest req,
+        ClaimsPrincipal? user,
+        CancellationToken ct = default)
     {
+        if (!ApplyUserDistrictScope(req, user))
+            return new UnsentFicheSearchResult { FicheKind = req.FicheKind };
+
         var result = req.FicheKind == UnsentFicheKind.Duty
             ? await _repo.SearchUnsentDutyAsync(req, ct)
             : await _repo.SearchUnsentIncomeAsync(req, ct);
         foreach (var item in result.Items)
             item.SourceKind = req.FicheKind;
         return result;
+    }
+
+    /// <summary>
+    /// کاربر منطقه‌ای فقط فیش‌های منطقهٔ خود را می‌بیند (همان قاعدهٔ ارسال)؛ false = هیچ نتیجه‌ای مجاز نیست.
+    /// </summary>
+    internal static bool ApplyUserDistrictScope(UnsentFicheSearchRequest req, ClaimsPrincipal? user)
+    {
+        req.RestrictIncomeAccountGroup = null;
+        if (DistrictAccessService.MayOverrideBranch(user))
+            return true;
+
+        var userDistrict = DistrictAccessService.NormalizeDistrict(DistrictAccessService.GetUserDistrict(user));
+        if (string.IsNullOrEmpty(userDistrict))
+            return false;
+
+        if (userDistrict == DistrictAccessService.CenterDistrictCode)
+        {
+            if (req.FicheKind == UnsentFicheKind.Duty)
+                return false;
+            req.District = null;
+            req.RestrictIncomeAccountGroup = TahatorRowBuilder.IncomeAccountGroupTahatorAmount;
+            return true;
+        }
+
+        req.District = userDistrict;
+        return true;
     }
 
     public async Task<UnsentBillPayLookupResult> LookupByBillPayAsync(
@@ -248,7 +280,8 @@ public class UnsentFicheService
         CancellationToken ct = default)
     {
         await _sendGate.EnsureOpenAsync(ct);
-        var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
+        var dryRun = SendDryRun.Rayvarz(_config);
+        var tahatorDryRun = SendDryRun.Tahator(_config);
         var delayMs = _config.GetValue("Rayvarz:SendDelayMs", 2000);
         var targets = ResolveBatchTargets(req);
         var result = new UnsentBatchSendResult
@@ -280,6 +313,7 @@ public class UnsentFicheService
             {
                 var outcome = await ProcessOneAsync(req, target, user, ct);
                 item.SendPath = outcome.SendPath;
+                item.DryRun = outcome.SendPath == "Tahator" ? tahatorDryRun : dryRun;
                 item.Success = outcome.Success;
                 item.Skipped = outcome.Skipped;
                 item.SkipReason = outcome.SkipReason;
@@ -373,14 +407,6 @@ public class UnsentFicheService
         var sourceKind = target.SourceKind;
         var item = new UnsentBatchPlanItem { FicheNo = ficheNo };
 
-        if (await _repo.ExistsInAccountingDocHeaderAsync(ficheNo, ct))
-        {
-            item.SendPath = "Skip";
-            item.Detail = "Accounting_DocHeader";
-            item.BlockReason = "فیش در Accounting_DocHeader موجود است";
-            return item;
-        }
-
         var fiche = await _repo.LoadAsync(IdentifierType.FicheNo, ficheNo, ct);
         if (fiche == null)
         {
@@ -416,6 +442,30 @@ public class UnsentFicheService
         {
             item.SendPath = "Skip";
             item.BlockReason = "نوع فیش با نوسازی/صنفی مطابقت ندارد";
+            return item;
+        }
+
+        var shamsiYear = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
+        var eligibility = await FicheSendEligibility.CheckAsync(
+            _repo, fiche, ficheNo, shamsiYear > 0 ? shamsiYear : null, ct);
+        if (eligibility.RayvarzQueryFailed)
+        {
+            item.SendPath = "Skip";
+            item.Detail = "Rayvarz";
+            item.BlockReason = "بررسی تکراری رایورز ناموفق — ارسال نشد";
+            return item;
+        }
+
+        var duplicateBlock = FicheSendEligibility.BuildBlockReason(eligibility);
+        if (duplicateBlock != null)
+        {
+            item.SendPath = TahatorRowBuilder.IsTahatorFiche(fiche) ? "Tahator" : "Skip";
+            item.Detail = eligibility.InRayvarz && eligibility.InAccountingDocHeader
+                ? "Rayvarz+Accounting_DocHeader"
+                : eligibility.InRayvarz
+                    ? "Rayvarz"
+                    : "Accounting_DocHeader";
+            item.BlockReason = duplicateBlock;
             return item;
         }
 

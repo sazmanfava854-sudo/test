@@ -54,6 +54,46 @@ public static class DateHelper
         return "";
     }
 
+    public const string StrictShamsiFormatHint = "فقط به شکل 1405/08/07 وارد کنید";
+
+    /// <summary>ورودی کاربر: دقیقاً yyyy/MM/dd (ارقام فارسی مجاز) — بدون شکل‌های آزاد ToRayvarzDate.</summary>
+    public static bool TryParseStrictShamsiSlash(string? input, out string slashDate)
+    {
+        slashDate = "";
+        if (string.IsNullOrWhiteSpace(input)) return false;
+
+        var s = NumericHelper.NormalizeDigits(input.Trim());
+        if (s.Length != 10 || s[4] != '/' || s[7] != '/') return false;
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (i is 4 or 7) continue;
+            if (s[i] is < '0' or > '9') return false;
+        }
+
+        var year = int.Parse(s[..4]);
+        var month = int.Parse(s.Substring(5, 2));
+        var day = int.Parse(s.Substring(8, 2));
+        if (year is < MinShamsiYear or > MaxShamsiYear) return false;
+        if (month is < 1 or > 12) return false;
+        if (day < 1 || day > (month <= 6 ? 31 : 30)) return false;
+
+        slashDate = s;
+        return true;
+    }
+
+    /// <summary>خالی = بدون خطا؛ پرشده ولی نامعتبر = پیام فارسی.</summary>
+    public static string? ValidateOptionalUserDate(string? input, string label)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        return TryParseStrictShamsiSlash(input, out _)
+            ? null
+            : $"{label}: «{input.Trim()}» تاریخ معتبر نیست — {StrictShamsiFormatHint}";
+    }
+
+    /// <summary>تاریخ معتبر با ارقام لاتین (SQL و SOAP ارقام فارسی را تطبیق نمی‌دهند)؛ نامعتبر بدون تغییر برمی‌گردد.</summary>
+    public static string? NormalizeOptionalUserDate(string? input) =>
+        TryParseStrictShamsiSlash(input, out var slash) ? slash : input;
+
     public static string CurrentShamsiRayvarzDate()
     {
         var pc = new System.Globalization.PersianCalendar();
@@ -95,6 +135,7 @@ public static class DateHelper
     public static string ToShamsiSlashDate(string? input)
     {
         if (string.IsNullOrWhiteSpace(input)) return "";
+        input = NumericHelper.NormalizeDigits(input);
         if (input.Contains('/')) return input.Trim();
         var d = ToRayvarzDate(input);
         return d.Length >= 8 ? $"{d[..4]}/{d.Substring(4, 2)}/{d.Substring(6, 2)}" : input.Trim();

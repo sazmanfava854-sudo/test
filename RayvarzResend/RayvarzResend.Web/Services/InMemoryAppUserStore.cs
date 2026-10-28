@@ -128,6 +128,7 @@ public sealed class InMemoryAppUserStore
                 Name = g.Name,
                 CanAccessUnsentFiches = g.CanAccessUnsentFiches,
                 CanAccessInstallment = g.CanAccessInstallment,
+                CanAccessInstallmentCheckDate = g.CanAccessInstallmentCheckDate,
                 CanAccessFicheDateChange = g.CanAccessFicheDateChange,
                 CanAccessBankInquiryConfirm = g.CanAccessBankInquiryConfirm,
                 CanAccessShahkar = g.CanAccessShahkar,
@@ -151,6 +152,7 @@ public sealed class InMemoryAppUserStore
             Name = name,
             CanAccessUnsentFiches = req.CanAccessUnsentFiches,
             CanAccessInstallment = req.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = req.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = req.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm,
             CanAccessShahkar = req.CanAccessShahkar,
@@ -165,6 +167,7 @@ public sealed class InMemoryAppUserStore
             Name = group.Name,
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = group.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanAccessShahkar = group.CanAccessShahkar,
@@ -186,6 +189,7 @@ public sealed class InMemoryAppUserStore
         group.Name = name;
         group.CanAccessUnsentFiches = req.CanAccessUnsentFiches;
         group.CanAccessInstallment = req.CanAccessInstallment;
+        group.CanAccessInstallmentCheckDate = req.CanAccessInstallmentCheckDate;
         group.CanAccessFicheDateChange = req.CanAccessFicheDateChange;
         group.CanAccessBankInquiryConfirm = req.CanAccessBankInquiryConfirm;
         group.CanAccessShahkar = req.CanAccessShahkar;
@@ -198,6 +202,7 @@ public sealed class InMemoryAppUserStore
             Name = group.Name,
             CanAccessUnsentFiches = group.CanAccessUnsentFiches,
             CanAccessInstallment = group.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = group.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = group.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = group.CanAccessBankInquiryConfirm,
             CanAccessShahkar = group.CanAccessShahkar,
@@ -225,25 +230,15 @@ public sealed class InMemoryAppUserStore
         if (!_byId.TryGetValue(id, out var user))
             throw new InvalidOperationException("کاربر یافت نشد");
 
-        if (req.IsAdmin.HasValue)
-            user.IsAdmin = req.IsAdmin.Value;
-        if (req.IsActive.HasValue)
-            user.IsActive = req.IsActive.Value;
         if (req.Domain != null)
         {
             var domain = AppUserDomainNormalizer.NormalizeList(req.Domain);
-            if (!AppUserDomainNormalizer.IsValidList(domain))
-                throw new ArgumentException("دامین الزامی است (مثلاً hoseine-sh یا hoseine-sh,sadathoseini-sh)");
             if (_byId.Values.Any(u => u.Id != id && u.Domain.Equals(domain, StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("کاربر با این دامین قبلاً ثبت شده است");
-            user.Domain = domain;
         }
+        AppUserUpdateRules.Apply(user, req);
         if (req.GroupIds != null)
             SetUserGroups(id, req.GroupIds);
-        if (user.IsAdmin)
-            user.DirectPermissions = AppUserDirectPermissions.AllGranted();
-        else if (req.DirectPermissions != null)
-            user.DirectPermissions = req.DirectPermissions;
 
         return List().First(u => u.Id == id);
     }

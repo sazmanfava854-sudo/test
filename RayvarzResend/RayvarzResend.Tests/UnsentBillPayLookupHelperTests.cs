@@ -7,6 +7,26 @@ namespace RayvarzResend.Tests;
 public class UnsentBillPayLookupHelperTests
 {
     [Fact]
+    public void TrySplitConcatenatedBillPay_splits_26_digit_epay_string()
+    {
+        Assert.True(
+            UnsentBillPayLookupHelper.TrySplitConcatenatedBillPay(
+                "90000813520650000809662537",
+                out var bill,
+                out var pay));
+        Assert.Equal("9000081352065", bill);
+        Assert.Equal("0000809662537", pay);
+
+        var pairs = UnsentBillPayLookupHelper.NormalizePairs(
+        [
+            new UnsentBillPayPair { BillId = "90000813520650000809662537", PaymentId = "" }
+        ]);
+        Assert.Single(pairs);
+        Assert.Equal("9000081352065", pairs[0].BillIdTrim);
+        Assert.Equal("809662537", pairs[0].PaymentIdTrim);
+    }
+
+    [Fact]
     public void NormalizePairs_pads_persian_digits_and_deduplicates()
     {
         var pairs = UnsentBillPayLookupHelper.NormalizePairs(

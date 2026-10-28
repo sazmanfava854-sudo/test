@@ -11,10 +11,22 @@ const unsentSearchState = {
   pageSize: 25,
   totalCount: 0,
   totalPages: 0,
+  truncated: false,
   filters: null
 };
 
 const $ = (id) => document.getElementById(id);
+
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+/** شرح ردیف‌ها همان متن کاتالوگ رایورز (ي/ك عربی) است — فقط برای نمایش فارسی می‌شود. */
+function toPersianLetters(value) {
+  return String(value ?? '').replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+}
 
 let appToastTimer = null;
 
@@ -303,6 +315,7 @@ function resetMainTabPanelState(tabKey) {
       unsentSearchState.page = 1;
       unsentSearchState.totalCount = 0;
       unsentSearchState.totalPages = 0;
+      unsentSearchState.truncated = false;
       renderUnsentTable([], { page: 1, pageSize: unsentSearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('unsentResultsSection');
       hideEl('unsentPagination');
@@ -313,11 +326,27 @@ function resetMainTabPanelState(tabKey) {
       hideEl('sendResultCard');
       if ($('btnSend')) $('btnSend').disabled = true;
       break;
+    case 'checkDate':
+      clearFieldValue('checkDateTrackingNo');
+      clearFieldValue('checkDateNewPaymentDate');
+      checkDateItems = [];
+      checkDateSelectedRow = null;
+      hideEl('checkDateResultsSection');
+      hideEl('checkDateApplySection');
+      hideEl('checkDateResultBox');
+      {
+        const tbody = $('checkDateTable')?.querySelector('tbody');
+        if (tbody) tbody.innerHTML = '';
+      }
+      if ($('checkDateCountLabel')) $('checkDateCountLabel').textContent = '';
+      if ($('btnCheckDateUpdate')) $('btnCheckDateUpdate').disabled = true;
+      break;
     case 'installment':
       clearFieldValue('installmentValues');
       clearFieldValue('installmentApplyEndState');
       clearFieldValue('installmentApplyEndStateExcel');
       clearFieldValue('installmentExcelFile');
+      installmentExcelRows = [];
       if ($('installmentExcelStatus')) $('installmentExcelStatus').textContent = 'فایلی انتخاب نشده';
       hideEl('installmentPreviewSection');
       hideEl('installmentResultBox');
@@ -337,6 +366,7 @@ function resetMainTabPanelState(tabKey) {
       clearGridSelection(selectedFicheDateNos, ficheDateSelectedItems);
       ficheDateSearchState.page = 1;
       ficheDateSearchState.totalCount = 0;
+      ficheDateSearchState.lastFilters = null;
       ficheDateSearchState.totalPages = 0;
       renderFicheDateTable([], { page: 1, pageSize: ficheDateSearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('ficheDateResultsSection');
@@ -350,6 +380,7 @@ function resetMainTabPanelState(tabKey) {
       clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
       bankInquirySearchState.page = 1;
       bankInquirySearchState.totalCount = 0;
+      bankInquirySearchState.lastFilters = null;
       bankInquirySearchState.totalPages = 0;
       renderBankInquiryTable([], { page: 1, pageSize: bankInquirySearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('bankInquiryResultsSection');
@@ -366,6 +397,7 @@ function resetMainTabPanelState(tabKey) {
       clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
       costCenterSearchState.page = 1;
       costCenterSearchState.totalCount = 0;
+      costCenterSearchState.lastFilters = null;
       costCenterSearchState.totalPages = 0;
       renderCostCenterTable([], { page: 1, pageSize: costCenterSearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('costCenterResultsSection');
@@ -407,6 +439,7 @@ function setupMainTabs() {
   const panels = {
     unsent: $('tabUnsent'),
     installment: $('tabInstallment'),
+    checkDate: $('tabCheckDate'),
     ficheDate: $('tabFicheDate'),
     bankInquiry: $('tabBankInquiry'),
     costCenter: $('tabCostCenter'),
@@ -426,6 +459,7 @@ function setupMainTabs() {
 function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), panels = {
   unsent: $('tabUnsent'),
   installment: $('tabInstallment'),
+  checkDate: $('tabCheckDate'),
   ficheDate: $('tabFicheDate'),
   bankInquiry: $('tabBankInquiry'),
   costCenter: $('tabCostCenter'),
@@ -448,6 +482,7 @@ function activateMainTab(key, tabs = document.querySelectorAll('.main-tab'), pan
     panel.hidden = !show;
     panel.classList.toggle('active', show);
   });
+  if (key === 'shahkar') refreshShahkarConnectionStatus();
 }
 
 function getSingleFicheKind() {
@@ -480,6 +515,8 @@ const installmentLookupLabels = {
 };
 
 let installmentMode = 'single';
+let checkDateItems = [];
+let checkDateSelectedRow = null;
 let installmentExcelRows = [];
 
 const ficheDateStatusLabels = {
@@ -500,7 +537,8 @@ const ficheDateSearchState = {
   page: 1,
   pageSize: 25,
   totalCount: 0,
-  totalPages: 0
+  totalPages: 0,
+  lastFilters: null
 };
 
 function getInstallmentApplyEndState() {
@@ -567,11 +605,15 @@ function mapUnsentExcelHeaderIndex(headers) {
   const map = {};
   headers.forEach((h, idx) => {
     const key = normalizeExcelHeader(h);
-    if (key === 'شناسهقبض' || key === 'billid' || key === 'billid' || key === 'شناسهقبص') {
+    if (key === 'شناسهقبض' || key === 'billid' || key === 'شناسهقبص') {
       map.billId = idx;
     }
-    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
+    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid') {
       map.paymentId = idx;
+    }
+    if (key === 'شناسهقبضوپرداخت' || key === 'شناسهقبضپرداخت' || key === 'billpay'
+      || key === 'billpayment' || key === 'قبضوپرداخت' || key === 'شناسها') {
+      map.billPayCombined = idx;
     }
     if (key === 'شمارهفیش' || key === 'ficheno' || key === 'fiche' || key === 'فیش') {
       map.ficheNo = idx;
@@ -610,10 +652,82 @@ function normalizeSearchId(value) {
   return normalizeDigits(String(value ?? '')).trim();
 }
 
+const SHAMSI_DATE_PATTERN = /^(\d{4})\/(\d{2})\/(\d{2})$/;
+
+function isStrictShamsiDate(value) {
+  const m = SHAMSI_DATE_PATTERN.exec(normalizeDigits(String(value ?? '')).trim());
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (year < 1300 || year > 1500 || month < 1 || month > 12 || day < 1) return false;
+  return day <= (month <= 6 ? 31 : 30);
+}
+
+/** فقط قالب ۱۴۰۵/۰۸/۰۷؛ ورودی خالی را بررسی نمی‌کند. */
+function shamsiDateError(entries) {
+  for (const [value, label] of entries) {
+    const v = normalizeDigits(String(value ?? '')).trim();
+    if (v && !isStrictShamsiDate(v)) {
+      return `${label}: «${v}» تاریخ معتبر نیست — فقط به شکل 1405/08/07 وارد کنید`;
+    }
+  }
+  return null;
+}
+
+function bindShamsiDateInputGuards() {
+  document.querySelectorAll('input[data-jdp]').forEach((input) => {
+    if (input.dataset.dateGuard === '1') return;
+    input.dataset.dateGuard = '1';
+    input.maxLength = 10;
+    input.setAttribute('inputmode', 'numeric');
+    const sync = () => {
+      const v = input.value.trim();
+      input.classList.toggle('input-invalid', v.length > 0 && !isStrictShamsiDate(v));
+    };
+    input.addEventListener('input', () => {
+      const cleaned = normalizeDigits(input.value).replace(/[^\d/]/g, '').slice(0, 10);
+      if (cleaned !== input.value) input.value = cleaned;
+      input.classList.remove('input-invalid');
+    });
+    input.addEventListener('blur', sync);
+    input.addEventListener('change', sync);
+  });
+}
+
 function normalizeBillOrPayIdDigits(value) {
   const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
   if (!digits) return '';
   return digits.length < 13 ? digits.padStart(13, '0') : digits;
+}
+
+/** ۲۶ رقم: ۱۳ رقم قبض + ۱۳ رقم پرداخت (حالت چسبیدهٔ epay). */
+function trySplitConcatenatedBillPay(raw) {
+  const digits = normalizeDigits(String(raw ?? '')).replace(/\D/g, '');
+  if (digits.length !== 26) return null;
+  return { billId: digits.slice(0, 13), paymentId: digits.slice(13) };
+}
+
+function resolveUnsentExcelBillPay(billRaw, payRaw, combinedRaw) {
+  const combined = (combinedRaw || '').trim();
+  if (combined) {
+    const split = trySplitConcatenatedBillPay(combined);
+    if (!split) {
+      return { error: 'ستون «شناسه قبض و پرداخت» باید دقیقاً ۲۶ رقم (۱۳+۱۳) باشد' };
+    }
+    return { billId: split.billId, paymentId: split.paymentId };
+  }
+
+  let bill = billRaw;
+  let pay = payRaw;
+  if (bill && !pay) {
+    const split = trySplitConcatenatedBillPay(bill);
+    if (split) ({ billId: bill, paymentId: pay } = split);
+  } else if (!bill && pay) {
+    const split = trySplitConcatenatedBillPay(pay);
+    if (split) ({ billId: bill, paymentId: pay } = split);
+  }
+  return { billId: bill, paymentId: pay };
 }
 
 function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
@@ -732,33 +846,47 @@ function parseUnsentExcelFile(file) {
         }
 
         const col = mapUnsentExcelHeaderIndex(headerRow);
-        if (col.ficheNo == null && (col.billId == null || col.paymentId == null)) {
-          reject(new Error('ستون شماره فیش، یا هر دو ستون شناسه قبض و شناسه پرداخت لازم است'));
+        const hasCombined = col.billPayCombined != null;
+        const hasSeparatePair = col.billId != null && col.paymentId != null;
+        if (col.ficheNo == null && !hasCombined && !hasSeparatePair) {
+          reject(new Error(
+            'ستون شماره فیش، یا «شناسه قبض و پرداخت» (۲۶ رقم)، یا هر دو ستون شناسه قبض و شناسه پرداخت لازم است'
+          ));
           return;
         }
 
         const parsed = [];
         const seen = new Set();
         for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const billId = col.billId != null ? parseExcelCellValue(sheet, r, col.billId) : '';
-          const paymentId = col.paymentId != null ? parseExcelCellValue(sheet, r, col.paymentId) : '';
+          const billRaw = col.billId != null ? parseExcelCellValue(sheet, r, col.billId) : '';
+          const payRaw = col.paymentId != null ? parseExcelCellValue(sheet, r, col.paymentId) : '';
+          const combinedRaw = col.billPayCombined != null
+            ? parseExcelCellValue(sheet, r, col.billPayCombined)
+            : '';
           const ficheNo = col.ficheNo != null ? parseExcelCellValue(sheet, r, col.ficheNo) : '';
-          if (!billId && !paymentId && !ficheNo) continue;
-          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)
-            || hasScientificNotation(ficheNo)) {
+          if (!billRaw && !payRaw && !combinedRaw && !ficheNo) continue;
+          if (hasScientificNotation(billRaw) || hasScientificNotation(payRaw)
+            || hasScientificNotation(combinedRaw) || hasScientificNotation(ficheNo)) {
             reject(new Error(
               `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
             ));
             return;
           }
+          const resolved = resolveUnsentExcelBillPay(billRaw, payRaw, combinedRaw);
+          if (resolved.error) {
+            reject(new Error(`ردیف ${r + 1}: ${resolved.error}`));
+            return;
+          }
           const item = {
-            billId: normalizeSearchId(billId),
-            paymentId: normalizeSearchId(paymentId),
+            billId: normalizeSearchId(resolved.billId),
+            paymentId: normalizeSearchId(resolved.paymentId),
             ficheNo: normalizeSearchId(ficheNo)
           };
           const pairComplete = !!item.billId && !!item.paymentId;
           if (!item.ficheNo && !pairComplete) {
-            reject(new Error(`ردیف ${r + 1}: یا شماره فیش را وارد کنید، یا شناسه قبض و شناسه پرداخت را با هم`));
+            reject(new Error(
+              `ردیف ${r + 1}: یا شماره فیش، یا ۲۶ رقم چسبیده (قبض+پرداخت)، یا هر دو ستون شناسه قبض و پرداخت`
+            ));
             return;
           }
           const key = pairComplete
@@ -791,6 +919,85 @@ function setUnsentExcelStatus(message, loading = false) {
   el.removeAttribute('aria-hidden');
   el.textContent = message;
   el.classList.toggle('is-loading', loading);
+}
+
+function chunkArray(items, size) {
+  const n = Math.max(1, size | 0);
+  const out = [];
+  for (let i = 0; i < items.length; i += n) out.push(items.slice(i, i + n));
+  return out;
+}
+
+/** زیر سقف timeout درگاه (معمولاً ~۶۰ث) — هر فیش SendDelayMs + SOAP دارد. */
+function resolveUnsentBatchChunkSize() {
+  const n = Number(config?.unsentBatch?.chunkSize);
+  if (Number.isFinite(n) && n >= 1 && n <= 20) return Math.floor(n);
+  return 4;
+}
+
+function mergeUnsentBatchSendResults(parts) {
+  const merged = {
+    total: 0,
+    succeeded: 0,
+    failed: 0,
+    skipped: 0,
+    dryRun: false,
+    results: []
+  };
+  (parts || []).forEach((data) => {
+    merged.total += data.total ?? 0;
+    merged.succeeded += data.succeeded ?? 0;
+    merged.failed += data.failed ?? 0;
+    merged.skipped += data.skipped ?? 0;
+    merged.dryRun = merged.dryRun || !!data.dryRun;
+    merged.results.push(...(data.results || []));
+  });
+  return merged;
+}
+
+async function sendUnsentBatchInChunks(targets, onProgress) {
+  const chunks = chunkArray(targets, resolveUnsentBatchChunkSize());
+  const parts = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const progressText = chunks.length > 1
+      ? `در حال ارسال دسته ${i + 1} از ${chunks.length} (${chunk.length} فیش از ${targets.length})…`
+      : `در حال ارسال ${chunk.length} فیش…`;
+    onProgress?.(progressText);
+
+    const res = await apiFetch('/api/unsent/send-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targets: chunk })
+    });
+    let data;
+    try {
+      data = await parseJsonResponse(res);
+    } catch (parseErr) {
+      if (res.status === 504 && parts.length > 0) {
+        const done = mergeUnsentBatchSendResults(parts);
+        throw new Error(
+          `${parseErr.message}\n\n${done.succeeded} فیش در ${parts.length} دستهٔ قبل ثبت شد — قبل از ارسال مجدد وضعیت را در رایورز بررسی کنید.`
+        );
+      }
+      if (res.status === 504) {
+        throw new Error(
+          'زمان پاسخ درگاه (HTTP 504) تمام شد. ممکن است فیش‌ها ارسال شده باشند — قبل از تکرار، وضعیت را در رایورز بررسی کنید.'
+        );
+      }
+      throw parseErr;
+    }
+    if (!res.ok) {
+      const err = data.error || `خطا (HTTP ${res.status})`;
+      if (parts.length > 0) {
+        const done = mergeUnsentBatchSendResults(parts);
+        throw new Error(`${err}\n\n${done.succeeded} فیش در دسته‌های قبلی ثبت شد.`);
+      }
+      throw new Error(err);
+    }
+    parts.push(data);
+  }
+  return mergeUnsentBatchSendResults(parts);
 }
 
 function formatUnsentBatchSendResult(data) {
@@ -892,6 +1099,26 @@ function getInstallmentPayload() {
   };
 }
 
+function hasUpdateProblems(data) {
+  return (data?.failed || 0) > 0
+    || (data?.notFound || 0) > 0
+    || (data?.skippedMismatch || 0) > 0
+    || (data?.skipped || 0) > 0;
+}
+
+function showResultBox(box, text) {
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = text;
+}
+
+/** پیش‌نمایش برای همان ورودی‌ها معتبر است؛ تغییر ورودی یعنی «اعمال» باید دوباره پیش‌نمایش بگیرد. */
+function invalidateInstallmentPreview() {
+  const updateBtn = $('btnInstallmentUpdate');
+  if (updateBtn) updateBtn.disabled = true;
+  hideEl('installmentPreviewSection');
+}
+
 function syncInstallmentDryRunUi() {
   const updateBtn = $('btnInstallmentUpdate');
   if (updateBtn && !updateBtn.disabled) updateBtn.textContent = 'اعمال';
@@ -951,23 +1178,137 @@ function renderInstallmentPreview(data) {
       : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
 
     tr.innerHTML = `
-      <td class="col-installment-row">${toPersianDigits(rowNum)}</td>
-      <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
-      <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
-      <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
-      <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
-      <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
-      <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
-      <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
-      <td class="col-installment-odooat">${formatOdooatPlan(row)}</td>
-      <td class="col-installment-status">${status}</td>
-      <td class="col-installment-comments">${row.proposedComments || '-'}</td>
+      <td class="col-installment-row">${escapeHtml(toPersianDigits(rowNum))}</td>
+      <td class="col-installment-detect">${escapeHtml(installmentLookupLabels[kind] || kind || '—')}</td>
+      <td class="col-installment-nodoc">${escapeHtml(toPersianDigits(row.noDocument || '-'))}</td>
+      <td class="col-installment-tracking">${escapeHtml(toPersianDigits(row.trackingNo || '-'))}</td>
+      <td class="col-installment-cost">${escapeHtml(formatInstallmentCost(row.paymentCost))}</td>
+      <td class="col-installment-date">${escapeHtml(formatInstallmentDate(row.paymentDate))}</td>
+      <td class="col-installment-workitem">${escapeHtml(toPersianDigits(row.nidWorkItem || '-'))}</td>
+      <td class="col-installment-nosazi">${escapeHtml(formatNosaziCode(row.nosaziCode))}</td>
+      <td class="col-installment-odooat">${escapeHtml(formatOdooatPlan(row))}</td>
+      <td class="col-installment-status">${escapeHtml(status)}</td>
+      <td class="col-installment-comments">${escapeHtml(row.proposedComments || '-')}</td>
     `;
     tbody.appendChild(tr);
   });
   if (updateBtn) {
     updateBtn.disabled = !(data.matchedCount > 0);
     updateBtn.textContent = 'اعمال';
+  }
+}
+
+function isInstallmentListKeyEmpty(id) {
+  if (id == null || id === '') return true;
+  const compact = String(id).replace(/-/g, '').toLowerCase();
+  return compact === '0' || compact === '00000000000000000000000000000000';
+}
+
+function setCheckDateApplySectionVisible(visible) {
+  const applySection = $('checkDateApplySection');
+  if (applySection) applySection.hidden = !visible;
+}
+
+function formatCheckDateRowStatus(row) {
+  const statusCode = row.ci_InstallmentStatus ?? row.cI_InstallmentStatus;
+  const statusPart = statusCode != null && statusCode !== ''
+    ? toPersianDigits(String(statusCode))
+    : '';
+  const endPart = (row.endStateDesc || '').trim();
+  const endCode = row.endStateCode != null && row.endStateCode !== ''
+    ? toPersianDigits(String(row.endStateCode))
+    : '';
+  if (endPart && endCode) return `${endPart} (${endCode})`;
+  if (endPart) return endPart;
+  if (statusPart) return statusPart;
+  return '—';
+}
+
+function setCheckDateSelectedRow(row, trackingFallback) {
+  if (!row || isInstallmentListKeyEmpty(row.nidInstallment)) {
+    checkDateSelectedRow = null;
+    return;
+  }
+  checkDateSelectedRow = {
+    nidInstallment: row.nidInstallment,
+    noDocument: row.noDocument || '',
+    trackingNo: row.trackingNo || trackingFallback || ''
+  };
+}
+
+function updateCheckDateApplyButton() {
+  const btn = $('btnCheckDateUpdate');
+  if (!btn) return;
+  const date = ($('checkDateNewPaymentDate')?.value || '').trim();
+  btn.disabled = !(
+    checkDateSelectedRow
+    && !isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)
+    && isStrictShamsiDate(date)
+  );
+}
+
+function renderCheckDateTable(data) {
+  const section = $('checkDateResultsSection');
+  const tbody = $('checkDateTable')?.querySelector('tbody');
+  const countLabel = $('checkDateCountLabel');
+  if (!section || !tbody) return;
+
+  checkDateItems = data.items || [];
+  checkDateSelectedRow = null;
+  updateCheckDateApplyButton();
+  const hasRows = checkDateItems.length > 0;
+  section.hidden = !hasRows;
+  setCheckDateApplySectionVisible(hasRows);
+
+  if (countLabel) {
+    countLabel.textContent = hasRows
+      ? `ردیف یافت شد: ${checkDateItems.length.toLocaleString('fa-IR')}`
+      : 'ردیفی یافت نشد';
+  }
+
+  tbody.innerHTML = '';
+  if (!hasRows) return;
+
+  const trackingFallback = data.trackingNo || '';
+  checkDateItems.forEach((row, index) => {
+    const tr = document.createElement('tr');
+    const rowNum = index + 1;
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" class="check-date-row-check" aria-label="انتخاب ردیف ${escapeHtml(toPersianDigits(rowNum))}" /></td>
+      <td class="col-installment-row">${escapeHtml(toPersianDigits(rowNum))}</td>
+      <td class="col-installment-detect">${escapeHtml(installmentLookupLabels.TrackingNo)}</td>
+      <td class="col-installment-nodoc">${escapeHtml(toPersianDigits(row.noDocument || '—'))}</td>
+      <td class="col-installment-tracking">${escapeHtml(toPersianDigits(row.trackingNo || '—'))}</td>
+      <td class="col-installment-cost">${escapeHtml(formatInstallmentCost(row.paymentCost))}</td>
+      <td class="col-installment-date">${escapeHtml(formatInstallmentDate(row.paymentDate))}</td>
+      <td class="col-installment-workitem">—</td>
+      <td class="col-installment-nosazi">—</td>
+      <td class="col-installment-odooat">—</td>
+      <td class="col-installment-status">${escapeHtml(formatCheckDateRowStatus(row))}</td>
+      <td class="col-installment-comments">${escapeHtml(row.comments || '—')}</td>
+    `;
+    const checkbox = tr.querySelector('.check-date-row-check');
+    checkbox?.addEventListener('change', () => {
+      if (checkbox.checked) {
+        tbody.querySelectorAll('.check-date-row-check').forEach((cb) => {
+          if (cb !== checkbox) cb.checked = false;
+        });
+        setCheckDateSelectedRow(row, trackingFallback);
+      } else {
+        checkDateSelectedRow = null;
+      }
+      updateCheckDateApplyButton();
+    });
+    tbody.appendChild(tr);
+  });
+
+  if (checkDateItems.length === 1) {
+    const onlyCheck = tbody.querySelector('.check-date-row-check');
+    if (onlyCheck) {
+      onlyCheck.checked = true;
+      setCheckDateSelectedRow(checkDateItems[0], trackingFallback);
+      updateCheckDateApplyButton();
+    }
   }
 }
 
@@ -1314,6 +1655,17 @@ function getSelectedFicheDateStatuses() {
     .filter((n) => !Number.isNaN(n));
 }
 
+/**
+ * صفحه‌بعد/قبل و تغییر اندازهٔ صفحه همان فیلترِ آخرین «جستجو» را به کار می‌برند؛
+ * در غیر این صورت انتخاب‌های قبلی روی نتیجهٔ یک کوئری دیگر اعمال می‌شد.
+ */
+function storedGridSearchPayload(state, page, pageSizeId) {
+  if (!state.lastFilters) return null;
+  const pageSize = parseInt($(pageSizeId)?.value || state.pageSize, 10) || 25;
+  state.pageSize = pageSize;
+  return { ...state.lastFilters, page, pageSize };
+}
+
 function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
   const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 25;
   ficheDateSearchState.pageSize = pageSize;
@@ -1398,16 +1750,16 @@ function renderFicheDateTable(items, meta = {}) {
     const checked = selectedFicheDateNos.has(item.ficheNo) ? ' checked' : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
-      <td>${item.accountGroupTitle || '-'}</td>
-      <td>${toPersianDigits(item.exportTemporaryDate || '-')}</td>
-      <td>${toPersianDigits(item.exportPermanentDate || '-')}</td>
-      <td>${toPersianDigits(item.paymentBreakDate || '-')}</td>
-      <td>${toPersianDigits(item.paymentDate || '-')}</td>
-      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
+      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(toPersianDigits(item.ficheNo || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.billId || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentId || '-'))}</td>
+      <td>${escapeHtml(item.accountGroupTitle || '-')}</td>
+      <td>${escapeHtml(toPersianDigits(item.exportTemporaryDate || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.exportPermanentDate || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentBreakDate || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentDate || '-'))}</td>
+      <td>${escapeHtml(item.eumFicheStatusLabel || item.eumFicheStatus)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1447,13 +1799,27 @@ function updateFicheDateCountLabel() {
 }
 
 async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) {
-  const payload = getFicheDateSearchPayload(page);
+  const payload = clearSelection
+    ? getFicheDateSearchPayload(page)
+    : storedGridSearchPayload(ficheDateSearchState, page, 'ficheDatePageSize');
+  if (!payload) return false;
+  const dateError = shamsiDateError([
+    [payload.permanentFromDate, 'صدور دایم از'],
+    [payload.permanentToDate, 'صدور دایم تا'],
+    [payload.temporaryFromDate, 'صدور موقت از'],
+    [payload.temporaryToDate, 'صدور موقت تا']
+  ]);
+  if (dateError) {
+    showAppWarning(dateError);
+    return false;
+  }
   if (!hasFicheDateSearchFilter(payload)) {
     showAppWarning('حداقل یک فیلتر وارد کنید');
     return false;
   }
 
   if (clearSelection) clearGridSelection(selectedFicheDateNos, ficheDateSelectedItems);
+  if (clearSelection) ficheDateSearchState.lastFilters = { ...payload };
   ficheDateSearchState.page = page;
 
   const btn = $('btnFicheDateSearch');
@@ -1540,7 +1906,8 @@ const bankInquirySearchState = {
   page: 1,
   pageSize: 25,
   totalCount: 0,
-  totalPages: 0
+  totalPages: 0,
+  lastFilters: null
 };
 
 function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
@@ -1627,17 +1994,17 @@ function renderBankInquiryTable(items, meta = {}) {
   tbody.innerHTML = bankInquiryItems.map((item) => {
     const checked = selectedBankInquiryNos.has(item.ficheNo) ? ' checked' : '';
     return `<tr>
-      <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
-      <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
-      <td>${formatNosaziCode(item.nosaziCode)}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
-      <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
-      <td>${formatShamsiDisplay(item.userConfirmDate)}</td>
-      <td>${item.usernameUserConfirm || '-'}</td>
+      <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(toPersianDigits(item.ficheNo || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.nidWorkItem || '-'))}</td>
+      <td>${escapeHtml(formatNosaziCode(item.nosaziCode))}</td>
+      <td>${escapeHtml(toPersianDigits(item.billId || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentId || '-'))}</td>
+      <td>${escapeHtml(formatShamsiDisplay(item.paymentDate))}</td>
+      <td>${escapeHtml(formatShamsiDisplay(item.bankPaymentDate))}</td>
+      <td>${escapeHtml(item.eumFicheStatusLabel || item.eumFicheStatus)}</td>
+      <td>${escapeHtml(formatShamsiDisplay(item.userConfirmDate))}</td>
+      <td>${escapeHtml(item.usernameUserConfirm || '-')}</td>
     </tr>`;
   }).join('');
 
@@ -1718,10 +2085,10 @@ function renderShahkarTable(items) {
     const checked = selectedShahkarUserNames.has(userName) ? ' checked' : '';
     const okLabel = formatShahkarOkLabel(item.shahkarOk, item.isShahkarOk);
     return `<tr>
-      <td class="col-check"><input type="checkbox" class="shahkar-row-check" data-user-name="${userName}"${checked} /></td>
-      <td>${userName || '-'}</td>
-      <td>${toPersianDigits(item.nationalCode || '-')}</td>
-      <td>${okLabel}</td>
+      <td class="col-check"><input type="checkbox" class="shahkar-row-check" data-user-name="${escapeHtml(userName)}"${checked} /></td>
+      <td>${escapeHtml(userName || '-')}</td>
+      <td>${escapeHtml(toPersianDigits(item.nationalCode || '-'))}</td>
+      <td>${escapeHtml(okLabel)}</td>
     </tr>`;
   }).join('');
 
@@ -1747,6 +2114,23 @@ function renderShahkarTable(items) {
   syncShahkarConfirmButton();
 }
 
+async function refreshShahkarConnectionStatus() {
+  const el = $('shahkarConnectionStatus');
+  if (!el) return;
+  el.textContent = 'در حال بررسی اتصال security10...';
+  try {
+    const res = await apiFetch('/api/shahkar/connection-test');
+    const data = await parseJsonResponse(res);
+    if (data.ok) {
+      el.textContent = `متصل به ${data.dataSource || ''} / ${data.database || ''} با کاربر ${data.userId || ''}`;
+      return;
+    }
+    el.textContent = [data.error, data.hint].filter(Boolean).join('\n\n');
+  } catch (e) {
+    el.textContent = e.message;
+  }
+}
+
 async function fetchShahkarResults({ clearSelection = false } = {}) {
   const userName = ($('shahkarUserName')?.value || '').trim();
   const nationalCode = normalizeSearchId($('shahkarNationalCode')?.value);
@@ -1766,7 +2150,10 @@ async function fetchShahkarResults({ clearSelection = false } = {}) {
       body: JSON.stringify({ userName, nationalCode })
     });
     const data = await parseJsonResponse(res);
-    if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+    if (!res.ok) {
+      const hint = data.hint ? `\n\n${data.hint}` : '';
+      throw new Error((data.error || `خطا (HTTP ${res.status})`) + hint);
+    }
     renderShahkarTable(data.items || []);
     if (box) box.hidden = true;
   } catch (e) {
@@ -1779,11 +2166,15 @@ async function fetchShahkarResults({ clearSelection = false } = {}) {
 }
 
 async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}) {
-  const payload = getBankInquirySearchPayload(page);
+  const payload = clearSelection
+    ? getBankInquirySearchPayload(page)
+    : storedGridSearchPayload(bankInquirySearchState, page, 'bankInquiryPageSize');
+  if (!payload) return false;
   const validationError = validateBankInquirySearchPayload(payload);
   if (validationError) return showAppWarning(validationError);
 
   if (clearSelection) clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
+  if (clearSelection) bankInquirySearchState.lastFilters = { ...payload };
   bankInquirySearchState.page = page;
 
   const btn = $('btnBankInquirySearch');
@@ -1829,7 +2220,8 @@ const costCenterSearchState = {
   page: 1,
   pageSize: 25,
   totalCount: 0,
-  totalPages: 0
+  totalPages: 0,
+  lastFilters: null
 };
 
 function getCostCenterSearchPayload(page = costCenterSearchState.page) {
@@ -1915,13 +2307,13 @@ function renderCostCenterTable(items, meta = {}) {
   tbody.innerHTML = costCenterItems.map((item) => {
     const checked = selectedCostCenterNos.has(item.ficheNo) ? ' checked' : '';
     return `<tr>
-      <td class="col-check"><input type="checkbox" class="cost-center-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
-      <td>${formatCostCenterValue(item.deposit)}</td>
-      <td>${formatCostCenterValue(item.creditorPapers)}</td>
-      <td>${formatNosaziCode(item.nosaziCode)}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
+      <td class="col-check"><input type="checkbox" class="cost-center-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(toPersianDigits(item.ficheNo || '-'))}</td>
+      <td>${escapeHtml(formatCostCenterValue(item.deposit))}</td>
+      <td>${escapeHtml(formatCostCenterValue(item.creditorPapers))}</td>
+      <td>${escapeHtml(formatNosaziCode(item.nosaziCode))}</td>
+      <td>${escapeHtml(toPersianDigits(item.billId || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentId || '-'))}</td>
     </tr>`;
   }).join('');
 
@@ -1949,11 +2341,15 @@ function renderCostCenterTable(items, meta = {}) {
 }
 
 async function fetchCostCenterResults(page = 1, { clearSelection = false } = {}) {
-  const payload = getCostCenterSearchPayload(page);
+  const payload = clearSelection
+    ? getCostCenterSearchPayload(page)
+    : storedGridSearchPayload(costCenterSearchState, page, 'costCenterPageSize');
+  if (!payload) return false;
   const validationError = validateCostCenterSearchPayload(payload);
   if (validationError) return showAppWarning(validationError);
 
   if (clearSelection) clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
+  if (clearSelection) costCenterSearchState.lastFilters = { ...payload };
   costCenterSearchState.page = page;
 
   const btn = $('btnCostCenterSearch');
@@ -2034,7 +2430,7 @@ function getBankInquiryConfirmPayload() {
 function validateBankInquiryConfirmPayload(payload) {
   if (!payload.ficheNos.length) return 'حداقل یک فیش از نتایج انتخاب کنید';
   if (!payload.newPaymentDate) return 'تاریخ پرداخت جدید را وارد کنید';
-  return null;
+  return shamsiDateError([[payload.newPaymentDate, 'تاریخ پرداخت جدید']]);
 }
 
 function formatBankInquiryConfirmResult(data) {
@@ -2175,9 +2571,22 @@ function updateIdentifierHint() {
   hint.textContent = `تشخیص سیستم: ${identifierTypeLabels[t]}`;
 }
 
-function isTahatorIncomeFiche(f) {
+function isTahatorFiche(f) {
   const g = f?.incomeAccountGroup;
   return g === 157 || g === 158;
+}
+
+function isTahatorAmountFiche(f) {
+  return f?.incomeAccountGroup === 157;
+}
+
+function isTahatorIncomeDetailFiche(f) {
+  return f?.incomeAccountGroup === 158;
+}
+
+/** هر دو فیش تهاتر (۱۵۷+۱۵۸) از API /api/tahator/send استفاده می‌کنند. */
+function isTahatorIncomeFiche(f) {
+  return isTahatorFiche(f);
 }
 
 let datePickersReady = false;
@@ -2202,6 +2611,8 @@ function initDatePickers() {
     });
     datePickersReady = true;
   }
+
+  bindShamsiDateInputGuards();
 
   document.querySelectorAll('.btn-date-icon').forEach((btn) => {
     if (btn.dataset.bound === '1') return;
@@ -2236,6 +2647,11 @@ function getUnsentSearchFilters() {
 }
 
 function validateUnsentSearchFilters(filters) {
+  const dateError = shamsiDateError([
+    [filters.fromDate, 'از تاریخ'],
+    [filters.toDate, 'تا تاریخ']
+  ]);
+  if (dateError) return dateError;
   if ((filters.fromDate && !filters.toDate) || (!filters.fromDate && filters.toDate)) {
     return 'هر دو تاریخ از و تا را وارد کنید';
   }
@@ -2247,27 +2663,27 @@ function validateUnsentSearchFilters(filters) {
   return null;
 }
 
+/** جستجوی ارسال‌نشده‌ها صفحه‌بندی سمت سرور ندارد — همهٔ نتایج (تا سقف MaxResults) یک‌جا می‌آید. */
+/** دکمهٔ «ورود از اکسل» یک label است؛ غیرفعال کردن خود input مانع انتخاب فایل دوم هنگام پردازش می‌شود. */
+function setUnsentExcelPickerBusy(input, label, busy) {
+  if (input) input.disabled = busy;
+  if (label) {
+    label.classList.toggle('is-disabled', busy);
+    label.setAttribute('aria-disabled', busy ? 'true' : 'false');
+  }
+}
+
 function updateUnsentPaginationUi() {
   const bar = $('unsentPagination');
   const label = $('unsentPageLabel');
-  const prevBtn = $('btnUnsentPrevPage');
-  const nextBtn = $('btnUnsentNextPage');
-  if (!bar || !label || !prevBtn || !nextBtn) return;
+  if (!bar || !label) return;
 
-  const { page, totalPages, totalCount } = unsentSearchState;
-  const hasResults = totalCount > 0;
-  bar.hidden = !hasResults;
-
-  if (!hasResults) {
-    label.textContent = '';
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    return;
-  }
-
-  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${totalPages.toLocaleString('fa-IR')} — ${totalCount.toLocaleString('fa-IR')} مورد`;
-  prevBtn.disabled = page <= 1;
-  nextBtn.disabled = page >= totalPages;
+  const { totalCount, truncated } = unsentSearchState;
+  bar.hidden = !(totalCount > 0);
+  label.textContent = totalCount > 0
+    ? `${totalCount.toLocaleString('fa-IR')} مورد${truncated ? ' — فقط بخشی از نتایج آمده؛ فیلتر را محدودتر کنید' : ''}`
+    : '';
+  label.classList.toggle('unsent-truncated', !!truncated);
 }
 
 function updateUnsentSendButton() {
@@ -2312,12 +2728,12 @@ function renderUnsentTable(items, meta = {}) {
     const checked = selectedUnsentFicheNos.has(item.ficheNo) ? ' checked' : '';
     return `
     <tr>
-      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
-      <td class="num-cell col-unsent-bill">${formatBillPayDisplay(item.billId)}</td>
-      <td class="num-cell col-unsent-pay">${formatBillPayDisplay(item.paymentId)}</td>
-      <td class="num-cell col-unsent-fiche">${formatBillPayDisplay(item.ficheNo)}</td>
-      <td class="col-installment-cost">${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
+      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(item.subKindLabel || (item.isTahator ? 'تهاتر' : '-'))}</td>
+      <td class="num-cell col-unsent-bill">${escapeHtml(formatBillPayDisplay(item.billId))}</td>
+      <td class="num-cell col-unsent-pay">${escapeHtml(formatBillPayDisplay(item.paymentId))}</td>
+      <td class="num-cell col-unsent-fiche">${escapeHtml(formatBillPayDisplay(item.ficheNo))}</td>
+      <td class="col-installment-cost">${escapeHtml(Number(item.payable || 0).toLocaleString('fa-IR'))}</td>
       <td class="col-unsent-fill" aria-hidden="true"></td>
     </tr>
   `;
@@ -2368,20 +2784,15 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
     return false;
   }
 
-  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
-  unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
+  unsentSearchState.truncated = false;
   if (clearSelection) {
     selectedUnsentFicheNos.clear();
     unsentSourceKindByFicheNo.clear();
   }
 
   const btn = $('btnUnsentSearch');
-  const prevBtn = $('btnUnsentPrevPage');
-  const nextBtn = $('btnUnsentNextPage');
   if (btn) btn.disabled = true;
-  if (prevBtn) prevBtn.disabled = true;
-  if (nextBtn) nextBtn.disabled = true;
   const prevLabel = btn?.textContent;
   if (btn) btn.textContent = 'در حال جستجو…';
   $('unsentResultBox').hidden = true;
@@ -2390,29 +2801,27 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
     const res = await apiFetch('/api/unsent/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...filters,
-        page,
-        pageSize
-      })
+      body: JSON.stringify(filters)
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-    const totalCount = data.totalCount ?? data.count ?? 0;
-    const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
     const items = data.items || [];
+    unsentSearchState.truncated = !!data.truncated;
     syncUnsentSourceKindsFromItems(items, filters.ficheKind);
     renderUnsentTable(items, {
-      page: data.page ?? page,
-      pageSize: data.pageSize ?? pageSize,
-      totalCount,
-      totalPages
+      page: 1,
+      pageSize: items.length,
+      totalCount: items.length,
+      totalPages: items.length > 0 ? 1 : 0
     });
+    if (data.truncated) {
+      showAppWarning(`فقط ${items.length.toLocaleString('fa-IR')} فیش اول نمایش داده شد — بقیه در «انتخاب همه» و ارسال دسته‌ای نیستند؛ بازهٔ تاریخ یا فیلتر را محدودتر کنید.`);
+    }
     return true;
   } catch (e) {
     showAppError(e.message);
-    renderUnsentTable([], { page: 1, pageSize, totalCount: 0, totalPages: 0 });
+    renderUnsentTable([], { page: 1, pageSize: 0, totalCount: 0, totalPages: 0 });
     return false;
   } finally {
     if (btn) {
@@ -2436,16 +2845,22 @@ function applyFicheDatesToForm(f) {
   $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
 }
 
-function getPayload(resetStatus) {
+function getPayload() {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
     fund: parseInt($('fund').value),
     docDate: $('docDate').value,
     actDate: $('actDate').value,
-    dueDate: $('dueDate').value,
-    resetStatus: !!resetStatus
+    dueDate: $('dueDate').value
   };
+}
+
+/** پس از ارسال: فرم پاک می‌شود ولی کارت نتیجه (شماره پیگیری) می‌ماند و فیش قبلی دیگر قابل ارسال نیست. */
+function finishSingleSend() {
+  resetMainTabPanelState('unsent');
+  currentFiche = null;
+  updateSendButton(null);
 }
 
 async function parseJsonResponse(res) {
@@ -2500,6 +2915,7 @@ function normalizeAuthSession(user) {
     user.isAdmin = true;
     user.canAccessUnsentFiches = true;
     user.canAccessInstallment = true;
+    user.canAccessInstallmentCheckDate = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
     user.canAccessCostCenter = true;
@@ -2517,29 +2933,15 @@ function canAccessUnsent() {
   return isAdminUser() || !!currentUser?.canAccessUnsentFiches;
 }
 
-function hasAnyModulePermission() {
-  if (isAdminUser()) return true;
-  return !!(
-    currentUser?.canAccessUnsentFiches
-    || currentUser?.canAccessInstallment
-    || currentUser?.canAccessFicheDateChange
-    || currentUser?.canAccessBankInquiryConfirm
-    || currentUser?.canAccessCostCenter
-    || currentUser?.canAccessShahkar
-    || currentUser?.canManageUsers
-  );
-}
-
 /** تب رایورز: ارسال جمعی، یا ارسال تکی وقتی هیچ ماژول دیگری تعریف نشده */
 function canAccessRayvarzModule() {
-  if (isAdminUser()) return true;
-  if (canAccessUnsent()) return true;
-  return !hasAnyModulePermission();
+  return canAccessUnsent();
 }
 
 const MAIN_TAB_ACCESS_ORDER = [
   { key: 'unsent', can: () => canAccessRayvarzModule() },
   { key: 'installment', can: () => canAccessInstallment() },
+  { key: 'checkDate', can: () => canAccessInstallmentCheckDate() },
   { key: 'ficheDate', can: () => canAccessFicheDateChange() },
   { key: 'bankInquiry', can: () => canAccessBankInquiryConfirm() },
   { key: 'costCenter', can: () => canAccessCostCenter() },
@@ -2549,6 +2951,10 @@ const MAIN_TAB_ACCESS_ORDER = [
 
 function canAccessInstallment() {
   return isAdminUser() || !!currentUser?.canAccessInstallment;
+}
+
+function canAccessInstallmentCheckDate() {
+  return isAdminUser() || !!currentUser?.canAccessInstallmentCheckDate;
 }
 
 function canAccessFicheDateChange() {
@@ -2584,6 +2990,9 @@ function applyPermissionUi() {
   });
   document.querySelectorAll('.perm-installment').forEach((el) => {
     el.hidden = !canAccessInstallment();
+  });
+  document.querySelectorAll('.perm-installment-check-date').forEach((el) => {
+    el.hidden = !canAccessInstallmentCheckDate();
   });
   document.querySelectorAll('.perm-fiche-date').forEach((el) => {
     el.hidden = !canAccessFicheDateChange();
@@ -2665,6 +3074,10 @@ async function loadUsersTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/users');
   const data = await parseJsonResponse(res);
+  if (!res.ok) {
+    showAppError(data.error || `بارگذاری لیست کاربران ناموفق بود (HTTP ${res.status})`);
+    return;
+  }
   cachedUsers = (data.items || []).map(normalizeEntityId);
   const tbody = $('usersTable')?.querySelector('tbody');
   if (!tbody) return;
@@ -2676,16 +3089,16 @@ async function loadUsersTable() {
       .filter(Boolean)
       .join('، ') || '—';
     tr.innerHTML = `
-      <td>${u.nationalId || u.username}</td>
-      <td dir="ltr">${u.domain || '—'}</td>
-      <td>${u.firstName || '—'}</td>
-      <td>${u.lastName || '—'}</td>
-      <td>${u.position || '—'}</td>
-      <td>${districtLabelFromValue(u.district)}</td>
-      <td>${u.isAdmin ? 'ادمین' : 'کاربر'}</td>
-      <td>${groupNames}</td>
-      <td>${u.isActive ? 'فعال' : 'غیرفعال'}</td>
-      <td><button type="button" class="btn secondary btn-sm btn-edit-user" data-user-id="${u.id}">ویرایش</button></td>
+      <td>${escapeHtml(u.nationalId || u.username)}</td>
+      <td dir="ltr">${escapeHtml(u.domain || '—')}</td>
+      <td>${escapeHtml(u.firstName || '—')}</td>
+      <td>${escapeHtml(u.lastName || '—')}</td>
+      <td>${escapeHtml(u.position || '—')}</td>
+      <td>${escapeHtml(districtLabelFromValue(u.district))}</td>
+      <td>${escapeHtml(u.isAdmin ? 'ادمین' : 'کاربر')}</td>
+      <td>${escapeHtml(groupNames)}</td>
+      <td>${escapeHtml(u.isActive ? 'فعال' : 'غیرفعال')}</td>
+      <td><button type="button" class="btn secondary btn-sm btn-edit-user" data-user-id="${escapeHtml(u.id)}">ویرایش</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -2693,6 +3106,25 @@ async function loadUsersTable() {
 
 let cachedGroups = [];
 let cachedUsers = [];
+/** بدون لیست گروه، انتخابگر گروه خالی است و ذخیره عضویت‌های کاربر را پاک می‌کند. */
+let groupsLoadFailed = false;
+
+function ensureGroupsLoaded() {
+  if (groupsLoadFailed) {
+    throw new Error('لیست گروه‌ها بارگذاری نشد — ابتدا «بارگذاری مجدد گروه‌ها» را بزنید');
+  }
+}
+
+/** جلوگیری از دوبار ارسال فرم‌های مدیریت (کلیک دوم = خطای تکراری یا ریست رمز دوباره). */
+async function runWithButtonBusy(btn, fn) {
+  if (btn?.disabled) return;
+  if (btn) btn.disabled = true;
+  try {
+    await fn();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 let editingUserId = null;
 let editingGroupId = null;
 
@@ -2728,11 +3160,13 @@ function setupGroupsTableActions() {
     const saveBtn = e.target.closest('.btn-save-group');
     if (saveBtn) {
       e.preventDefault();
-      try {
-        await saveGroupFromForm();
-      } catch (err) {
-        alert(err.message);
-      }
+      await runWithButtonBusy(saveBtn, async () => {
+        try {
+          await saveGroupFromForm();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
     }
   });
 }
@@ -2753,6 +3187,12 @@ async function loadGroupsTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/groups');
   const data = await parseJsonResponse(res);
+  if (!res.ok) {
+    groupsLoadFailed = true;
+    showAppError(data.error || `بارگذاری لیست گروه‌ها ناموفق بود (HTTP ${res.status})`);
+    return;
+  }
+  groupsLoadFailed = false;
   cachedGroups = (data.items || []).map(normalizeEntityId);
   renderGroupsTableBody();
   const editUser = editingUserId
@@ -2774,16 +3214,17 @@ function renderGroupsTableBody() {
     const isEditing = editingGroupId && String(editingGroupId) === String(g.id);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${g.name}</td>
-      <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
-      <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessShahkar ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessCostCenter ? 'بله' : 'خیر'}</td>
+      <td>${escapeHtml(g.name)}</td>
+      <td>${escapeHtml(g.canAccessUnsentFiches ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessInstallment ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessInstallmentCheckDate ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canManageUsers ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessFicheDateChange ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessBankInquiryConfirm ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessShahkar ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessCostCenter ? 'بله' : 'خیر')}</td>
       <td class="group-actions-cell">
-        <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${g.id}">ذخیره</button>` : ''}
+        <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${escapeHtml(g.id)}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${escapeHtml(g.id)}">ذخیره</button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
@@ -2797,6 +3238,7 @@ function openGroupEdit(groupId) {
   if ($('newGroupName')) $('newGroupName').value = group.name;
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = group.canAccessUnsentFiches;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = group.canAccessInstallment;
+  if ($('newGroupInstallmentCheckDate')) $('newGroupInstallmentCheckDate').checked = group.canAccessInstallmentCheckDate;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = group.canAccessFicheDateChange;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = group.canAccessBankInquiryConfirm;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = group.canAccessShahkar;
@@ -2813,6 +3255,7 @@ function resetGroupForm() {
   if ($('newGroupName')) $('newGroupName').value = '';
   if ($('newGroupUnsent')) $('newGroupUnsent').checked = false;
   if ($('newGroupInstallment')) $('newGroupInstallment').checked = false;
+  if ($('newGroupInstallmentCheckDate')) $('newGroupInstallmentCheckDate').checked = false;
   if ($('newGroupFicheDate')) $('newGroupFicheDate').checked = false;
   if ($('newGroupBankInquiry')) $('newGroupBankInquiry').checked = false;
   if ($('newGroupShahkar')) $('newGroupShahkar').checked = false;
@@ -2828,6 +3271,7 @@ async function saveGroupFromForm({ forceCreate = false } = {}) {
     name: ($('newGroupName')?.value || '').trim(),
     canAccessUnsentFiches: !!$('newGroupUnsent')?.checked,
     canAccessInstallment: !!$('newGroupInstallment')?.checked,
+    canAccessInstallmentCheckDate: !!$('newGroupInstallmentCheckDate')?.checked,
     canAccessFicheDateChange: !!$('newGroupFicheDate')?.checked,
     canAccessBankInquiryConfirm: !!$('newGroupBankInquiry')?.checked,
     canAccessShahkar: !!$('newGroupShahkar')?.checked,
@@ -2927,6 +3371,7 @@ function readDirectPermissionsFromForm(prefix) {
   return {
     canAccessUnsentFiches: !!$(`${prefix}Unsent`)?.checked,
     canAccessInstallment: !!$(`${prefix}Installment`)?.checked,
+    canAccessInstallmentCheckDate: !!$(`${prefix}InstallmentCheckDate`)?.checked,
     canAccessFicheDateChange: !!$(`${prefix}FicheDate`)?.checked,
     canAccessBankInquiryConfirm: !!$(`${prefix}BankInquiry`)?.checked,
     canAccessShahkar: !!$(`${prefix}Shahkar`)?.checked,
@@ -2939,6 +3384,7 @@ function allDirectPermissionsGranted() {
   return {
     canAccessUnsentFiches: true,
     canAccessInstallment: true,
+    canAccessInstallmentCheckDate: true,
     canAccessFicheDateChange: true,
     canAccessBankInquiryConfirm: true,
     canAccessShahkar: true,
@@ -2961,6 +3407,7 @@ function setDirectPermissionsOnForm(prefix, perms) {
   const p = perms || {};
   if ($(`${prefix}Unsent`)) $(`${prefix}Unsent`).checked = !!p.canAccessUnsentFiches;
   if ($(`${prefix}Installment`)) $(`${prefix}Installment`).checked = !!p.canAccessInstallment;
+  if ($(`${prefix}InstallmentCheckDate`)) $(`${prefix}InstallmentCheckDate`).checked = !!p.canAccessInstallmentCheckDate;
   if ($(`${prefix}FicheDate`)) $(`${prefix}FicheDate`).checked = !!p.canAccessFicheDateChange;
   if ($(`${prefix}BankInquiry`)) $(`${prefix}BankInquiry`).checked = !!p.canAccessBankInquiryConfirm;
   if ($(`${prefix}Shahkar`)) $(`${prefix}Shahkar`).checked = !!p.canAccessShahkar;
@@ -3034,6 +3481,7 @@ function closeUserEdit() {
 
 async function saveUserEdit() {
   if (!editingUserId) return;
+  ensureGroupsLoaded();
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
@@ -3048,28 +3496,53 @@ async function saveUserEdit() {
   });
   const data = await parseJsonResponse(res);
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+  const pendingPassword = ($('editUserNewPassword')?.value || '').trim();
+  if (pendingPassword) {
+    await resetUserPassword({ skipConfirm: true });
+  }
   closeUserEdit();
   await loadUsersTable();
 }
 
-async function resetUserPassword() {
-  if (!editingUserId) return;
-  const password = $('editUserNewPassword')?.value || '';
-  const policyError = typeof validatePasswordPolicy === 'function' ? validatePasswordPolicy(password) : null;
-  if (policyError) return alert(policyError);
+async function resetUserPassword({ skipConfirm = false } = {}) {
+  if (!editingUserId) {
+    alert('ابتدا کاربر را از لیست انتخاب و ویرایش کنید');
+    return;
+  }
+  const password = ($('editUserNewPassword')?.value || '').trim();
+  const policyError = typeof window.validatePasswordPolicy === 'function'
+    ? window.validatePasswordPolicy(password)
+    : (password ? null : 'رمز عبور الزامی است');
+  if (policyError) {
+    alert(policyError);
+    return;
+  }
+  if (!skipConfirm && !window.confirm('رمز عبور این کاربر با مقدار وارد شده جایگزین شود؟')) {
+    return;
+  }
   const res = await apiFetch(`/api/admin/users/${editingUserId}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password })
   });
-  const data = await parseJsonResponse(res);
+  const text = await res.text();
+  let data = {};
+  if (text && text.trim()) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`پاسخ نامعتبر از سرور (HTTP ${res.status})`);
+    }
+  }
   if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
   if ($('editUserNewPassword')) $('editUserNewPassword').value = '';
-  alert('رمز عبور با موفقیت تغییر کرد');
+  const msg = data.message || 'رمز عبور با موفقیت تغییر کرد';
+  if (typeof showAppSuccess === 'function') showAppSuccess(msg);
+  else alert(msg);
 }
 
 async function createUserFromForm() {
-  const nationalId = ($('newUserNationalId')?.value || '').trim();
+  const nationalId = normalizeSearchId($('newUserNationalId')?.value);
   const domain = ($('newUserDomain')?.value || '').trim();
   const payload = {
     username: nationalId,
@@ -3102,6 +3575,7 @@ async function createUserFromForm() {
   if (passwordPolicyError) return alert(passwordPolicyError);
   const box = $('usersResultBox');
   try {
+    ensureGroupsLoaded();
     const res = await apiFetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3183,22 +3657,27 @@ function renderSendResultCard(items, tone) {
   $('resultSection').hidden = false;
   const card = $('sendResultCard');
   if (!card) return;
+  card.hidden = false;
   card.className = `send-result-card send-result-${tone}`;
   card.innerHTML = items.map((row) => `
     <div class="send-result-row">
-      <div class="send-result-label">${row.label}</div>
-      <div class="send-result-value">${row.value ?? '—'}</div>
+      <div class="send-result-label">${escapeHtml(row.label)}</div>
+      <div class="send-result-value">${escapeHtml(row.value ?? '—')}</div>
     </div>
   `).join('');
 }
 
 function showSendResult(data) {
-  const tone = data.success
-    ? (data.verifiedInRayvarz === false ? 'warn' : 'ok')
-    : 'err';
+  const tone = data.outcomeUnknown
+    ? 'warn'
+    : data.success
+      ? (data.verifiedInRayvarz === false ? 'warn' : 'ok')
+      : 'err';
   const statusFa = data.dryRun
     ? 'آزمایشی — به رایورز ارسال نشد'
-    : data.success
+    : data.outcomeUnknown
+      ? 'نتیجه نامشخص — پیش از ارسال مجدد بررسی کنید'
+      : data.success
       ? (data.verifiedInRayvarz === false ? 'ارسال شد ولی در رایورز تأیید نشد' : 'ارسال موفق')
       : 'ارسال ناموفق';
   renderSendResultCard([
@@ -3243,8 +3722,8 @@ function renderMappingTable(f) {
   const rows = buildMappingRows(f);
   $('mappingTable').innerHTML = rows.map(r => `
     <div class="mapping-row mapping-row-fa">
-      <div class="mapping-field">${r.field}</div>
-      <div class="mapping-value">${r.value}</div>
+      <div class="mapping-field">${escapeHtml(r.field)}</div>
+      <div class="mapping-value">${escapeHtml(r.value)}</div>
     </div>
   `).join('');
 }
@@ -3252,40 +3731,61 @@ function renderMappingTable(f) {
 function renderFiche(f) {
   $('ficheSection').hidden = false;
   const alertHtml = f.blockReason
-    ? `<div class="fiche-alert fiche-alert-err" role="alert">${f.blockReason}</div>`
+    ? `<div class="fiche-alert fiche-alert-err" role="alert">${escapeHtml(f.blockReason)}</div>`
     : '';
 
   $('ficheSummary').innerHTML = `
     ${alertHtml}
     <div class="stat-card">
       <span class="stat-label">شماره فیش</span>
-      <span class="stat-value">${f.ficheNo}</span>
+      <span class="stat-value">${escapeHtml(f.ficheNo)}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">نوع</span>
-      <span class="stat-value">${isTahatorIncomeFiche(f) ? 'تهاتر (درآمد)' : (categoryLabels[f.category] || f.category)}</span>
+      <span class="stat-value">${escapeHtml(isTahatorAmountFiche(f) ? 'تهاتر (مبلغ — گروه ۱۵۷)' : isTahatorIncomeDetailFiche(f) ? 'تهاتر (درآمد — گروه ۱۵۸)' : (categoryLabels[f.category] || f.category))}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">مبلغ قابل پرداخت</span>
-      <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
+      <span class="stat-value money">${escapeHtml(Number(f.payable).toLocaleString())} ریال</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">منبع</span>
-      <span class="stat-value">${$('fund')?.value || f.suggestedFund || '-'}</span>
+      <span class="stat-value">${escapeHtml($('fund')?.value || f.suggestedFund || '-')}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">کد نوسازی</span>
-      <span class="stat-value">${f.bnkAcntNo || '-'}</span>
+      <span class="stat-value">${escapeHtml(f.bnkAcntNo || '-')}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">رایورز (incmdocsys)</span>
+      <span class="stat-value">${escapeHtml(f.existsInRayvarz ? 'موجود — ارسال نشود' : 'نیست')}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Accounting_DocHeader</span>
+      <span class="stat-value">${escapeHtml(f.existsInAccountingDocHeader ? 'موجود — ارسال نشود' : 'نیست')}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">وضعیت</span>
+      <span class="stat-value">${escapeHtml(f.statusMessage || (f.canSend ? 'آماده ارسال' : '—'))}</span>
     </div>
   `;
 
   renderMappingTable(f);
 
+  const rowsTitle = $('incomeRowsTitle');
+  if (rowsTitle) {
+    rowsTitle.textContent = isTahatorAmountFiche(f)
+      ? 'ردیف تهاتر مبلغ (تک‌ردیف — بدون جزئیات Income_Calculation)'
+      : isTahatorIncomeDetailFiche(f)
+        ? 'ردیف‌های درآمد (جزئیات تهاتر)'
+        : 'ردیف‌های درآمد';
+  }
+
   const tbody = $('rowsTable').querySelector('tbody');
   tbody.innerHTML = '';
   (f.rows || []).forEach((r, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td><td>${r.incmNo}</td><td>${r.incmRowDsc}</td><td>${Number(r.val).toLocaleString()}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(i + 1)}</td><td>${escapeHtml(r.incmNo)}</td><td>${escapeHtml(toPersianLetters(r.incmRowDsc))}</td><td>${escapeHtml(Number(r.val).toLocaleString())}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -3320,7 +3820,12 @@ async function init() {
   const installmentInput = $('installmentValues');
   if (installmentInput) {
     installmentInput.addEventListener('input', () => {
-      installmentInput.value = installmentInput.value.replace(/\D/g, '');
+      // چند شماره با «,» «؛» یا فاصله — همان جداکننده‌های سرور.
+      const cleaned = normalizeDigits(installmentInput.value)
+        .replace(/[،؛]/g, (ch) => (ch === '،' ? ',' : ';'))
+        .replace(/[^\d,;\s]/g, '');
+      if (cleaned !== installmentInput.value) installmentInput.value = cleaned;
+      invalidateInstallmentPreview();
     });
   }
 
@@ -3333,8 +3838,14 @@ async function init() {
       setRayvarzSendMode(btn.dataset.rayvarzMode);
     });
   });
-  $('installmentApplyEndState')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('single'));
-  $('installmentApplyEndStateExcel')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('excel'));
+  $('installmentApplyEndState')?.addEventListener('change', () => {
+    syncInstallmentOdooatCheckboxes('single');
+    invalidateInstallmentPreview();
+  });
+  $('installmentApplyEndStateExcel')?.addEventListener('change', () => {
+    syncInstallmentOdooatCheckboxes('excel');
+    invalidateInstallmentPreview();
+  });
   setInstallmentMode('single');
 
   const excelInput = $('installmentExcelFile');
@@ -3452,6 +3963,7 @@ function setupEventHandlers() {
     return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
   }
 
+  let sent = false;
   if (isTahatorIncomeFiche(currentFiche)) {
     $('btnSend').disabled = true;
     showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
@@ -3463,22 +3975,30 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showTahatorSendResult(data);
       if (data.dryRun) showAppInfo('ارسال آزمایشی تهاتر — به رایورز ارسال نشد.');
       else if (data.skipped) showAppWarning(data.message);
-      else if (data.success) {
-        showAppSuccess(data.message || 'ارسال تهاتر موفق');
-        if (!data.dryRun) resetMainTabPanelState('unsent');
-      } else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      else if (data.success) showAppSuccess(data.message || 'ارسال تهاتر موفق');
+      else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      if (!data.dryRun && (data.success || data.skipped)) {
+        finishSingleSend();
+        sent = true;
+      }
+      showTahatorSendResult(data);
       $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
       showAppError(e.message);
     } finally {
-      $('btnSend').disabled = false;
-      updateSendButton(currentFiche);
+      if (!sent) updateSendButton(currentFiche);
     }
     return;
   }
+
+  const sendDateError = shamsiDateError([
+    [$('docDate').value, 'تاریخ سند'],
+    [$('actDate').value, 'تاریخ عملیات'],
+    [$('dueDate').value, 'تاریخ سررسید']
+  ]);
+  if (sendDateError) return showAppWarning(sendDateError);
 
   $('btnSend').disabled = true;
   showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
@@ -3486,29 +4006,33 @@ function setupEventHandlers() {
     const res = await apiFetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(true))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
-    showSendResult(data);
-
     if (data.dryRun) {
       showAppInfo('ارسال آزمایشی — به رایورز ارسال نشد.');
+    } else if (data.outcomeUnknown) {
+      showAppWarning(data.message || 'نتیجه ارسال نامشخص است — پیش از ارسال مجدد در رایورز بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz === false) {
       showAppWarning('ارسال انجام شد ولی در رایورز تأیید نشد.');
     } else if (!data.success) {
       showAppError(data.message || data.docNotSentError || 'ارسال ناموفق');
-    } else if (data.success && data.verifiedInRayvarz) {
+    } else {
       showAppSuccess('فیش در رایورز ثبت شد.');
-      resetMainTabPanelState('unsent');
     }
+    // هر ارسالی که قطعاً ناموفق نبوده، دکمه را برای همین فیش می‌بندد تا سند تکراری ساخته نشود.
+    if (!data.dryRun && (data.success || data.outcomeUnknown)) {
+      finishSingleSend();
+      sent = true;
+    }
+    showSendResult(data);
     $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     showAppError(e.message);
   } finally {
-    $('btnSend').disabled = false;
-    updateSendButton(currentFiche);
+    if (!sent) updateSendButton(currentFiche);
   }
   });
 
@@ -3548,7 +4072,7 @@ function setupEventHandlers() {
     if (unsentExcelBusy) return;
 
     unsentExcelBusy = true;
-    if (excelBtn) excelBtn.disabled = true;
+    setUnsentExcelPickerBusy(input, excelBtn, true);
     setUnsentExcelStatus('فایل در حال بررسی است…', true);
     if (box) box.hidden = true;
 
@@ -3614,31 +4138,13 @@ function setupEventHandlers() {
     } finally {
       unsentExcelBusy = false;
       if (input) input.value = '';
-      if (excelBtn) excelBtn.disabled = false;
+      setUnsentExcelPickerBusy(input, excelBtn, false);
     }
   });
 
   bindClick('btnUnsentSearch', async () => {
     await fetchUnsentResults(1, { clearSelection: true });
   });
-
-  bindClick('btnUnsentPrevPage', async () => {
-    if (unsentSearchState.page <= 1) return;
-    await fetchUnsentResults(unsentSearchState.page - 1);
-  });
-
-  bindClick('btnUnsentNextPage', async () => {
-    if (unsentSearchState.page >= unsentSearchState.totalPages) return;
-    await fetchUnsentResults(unsentSearchState.page + 1);
-  });
-
-  const pageSizeSel = $('unsentPageSize');
-  if (pageSizeSel) {
-    pageSizeSel.addEventListener('change', async () => {
-      if (!unsentSearchState.filters) return;
-      await fetchUnsentResults(1);
-    });
-  }
 
   bindClick('btnUnsentSend', async () => {
     const targets = getSelectedUnsentBatchTargets();
@@ -3657,28 +4163,123 @@ function setupEventHandlers() {
     box.textContent = `در حال ارسال ${targets.length} فیش…`;
 
     try {
-      const res = await apiFetch('/api/unsent/send-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targets })
+      const data = await sendUnsentBatchInChunks(targets, (msg) => {
+        box.textContent = msg;
       });
-      const data = await parseJsonResponse(res);
-      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      box.textContent = formatUnsentBatchSendResult(data);
+      const resultText = formatUnsentBatchSendResult(data);
+      const summary = `ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`;
 
       if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else if (data.failed > 0) {
-        showAppWarning(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
-      } else {
-        showAppSuccess(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
-        if (!data.dryRun) resetMainTabPanelState('unsent');
-      }
+      else if (hasUpdateProblems(data)) showAppWarning(summary);
+      else showAppSuccess(summary);
+      // انتخاب‌ها پاک می‌شوند تا فیش‌های ارسال‌شده دوباره ارسال نشوند؛ گزارش هر فیش باقی می‌ماند.
+      if (!data.dryRun && (data.succeeded || 0) > 0) resetMainTabPanelState('unsent');
+      showResultBox(box, resultText);
     } catch (e) {
       box.textContent = e.message;
       showAppError(e.message);
     } finally {
       updateUnsentSendButton();
+    }
+  });
+
+  $('checkDateNewPaymentDate')?.addEventListener('input', updateCheckDateApplyButton);
+
+  bindClick('btnCheckDateSearch', async () => {
+    const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value);
+    if (!trackingNo) return showAppWarning('کد پیگیری را وارد کنید');
+    const btn = $('btnCheckDateSearch');
+    const box = $('checkDateResultBox');
+    btn.disabled = true;
+    if (box) box.hidden = true;
+    try {
+      const res = await apiFetch('/api/installment-check-date/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingNo })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      renderCheckDateTable(data);
+      if (!data.items?.length) {
+        renderCheckDateTable(data);
+        showAppWarning('ردیفی یافت نشد');
+      } else {
+        showAppSuccess(`${data.items.length} ردیف یافت شد`);
+      }
+    } catch (e) {
+      hideEl('checkDateResultsSection');
+      hideEl('checkDateApplySection');
+      showAppError(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  bindClick('btnCheckDateUpdate', async () => {
+    if (!checkDateSelectedRow || isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)) {
+      return showAppWarning('یک ردیف از گرید انتخاب کنید');
+    }
+    const newPaymentDate = ($('checkDateNewPaymentDate')?.value || '').trim();
+    if (!newPaymentDate) return showAppWarning('تاریخ پرداخت جدید را وارد کنید');
+    const checkDateError = shamsiDateError([[newPaymentDate, 'تاریخ پرداخت جدید']]);
+    if (checkDateError) return showAppWarning(checkDateError);
+
+    // همان ردیفی که جستجو و انتخاب شد — نه مقدار فعلی کادر که ممکن است پس از جستجو عوض شده باشد.
+    const trackingNo = normalizeSearchId(checkDateSelectedRow.trackingNo)
+      || normalizeSearchId($('checkDateTrackingNo')?.value);
+    const dry = config?.installmentCheckDate?.dryRun ?? config?.installment?.dryRun ?? config?.dryRun ?? false;
+    const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';
+    if (!confirm(`${dryNote ? dryNote + '\n\n' : ''}تاریخ چک به ${newPaymentDate} تغییر کند؟`)) return;
+
+    const btn = $('btnCheckDateUpdate');
+    const box = $('checkDateResultBox');
+    btn.disabled = true;
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'در حال اعمال…';
+    }
+    try {
+      const res = await apiFetch('/api/installment-check-date/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nidInstallment: checkDateSelectedRow.nidInstallment,
+          noDocument: checkDateSelectedRow.noDocument,
+          trackingNo,
+          newPaymentDate
+        })
+      });
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
+      if (box) {
+        box.textContent = [
+          data.message || '',
+          `قبل: ${data.paymentDateBefore || '—'}`,
+          `بعد: ${data.paymentDateAfter || data.newPaymentDate || '—'}`,
+          `DryRun: ${data.dryRun}`
+        ].filter(Boolean).join('\n');
+      }
+      if (data.dryRun) showAppInfo(data.message || 'DryRun — تغییری اعمال نشد');
+      else if (data.success) {
+        showAppSuccess(data.message || 'تاریخ چک به‌روز شد');
+        const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value);
+        if (trackingNo) {
+          const searchRes = await apiFetch('/api/installment-check-date/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trackingNo })
+          });
+          const searchData = await parseJsonResponse(searchRes);
+          if (searchRes.ok) renderCheckDateTable(searchData);
+        }
+      } else showAppWarning(data.message || 'به‌روزرسانی ناموفق');
+    } catch (e) {
+      if (box) box.textContent = e.message;
+      showAppError(e.message);
+    } finally {
+      updateCheckDateApplyButton();
     }
   });
 
@@ -3728,6 +4329,7 @@ function setupEventHandlers() {
     const btn = $('btnInstallmentUpdate');
     const box = $('installmentResultBox');
     btn.disabled = true;
+    let applied = false;
     if (box) {
       box.hidden = false;
       box.textContent = 'در حال اعمال…';
@@ -3740,18 +4342,22 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      if (box) box.textContent = formatInstallmentUpdateResult(data);
+      const resultText = formatInstallmentUpdateResult(data);
       if (data.dryRun) {
         showAppInfo(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
       } else {
-        showAppSuccess(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+        applied = true;
         resetMainTabPanelState('installment');
+        const msg = `UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`;
+        if (hasUpdateProblems(data)) showAppWarning(`${msg} — جزئیات خطاها را در گزارش ببینید`);
+        else showAppSuccess(msg);
       }
+      showResultBox(box, resultText);
     } catch (e) {
-      if (box) box.textContent = e.message;
+      showResultBox(box, e.message);
       showAppError(e.message);
     } finally {
-      btn.disabled = false;
+      btn.disabled = applied;
     }
   });
 
@@ -3802,6 +4408,12 @@ function setupEventHandlers() {
       || (payload.applyPaymentBreakDate && payload.newPaymentBreakDate)
       || (payload.applyEumFicheStatus && payload.newEumFicheStatus != null);
     if (!hasChange) return showAppWarning('حداقل یک فیلد برای تغییر مشخص کنید');
+    const dateError = shamsiDateError([
+      [payload.applyExportPermanentDate ? payload.newExportPermanentDate : '', 'تاریخ صدور دایم جدید'],
+      [payload.applyExportTemporaryDate ? payload.newExportTemporaryDate : '', 'تاریخ صدور موقت جدید'],
+      [payload.applyPaymentBreakDate ? payload.newPaymentBreakDate : '', 'تاریخ مهلت پرداخت جدید']
+    ]);
+    if (dateError) return showAppWarning(dateError);
 
     const dry = config?.ficheDateChange?.dryRun ?? config?.dryRun ?? false;
     const warn = dry
@@ -3824,13 +4436,16 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      if (box) box.textContent = formatFicheDateUpdateResult(data);
+      const resultText = formatFicheDateUpdateResult(data);
       if (data.dryRun) {
         showAppInfo(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
       } else {
-        showAppSuccess(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
+        const msg = `UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`;
+        if (hasUpdateProblems(data)) showAppWarning(`${msg} — جزئیات خطاها را در گزارش ببینید`);
+        else showAppSuccess(msg);
         resetMainTabPanelState('ficheDate');
       }
+      showResultBox(box, resultText);
     } catch (e) {
       if (box) box.textContent = e.message;
       showAppError(e.message);
@@ -3910,8 +4525,11 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('مرکز هزینه — DryRun؛ تغییری در دیتابیس اعمال نشد.');
       } else if (data.success && (data.updated || 0) > 0) {
-        showAppSuccess(data.message || `${data.updated} فیش به‌روز شد`);
+        const partial = hasUpdateProblems(data) || (data.results || []).some((r) => !r.success);
+        if (partial) showAppWarning(data.message || `${data.updated} فیش به‌روز شد`);
+        else showAppSuccess(data.message || `${data.updated} فیش به‌روز شد`);
         resetMainTabPanelState('costCenter');
+        if (box) box.hidden = false;
       } else {
         showAppError(data.message || 'به‌روزرسانی ناموفق بود');
       }
@@ -4000,8 +4618,11 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('شاهکار — DryRun؛ تغییری در دیتابیس اعمال نشد.');
       } else if (data.success && (data.updated || 0) > 0) {
-        showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
+        const partial = hasUpdateProblems(data) || (data.results || []).some((r) => !r.success);
+        if (partial) showAppWarning(data.message || `${data.updated} کاربر به‌روز شد`);
+        else showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
         resetMainTabPanelState('shahkar');
+        if (box) box.hidden = false;
       } else {
         showAppError(data.message || 'به‌روزرسانی ناموفق بود');
       }
@@ -4044,8 +4665,11 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('تغییر تاریخ پرداخت — تغییری روی سرور اعمال نشد (DryRun).');
       } else if (data.success && (data.updated || 0) > 0) {
-        showAppSuccess(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
+        const partial = hasUpdateProblems(data) || (data.results || []).some((r) => !r.success);
+        if (partial) showAppWarning(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
+        else showAppSuccess(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
         resetMainTabPanelState('bankInquiry');
+        if (box) box.hidden = false;
       } else {
         const firstFail = (data.results || []).find((r) => !r.success);
         const detail = data.message || firstFail?.message || firstFail?.bankInquiryMessage || 'استعلام بانک یا به‌روزرسانی ناموفق بود';
@@ -4072,34 +4696,34 @@ function setupAuthAndAdminHandlers() {
     window.location.href = '/login.html';
   });
 
-  bindClick('btnCreateUser', createUserFromForm);
+  bindClick('btnCreateUser', () => runWithButtonBusy($('btnCreateUser'), createUserFromForm));
   bindClick('btnRefreshUsers', async () => {
     await loadGroupsTable();
     await loadUsersTable();
   });
-  bindClick('btnCreateGroup', async () => {
+  bindClick('btnCreateGroup', () => runWithButtonBusy($('btnCreateGroup'), async () => {
     try {
       await saveGroupFromForm();
     } catch (e) {
       alert(e.message);
     }
-  });
+  }));
   bindClick('btnCancelGroupEdit', () => resetGroupForm());
   bindClick('btnRefreshGroups', loadGroupsTable);
-  bindClick('btnSaveUserEdit', async () => {
+  bindClick('btnSaveUserEdit', () => runWithButtonBusy($('btnSaveUserEdit'), async () => {
     try {
       await saveUserEdit();
     } catch (e) {
       alert(e.message);
     }
-  });
-  bindClick('btnResetUserPassword', async () => {
+  }));
+  bindClick('btnResetUserPassword', () => runWithButtonBusy($('btnResetUserPassword'), async () => {
     try {
       await resetUserPassword();
     } catch (e) {
       alert(e.message);
     }
-  });
+  }));
   bindClick('btnCancelUserEdit', closeUserEdit);
 }
 

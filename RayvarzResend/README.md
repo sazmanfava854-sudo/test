@@ -1,14 +1,30 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۳۴ — PR #116)** — ماژول مرکز هزینه (`Deposit` / `CreditorPapers`).
+**نسخه آخر (تحویل: ۵۱ — ارسال جمعی تکه‌ای، رفع 504 درگاه)** — شامل v50 و قبل.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-pr116-v34` |
-| Zip publish | `RayvarzResend-34.zip` — یک پوشه `RayvarzResend\` + یک `appsettings.json` (.NET 8 روی سرور) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v51` |
+| **دانلود Zip** | [**RayvarzResend-51.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-51.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
-| شاخه | [`cursor/cost-center-pr116-9665`](https://github.com/sazmanfava854-sudo/test/tree/cursor/cost-center-pr116-9665) |
-| جزئیات | [`DELIVERY-v34.md`](DELIVERY-v34.md) |
+| شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
+| جزئیات | [`DELIVERY-v51.md`](DELIVERY-v51.md) |
+| v50 قبلی | [`DELIVERY-v50.md`](DELIVERY-v50.md) |
+| v49 قبلی | [`DELIVERY-v49.md`](DELIVERY-v49.md) |
+| v48 قبلی | [`DELIVERY-v48.md`](DELIVERY-v48.md) |
+| v47 قبلی | [`DELIVERY-v47.md`](DELIVERY-v47.md) |
+| v46 قبلی | [`DELIVERY-v46.md`](DELIVERY-v46.md) |
+| v45 قبلی | [`DELIVERY-v45.md`](DELIVERY-v45.md) |
+| v44 قبلی | [`DELIVERY-v44.md`](DELIVERY-v44.md) |
+| v43 قبلی | [`DELIVERY-v43.md`](DELIVERY-v43.md) |
+| v42 قبلی | [`DELIVERY-v42.md`](DELIVERY-v42.md) |
+| v41 قبلی | [`DELIVERY-v41.md`](DELIVERY-v41.md) |
+| v40 قبلی | [`DELIVERY-v40.md`](DELIVERY-v40.md) |
+| v38 قبلی | [`DELIVERY-v38.md`](DELIVERY-v38.md) |
+| v37 قبلی | [`DELIVERY-v37.md`](DELIVERY-v37.md) |
+| v36 قبلی | [`DELIVERY-v36.md`](DELIVERY-v36.md) |
+| v35 قبلی | [`DELIVERY-v35.md`](DELIVERY-v35.md) |
+| v34 قبلی | [`DELIVERY-v34.md`](DELIVERY-v34.md) |
 | v26 قبلی | [`DELIVERY-v26.md`](DELIVERY-v26.md) |
 | v25 قبلی | [`DELIVERY-v25.md`](DELIVERY-v25.md) |
 | v24 قبلی | [`DELIVERY-v24.md`](DELIVERY-v24.md) |
@@ -18,7 +34,7 @@
 | v20 باگ‌ها | [`DELIVERY-v20.md`](DELIVERY-v20.md) |
 | Baseline قبلی (v16) | [`BASELINE-v16.md`](BASELINE-v16.md) |
 
-پس از `dotnet run`: `GET /api/config` → `releaseVersion: 34` ، `releaseDisplayName: نسخه آخر`
+پس از `dotnet run`: `GET /api/config` → `releaseVersion: 44` ، `releaseDisplayName: نسخه آخر`
 
 فرم وب ساده برای تست ارسال فیش به وب‌سرویس رایورز (محیط تست).
 

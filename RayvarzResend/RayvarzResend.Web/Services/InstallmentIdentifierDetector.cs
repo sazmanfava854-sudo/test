@@ -28,7 +28,7 @@ public static class InstallmentIdentifierDetector
     public static string NormalizeLookupValue(string? raw) => (raw ?? "").Trim();
 
     public static string ExtractDigits(string? raw) =>
-        new string((raw ?? "").Where(char.IsDigit).ToArray());
+        new string(NumericHelper.NormalizeDigits(raw ?? "").Where(c => c is >= '0' and <= '9').ToArray());
 
     public static string Describe(InstallmentLookupKind kind) =>
         kind == InstallmentLookupKind.TrackingNo
@@ -62,6 +62,7 @@ public static class InstallmentIdentifierDetector
     {
         var normalized = "LTRIM(RTRIM(CAST(" + columnSql + " AS varchar(30))))";
         var missingZeroLen = TrackingNoStandardLength - 1;
-        return normalized + " = @v OR (LEN(@v) = " + missingZeroLen + " AND " + normalized + " = CONCAT('0', @v))";
+        // Outer parentheses: callers AND this onto NidInstallment/NoDocument filters.
+        return "(" + normalized + " = @v OR (LEN(@v) = " + missingZeroLen + " AND " + normalized + " = CONCAT('0', @v)))";
     }
 }

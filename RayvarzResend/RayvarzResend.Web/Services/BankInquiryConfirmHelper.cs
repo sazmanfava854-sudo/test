@@ -28,12 +28,8 @@ public static class BankInquiryConfirmHelper
         LEFT JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
         """;
 
-    public static string NormalizeSlashDate(string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return "";
-        var rayvarz = DateHelper.ToRayvarzDate(input);
-        return rayvarz.Length >= 8 ? DateHelper.ToShamsiSlashDate(rayvarz) : "";
-    }
+    public static string NormalizeSlashDate(string? input) =>
+        DateHelper.TryParseStrictShamsiSlash(input, out var slash) ? slash : "";
 
     public static bool TryNormalizeSlashDate(string? input, out string slashDate)
     {

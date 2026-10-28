@@ -57,6 +57,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(builder.Configuration.GetValue("Auth:SessionHours", 8));
+        options.Events.OnValidatePrincipal = ctx =>
+            ctx.HttpContext.RequestServices.GetRequiredService<AppAuthService>().ValidatePrincipalAsync(ctx);
         options.Events.OnRedirectToLogin = ctx =>
         {
             if (ctx.Request.Path.StartsWithSegments("/api"))
@@ -92,6 +94,7 @@ builder.Services.AddSingleton<InMemoryAppUserStore>();
 builder.Services.AddSingleton<AppUserRepository>();
 builder.Services.AddSingleton<AppPermissionService>();
 builder.Services.AddSingleton<AppAuthService>();
+builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<MashhadSsoApiClient>();
 builder.Services.AddSingleton<ShimasAuthService>();
 builder.Services.AddSingleton<FicheRepository>();
@@ -105,6 +108,7 @@ builder.Services.AddSingleton<MemberRuleRepository>();
 builder.Services.AddSingleton<SaraBridgeStubService>();
 builder.Services.AddSingleton<RayvarzPayloadBuilder>();
 builder.Services.AddSingleton<InstallmentCheckService>();
+builder.Services.AddSingleton<InstallmentCheckDateService>();
 builder.Services.AddSingleton<FicheDateChangeService>();
 builder.Services.AddSingleton<BankInquiryApiClient>();
 builder.Services.AddSingleton<EpayFichePresenceChecker>();
@@ -187,6 +191,7 @@ async Task<IResult?> TryCompleteSsoCallbackAsync(HttpContext http, CancellationT
         return Results.Redirect($"/login.html?error={error}");
     }
 
+    // کاربران با دامین برگشتی از SSO ثبت شده‌اند؛ refresh_token قبلاً نزد API مشهد تأیید شده است.
     if (!string.IsNullOrWhiteSpace(callback.Domain))
         validation.Profile.Domain = callback.Domain;
 
@@ -289,14 +294,14 @@ app.MapGet("/api/auth/sso-outbound-map", (ShimasAuthService shimas) =>
             }
         }
     });
-}).AllowAnonymous();
+}).RequireAuthorization(adminOnly);
 
 // دیباگ hash: همان apiName / requestTime / apiSecret و بدنه Time/Hash/ClientId که اپ می‌فرستد (بدون ClientSecret)
 app.MapGet("/api/auth/sso-signing-preview", async (ShimasAuthService shimas, CancellationToken ct) =>
 {
     var preview = await shimas.PreviewLoginKeySigningAsync(ct);
     return Results.Ok(preview);
-}).AllowAnonymous();
+}).RequireAuthorization(adminOnly);
 
 app.MapGet("/api/auth/sso-return-url", (HttpContext http, ShimasAuthService shimas) =>
 {
@@ -341,7 +346,7 @@ app.MapGet("/auth/login", async (HttpContext http, ShimasAuthService shimas, Can
         }
 
         var loginUrl = await shimas.BuildExternalLoginUrlAsync(callbackUrl, http, ct);
-        if (http.Request.Query.ContainsKey("debug"))
+        if (http.Request.Query.ContainsKey("debug") && AppAuthService.IsAdmin(http.User))
         {
             var encoded = Uri.EscapeDataString(callbackUrl);
             var diag = await shimas.DiagnoseLoginKeyAsync(callbackUrl, ct);
@@ -408,7 +413,7 @@ app.MapGet("/api/auth/sso-loginkey-check", async (HttpContext http, ShimasAuthSe
         diag.StartUrlSample,
         verdictFa = diag.Verdict
     });
-}).AllowAnonymous();
+}).RequireAuthorization(adminOnly);
 
 // تشخیص 403 Client info missmatched:
 //   /api/auth/sso-loginkey-probe                → اعتبار FinancialAssistant (Auth:Shimas) با همهٔ فرمول‌های هش
@@ -477,7 +482,7 @@ app.MapGet("/api/auth/sso-loginkey-probe", async (HttpContext http, ShimasAuthSe
                     : "هیچ فرمولی قبول نشد — apiName/ClientId/SecretKey را با پورتال تطبیق دهید یا scripts/test-mashhad-sso-loginkey.ps1 را روی سروری که به login.mashhad.ir دسترسی دارد اجرا کنید.",
         results
     });
-}).AllowAnonymous();
+}).RequireAuthorization(adminOnly);
 
 app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>
 {
@@ -492,16 +497,26 @@ app.MapGet("/auth/callback", async (HttpContext http, CancellationToken ct) =>
     }
 }).AllowAnonymous();
 
-app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/auth/login", async (LoginRequest? req, AppAuthService auth, ShimasAuthService shimas, LoginThrottle throttle, HttpContext http, CancellationToken ct) =>
 {
     if (req == null || string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest(new { error = "نام کاربری و رمز عبور الزامی است" });
+
+    var throttleKey = LoginThrottle.Key(req.Username, http.Connection.RemoteIpAddress?.ToString());
+    if (throttle.IsLocked(throttleKey, out var retryAfter))
+        return Results.Json(
+            new { error = $"به دلیل {LoginThrottle.MaxFailures} تلاش ناموفق، ورود این کاربر تا {Math.Ceiling(retryAfter.TotalMinutes)} دقیقه دیگر قفل است" },
+            statusCode: 429);
 
     try
     {
         var user = await auth.ValidateCredentialsAsync(req.Username, req.Password, ct);
         if (user == null)
+        {
+            throttle.RecordFailure(throttleKey);
             return Results.Json(new { error = "نام کاربری یا رمز عبور اشتباه است" }, statusCode: 401);
+        }
+        throttle.Reset(throttleKey);
 
         if (!shimas.Options.AllowLocalPasswordLoginAfterCredentialCheck(http.Request.Host.Host, user.IsAdmin))
             return Results.Json(new { error = "ورود محلی غیرفعال است — از ورود سازمانی (SSO) استفاده کنید" }, statusCode: 403);
@@ -579,6 +594,10 @@ app.MapPost("/api/admin/users", async (CreateAppUserRequest? req, AppUserReposit
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
+    var callerIsAdmin = (await perms.ResolveForPrincipalAsync(http.User, ct)).IsAdmin;
+    var adminDenied = AppUserUpdateRules.DenyAdminChangeByNonAdmin(callerIsAdmin, targetIsAdmin: false, req.IsAdmin);
+    if (adminDenied != null)
+        return Results.Json(new { error = adminDenied }, statusCode: 403);
     try
     {
         var created = await users.CreateUserAsync(req, ct);
@@ -615,6 +634,7 @@ app.MapMethods("/api/admin/users/{id:guid}", ["PUT", "POST"], async (
     UpdateAppUserRequest? req,
     AppUserRepository users,
     AppPermissionService perms,
+    AppAuthService auth,
     HttpContext http,
     CancellationToken ct) =>
 {
@@ -622,9 +642,17 @@ app.MapMethods("/api/admin/users/{id:guid}", ["PUT", "POST"], async (
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست خالی است" });
+    var target = await users.FindByIdAsync(id, ct);
+    if (target == null)
+        return Results.NotFound(new { error = "کاربر یافت نشد" });
+    var callerIsAdmin = (await perms.ResolveForPrincipalAsync(http.User, ct)).IsAdmin;
+    var adminDenied = AppUserUpdateRules.DenyAdminChangeByNonAdmin(callerIsAdmin, target.IsAdmin, req.IsAdmin);
+    if (adminDenied != null)
+        return Results.Json(new { error = adminDenied }, statusCode: 403);
     try
     {
         var updated = await users.UpdateUserAsync(id, req, ct);
+        auth.InvalidatePrincipalCache(id);
         return Results.Ok(new { user = updated });
     }
     catch (ArgumentException ex)
@@ -649,10 +677,17 @@ app.MapPost("/api/admin/users/{id:guid}/reset-password", async (
     if (denied != null) return denied;
     if (req == null || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest(new { error = "رمز عبور جدید الزامی است" });
+    var target = await users.FindByIdAsync(id, ct);
+    if (target == null)
+        return Results.NotFound(new { error = "کاربر یافت نشد" });
+    var callerIsAdmin = (await perms.ResolveForPrincipalAsync(http.User, ct)).IsAdmin;
+    var adminDenied = AppUserUpdateRules.DenyAdminChangeByNonAdmin(callerIsAdmin, target.IsAdmin, requestedIsAdmin: null);
+    if (adminDenied != null)
+        return Results.Json(new { error = adminDenied }, statusCode: 403);
     try
     {
-        await users.ResetPasswordAsync(id, req.Password, ct);
-        return Results.Ok(new { ok = true });
+        await users.ResetPasswordAsync(id, req.Password.Trim(), ct);
+        return Results.Ok(new { ok = true, message = "رمز عبور با موفقیت تغییر کرد" });
     }
     catch (ArgumentException ex)
     {
@@ -752,16 +787,21 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         isAdmin = AppAuthService.IsAdmin(http.User),
         shimas = shimas.GetStatus()
     },
-    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, ficheDateChange = true, bankInquiryConfirm = true, costCenter = true, shahkar = true },
+    features = new { rayvarzPing = true, rayvarzPostTest = true, rayvarzPostMinimalSave = true, tahator = true, unsentBatch = true, ruleEngineBridgeStub = true, auth = true, installmentCheck = true, installmentCheckDate = true, ficheDateChange = true, bankInquiryConfirm = true, costCenter = true, shahkar = true },
+    unsentBatch = new
+    {
+        chunkSize = Math.Clamp(config.GetValue("Rayvarz:UnsentBatchChunkSize", 4), 1, 20),
+        sendDelayMs = config.GetValue("Rayvarz:SendDelayMs", 2000)
+    },
     tahator = new
     {
-        dryRun = config.GetValue<bool?>("Tahator:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
+        dryRun = SendDryRun.Tahator(config),
         pollIntervalMs = config.GetValue("Tahator:PollIntervalMs", 2000),
         pollTimeoutSeconds = config.GetValue("Tahator:PollTimeoutSeconds", 60),
     },
     accountingDoc = new
     {
-        dryRun = config.GetValue<bool?>("AccountingDoc:DryRun") ?? config.GetValue<bool>("Rayvarz:DryRun"),
+        dryRun = SendDryRun.AccountingDoc(config),
         pollTimeoutSeconds = config.GetValue("AccountingDoc:PollTimeoutSeconds",
             config.GetValue("Tahator:PollTimeoutSeconds", 60)),
         pollIntervalMs = config.GetValue("AccountingDoc:PollIntervalMs",
@@ -770,6 +810,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     installment = new
     {
         dryRun = config.GetValue<bool?>("Installment:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
+        connection = "ConnectionStrings:Sara",
+        database = "Sara8M03",
+        table = "dbo.Installment_List"
+    },
+    installmentCheckDate = new
+    {
+        dryRun = config.GetValue<bool?>("InstallmentCheckDate:DryRun")
+            ?? config.GetValue<bool?>("Installment:DryRun")
+            ?? config.GetValue("Rayvarz:DryRun", true),
         connection = "ConnectionStrings:Sara",
         database = "Sara8M03",
         table = "dbo.Installment_List"
@@ -816,8 +865,20 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
     {
         dryRun = config.GetValue<bool?>("Shahkar:DryRun") ?? config.GetValue("Rayvarz:DryRun", true),
         connection = $"ConnectionStrings:{config["Shahkar:ConnectionStringName"] ?? "Security"}",
+        sqlServer = config["Shahkar:SqlServer"],
+        sqlInstance = config["Shahkar:SqlInstance"],
+        dataSource = SqlConnectionStringResolver.Summarize(
+            SqlConnectionStringResolver.Get(
+                config,
+                config["Shahkar:ConnectionStringName"] ?? "Security",
+                config["Shahkar:SqlServer"],
+                config["Shahkar:SqlInstance"])).DataSource,
         table = $"{config["Shahkar:Schema"] ?? "dbo"}.{config["Shahkar:TableName"] ?? "Users"}",
-        configured = !string.IsNullOrWhiteSpace(config.GetConnectionString(config["Shahkar:ConnectionStringName"] ?? "Security"))
+        configured = !string.IsNullOrWhiteSpace(SqlConnectionStringResolver.Get(
+            config,
+            config["Shahkar:ConnectionStringName"] ?? "Security",
+            config["Shahkar:SqlServer"],
+            config["Shahkar:SqlInstance"]))
     },
     ruleEngine = new
     {
@@ -847,9 +908,15 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
 app.MapGet("/api/db-test", async (IConfiguration config) =>
 {
     var results = new List<object>();
-    foreach (var name in new[] { "Sara", "Rayvarz" })
+    foreach (var name in new[] { "Sara", "Rayvarz", "Security" })
     {
-        var cs = config.GetConnectionString(name);
+        var cs = name == "Security"
+            ? SqlConnectionStringResolver.Get(
+                config,
+                config["Shahkar:ConnectionStringName"] ?? "Security",
+                config["Shahkar:SqlServer"],
+                config["Shahkar:SqlInstance"])
+            : config.GetConnectionString(name);
         if (string.IsNullOrWhiteSpace(cs))
         {
             results.Add(new { name, ok = false, error = "Connection string تنظیم نشده" });
@@ -859,9 +926,12 @@ app.MapGet("/api/db-test", async (IConfiguration config) =>
         {
             await using var conn = new SqlConnection(cs);
             await conn.OpenAsync();
-            var sql = name == "Sara"
-                ? "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche"
-                : "SELECT TOP 1 Ref FROM ray.incmdocsys";
+            var sql = name switch
+            {
+                "Sara" => "SELECT TOP 1 FicheNo FROM dbo.Duty_Fiche",
+                "Security" => "SELECT DB_NAME()",
+                _ => "SELECT TOP 1 Ref FROM ray.incmdocsys"
+            };
             await using var cmd = new SqlCommand(sql, conn);
             var sample = (await cmd.ExecuteScalarAsync())?.ToString();
             results.Add(new { name, ok = true, server = conn.DataSource, database = conn.Database, sample });
@@ -884,8 +954,10 @@ app.MapGet("/api/rayvarz-post-test", async (RayvarzClient client, CancellationTo
 app.MapGet("/api/rayvarz-post-minimal-save", async (RayvarzClient client, CancellationToken ct) =>
     Results.Ok(await client.PostMinimalSaveDocumentAsync(ct))).RequireAuthorization(adminOnly);
 
-app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository repo, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
 {
+    var permDenied = await DenyUnlessUnsent(http, perms, ct);
+    if (permDenied != null) return permDenied;
     if (req == null || string.IsNullOrWhiteSpace(req.IdentifierValue))
         return Results.BadRequest(new { error = "شناسه فیش خالی است" });
 
@@ -928,10 +1000,26 @@ app.MapPost("/api/fiche/load", async (LoadFicheRequest? req, FicheRepository rep
         if (districtDenied != null)
             return Results.Json(new { error = districtDenied }, statusCode: 403);
 
+        fiche.ExistsInAccountingDocHeader = await repo.ExistsInAccountingDocHeaderAsync(fiche.FicheNo, ct);
         try
         {
             var yr = DateHelper.ExtractShamsiYear(fiche.RayvarzDocDate);
-            fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, yr > 0 ? yr : null, ct);
+            if (TahatorRowBuilder.IsTahatorFiche(fiche))
+            {
+                var tahatorYears = RayvarzYearResolver.CollectCandidates(
+                    fiche.RayvarzDocDate, fiche.RayvarzActDate, fiche.RayvarzDueDate).ToList();
+                if (yr > 0 && !tahatorYears.Contains(yr))
+                    tahatorYears.Add(yr);
+                fiche.ExistsInRayvarz = await repo.ExistsTahatorDocumentInRayvarzRobustAsync(
+                    fiche.FicheNo,
+                    TahatorRowBuilder.IsTahatorAmountFiche(fiche),
+                    tahatorYears,
+                    ct);
+            }
+            else
+            {
+                fiche.ExistsInRayvarz = await repo.ExistsInRayvarzAsync(fiche.FicheNo, yr > 0 ? yr : null, ct);
+            }
         }
         catch (Exception rayEx)
         {
@@ -1093,21 +1181,35 @@ app.MapPost("/api/tahator/check", async (TahatorFicheRequest? req, TahatorResend
 static IResult RuleSendGateBlocked() =>
     Results.Json(new { error = RuleSendGate.UserBlockedMessage }, statusCode: 409);
 
-app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendService tahator, FicheRepository repo, RuleSendGate sendGate, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
 {
     if (await sendGate.IsBlockedAsync(ct))
         return RuleSendGateBlocked();
+    var permDenied = await DenyUnlessUnsent(http, perms, ct);
+    if (permDenied != null) return permDenied;
     if (string.IsNullOrWhiteSpace(req?.FicheNo))
         return Results.BadRequest(new { error = "FicheNo تهاتر الزامی است (تک‌کد — بدون اکسل)." });
+    var tahatorDateError = DateHelper.ValidateOptionalUserDate(req.DocDate, "تاریخ سند")
+        ?? DateHelper.ValidateOptionalUserDate(req.ActDate, "تاریخ عملیات")
+        ?? DateHelper.ValidateOptionalUserDate(req.DueDate, "تاریخ سررسید");
+    if (tahatorDateError != null)
+        return Results.BadRequest(new { error = tahatorDateError });
+    req.DocDate = DateHelper.NormalizeOptionalUserDate(req.DocDate) ?? "";
+    req.ActDate = DateHelper.NormalizeOptionalUserDate(req.ActDate) ?? "";
+    req.DueDate = DateHelper.NormalizeOptionalUserDate(req.DueDate) ?? "";
+    if (!DistrictAccessService.MayOverrideBranch(http.User))
+    {
+        req.Branch = 0;
+        req.Fund = 0;
+    }
     try
     {
         var loaded = await repo.LoadAsync(IdentifierType.FicheNo, req.FicheNo.Trim(), ct);
-        if (loaded != null)
-        {
-            var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, loaded);
-            if (districtDenied != null)
-                return Results.Json(new { error = districtDenied }, statusCode: 403);
-        }
+        if (loaded == null)
+            return Results.NotFound(new { error = $"فیش {req.FicheNo.Trim()} یافت نشد" });
+        var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, loaded);
+        if (districtDenied != null)
+            return Results.Json(new { error = districtDenied }, statusCode: 403);
 
         return Results.Ok(await tahator.SendAsync(req, ct));
     }
@@ -1121,19 +1223,42 @@ app.MapPost("/api/tahator/send", async (TahatorFicheRequest? req, TahatorResendS
     }
 }).RequireAuthorization(authenticated);
 
-app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, RuleSendGate sendGate, HttpContext http, CancellationToken ct) =>
+app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService send, RuleSendGate sendGate, AppPermissionService perms, HttpContext http, CancellationToken ct) =>
 {
     if (await sendGate.IsBlockedAsync(ct))
         return RuleSendGateBlocked();
+    var permDenied = await DenyUnlessUnsent(http, perms, ct);
+    if (permDenied != null) return permDenied;
     if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
         return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
-
-    var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, req.Fiche);
-    if (districtDenied != null)
-        return Results.Json(new { error = districtDenied }, statusCode: 403);
+    var sendDateError = DateHelper.ValidateOptionalUserDate(req.DocDate, "تاریخ سند")
+        ?? DateHelper.ValidateOptionalUserDate(req.ActDate, "تاریخ عملیات")
+        ?? DateHelper.ValidateOptionalUserDate(req.DueDate, "تاریخ سررسید");
+    if (sendDateError != null)
+        return Results.BadRequest(new { error = sendDateError });
+    req.DocDate = DateHelper.NormalizeOptionalUserDate(req.DocDate) ?? "";
+    req.ActDate = DateHelper.NormalizeOptionalUserDate(req.ActDate) ?? "";
+    req.DueDate = DateHelper.NormalizeOptionalUserDate(req.DueDate) ?? "";
 
     try
     {
+        var reloaded = await send.ReloadForSendAsync(req.Fiche, ct);
+        if (reloaded == null)
+            return Results.NotFound(new { error = $"فیش {req.Fiche.FicheNo.Trim()} در دیتابیس یافت نشد — ارسال نشد" });
+        req.Fiche = reloaded;
+
+        var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, req.Fiche);
+        if (districtDenied != null)
+            return Results.Json(new { error = districtDenied }, statusCode: 403);
+
+        if (!DistrictAccessService.MayOverrideBranch(http.User))
+        {
+            if (!FicheBranchResolver.TryResolve(req.Fiche, out var branch, out var fund, out var branchError))
+                return Results.BadRequest(new { error = branchError ?? FicheBranchResolver.RegionNotResolvedMessage });
+            req.Branch = branch;
+            req.Fund = fund;
+        }
+
         return Results.Ok(await send.SendAsync(req, ct));
     }
     catch (RuleSendGateBlockedException ex)
@@ -1169,13 +1294,19 @@ app.MapPost("/api/unsent/search", async (
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست جستجو خالی است" });
+    var unsentDateError = DateHelper.ValidateOptionalUserDate(req.FromDate, "از تاریخ")
+        ?? DateHelper.ValidateOptionalUserDate(req.ToDate, "تا تاریخ");
+    if (unsentDateError != null)
+        return Results.BadRequest(new { error = unsentDateError });
+    req.FromDate = DateHelper.NormalizeOptionalUserDate(req.FromDate);
+    req.ToDate = DateHelper.NormalizeOptionalUserDate(req.ToDate);
     if (req.HasPartialDateRange)
         return Results.BadRequest(new { error = "هر دو تاریخ از و تا را وارد کنید" });
     if (!req.HasAnyFilter)
         return Results.BadRequest(new { error = "حداقل یک فیلتر (تاریخ، فیش، قبض، پرداخت، منطقه) لازم است" });
     try
     {
-        return Results.Ok(await unsent.SearchAsync(req, ct));
+        return Results.Ok(await unsent.SearchAsync(req, http.User, ct));
     }
     catch (Exception ex)
     {
@@ -1321,6 +1452,63 @@ app.MapPost("/api/installment/update", async (
     }
 }).RequireAuthorization(authenticated);
 
+app.MapPost("/api/installment-check-date/search", async (
+    InstallmentCheckDateSearchRequest? req,
+    InstallmentCheckDateService checkDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessInstallmentCheckDate(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    try
+    {
+        var result = await checkDate.SearchAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
+app.MapPost("/api/installment-check-date/update", async (
+    InstallmentCheckDateUpdateRequest? req,
+    InstallmentCheckDateService checkDate,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessInstallmentCheckDate(http, perms, ct);
+    if (denied != null) return denied;
+    if (req == null)
+        return Results.BadRequest(new { error = "درخواست خالی است" });
+    req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
+    try
+    {
+        var result = await checkDate.UpdateAsync(req, ct);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+            return Results.BadRequest(new { error = result.Error });
+        return Results.Ok(result);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Json(new { error = ex.Message, hint = ConnectionHint("Sara", "", ex) }, statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 500);
+    }
+}).RequireAuthorization(authenticated);
+
 app.MapGet("/api/fiche-date/account-groups", async (
     string? q,
     int? limit,
@@ -1359,7 +1547,7 @@ app.MapPost("/api/fiche-date/search", async (
         return Results.BadRequest(new { error = "درخواست خالی است" });
     try
     {
-        var result = await ficheDate.SearchAsync(req, ct);
+        var result = await ficheDate.SearchAsync(req, http.User, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error });
         return Results.Ok(result);
@@ -1388,7 +1576,7 @@ app.MapPost("/api/fiche-date/update", async (
     req.PerformedByUser = AppAuthService.ResolveCommentUserName(http.User);
     try
     {
-        var result = await ficheDate.UpdateAsync(req, ct);
+        var result = await ficheDate.UpdateAsync(req, http.User, ct);
         if (!string.IsNullOrWhiteSpace(result.Error))
             return Results.BadRequest(new { error = result.Error });
         return Results.Ok(result);
@@ -1474,8 +1662,32 @@ app.MapPost("/api/shahkar/search", async (
 
     var result = await shahkar.SearchAsync(req, ct);
     if (!string.IsNullOrWhiteSpace(result.Error) && !result.Success)
-        return Results.BadRequest(new { error = result.Error });
+        return Results.BadRequest(new { error = result.Error, hint = result.Hint });
     return Results.Ok(result);
+}).RequireAuthorization(authenticated);
+
+app.MapGet("/api/shahkar/connection-test", async (
+    ShahkarService shahkar,
+    AppPermissionService perms,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var denied = await DenyUnlessShahkar(http, perms, ct);
+    if (denied != null) return denied;
+
+    var summary = shahkar.ConnectionSummary;
+    var (ok, error, hint) = await shahkar.TestConnectionAsync(ct);
+    return Results.Ok(new
+    {
+        ok,
+        error,
+        hint,
+        connectionKey = "ConnectionStrings:Security",
+        dataSource = summary.DataSource,
+        database = summary.Database,
+        userId = summary.IntegratedSecurity ? null : summary.UserId,
+        hasPassword = summary.HasPassword
+    });
 }).RequireAuthorization(authenticated);
 
 app.MapPost("/api/shahkar/confirm", async (
@@ -1492,7 +1704,7 @@ app.MapPost("/api/shahkar/confirm", async (
 
     var result = await shahkar.ConfirmAsync(req, ct);
     if (!string.IsNullOrWhiteSpace(result.Error))
-        return Results.BadRequest(new { error = result.Error });
+        return Results.BadRequest(new { error = result.Error, hint = result.Hint });
     return Results.Ok(result);
 }).RequireAuthorization(authenticated);
 
@@ -1662,6 +1874,14 @@ static async Task<IResult?> DenyUnlessInstallment(HttpContext http, AppPermissio
     return null;
 }
 
+static async Task<IResult?> DenyUnlessInstallmentCheckDate(HttpContext http, AppPermissionService perms, CancellationToken ct)
+{
+    var p = await perms.ResolveForPrincipalAsync(http.User, ct);
+    if (!AppPermissionService.Allows(p, x => x.CanAccessInstallmentCheckDate))
+        return Results.Json(new { error = "دسترسی به تغییر تاریخ چک مجاز نیست" }, statusCode: 403);
+    return null;
+}
+
 static async Task<IResult?> DenyUnlessFicheDateChange(HttpContext http, AppPermissionService perms, CancellationToken ct)
 {
     var p = await perms.ResolveForPrincipalAsync(http.User, ct);
@@ -1687,6 +1907,8 @@ static string? ConnectionHint(string name, string cs, Exception ex)
         return "خطای خواندن appsettings.json — ویرگول/کاما/گیومه در Password یا ساختار JSON را چک کنید.";
     if (name == "Rayvarz" && msg.Contains("login failed"))
         return "User Id یا Password رایورز اشتباه است. اگر Password کاراکتر ; یا \" دارد، در JSON باید escape شود.";
+    if (name == "Security" && msg.Contains("login failed"))
+        return "ConnectionStrings:Security — User Id/Password را با SSMS مقایسه کنید. برای instance نام‌دار از Shahkar:SqlServer و Shahkar:SqlInstance استفاده کنید یا Server=IP\\\\sql2012 در JSON.";
     return null;
 }
 

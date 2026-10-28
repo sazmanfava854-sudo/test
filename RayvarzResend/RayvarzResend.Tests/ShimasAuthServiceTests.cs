@@ -341,9 +341,25 @@ public class ShimasAuthServiceTests
     }
 
     [Fact]
-    public async Task ValidateAsync_succeeds_with_stub_when_remote_url_missing()
+    public async Task ValidateAsync_fails_closed_when_no_validation_is_configured()
     {
         var service = CreateService(new ShimasAuthOptions { Enabled = true, ValidateTokenUrl = "" });
+
+        var result = await service.ValidateAsync("1234567890", "refresh-token-abc");
+
+        Assert.False(result.Success);
+        Assert.Contains("پیکربندی نشده", result.Error);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_succeeds_with_stub_only_when_unverified_tokens_explicitly_allowed()
+    {
+        var service = CreateService(new ShimasAuthOptions
+        {
+            Enabled = true,
+            ValidateTokenUrl = "",
+            AllowUnverifiedRefreshToken = true
+        });
 
         var result = await service.ValidateAsync("1234567890", "refresh-token-abc");
 

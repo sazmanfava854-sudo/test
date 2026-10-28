@@ -5,7 +5,7 @@ using RayvarzResend.Web.RuleEngine.Sync;
 
 namespace RayvarzResend.Web.Services;
 
-/// <summary>اعتبارسنجی ارسال و ارسال تکی — مسیر تهاتر جدا از ارسال عادی.</summary>
+/// <summary>اعتبارسنجی و ارسال تکی درآمد شهرسازی / نوسازی·صنفی — تهاتر از مسیر جدا.</summary>
 public class FicheSendService
 {
     private readonly FicheRepository _repo;
@@ -34,8 +34,40 @@ public class FicheSendService
         _sendGate = sendGate;
     }
 
+    /// <summary>
+    /// فیش را از دیتابیس دوباره می‌خواند — مبلغ/ردیف/منطقه/گروه از JSON مرورگر قابل اعتماد نیست.
+    /// NidFiche بین Income_Fiche و Duty_Fiche با شماره مشابه تمایز می‌دهد.
+    /// </summary>
+    public async Task<FicheHeaderDto?> ReloadForSendAsync(FicheHeaderDto clientFiche, CancellationToken ct = default)
+    {
+        var ficheNo = IdentifierText.Normalize(clientFiche.FicheNo);
+        if (string.IsNullOrWhiteSpace(ficheNo))
+            return null;
+
+        var candidates = new List<FicheHeaderDto>();
+        foreach (var kind in new[] { UnsentFicheKind.Income, UnsentFicheKind.Duty })
+        {
+            var loaded = await _repo.LoadByKindAsync(kind, IdentifierType.FicheNo, ficheNo, ct);
+            if (loaded != null)
+                candidates.Add(loaded);
+        }
+
+        return PickReloaded(candidates, clientFiche);
+    }
+
+    internal static FicheHeaderDto? PickReloaded(IReadOnlyList<FicheHeaderDto> candidates, FicheHeaderDto clientFiche)
+    {
+        if (candidates.Count == 0)
+            return null;
+        if (clientFiche.NidFiche != Guid.Empty)
+            return candidates.FirstOrDefault(c => c.NidFiche == clientFiche.NidFiche);
+        return candidates[0];
+    }
+
     public async Task<SendResultDto> SendAsync(SendFicheRequest req, CancellationToken ct = default)
     {
+        using var sendLock = FicheSendLock.TryAcquire(req.Fiche.FicheNo)
+            ?? throw new InvalidOperationException(FicheSendLock.BusyMessage);
         await _sendGate.EnsureOpenAsync(ct);
         var fiche = req.Fiche;
         var blockReason = ValidateSendable(fiche);
@@ -49,39 +81,35 @@ public class FicheSendService
             throw new InvalidOperationException("ردیف IncmNo یافت نشد — ارسال نشد");
 
         var incmdocsysYear = ResolveIncmdocsysYear(req);
+        var shamsiYear = incmdocsysYear > 0 ? incmdocsysYear : (int?)null;
 
-        bool existsInRayvarz;
         string? sendWarning = null;
-        try
-        {
-            existsInRayvarz = fiche.ExistsInRayvarz
-                || await _repo.ExistsInRayvarzAsync(fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
-        }
-        catch (SqlException ex)
-        {
-            if (_config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
-                throw new InvalidOperationException($"اتصال SQL رایورز (Ray_CityHall) ناموفق: {ex.Message}", ex);
+        var eligibility = await FicheSendEligibility.CheckAsync(_repo, fiche, fiche.FicheNo, shamsiYear, ct);
+        if (eligibility.RayvarzQueryFailed && _config.GetValue("Rayvarz:RequireRayvarzDbForSend", true))
+            throw new InvalidOperationException("اتصال SQL رایورز (Ray_CityHall) ناموفق — چک تکراری انجام نشد");
 
-            existsInRayvarz = fiche.ExistsInRayvarz;
-            sendWarning = $"چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت: {ex.Message}";
-        }
+        if (eligibility.RayvarzQueryFailed)
+            sendWarning = "چک تکراری در Ray_CityHall انجام نشد — ارسال SOAP ادامه یافت";
 
-        if (existsInRayvarz)
-            throw new InvalidOperationException("فیش در رایورز موجود است — ارسال نشد");
+        var duplicateBlock = FicheSendEligibility.BuildBlockReason(eligibility);
+        if (duplicateBlock != null)
+            throw new InvalidOperationException(duplicateBlock);
 
         await _epay.EnsurePresentOrThrowAsync(fiche, ct);
 
         var built = await _payload.BuildAsync(fiche, req.Branch, req.Fund, req.DocDate, req.ActDate, req.DueDate, ct);
-        var dryRun = _config.GetValue<bool>("Rayvarz:DryRun");
+        var dryRun = SendDryRun.Rayvarz(_config);
         var result = await _client.SendAsync(built.Xml, dryRun, ct);
         result.Warning = CombineWarnings(fiche.Warning, CombineWarnings(sendWarning, built.Warning));
 
-        if (!dryRun && result.Success)
+        // After the POST the document may exist in Rayvarz; closing the browser must not skip the Sara write.
+        var postCt = CancellationToken.None;
+        if (!dryRun && (result.Success || result.OutcomeUnknown))
         {
             try
             {
                 result.VerifiedInRayvarz = await _repo.ExistsInRayvarzAsync(
-                    fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, ct);
+                    fiche.FicheNo, incmdocsysYear > 0 ? incmdocsysYear : null, postCt);
             }
             catch (SqlException ex)
             {
@@ -99,7 +127,14 @@ public class FicheSendService
             var yearList = years.Where(y => y > 0).Distinct().ToList();
 
             var accounting = await _accountingDoc.TryWriteAfterSendAsync(
-                fiche, result.PursuitDocNo, yearList, ct);
+                fiche, result.PursuitDocNo, yearList, postCt);
+            if (result.OutcomeUnknown && (accounting.Written || result.VerifiedInRayvarz))
+            {
+                result.Success = true;
+                result.OutcomeUnknown = false;
+                result.Warning = CombineWarnings(result.Warning,
+                    "پاسخ رایورز در مهلت نرسید ولی سند در رایورز پیدا شد — ارسال موفق حساب شد");
+            }
             result.AccountingDocWritten = accounting.Written;
             result.AccountingDocMessage = accounting.Message;
             if (!accounting.Written && !accounting.WasSkipped)
@@ -109,7 +144,7 @@ public class FicheSendService
             {
                 try
                 {
-                    result.DocNotSentError = await _repo.GetDocNotSentErrorAsync(fiche.FicheNo, ct);
+                    result.DocNotSentError = await _repo.GetDocNotSentErrorAsync(fiche.FicheNo, postCt);
                 }
                 catch (SqlException ex)
                 {
@@ -126,8 +161,12 @@ public class FicheSendService
 
     public static string? ValidateSendable(FicheHeaderDto fiche)
     {
-        if (fiche.ExistsInRayvarz)
-            return "فیش در رایورز موجود است — ارسال نشد";
+        var duplicateBlock = FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
+            fiche.ExistsInRayvarz,
+            fiche.ExistsInAccountingDocHeader,
+            false));
+        if (duplicateBlock != null)
+            return duplicateBlock;
 
         if (TahatorRowBuilder.IsTahatorFiche(fiche))
             return "فیش تهاتر — از مسیر تهاتر ارسال کنید";
@@ -150,11 +189,19 @@ public class FicheSendService
     {
         if (TahatorRowBuilder.IsTahatorFiche(fiche))
         {
-            if (fiche.ExistsInRayvarz)
+            var duplicateBlock = FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
+                fiche.ExistsInRayvarz,
+                fiche.ExistsInAccountingDocHeader,
+                false));
+            if (duplicateBlock != null)
             {
                 fiche.CanSend = false;
-                fiche.BlockReason = "فیش در رایورز موجود است — ارسال نشد";
-                fiche.StatusMessage = "تکراری — در رایورز موجود است";
+                fiche.BlockReason = duplicateBlock;
+                fiche.StatusMessage = fiche.ExistsInRayvarz && fiche.ExistsInAccountingDocHeader
+                    ? "تکراری — در رایورز و Accounting_DocHeader"
+                    : fiche.ExistsInRayvarz
+                        ? "تکراری — در رایورز موجود است"
+                        : "تکراری — در Accounting_DocHeader موجود است";
                 return;
             }
 

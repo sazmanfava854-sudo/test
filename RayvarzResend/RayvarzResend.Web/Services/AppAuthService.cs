@@ -40,6 +40,10 @@ public sealed class AppAuthService
         var nationalId = _config["Auth:BootstrapAdmin:NationalId"] ?? "1234567890";
         var domain = _config["Auth:BootstrapAdmin:Domain"] ?? "admin";
 
+        if (password == "Admin@1234")
+            _logger.LogWarning(
+                "Auth:BootstrapAdmin:Password is the shipped default — change the admin password (login is throttled but the default is public)");
+
         var existing = await _users.FindByUsernameAsync(username, ct);
         if (existing != null && existing.Username.Equals(username, StringComparison.OrdinalIgnoreCase))
         {
@@ -98,26 +102,26 @@ public sealed class AppAuthService
         return user;
     }
 
-    public async Task ChangePasswordAsync(
-        Guid userId,
-        string? currentPassword,
-        string? newPassword,
-        CancellationToken ct = default)
+    public async Task SetPasswordForUserAsync(Guid userId, string? newPassword, CancellationToken ct = default)
     {
-        var policyError = PasswordPolicy.Validate(newPassword);
+        var trimmed = (newPassword ?? "").Trim();
+        var policyError = PasswordPolicy.Validate(trimmed);
         if (policyError != null)
             throw new ArgumentException(policyError);
-        if (string.IsNullOrWhiteSpace(currentPassword))
-            throw new ArgumentException("رمز عبور فعلی الزامی است");
 
         var user = await _users.FindByIdAsync(userId, ct);
         if (user == null || !user.IsActive)
             throw new InvalidOperationException("کاربر یافت نشد");
-        if (!PasswordHasherUtil.Verify(currentPassword, user.PasswordHash))
-            throw new ArgumentException("رمز عبور فعلی اشتباه است");
 
-        await _users.ResetPasswordAsync(userId, newPassword!, ct);
+        await _users.ResetPasswordAsync(userId, trimmed, ct);
     }
+
+    public Task ChangePasswordAsync(
+        Guid userId,
+        string? currentPassword,
+        string? newPassword,
+        CancellationToken ct = default) =>
+        SetPasswordForUserAsync(userId, newPassword, ct);
 
     public async Task<AuthSessionDto> ToSessionAsync(AppUserRecord user, CancellationToken ct = default)
     {
@@ -138,6 +142,7 @@ public sealed class AppAuthService
             IsAdmin = user.IsAdmin,
             CanAccessUnsentFiches = perms.CanAccessUnsentFiches,
             CanAccessInstallment = perms.CanAccessInstallment,
+            CanAccessInstallmentCheckDate = perms.CanAccessInstallmentCheckDate,
             CanAccessFicheDateChange = perms.CanAccessFicheDateChange,
             CanAccessBankInquiryConfirm = perms.CanAccessBankInquiryConfirm,
             CanAccessShahkar = perms.CanAccessShahkar,
@@ -208,6 +213,65 @@ public sealed class AppAuthService
         var user = await _users.FindByIdAsync(id.Value, ct);
         return user is { IsActive: true } ? await ToSessionAsync(user, ct) : null;
     }
+
+    private static readonly TimeSpan PrincipalRecheckInterval = TimeSpan.FromSeconds(30);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, (AppUserRecord? User, DateTime LoadedUtc)> _principalCache = new();
+
+    /// <summary>
+    /// کوکی شامل IsAdmin/District است؛ بدون این بررسی غیرفعال‌سازی یا تغییر نقش تا پایان نشست اثر نمی‌کند.
+    /// </summary>
+    public async Task ValidatePrincipalAsync(CookieValidatePrincipalContext context)
+    {
+        var id = GetUserId(context.Principal);
+        if (id == null)
+        {
+            context.RejectPrincipal();
+            return;
+        }
+
+        AppUserRecord? user;
+        var now = DateTime.UtcNow;
+        if (_principalCache.TryGetValue(id.Value, out var cached) && now - cached.LoadedUtc < PrincipalRecheckInterval)
+        {
+            user = cached.User;
+        }
+        else
+        {
+            try
+            {
+                user = await _users.FindByIdAsync(id.Value, context.HttpContext.RequestAborted);
+            }
+            catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+            {
+                // DB hiccup must not sign everyone out; the next request re-checks.
+                _logger.LogWarning(ex, "Principal re-check skipped for {UserId} — user DB unavailable", id.Value);
+                return;
+            }
+
+            _principalCache[id.Value] = (user, now);
+        }
+
+        if (user is not { IsActive: true })
+        {
+            context.RejectPrincipal();
+            await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return;
+        }
+
+        if (PrincipalMatches(context.Principal, user))
+            return;
+
+        context.ReplacePrincipal(BuildPrincipal(user));
+        context.ShouldRenew = true;
+    }
+
+    public void InvalidatePrincipalCache(Guid userId) => _principalCache.TryRemove(userId, out _);
+
+    internal static bool PrincipalMatches(ClaimsPrincipal? principal, AppUserRecord user) =>
+        principal?.FindFirst(AuthClaimTypes.IsAdmin)?.Value == (user.IsAdmin ? "1" : "0")
+        && (principal?.FindFirst(AuthClaimTypes.District)?.Value ?? "") == (user.District ?? "")
+        && (principal?.FindFirst(AuthClaimTypes.DisplayName)?.Value ?? "") == BuildDisplayName(user)
+        && principal?.IsInRole("Admin") == user.IsAdmin;
 
     public Task SignInAsync(HttpContext http, AppUserRecord user, CancellationToken ct = default)
     {

@@ -16,6 +16,14 @@ const MODULES = [
     can: (user) => isAdminUser(user) || !!user?.canAccessInstallment
   },
   {
+    key: 'checkDate',
+    title: 'تغییر تاریخ چک',
+    description: '',
+    icon: '📝',
+    href: '/?tab=checkDate',
+    can: (user) => isAdminUser(user) || !!user?.canAccessInstallmentCheckDate
+  },
+  {
     key: 'ficheDate',
     title: 'تغییر تاریخ فیش',
     description: '',
@@ -72,6 +80,7 @@ function normalizeAuthSession(user) {
     user.isAdmin = true;
     user.canAccessUnsentFiches = true;
     user.canAccessInstallment = true;
+    user.canAccessInstallmentCheckDate = true;
     user.canAccessFicheDateChange = true;
     user.canAccessBankInquiryConfirm = true;
     user.canAccessCostCenter = true;
@@ -85,27 +94,12 @@ function isAdminUser(user) {
   return readIsAdminFlag(user ?? currentUser);
 }
 
-function hasAnyModulePermission(user) {
-  if (isAdminUser(user)) return true;
-  return !!(
-    user?.canAccessUnsentFiches
-    || user?.canAccessInstallment
-    || user?.canAccessFicheDateChange
-    || user?.canAccessBankInquiryConfirm
-    || user?.canAccessCostCenter
-    || user?.canAccessShahkar
-    || user?.canManageUsers
-  );
-}
-
 function canAccessUnsent(user) {
   return isAdminUser(user) || !!user?.canAccessUnsentFiches;
 }
 
 function canAccessRayvarzModule(user) {
-  if (isAdminUser(user)) return true;
-  if (canAccessUnsent(user)) return true;
-  return !hasAnyModulePermission(user);
+  return canAccessUnsent(user);
 }
 
 async function loadAuthMode() {

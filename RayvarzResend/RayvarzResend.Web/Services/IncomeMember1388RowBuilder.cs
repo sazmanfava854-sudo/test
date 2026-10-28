@@ -23,7 +23,7 @@ public static class IncomeMember1388RowBuilder
 
         if (group == TahatorRowBuilder.IncomeAccountGroupTahatorIncome)
         {
-            TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
+            Member1388IncomeRowProfiles.ApplyTahatorIncome(fiche);
             return;
         }
 

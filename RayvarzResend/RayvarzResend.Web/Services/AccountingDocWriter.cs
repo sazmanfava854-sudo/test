@@ -29,9 +29,7 @@ public sealed class AccountingDocWriter
     /// پیش‌فرض false (مثل FicheSendService) — اگر کلید Rayvarz:DryRun روی سرور publish نباشد،
     /// نباید واسط در حالت DryRun بماند در حالی که SOAP واقعی ارسال می‌شود.
     /// </summary>
-    public bool IsDryRun =>
-        _config.GetValue<bool?>("AccountingDoc:DryRun")
-        ?? _config.GetValue<bool>("Rayvarz:DryRun");
+    public bool IsDryRun => SendDryRun.AccountingDoc(_config);
 
     public async Task<AccountingDocWriteResult> TryWriteAfterSendAsync(
         FicheHeaderDto fiche,
