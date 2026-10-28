@@ -1174,6 +1174,11 @@ app.MapPost("/api/fiche/send", async (SendFicheRequest? req, FicheSendService se
         return RuleSendGateBlocked();
     if (req?.Fiche == null || string.IsNullOrWhiteSpace(req.Fiche.FicheNo))
         return Results.BadRequest(new { error = "فیش ارسال نشده یا شماره فیش خالی است — ارسال نشد" });
+    var sendDateError = DateHelper.ValidateOptionalUserDate(req.DocDate, "تاریخ سند")
+        ?? DateHelper.ValidateOptionalUserDate(req.ActDate, "تاریخ عملیات")
+        ?? DateHelper.ValidateOptionalUserDate(req.DueDate, "تاریخ سررسید");
+    if (sendDateError != null)
+        return Results.BadRequest(new { error = sendDateError });
 
     var districtDenied = DistrictAccessService.GetAccessDeniedMessage(http.User, req.Fiche);
     if (districtDenied != null)
@@ -1216,6 +1221,10 @@ app.MapPost("/api/unsent/search", async (
     if (denied != null) return denied;
     if (req == null)
         return Results.BadRequest(new { error = "درخواست جستجو خالی است" });
+    var unsentDateError = DateHelper.ValidateOptionalUserDate(req.FromDate, "از تاریخ")
+        ?? DateHelper.ValidateOptionalUserDate(req.ToDate, "تا تاریخ");
+    if (unsentDateError != null)
+        return Results.BadRequest(new { error = unsentDateError });
     if (req.HasPartialDateRange)
         return Results.BadRequest(new { error = "هر دو تاریخ از و تا را وارد کنید" });
     if (!req.HasAnyFilter)

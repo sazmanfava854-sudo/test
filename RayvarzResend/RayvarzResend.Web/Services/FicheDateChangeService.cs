@@ -56,6 +56,16 @@ public sealed class FicheDateChangeService
         CancellationToken ct = default)
     {
         var result = new FicheDateChangeSearchResult();
+        var dateError = DateHelper.ValidateOptionalUserDate(req.PermanentFromDate, "صدور دایم از")
+            ?? DateHelper.ValidateOptionalUserDate(req.PermanentToDate, "صدور دایم تا")
+            ?? DateHelper.ValidateOptionalUserDate(req.TemporaryFromDate, "صدور موقت از")
+            ?? DateHelper.ValidateOptionalUserDate(req.TemporaryToDate, "صدور موقت تا");
+        if (dateError != null)
+        {
+            result.Error = dateError;
+            return result;
+        }
+
         if (!FicheDateChangeHelper.HasAnySearchFilter(req))
         {
             result.Error = "حداقل یک فیلتر (شماره فیش، بازه تاریخ، عنوان مالکیت، یا وضعیت فیش) وارد کنید";

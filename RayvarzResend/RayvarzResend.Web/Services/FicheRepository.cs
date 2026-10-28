@@ -27,15 +27,15 @@ public class FicheRepository
 
     private const string DutyBnkAcntNoSelect = """
         COALESCE(
-            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
-            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""حوزه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""بلوک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ساختمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
-            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""آپارتمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
-            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""واحد صنفی""]/Value)[1]', 'nvarchar(20)'))), ''), '0')
+            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="کد نوسازی"]/Value)[1]', 'nvarchar(100)'))), ''),
+            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="کد نوسازي"]/Value)[1]', 'nvarchar(100)'))), ''),
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="منطقه"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="حوزه"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="بلوک"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="ملک"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="ساختمان"]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="آپارتمان"]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="واحد صنفی"]/Value)[1]', 'nvarchar(20)'))), ''), '0')
         ) AS BnkAcntNo
         """;
 
@@ -1049,7 +1049,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
                      '' AS NidWorkItem,
-                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
+                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="منطقه"]/Value)[1]', 'nvarchar(20)'))), '') AS District,
                      {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               WHERE NOT EXISTS (
@@ -1060,7 +1060,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
-                AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district
+                AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="منطقه"]/Value)[1]', 'nvarchar(20)'))) = @district
               ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
               """
             : $"""

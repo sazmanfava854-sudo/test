@@ -690,6 +690,11 @@ pre.hint {
   font-family: inherit;
 }
 
+input.input-invalid {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .mapping-table {
   display: grid;
   gap: 7px;

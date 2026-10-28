@@ -33,7 +33,7 @@
    - ارسال: **فقط شماره فیشی که کاربر وارد کرده** (۱۵۷ یا ۱۵۸) — جفت خودکار ارسال نمی‌شود
 2. اگر **هر دو** در `incmdocsys` بود → ارسال لازم نیست (`Accounting_DocHeader` به‌تنهایی مانع ارسال مجدد نیست — سناریوی حذف از رایورز)  
 3. `SELECT` از `Income_Fiche` (هر دو فیش)  
-4. **ذخیره پایدار** snapshot هر فишی که ارسال می‌شود  
+4. **ذخیره پایدار** snapshot هر فیشی که ارسال می‌شود  
 5. `UPDATE` وضعیت **۲** روی Sara (فقط فیش‌های در صف ارسال)  
 6. ساخت SOAP و `POST SaveDocument` — **دو بار** در صورت نیاز  
 7. تأیید `incmdocsys`؛ سپس درج واسط Sara در `Accounting_DocHeader` و `Accounting_DocDetails` (`AccountingDocWriter`) اگر ردیف Header وجود نداشت  

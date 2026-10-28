@@ -50,10 +50,12 @@ public class FicheDateChangeHelperTests
     }
 
     [Fact]
-    public void NormalizeSlashDate_accepts_slash_and_digits()
+    public void NormalizeSlashDate_accepts_only_slash_format()
     {
         Assert.Equal("1404/01/11", FicheDateChangeHelper.NormalizeSlashDate("1404/01/11"));
-        Assert.Equal("1404/01/11", FicheDateChangeHelper.NormalizeSlashDate("14040111"));
+        Assert.Equal("1404/01/11", FicheDateChangeHelper.NormalizeSlashDate("۱۴۰۴/۰۱/۱۱"));
+        Assert.Equal("", FicheDateChangeHelper.NormalizeSlashDate("14040111"));
+        Assert.Equal("", FicheDateChangeHelper.NormalizeSlashDate("051205/20601482"));
     }
 
     [Fact]

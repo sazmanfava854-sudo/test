@@ -630,6 +630,49 @@ function normalizeSearchId(value) {
   return normalizeDigits(String(value ?? '')).trim();
 }
 
+const SHAMSI_DATE_PATTERN = /^(\d{4})\/(\d{2})\/(\d{2})$/;
+
+function isStrictShamsiDate(value) {
+  const m = SHAMSI_DATE_PATTERN.exec(normalizeDigits(String(value ?? '')).trim());
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (year < 1300 || year > 1500 || month < 1 || month > 12 || day < 1) return false;
+  return day <= (month <= 6 ? 31 : 30);
+}
+
+/** فقط قالب ۱۴۰۵/۰۸/۰۷؛ ورودی خالی را بررسی نمی‌کند. */
+function shamsiDateError(entries) {
+  for (const [value, label] of entries) {
+    const v = normalizeDigits(String(value ?? '')).trim();
+    if (v && !isStrictShamsiDate(v)) {
+      return `${label}: «${v}» تاریخ معتبر نیست — فقط به شکل 1405/08/07 وارد کنید`;
+    }
+  }
+  return null;
+}
+
+function bindShamsiDateInputGuards() {
+  document.querySelectorAll('input[data-jdp]').forEach((input) => {
+    if (input.dataset.dateGuard === '1') return;
+    input.dataset.dateGuard = '1';
+    input.maxLength = 10;
+    input.setAttribute('inputmode', 'numeric');
+    const sync = () => {
+      const v = input.value.trim();
+      input.classList.toggle('input-invalid', v.length > 0 && !isStrictShamsiDate(v));
+    };
+    input.addEventListener('input', () => {
+      const cleaned = normalizeDigits(input.value).replace(/[^\d/]/g, '').slice(0, 10);
+      if (cleaned !== input.value) input.value = cleaned;
+      input.classList.remove('input-invalid');
+    });
+    input.addEventListener('blur', sync);
+    input.addEventListener('change', sync);
+  });
+}
+
 function normalizeBillOrPayIdDigits(value) {
   const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
   if (!digits) return '';
@@ -1036,7 +1079,7 @@ function updateCheckDateApplyButton() {
   btn.disabled = !(
     checkDateSelectedRow
     && !isInstallmentListKeyEmpty(checkDateSelectedRow.nidInstallment)
-    && date.length > 0
+    && isStrictShamsiDate(date)
   );
 }
 
@@ -1582,6 +1625,16 @@ function updateFicheDateCountLabel() {
 
 async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) {
   const payload = getFicheDateSearchPayload(page);
+  const dateError = shamsiDateError([
+    [payload.permanentFromDate, 'صدور دایم از'],
+    [payload.permanentToDate, 'صدور دایم تا'],
+    [payload.temporaryFromDate, 'صدور موقت از'],
+    [payload.temporaryToDate, 'صدور موقت تا']
+  ]);
+  if (dateError) {
+    showAppWarning(dateError);
+    return false;
+  }
   if (!hasFicheDateSearchFilter(payload)) {
     showAppWarning('حداقل یک فیلتر وارد کنید');
     return false;
@@ -2188,7 +2241,7 @@ function getBankInquiryConfirmPayload() {
 function validateBankInquiryConfirmPayload(payload) {
   if (!payload.ficheNos.length) return 'حداقل یک فیش از نتایج انتخاب کنید';
   if (!payload.newPaymentDate) return 'تاریخ پرداخت جدید را وارد کنید';
-  return null;
+  return shamsiDateError([[payload.newPaymentDate, 'تاریخ پرداخت جدید']]);
 }
 
 function formatBankInquiryConfirmResult(data) {
@@ -2370,6 +2423,8 @@ function initDatePickers() {
     datePickersReady = true;
   }
 
+  bindShamsiDateInputGuards();
+
   document.querySelectorAll('.btn-date-icon').forEach((btn) => {
     if (btn.dataset.bound === '1') return;
     btn.dataset.bound = '1';
@@ -2403,6 +2458,11 @@ function getUnsentSearchFilters() {
 }
 
 function validateUnsentSearchFilters(filters) {
+  const dateError = shamsiDateError([
+    [filters.fromDate, 'از تاریخ'],
+    [filters.toDate, 'تا تاریخ']
+  ]);
+  if (dateError) return dateError;
   if ((filters.fromDate && !filters.toDate) || (!filters.fromDate && filters.toDate)) {
     return 'هر دو تاریخ از و تا را وارد کنید';
   }
@@ -3710,6 +3770,13 @@ function setupEventHandlers() {
     return;
   }
 
+  const sendDateError = shamsiDateError([
+    [$('docDate').value, 'تاریخ سند'],
+    [$('actDate').value, 'تاریخ عملیات'],
+    [$('dueDate').value, 'تاریخ سررسید']
+  ]);
+  if (sendDateError) return showAppWarning(sendDateError);
+
   $('btnSend').disabled = true;
   showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
   try {
@@ -3951,6 +4018,8 @@ function setupEventHandlers() {
     }
     const newPaymentDate = ($('checkDateNewPaymentDate')?.value || '').trim();
     if (!newPaymentDate) return showAppWarning('تاریخ پرداخت جدید را وارد کنید');
+    const checkDateError = shamsiDateError([[newPaymentDate, 'تاریخ پرداخت جدید']]);
+    if (checkDateError) return showAppWarning(checkDateError);
 
     const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value)
       || checkDateSelectedRow.trackingNo;
@@ -4128,6 +4197,12 @@ function setupEventHandlers() {
       || (payload.applyPaymentBreakDate && payload.newPaymentBreakDate)
       || (payload.applyEumFicheStatus && payload.newEumFicheStatus != null);
     if (!hasChange) return showAppWarning('حداقل یک فیلد برای تغییر مشخص کنید');
+    const dateError = shamsiDateError([
+      [payload.applyExportPermanentDate ? payload.newExportPermanentDate : '', 'تاریخ صدور دایم جدید'],
+      [payload.applyExportTemporaryDate ? payload.newExportTemporaryDate : '', 'تاریخ صدور موقت جدید'],
+      [payload.applyPaymentBreakDate ? payload.newPaymentBreakDate : '', 'تاریخ مهلت پرداخت جدید']
+    ]);
+    if (dateError) return showAppWarning(dateError);
 
     const dry = config?.ficheDateChange?.dryRun ?? config?.dryRun ?? false;
     const warn = dry
