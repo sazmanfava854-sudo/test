@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v47_release()
+    public void ReleaseInfo_is_v48_release()
     {
-        Assert.Equal(47, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v47", ReleaseInfo.Tag);
+        Assert.Equal(48, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v48", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v47_doc_lists_current_release()
+    public void DELIVERY_v48_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v47.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v48.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 47", doc);
-        Assert.Contains("XQuery", doc);
-        Assert.Contains("RayvarzResend-47.zip", doc);
+        Assert.Contains("releaseVersion: 48", doc);
+        Assert.Contains("XSS", doc);
+        Assert.Contains("RayvarzResend-48.zip", doc);
     }
 
     [Fact]
@@ -259,7 +259,10 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=106", html);
+        Assert.Contains("js/app.js?v=107", html);
+        Assert.Contains("css/style.css?v=50", html);
+        Assert.Contains("id=\"btnUnsentExcel\"", html);
+        Assert.DoesNotContain("btnUnsentNextPage", html);
         Assert.Contains("<th class=\"col-unsent-fiche\">شماره فیش</th>", html);
         Assert.DoesNotMatch(@"[\u0400-\u04FF]", html);
         Assert.DoesNotContain("dbo.Installment_List", html);
