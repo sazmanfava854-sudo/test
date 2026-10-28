@@ -1134,6 +1134,15 @@ tbody tr:last-child td {
 
 .unsent-excel-status-row {
   margin: 10px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unsent-excel-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .unsent-bulk-table .col-unsent-bill,
