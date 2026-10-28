@@ -23,6 +23,20 @@ public static class UnsentBillPayLookupHelper
         BankInquiryConfirmHelper.NormalizeBillOrPayId(billId) + "|" +
         BankInquiryConfirmHelper.NormalizeBillOrPayId(paymentId);
 
+    /// <summary>۲۶ رقم پشت‌سرهم (۱۳ قبض + ۱۳ پرداخت) — همان شکل چسبیدهٔ epay.</summary>
+    public static bool TrySplitConcatenatedBillPay(string? value, out string billDigits, out string payDigits)
+    {
+        billDigits = payDigits = "";
+        var digits = new string(NumericHelper.NormalizeDigits(value ?? "").Where(char.IsDigit).ToArray());
+        var len = BankInquiryConfirmHelper.EpayBillPayIdLength;
+        if (digits.Length != len * 2)
+            return false;
+
+        billDigits = digits[..len];
+        payDigits = digits[len..];
+        return true;
+    }
+
     public static List<NormalizedBillPayPair> NormalizePairs(IEnumerable<UnsentBillPayPair>? pairs)
     {
         var result = new List<NormalizedBillPayPair>();
@@ -34,6 +48,20 @@ public static class UnsentBillPayLookupHelper
             var payRaw = IdentifierText.Normalize(pair.PaymentId);
             var hasBill = billRaw.Length > 0;
             var hasPay = payRaw.Length > 0;
+
+            if (hasBill && !hasPay && TrySplitConcatenatedBillPay(billRaw, out var splitBill, out var splitPay))
+            {
+                billRaw = splitBill;
+                payRaw = splitPay;
+                hasPay = true;
+            }
+            else if (!hasBill && hasPay && TrySplitConcatenatedBillPay(payRaw, out splitBill, out splitPay))
+            {
+                billRaw = splitBill;
+                payRaw = splitPay;
+                hasBill = true;
+            }
+
             string bill;
             string pay;
             if (hasBill && hasPay)

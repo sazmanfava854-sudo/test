@@ -605,11 +605,15 @@ function mapUnsentExcelHeaderIndex(headers) {
   const map = {};
   headers.forEach((h, idx) => {
     const key = normalizeExcelHeader(h);
-    if (key === 'شناسهقبض' || key === 'billid' || key === 'billid' || key === 'شناسهقبص') {
+    if (key === 'شناسهقبض' || key === 'billid' || key === 'شناسهقبص') {
       map.billId = idx;
     }
-    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid' || key === 'payid') {
+    if (key === 'شناسهپرداخت' || key === 'paymentid' || key === 'payid') {
       map.paymentId = idx;
+    }
+    if (key === 'شناسهقبضوپرداخت' || key === 'شناسهقبضپرداخت' || key === 'billpay'
+      || key === 'billpayment' || key === 'قبضوپرداخت' || key === 'شناسها') {
+      map.billPayCombined = idx;
     }
     if (key === 'شمارهفیش' || key === 'ficheno' || key === 'fiche' || key === 'فیش') {
       map.ficheNo = idx;
@@ -695,6 +699,35 @@ function normalizeBillOrPayIdDigits(value) {
   const digits = normalizeDigits(String(value ?? '').trim()).replace(/\D/g, '');
   if (!digits) return '';
   return digits.length < 13 ? digits.padStart(13, '0') : digits;
+}
+
+/** ۲۶ رقم: ۱۳ رقم قبض + ۱۳ رقم پرداخت (حالت چسبیدهٔ epay). */
+function trySplitConcatenatedBillPay(raw) {
+  const digits = normalizeDigits(String(raw ?? '')).replace(/\D/g, '');
+  if (digits.length !== 26) return null;
+  return { billId: digits.slice(0, 13), paymentId: digits.slice(13) };
+}
+
+function resolveUnsentExcelBillPay(billRaw, payRaw, combinedRaw) {
+  const combined = (combinedRaw || '').trim();
+  if (combined) {
+    const split = trySplitConcatenatedBillPay(combined);
+    if (!split) {
+      return { error: 'ستون «شناسه قبض و پرداخت» باید دقیقاً ۲۶ رقم (۱۳+۱۳) باشد' };
+    }
+    return { billId: split.billId, paymentId: split.paymentId };
+  }
+
+  let bill = billRaw;
+  let pay = payRaw;
+  if (bill && !pay) {
+    const split = trySplitConcatenatedBillPay(bill);
+    if (split) ({ billId: bill, paymentId: pay } = split);
+  } else if (!bill && pay) {
+    const split = trySplitConcatenatedBillPay(pay);
+    if (split) ({ billId: bill, paymentId: pay } = split);
+  }
+  return { billId: bill, paymentId: pay };
 }
 
 function setSheetCellAsText(sheet, rowIdx, colIdx, value) {
@@ -813,33 +846,47 @@ function parseUnsentExcelFile(file) {
         }
 
         const col = mapUnsentExcelHeaderIndex(headerRow);
-        if (col.ficheNo == null && (col.billId == null || col.paymentId == null)) {
-          reject(new Error('ستون شماره فیش، یا هر دو ستون شناسه قبض و شناسه پرداخت لازم است'));
+        const hasCombined = col.billPayCombined != null;
+        const hasSeparatePair = col.billId != null && col.paymentId != null;
+        if (col.ficheNo == null && !hasCombined && !hasSeparatePair) {
+          reject(new Error(
+            'ستون شماره فیش، یا «شناسه قبض و پرداخت» (۲۶ رقم)، یا هر دو ستون شناسه قبض و شناسه پرداخت لازم است'
+          ));
           return;
         }
 
         const parsed = [];
         const seen = new Set();
         for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const billId = col.billId != null ? parseExcelCellValue(sheet, r, col.billId) : '';
-          const paymentId = col.paymentId != null ? parseExcelCellValue(sheet, r, col.paymentId) : '';
+          const billRaw = col.billId != null ? parseExcelCellValue(sheet, r, col.billId) : '';
+          const payRaw = col.paymentId != null ? parseExcelCellValue(sheet, r, col.paymentId) : '';
+          const combinedRaw = col.billPayCombined != null
+            ? parseExcelCellValue(sheet, r, col.billPayCombined)
+            : '';
           const ficheNo = col.ficheNo != null ? parseExcelCellValue(sheet, r, col.ficheNo) : '';
-          if (!billId && !paymentId && !ficheNo) continue;
-          if (hasScientificNotation(billId) || hasScientificNotation(paymentId)
-            || hasScientificNotation(ficheNo)) {
+          if (!billRaw && !payRaw && !combinedRaw && !ficheNo) continue;
+          if (hasScientificNotation(billRaw) || hasScientificNotation(payRaw)
+            || hasScientificNotation(combinedRaw) || hasScientificNotation(ficheNo)) {
             reject(new Error(
               `ردیف ${r + 1}: شناسه قبض/پرداخت به‌صورت علمی خوانده شد. ستون را Text کنید و مقدار را دوباره وارد کنید.`
             ));
             return;
           }
+          const resolved = resolveUnsentExcelBillPay(billRaw, payRaw, combinedRaw);
+          if (resolved.error) {
+            reject(new Error(`ردیف ${r + 1}: ${resolved.error}`));
+            return;
+          }
           const item = {
-            billId: normalizeSearchId(billId),
-            paymentId: normalizeSearchId(paymentId),
+            billId: normalizeSearchId(resolved.billId),
+            paymentId: normalizeSearchId(resolved.paymentId),
             ficheNo: normalizeSearchId(ficheNo)
           };
           const pairComplete = !!item.billId && !!item.paymentId;
           if (!item.ficheNo && !pairComplete) {
-            reject(new Error(`ردیف ${r + 1}: یا شماره فیش را وارد کنید، یا شناسه قبض و شناسه پرداخت را با هم`));
+            reject(new Error(
+              `ردیف ${r + 1}: یا شماره فیش، یا ۲۶ رقم چسبیده (قبض+پرداخت)، یا هر دو ستون شناسه قبض و پرداخت`
+            ));
             return;
           }
           const key = pairComplete
