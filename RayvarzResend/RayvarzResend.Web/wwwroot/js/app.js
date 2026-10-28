@@ -11,10 +11,22 @@ const unsentSearchState = {
   pageSize: 25,
   totalCount: 0,
   totalPages: 0,
+  truncated: false,
   filters: null
 };
 
 const $ = (id) => document.getElementById(id);
+
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+/** شرح ردیف‌ها همان متن کاتالوگ رایورز (ي/ك عربی) است — فقط برای نمایش فارسی می‌شود. */
+function toPersianLetters(value) {
+  return String(value ?? '').replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+}
 
 let appToastTimer = null;
 
@@ -303,6 +315,7 @@ function resetMainTabPanelState(tabKey) {
       unsentSearchState.page = 1;
       unsentSearchState.totalCount = 0;
       unsentSearchState.totalPages = 0;
+      unsentSearchState.truncated = false;
       renderUnsentTable([], { page: 1, pageSize: unsentSearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('unsentResultsSection');
       hideEl('unsentPagination');
@@ -333,6 +346,7 @@ function resetMainTabPanelState(tabKey) {
       clearFieldValue('installmentApplyEndState');
       clearFieldValue('installmentApplyEndStateExcel');
       clearFieldValue('installmentExcelFile');
+      installmentExcelRows = [];
       if ($('installmentExcelStatus')) $('installmentExcelStatus').textContent = 'فایلی انتخاب نشده';
       hideEl('installmentPreviewSection');
       hideEl('installmentResultBox');
@@ -352,6 +366,7 @@ function resetMainTabPanelState(tabKey) {
       clearGridSelection(selectedFicheDateNos, ficheDateSelectedItems);
       ficheDateSearchState.page = 1;
       ficheDateSearchState.totalCount = 0;
+      ficheDateSearchState.lastFilters = null;
       ficheDateSearchState.totalPages = 0;
       renderFicheDateTable([], { page: 1, pageSize: ficheDateSearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('ficheDateResultsSection');
@@ -365,6 +380,7 @@ function resetMainTabPanelState(tabKey) {
       clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
       bankInquirySearchState.page = 1;
       bankInquirySearchState.totalCount = 0;
+      bankInquirySearchState.lastFilters = null;
       bankInquirySearchState.totalPages = 0;
       renderBankInquiryTable([], { page: 1, pageSize: bankInquirySearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('bankInquiryResultsSection');
@@ -381,6 +397,7 @@ function resetMainTabPanelState(tabKey) {
       clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
       costCenterSearchState.page = 1;
       costCenterSearchState.totalCount = 0;
+      costCenterSearchState.lastFilters = null;
       costCenterSearchState.totalPages = 0;
       renderCostCenterTable([], { page: 1, pageSize: costCenterSearchState.pageSize, totalCount: 0, totalPages: 0 });
       hideEl('costCenterResultsSection');
@@ -520,7 +537,8 @@ const ficheDateSearchState = {
   page: 1,
   pageSize: 25,
   totalCount: 0,
-  totalPages: 0
+  totalPages: 0,
+  lastFilters: null
 };
 
 function getInstallmentApplyEndState() {
@@ -955,6 +973,26 @@ function getInstallmentPayload() {
   };
 }
 
+function hasUpdateProblems(data) {
+  return (data?.failed || 0) > 0
+    || (data?.notFound || 0) > 0
+    || (data?.skippedMismatch || 0) > 0
+    || (data?.skipped || 0) > 0;
+}
+
+function showResultBox(box, text) {
+  if (!box) return;
+  box.hidden = false;
+  box.textContent = text;
+}
+
+/** پیش‌نمایش برای همان ورودی‌ها معتبر است؛ تغییر ورودی یعنی «اعمال» باید دوباره پیش‌نمایش بگیرد. */
+function invalidateInstallmentPreview() {
+  const updateBtn = $('btnInstallmentUpdate');
+  if (updateBtn) updateBtn.disabled = true;
+  hideEl('installmentPreviewSection');
+}
+
 function syncInstallmentDryRunUi() {
   const updateBtn = $('btnInstallmentUpdate');
   if (updateBtn && !updateBtn.disabled) updateBtn.textContent = 'اعمال';
@@ -1014,17 +1052,17 @@ function renderInstallmentPreview(data) {
       : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
 
     tr.innerHTML = `
-      <td class="col-installment-row">${toPersianDigits(rowNum)}</td>
-      <td class="col-installment-detect">${installmentLookupLabels[kind] || kind || '—'}</td>
-      <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '-')}</td>
-      <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '-')}</td>
-      <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
-      <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
-      <td class="col-installment-workitem">${toPersianDigits(row.nidWorkItem || '-')}</td>
-      <td class="col-installment-nosazi">${formatNosaziCode(row.nosaziCode)}</td>
-      <td class="col-installment-odooat">${formatOdooatPlan(row)}</td>
-      <td class="col-installment-status">${status}</td>
-      <td class="col-installment-comments">${row.proposedComments || '-'}</td>
+      <td class="col-installment-row">${escapeHtml(toPersianDigits(rowNum))}</td>
+      <td class="col-installment-detect">${escapeHtml(installmentLookupLabels[kind] || kind || '—')}</td>
+      <td class="col-installment-nodoc">${escapeHtml(toPersianDigits(row.noDocument || '-'))}</td>
+      <td class="col-installment-tracking">${escapeHtml(toPersianDigits(row.trackingNo || '-'))}</td>
+      <td class="col-installment-cost">${escapeHtml(formatInstallmentCost(row.paymentCost))}</td>
+      <td class="col-installment-date">${escapeHtml(formatInstallmentDate(row.paymentDate))}</td>
+      <td class="col-installment-workitem">${escapeHtml(toPersianDigits(row.nidWorkItem || '-'))}</td>
+      <td class="col-installment-nosazi">${escapeHtml(formatNosaziCode(row.nosaziCode))}</td>
+      <td class="col-installment-odooat">${escapeHtml(formatOdooatPlan(row))}</td>
+      <td class="col-installment-status">${escapeHtml(status)}</td>
+      <td class="col-installment-comments">${escapeHtml(row.proposedComments || '-')}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1110,18 +1148,18 @@ function renderCheckDateTable(data) {
     const tr = document.createElement('tr');
     const rowNum = index + 1;
     tr.innerHTML = `
-      <td class="col-check"><input type="checkbox" class="check-date-row-check" aria-label="انتخاب ردیف ${toPersianDigits(rowNum)}" /></td>
-      <td class="col-installment-row">${toPersianDigits(rowNum)}</td>
-      <td class="col-installment-detect">${installmentLookupLabels.TrackingNo}</td>
-      <td class="col-installment-nodoc">${toPersianDigits(row.noDocument || '—')}</td>
-      <td class="col-installment-tracking">${toPersianDigits(row.trackingNo || '—')}</td>
-      <td class="col-installment-cost">${formatInstallmentCost(row.paymentCost)}</td>
-      <td class="col-installment-date">${formatInstallmentDate(row.paymentDate)}</td>
+      <td class="col-check"><input type="checkbox" class="check-date-row-check" aria-label="انتخاب ردیف ${escapeHtml(toPersianDigits(rowNum))}" /></td>
+      <td class="col-installment-row">${escapeHtml(toPersianDigits(rowNum))}</td>
+      <td class="col-installment-detect">${escapeHtml(installmentLookupLabels.TrackingNo)}</td>
+      <td class="col-installment-nodoc">${escapeHtml(toPersianDigits(row.noDocument || '—'))}</td>
+      <td class="col-installment-tracking">${escapeHtml(toPersianDigits(row.trackingNo || '—'))}</td>
+      <td class="col-installment-cost">${escapeHtml(formatInstallmentCost(row.paymentCost))}</td>
+      <td class="col-installment-date">${escapeHtml(formatInstallmentDate(row.paymentDate))}</td>
       <td class="col-installment-workitem">—</td>
       <td class="col-installment-nosazi">—</td>
       <td class="col-installment-odooat">—</td>
-      <td class="col-installment-status">${formatCheckDateRowStatus(row)}</td>
-      <td class="col-installment-comments">${row.comments || '—'}</td>
+      <td class="col-installment-status">${escapeHtml(formatCheckDateRowStatus(row))}</td>
+      <td class="col-installment-comments">${escapeHtml(row.comments || '—')}</td>
     `;
     const checkbox = tr.querySelector('.check-date-row-check');
     checkbox?.addEventListener('change', () => {
@@ -1491,6 +1529,17 @@ function getSelectedFicheDateStatuses() {
     .filter((n) => !Number.isNaN(n));
 }
 
+/**
+ * صفحه‌بعد/قبل و تغییر اندازهٔ صفحه همان فیلترِ آخرین «جستجو» را به کار می‌برند؛
+ * در غیر این صورت انتخاب‌های قبلی روی نتیجهٔ یک کوئری دیگر اعمال می‌شد.
+ */
+function storedGridSearchPayload(state, page, pageSizeId) {
+  if (!state.lastFilters) return null;
+  const pageSize = parseInt($(pageSizeId)?.value || state.pageSize, 10) || 25;
+  state.pageSize = pageSize;
+  return { ...state.lastFilters, page, pageSize };
+}
+
 function getFicheDateSearchPayload(page = ficheDateSearchState.page) {
   const pageSize = parseInt($('ficheDatePageSize')?.value || ficheDateSearchState.pageSize, 10) || 25;
   ficheDateSearchState.pageSize = pageSize;
@@ -1575,16 +1624,16 @@ function renderFicheDateTable(items, meta = {}) {
     const checked = selectedFicheDateNos.has(item.ficheNo) ? ' checked' : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
-      <td>${item.accountGroupTitle || '-'}</td>
-      <td>${toPersianDigits(item.exportTemporaryDate || '-')}</td>
-      <td>${toPersianDigits(item.exportPermanentDate || '-')}</td>
-      <td>${toPersianDigits(item.paymentBreakDate || '-')}</td>
-      <td>${toPersianDigits(item.paymentDate || '-')}</td>
-      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
+      <td class="col-check"><input type="checkbox" class="fiche-date-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(toPersianDigits(item.ficheNo || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.billId || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentId || '-'))}</td>
+      <td>${escapeHtml(item.accountGroupTitle || '-')}</td>
+      <td>${escapeHtml(toPersianDigits(item.exportTemporaryDate || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.exportPermanentDate || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentBreakDate || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentDate || '-'))}</td>
+      <td>${escapeHtml(item.eumFicheStatusLabel || item.eumFicheStatus)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1624,7 +1673,10 @@ function updateFicheDateCountLabel() {
 }
 
 async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) {
-  const payload = getFicheDateSearchPayload(page);
+  const payload = clearSelection
+    ? getFicheDateSearchPayload(page)
+    : storedGridSearchPayload(ficheDateSearchState, page, 'ficheDatePageSize');
+  if (!payload) return false;
   const dateError = shamsiDateError([
     [payload.permanentFromDate, 'صدور دایم از'],
     [payload.permanentToDate, 'صدور دایم تا'],
@@ -1641,6 +1693,7 @@ async function fetchFicheDateResults(page = 1, { clearSelection = false } = {}) 
   }
 
   if (clearSelection) clearGridSelection(selectedFicheDateNos, ficheDateSelectedItems);
+  if (clearSelection) ficheDateSearchState.lastFilters = { ...payload };
   ficheDateSearchState.page = page;
 
   const btn = $('btnFicheDateSearch');
@@ -1727,7 +1780,8 @@ const bankInquirySearchState = {
   page: 1,
   pageSize: 25,
   totalCount: 0,
-  totalPages: 0
+  totalPages: 0,
+  lastFilters: null
 };
 
 function getBankInquirySearchPayload(page = bankInquirySearchState.page) {
@@ -1814,17 +1868,17 @@ function renderBankInquiryTable(items, meta = {}) {
   tbody.innerHTML = bankInquiryItems.map((item) => {
     const checked = selectedBankInquiryNos.has(item.ficheNo) ? ' checked' : '';
     return `<tr>
-      <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
-      <td>${toPersianDigits(item.nidWorkItem || '-')}</td>
-      <td>${formatNosaziCode(item.nosaziCode)}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
-      <td>${formatShamsiDisplay(item.paymentDate)}</td>
-      <td>${formatShamsiDisplay(item.bankPaymentDate)}</td>
-      <td>${item.eumFicheStatusLabel || item.eumFicheStatus}</td>
-      <td>${formatShamsiDisplay(item.userConfirmDate)}</td>
-      <td>${item.usernameUserConfirm || '-'}</td>
+      <td class="col-check"><input type="checkbox" class="bank-inquiry-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(toPersianDigits(item.ficheNo || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.nidWorkItem || '-'))}</td>
+      <td>${escapeHtml(formatNosaziCode(item.nosaziCode))}</td>
+      <td>${escapeHtml(toPersianDigits(item.billId || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentId || '-'))}</td>
+      <td>${escapeHtml(formatShamsiDisplay(item.paymentDate))}</td>
+      <td>${escapeHtml(formatShamsiDisplay(item.bankPaymentDate))}</td>
+      <td>${escapeHtml(item.eumFicheStatusLabel || item.eumFicheStatus)}</td>
+      <td>${escapeHtml(formatShamsiDisplay(item.userConfirmDate))}</td>
+      <td>${escapeHtml(item.usernameUserConfirm || '-')}</td>
     </tr>`;
   }).join('');
 
@@ -1905,10 +1959,10 @@ function renderShahkarTable(items) {
     const checked = selectedShahkarUserNames.has(userName) ? ' checked' : '';
     const okLabel = formatShahkarOkLabel(item.shahkarOk, item.isShahkarOk);
     return `<tr>
-      <td class="col-check"><input type="checkbox" class="shahkar-row-check" data-user-name="${userName}"${checked} /></td>
-      <td>${userName || '-'}</td>
-      <td>${toPersianDigits(item.nationalCode || '-')}</td>
-      <td>${okLabel}</td>
+      <td class="col-check"><input type="checkbox" class="shahkar-row-check" data-user-name="${escapeHtml(userName)}"${checked} /></td>
+      <td>${escapeHtml(userName || '-')}</td>
+      <td>${escapeHtml(toPersianDigits(item.nationalCode || '-'))}</td>
+      <td>${escapeHtml(okLabel)}</td>
     </tr>`;
   }).join('');
 
@@ -1986,11 +2040,15 @@ async function fetchShahkarResults({ clearSelection = false } = {}) {
 }
 
 async function fetchBankInquiryResults(page = 1, { clearSelection = false } = {}) {
-  const payload = getBankInquirySearchPayload(page);
+  const payload = clearSelection
+    ? getBankInquirySearchPayload(page)
+    : storedGridSearchPayload(bankInquirySearchState, page, 'bankInquiryPageSize');
+  if (!payload) return false;
   const validationError = validateBankInquirySearchPayload(payload);
   if (validationError) return showAppWarning(validationError);
 
   if (clearSelection) clearGridSelection(selectedBankInquiryNos, bankInquirySelectedItems);
+  if (clearSelection) bankInquirySearchState.lastFilters = { ...payload };
   bankInquirySearchState.page = page;
 
   const btn = $('btnBankInquirySearch');
@@ -2036,7 +2094,8 @@ const costCenterSearchState = {
   page: 1,
   pageSize: 25,
   totalCount: 0,
-  totalPages: 0
+  totalPages: 0,
+  lastFilters: null
 };
 
 function getCostCenterSearchPayload(page = costCenterSearchState.page) {
@@ -2122,13 +2181,13 @@ function renderCostCenterTable(items, meta = {}) {
   tbody.innerHTML = costCenterItems.map((item) => {
     const checked = selectedCostCenterNos.has(item.ficheNo) ? ' checked' : '';
     return `<tr>
-      <td class="col-check"><input type="checkbox" class="cost-center-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${toPersianDigits(item.ficheNo || '-')}</td>
-      <td>${formatCostCenterValue(item.deposit)}</td>
-      <td>${formatCostCenterValue(item.creditorPapers)}</td>
-      <td>${formatNosaziCode(item.nosaziCode)}</td>
-      <td>${toPersianDigits(item.billId || '-')}</td>
-      <td>${toPersianDigits(item.paymentId || '-')}</td>
+      <td class="col-check"><input type="checkbox" class="cost-center-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(toPersianDigits(item.ficheNo || '-'))}</td>
+      <td>${escapeHtml(formatCostCenterValue(item.deposit))}</td>
+      <td>${escapeHtml(formatCostCenterValue(item.creditorPapers))}</td>
+      <td>${escapeHtml(formatNosaziCode(item.nosaziCode))}</td>
+      <td>${escapeHtml(toPersianDigits(item.billId || '-'))}</td>
+      <td>${escapeHtml(toPersianDigits(item.paymentId || '-'))}</td>
     </tr>`;
   }).join('');
 
@@ -2156,11 +2215,15 @@ function renderCostCenterTable(items, meta = {}) {
 }
 
 async function fetchCostCenterResults(page = 1, { clearSelection = false } = {}) {
-  const payload = getCostCenterSearchPayload(page);
+  const payload = clearSelection
+    ? getCostCenterSearchPayload(page)
+    : storedGridSearchPayload(costCenterSearchState, page, 'costCenterPageSize');
+  if (!payload) return false;
   const validationError = validateCostCenterSearchPayload(payload);
   if (validationError) return showAppWarning(validationError);
 
   if (clearSelection) clearGridSelection(selectedCostCenterNos, costCenterSelectedItems);
+  if (clearSelection) costCenterSearchState.lastFilters = { ...payload };
   costCenterSearchState.page = page;
 
   const btn = $('btnCostCenterSearch');
@@ -2474,27 +2537,27 @@ function validateUnsentSearchFilters(filters) {
   return null;
 }
 
+/** جستجوی ارسال‌نشده‌ها صفحه‌بندی سمت سرور ندارد — همهٔ نتایج (تا سقف MaxResults) یک‌جا می‌آید. */
+/** دکمهٔ «ورود از اکسل» یک label است؛ غیرفعال کردن خود input مانع انتخاب فایل دوم هنگام پردازش می‌شود. */
+function setUnsentExcelPickerBusy(input, label, busy) {
+  if (input) input.disabled = busy;
+  if (label) {
+    label.classList.toggle('is-disabled', busy);
+    label.setAttribute('aria-disabled', busy ? 'true' : 'false');
+  }
+}
+
 function updateUnsentPaginationUi() {
   const bar = $('unsentPagination');
   const label = $('unsentPageLabel');
-  const prevBtn = $('btnUnsentPrevPage');
-  const nextBtn = $('btnUnsentNextPage');
-  if (!bar || !label || !prevBtn || !nextBtn) return;
+  if (!bar || !label) return;
 
-  const { page, totalPages, totalCount } = unsentSearchState;
-  const hasResults = totalCount > 0;
-  bar.hidden = !hasResults;
-
-  if (!hasResults) {
-    label.textContent = '';
-    prevBtn.disabled = true;
-    nextBtn.disabled = true;
-    return;
-  }
-
-  label.textContent = `صفحه ${page.toLocaleString('fa-IR')} از ${totalPages.toLocaleString('fa-IR')} — ${totalCount.toLocaleString('fa-IR')} مورد`;
-  prevBtn.disabled = page <= 1;
-  nextBtn.disabled = page >= totalPages;
+  const { totalCount, truncated } = unsentSearchState;
+  bar.hidden = !(totalCount > 0);
+  label.textContent = totalCount > 0
+    ? `${totalCount.toLocaleString('fa-IR')} مورد${truncated ? ' — فقط بخشی از نتایج آمده؛ فیلتر را محدودتر کنید' : ''}`
+    : '';
+  label.classList.toggle('unsent-truncated', !!truncated);
 }
 
 function updateUnsentSendButton() {
@@ -2539,12 +2602,12 @@ function renderUnsentTable(items, meta = {}) {
     const checked = selectedUnsentFicheNos.has(item.ficheNo) ? ' checked' : '';
     return `
     <tr>
-      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${item.ficheNo}"${checked} /></td>
-      <td>${item.subKindLabel || (item.isTahator ? 'تهاتر' : '-')}</td>
-      <td class="num-cell col-unsent-bill">${formatBillPayDisplay(item.billId)}</td>
-      <td class="num-cell col-unsent-pay">${formatBillPayDisplay(item.paymentId)}</td>
-      <td class="num-cell col-unsent-fiche">${formatBillPayDisplay(item.ficheNo)}</td>
-      <td class="col-installment-cost">${Number(item.payable || 0).toLocaleString('fa-IR')}</td>
+      <td class="col-check"><input type="checkbox" class="unsent-row-check" data-fiche-no="${escapeHtml(item.ficheNo)}"${checked} /></td>
+      <td>${escapeHtml(item.subKindLabel || (item.isTahator ? 'تهاتر' : '-'))}</td>
+      <td class="num-cell col-unsent-bill">${escapeHtml(formatBillPayDisplay(item.billId))}</td>
+      <td class="num-cell col-unsent-pay">${escapeHtml(formatBillPayDisplay(item.paymentId))}</td>
+      <td class="num-cell col-unsent-fiche">${escapeHtml(formatBillPayDisplay(item.ficheNo))}</td>
+      <td class="col-installment-cost">${escapeHtml(Number(item.payable || 0).toLocaleString('fa-IR'))}</td>
       <td class="col-unsent-fill" aria-hidden="true"></td>
     </tr>
   `;
@@ -2595,20 +2658,15 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
     return false;
   }
 
-  const pageSize = parseInt($('unsentPageSize')?.value || unsentSearchState.pageSize, 10) || 25;
-  unsentSearchState.pageSize = pageSize;
   unsentSearchState.filters = filters;
+  unsentSearchState.truncated = false;
   if (clearSelection) {
     selectedUnsentFicheNos.clear();
     unsentSourceKindByFicheNo.clear();
   }
 
   const btn = $('btnUnsentSearch');
-  const prevBtn = $('btnUnsentPrevPage');
-  const nextBtn = $('btnUnsentNextPage');
   if (btn) btn.disabled = true;
-  if (prevBtn) prevBtn.disabled = true;
-  if (nextBtn) nextBtn.disabled = true;
   const prevLabel = btn?.textContent;
   if (btn) btn.textContent = 'در حال جستجو…';
   $('unsentResultBox').hidden = true;
@@ -2617,29 +2675,27 @@ async function fetchUnsentResults(page = 1, { clearSelection = false } = {}) {
     const res = await apiFetch('/api/unsent/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...filters,
-        page,
-        pageSize
-      })
+      body: JSON.stringify(filters)
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-    const totalCount = data.totalCount ?? data.count ?? 0;
-    const totalPages = data.totalPages ?? (data.pageSize > 0 ? Math.ceil(totalCount / data.pageSize) : 0);
     const items = data.items || [];
+    unsentSearchState.truncated = !!data.truncated;
     syncUnsentSourceKindsFromItems(items, filters.ficheKind);
     renderUnsentTable(items, {
-      page: data.page ?? page,
-      pageSize: data.pageSize ?? pageSize,
-      totalCount,
-      totalPages
+      page: 1,
+      pageSize: items.length,
+      totalCount: items.length,
+      totalPages: items.length > 0 ? 1 : 0
     });
+    if (data.truncated) {
+      showAppWarning(`فقط ${items.length.toLocaleString('fa-IR')} فیش اول نمایش داده شد — بقیه در «انتخاب همه» و ارسال دسته‌ای نیستند؛ بازهٔ تاریخ یا فیلتر را محدودتر کنید.`);
+    }
     return true;
   } catch (e) {
     showAppError(e.message);
-    renderUnsentTable([], { page: 1, pageSize, totalCount: 0, totalPages: 0 });
+    renderUnsentTable([], { page: 1, pageSize: 0, totalCount: 0, totalPages: 0 });
     return false;
   } finally {
     if (btn) {
@@ -2663,16 +2719,22 @@ function applyFicheDatesToForm(f) {
   $('dueDate').value = formatShamsiInput(f.rayvarzDueDate);
 }
 
-function getPayload(resetStatus) {
+function getPayload() {
   return {
     fiche: currentFiche,
     branch: parseInt($('branch').value),
     fund: parseInt($('fund').value),
     docDate: $('docDate').value,
     actDate: $('actDate').value,
-    dueDate: $('dueDate').value,
-    resetStatus: !!resetStatus
+    dueDate: $('dueDate').value
   };
+}
+
+/** پس از ارسال: فرم پاک می‌شود ولی کارت نتیجه (شماره پیگیری) می‌ماند و فیش قبلی دیگر قابل ارسال نیست. */
+function finishSingleSend() {
+  resetMainTabPanelState('unsent');
+  currentFiche = null;
+  updateSendButton(null);
 }
 
 async function parseJsonResponse(res) {
@@ -2745,25 +2807,9 @@ function canAccessUnsent() {
   return isAdminUser() || !!currentUser?.canAccessUnsentFiches;
 }
 
-function hasAnyModulePermission() {
-  if (isAdminUser()) return true;
-  return !!(
-    currentUser?.canAccessUnsentFiches
-    || currentUser?.canAccessInstallment
-    || currentUser?.canAccessInstallmentCheckDate
-    || currentUser?.canAccessFicheDateChange
-    || currentUser?.canAccessBankInquiryConfirm
-    || currentUser?.canAccessCostCenter
-    || currentUser?.canAccessShahkar
-    || currentUser?.canManageUsers
-  );
-}
-
 /** تب رایورز: ارسال جمعی، یا ارسال تکی وقتی هیچ ماژول دیگری تعریف نشده */
 function canAccessRayvarzModule() {
-  if (isAdminUser()) return true;
-  if (canAccessUnsent()) return true;
-  return !hasAnyModulePermission();
+  return canAccessUnsent();
 }
 
 const MAIN_TAB_ACCESS_ORDER = [
@@ -2902,6 +2948,10 @@ async function loadUsersTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/users');
   const data = await parseJsonResponse(res);
+  if (!res.ok) {
+    showAppError(data.error || `بارگذاری لیست کاربران ناموفق بود (HTTP ${res.status})`);
+    return;
+  }
   cachedUsers = (data.items || []).map(normalizeEntityId);
   const tbody = $('usersTable')?.querySelector('tbody');
   if (!tbody) return;
@@ -2913,16 +2963,16 @@ async function loadUsersTable() {
       .filter(Boolean)
       .join('، ') || '—';
     tr.innerHTML = `
-      <td>${u.nationalId || u.username}</td>
-      <td dir="ltr">${u.domain || '—'}</td>
-      <td>${u.firstName || '—'}</td>
-      <td>${u.lastName || '—'}</td>
-      <td>${u.position || '—'}</td>
-      <td>${districtLabelFromValue(u.district)}</td>
-      <td>${u.isAdmin ? 'ادمین' : 'کاربر'}</td>
-      <td>${groupNames}</td>
-      <td>${u.isActive ? 'فعال' : 'غیرفعال'}</td>
-      <td><button type="button" class="btn secondary btn-sm btn-edit-user" data-user-id="${u.id}">ویرایش</button></td>
+      <td>${escapeHtml(u.nationalId || u.username)}</td>
+      <td dir="ltr">${escapeHtml(u.domain || '—')}</td>
+      <td>${escapeHtml(u.firstName || '—')}</td>
+      <td>${escapeHtml(u.lastName || '—')}</td>
+      <td>${escapeHtml(u.position || '—')}</td>
+      <td>${escapeHtml(districtLabelFromValue(u.district))}</td>
+      <td>${escapeHtml(u.isAdmin ? 'ادمین' : 'کاربر')}</td>
+      <td>${escapeHtml(groupNames)}</td>
+      <td>${escapeHtml(u.isActive ? 'فعال' : 'غیرفعال')}</td>
+      <td><button type="button" class="btn secondary btn-sm btn-edit-user" data-user-id="${escapeHtml(u.id)}">ویرایش</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -2930,6 +2980,25 @@ async function loadUsersTable() {
 
 let cachedGroups = [];
 let cachedUsers = [];
+/** بدون لیست گروه، انتخابگر گروه خالی است و ذخیره عضویت‌های کاربر را پاک می‌کند. */
+let groupsLoadFailed = false;
+
+function ensureGroupsLoaded() {
+  if (groupsLoadFailed) {
+    throw new Error('لیست گروه‌ها بارگذاری نشد — ابتدا «بارگذاری مجدد گروه‌ها» را بزنید');
+  }
+}
+
+/** جلوگیری از دوبار ارسال فرم‌های مدیریت (کلیک دوم = خطای تکراری یا ریست رمز دوباره). */
+async function runWithButtonBusy(btn, fn) {
+  if (btn?.disabled) return;
+  if (btn) btn.disabled = true;
+  try {
+    await fn();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 let editingUserId = null;
 let editingGroupId = null;
 
@@ -2965,11 +3034,13 @@ function setupGroupsTableActions() {
     const saveBtn = e.target.closest('.btn-save-group');
     if (saveBtn) {
       e.preventDefault();
-      try {
-        await saveGroupFromForm();
-      } catch (err) {
-        alert(err.message);
-      }
+      await runWithButtonBusy(saveBtn, async () => {
+        try {
+          await saveGroupFromForm();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
     }
   });
 }
@@ -2990,6 +3061,12 @@ async function loadGroupsTable() {
   if (!canManageUsers()) return;
   const res = await apiFetch('/api/admin/groups');
   const data = await parseJsonResponse(res);
+  if (!res.ok) {
+    groupsLoadFailed = true;
+    showAppError(data.error || `بارگذاری لیست گروه‌ها ناموفق بود (HTTP ${res.status})`);
+    return;
+  }
+  groupsLoadFailed = false;
   cachedGroups = (data.items || []).map(normalizeEntityId);
   renderGroupsTableBody();
   const editUser = editingUserId
@@ -3011,17 +3088,17 @@ function renderGroupsTableBody() {
     const isEditing = editingGroupId && String(editingGroupId) === String(g.id);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${g.name}</td>
-      <td>${g.canAccessUnsentFiches ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessInstallment ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessInstallmentCheckDate ? 'بله' : 'خیر'}</td>
-      <td>${g.canManageUsers ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessFicheDateChange ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessBankInquiryConfirm ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessShahkar ? 'بله' : 'خیر'}</td>
-      <td>${g.canAccessCostCenter ? 'بله' : 'خیر'}</td>
+      <td>${escapeHtml(g.name)}</td>
+      <td>${escapeHtml(g.canAccessUnsentFiches ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessInstallment ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessInstallmentCheckDate ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canManageUsers ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessFicheDateChange ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessBankInquiryConfirm ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessShahkar ? 'بله' : 'خیر')}</td>
+      <td>${escapeHtml(g.canAccessCostCenter ? 'بله' : 'خیر')}</td>
       <td class="group-actions-cell">
-        <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${g.id}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${g.id}">ذخیره</button>` : ''}
+        <button type="button" class="btn secondary btn-sm btn-edit-group" data-group-id="${escapeHtml(g.id)}">ویرایش</button>${isEditing ? ` <button type="button" class="btn primary btn-sm btn-save-group" data-group-id="${escapeHtml(g.id)}">ذخیره</button>` : ''}
       </td>
     `;
     tbody.appendChild(tr);
@@ -3278,6 +3355,7 @@ function closeUserEdit() {
 
 async function saveUserEdit() {
   if (!editingUserId) return;
+  ensureGroupsLoaded();
   const payload = {
     isAdmin: !!$('editUserIsAdmin')?.checked,
     isActive: !!$('editUserIsActive')?.checked,
@@ -3338,7 +3416,7 @@ async function resetUserPassword({ skipConfirm = false } = {}) {
 }
 
 async function createUserFromForm() {
-  const nationalId = ($('newUserNationalId')?.value || '').trim();
+  const nationalId = normalizeSearchId($('newUserNationalId')?.value);
   const domain = ($('newUserDomain')?.value || '').trim();
   const payload = {
     username: nationalId,
@@ -3371,6 +3449,7 @@ async function createUserFromForm() {
   if (passwordPolicyError) return alert(passwordPolicyError);
   const box = $('usersResultBox');
   try {
+    ensureGroupsLoaded();
     const res = await apiFetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3452,22 +3531,27 @@ function renderSendResultCard(items, tone) {
   $('resultSection').hidden = false;
   const card = $('sendResultCard');
   if (!card) return;
+  card.hidden = false;
   card.className = `send-result-card send-result-${tone}`;
   card.innerHTML = items.map((row) => `
     <div class="send-result-row">
-      <div class="send-result-label">${row.label}</div>
-      <div class="send-result-value">${row.value ?? '—'}</div>
+      <div class="send-result-label">${escapeHtml(row.label)}</div>
+      <div class="send-result-value">${escapeHtml(row.value ?? '—')}</div>
     </div>
   `).join('');
 }
 
 function showSendResult(data) {
-  const tone = data.success
-    ? (data.verifiedInRayvarz === false ? 'warn' : 'ok')
-    : 'err';
+  const tone = data.outcomeUnknown
+    ? 'warn'
+    : data.success
+      ? (data.verifiedInRayvarz === false ? 'warn' : 'ok')
+      : 'err';
   const statusFa = data.dryRun
     ? 'آزمایشی — به رایورز ارسال نشد'
-    : data.success
+    : data.outcomeUnknown
+      ? 'نتیجه نامشخص — پیش از ارسال مجدد بررسی کنید'
+      : data.success
       ? (data.verifiedInRayvarz === false ? 'ارسال شد ولی در رایورز تأیید نشد' : 'ارسال موفق')
       : 'ارسال ناموفق';
   renderSendResultCard([
@@ -3512,8 +3596,8 @@ function renderMappingTable(f) {
   const rows = buildMappingRows(f);
   $('mappingTable').innerHTML = rows.map(r => `
     <div class="mapping-row mapping-row-fa">
-      <div class="mapping-field">${r.field}</div>
-      <div class="mapping-value">${r.value}</div>
+      <div class="mapping-field">${escapeHtml(r.field)}</div>
+      <div class="mapping-value">${escapeHtml(r.value)}</div>
     </div>
   `).join('');
 }
@@ -3521,42 +3605,42 @@ function renderMappingTable(f) {
 function renderFiche(f) {
   $('ficheSection').hidden = false;
   const alertHtml = f.blockReason
-    ? `<div class="fiche-alert fiche-alert-err" role="alert">${f.blockReason}</div>`
+    ? `<div class="fiche-alert fiche-alert-err" role="alert">${escapeHtml(f.blockReason)}</div>`
     : '';
 
   $('ficheSummary').innerHTML = `
     ${alertHtml}
     <div class="stat-card">
       <span class="stat-label">شماره فیش</span>
-      <span class="stat-value">${f.ficheNo}</span>
+      <span class="stat-value">${escapeHtml(f.ficheNo)}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">نوع</span>
-      <span class="stat-value">${isTahatorAmountFiche(f) ? 'تهاتر (مبلغ — گروه ۱۵۷)' : isTahatorIncomeDetailFiche(f) ? 'تهاتر (درآمد — گروه ۱۵۸)' : (categoryLabels[f.category] || f.category)}</span>
+      <span class="stat-value">${escapeHtml(isTahatorAmountFiche(f) ? 'تهاتر (مبلغ — گروه ۱۵۷)' : isTahatorIncomeDetailFiche(f) ? 'تهاتر (درآمد — گروه ۱۵۸)' : (categoryLabels[f.category] || f.category))}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">مبلغ قابل پرداخت</span>
-      <span class="stat-value money">${Number(f.payable).toLocaleString()} ریال</span>
+      <span class="stat-value money">${escapeHtml(Number(f.payable).toLocaleString())} ریال</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">منبع</span>
-      <span class="stat-value">${$('fund')?.value || f.suggestedFund || '-'}</span>
+      <span class="stat-value">${escapeHtml($('fund')?.value || f.suggestedFund || '-')}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">کد نوسازی</span>
-      <span class="stat-value">${f.bnkAcntNo || '-'}</span>
+      <span class="stat-value">${escapeHtml(f.bnkAcntNo || '-')}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">رایورز (incmdocsys)</span>
-      <span class="stat-value">${f.existsInRayvarz ? 'موجود — ارسال نشود' : 'نیست'}</span>
+      <span class="stat-value">${escapeHtml(f.existsInRayvarz ? 'موجود — ارسال نشود' : 'نیست')}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">Accounting_DocHeader</span>
-      <span class="stat-value">${f.existsInAccountingDocHeader ? 'موجود — ارسال نشود' : 'نیست'}</span>
+      <span class="stat-value">${escapeHtml(f.existsInAccountingDocHeader ? 'موجود — ارسال نشود' : 'نیست')}</span>
     </div>
     <div class="stat-card">
       <span class="stat-label">وضعیت</span>
-      <span class="stat-value">${f.statusMessage || (f.canSend ? 'آماده ارسال' : '—')}</span>
+      <span class="stat-value">${escapeHtml(f.statusMessage || (f.canSend ? 'آماده ارسال' : '—'))}</span>
     </div>
   `;
 
@@ -3575,7 +3659,7 @@ function renderFiche(f) {
   tbody.innerHTML = '';
   (f.rows || []).forEach((r, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td><td>${r.incmNo}</td><td>${r.incmRowDsc}</td><td>${Number(r.val).toLocaleString()}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(i + 1)}</td><td>${escapeHtml(r.incmNo)}</td><td>${escapeHtml(toPersianLetters(r.incmRowDsc))}</td><td>${escapeHtml(Number(r.val).toLocaleString())}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -3610,7 +3694,12 @@ async function init() {
   const installmentInput = $('installmentValues');
   if (installmentInput) {
     installmentInput.addEventListener('input', () => {
-      installmentInput.value = installmentInput.value.replace(/\D/g, '');
+      // چند شماره با «,» «؛» یا فاصله — همان جداکننده‌های سرور.
+      const cleaned = normalizeDigits(installmentInput.value)
+        .replace(/[،؛]/g, (ch) => (ch === '،' ? ',' : ';'))
+        .replace(/[^\d,;\s]/g, '');
+      if (cleaned !== installmentInput.value) installmentInput.value = cleaned;
+      invalidateInstallmentPreview();
     });
   }
 
@@ -3623,8 +3712,14 @@ async function init() {
       setRayvarzSendMode(btn.dataset.rayvarzMode);
     });
   });
-  $('installmentApplyEndState')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('single'));
-  $('installmentApplyEndStateExcel')?.addEventListener('change', () => syncInstallmentOdooatCheckboxes('excel'));
+  $('installmentApplyEndState')?.addEventListener('change', () => {
+    syncInstallmentOdooatCheckboxes('single');
+    invalidateInstallmentPreview();
+  });
+  $('installmentApplyEndStateExcel')?.addEventListener('change', () => {
+    syncInstallmentOdooatCheckboxes('excel');
+    invalidateInstallmentPreview();
+  });
   setInstallmentMode('single');
 
   const excelInput = $('installmentExcelFile');
@@ -3742,6 +3837,7 @@ function setupEventHandlers() {
     return showAppWarning(currentFiche.blockReason || currentFiche.statusMessage || 'این فیش قابل ارسال نیست');
   }
 
+  let sent = false;
   if (isTahatorIncomeFiche(currentFiche)) {
     $('btnSend').disabled = true;
     showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
@@ -3753,19 +3849,20 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      showTahatorSendResult(data);
       if (data.dryRun) showAppInfo('ارسال آزمایشی تهاتر — به رایورز ارسال نشد.');
       else if (data.skipped) showAppWarning(data.message);
-      else if (data.success) {
-        showAppSuccess(data.message || 'ارسال تهاتر موفق');
-        if (!data.dryRun) resetMainTabPanelState('unsent');
-      } else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      else if (data.success) showAppSuccess(data.message || 'ارسال تهاتر موفق');
+      else showAppError(data.message || (data.docNotSentError ? `عدم ارسال: ${data.docNotSentError}` : 'تهاتر ناموفق'));
+      if (!data.dryRun && (data.success || data.skipped)) {
+        finishSingleSend();
+        sent = true;
+      }
+      showTahatorSendResult(data);
       $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
       showAppError(e.message);
     } finally {
-      $('btnSend').disabled = false;
-      updateSendButton(currentFiche);
+      if (!sent) updateSendButton(currentFiche);
     }
     return;
   }
@@ -3783,29 +3880,33 @@ function setupEventHandlers() {
     const res = await apiFetch('/api/fiche/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(getPayload(true))
+      body: JSON.stringify(getPayload())
     });
     const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || data.detail || data.title || `خطا (HTTP ${res.status})`);
 
-    showSendResult(data);
-
     if (data.dryRun) {
       showAppInfo('ارسال آزمایشی — به رایورز ارسال نشد.');
+    } else if (data.outcomeUnknown) {
+      showAppWarning(data.message || 'نتیجه ارسال نامشخص است — پیش از ارسال مجدد در رایورز بررسی کنید.');
     } else if (data.success && data.verifiedInRayvarz === false) {
       showAppWarning('ارسال انجام شد ولی در رایورز تأیید نشد.');
     } else if (!data.success) {
       showAppError(data.message || data.docNotSentError || 'ارسال ناموفق');
-    } else if (data.success && data.verifiedInRayvarz) {
+    } else {
       showAppSuccess('فیش در رایورز ثبت شد.');
-      resetMainTabPanelState('unsent');
     }
+    // هر ارسالی که قطعاً ناموفق نبوده، دکمه را برای همین فیش می‌بندد تا سند تکراری ساخته نشود.
+    if (!data.dryRun && (data.success || data.outcomeUnknown)) {
+      finishSingleSend();
+      sent = true;
+    }
+    showSendResult(data);
     $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     showAppError(e.message);
   } finally {
-    $('btnSend').disabled = false;
-    updateSendButton(currentFiche);
+    if (!sent) updateSendButton(currentFiche);
   }
   });
 
@@ -3845,7 +3946,7 @@ function setupEventHandlers() {
     if (unsentExcelBusy) return;
 
     unsentExcelBusy = true;
-    if (excelBtn) excelBtn.disabled = true;
+    setUnsentExcelPickerBusy(input, excelBtn, true);
     setUnsentExcelStatus('فایل در حال بررسی است…', true);
     if (box) box.hidden = true;
 
@@ -3911,31 +4012,13 @@ function setupEventHandlers() {
     } finally {
       unsentExcelBusy = false;
       if (input) input.value = '';
-      if (excelBtn) excelBtn.disabled = false;
+      setUnsentExcelPickerBusy(input, excelBtn, false);
     }
   });
 
   bindClick('btnUnsentSearch', async () => {
     await fetchUnsentResults(1, { clearSelection: true });
   });
-
-  bindClick('btnUnsentPrevPage', async () => {
-    if (unsentSearchState.page <= 1) return;
-    await fetchUnsentResults(unsentSearchState.page - 1);
-  });
-
-  bindClick('btnUnsentNextPage', async () => {
-    if (unsentSearchState.page >= unsentSearchState.totalPages) return;
-    await fetchUnsentResults(unsentSearchState.page + 1);
-  });
-
-  const pageSizeSel = $('unsentPageSize');
-  if (pageSizeSel) {
-    pageSizeSel.addEventListener('change', async () => {
-      if (!unsentSearchState.filters) return;
-      await fetchUnsentResults(1);
-    });
-  }
 
   bindClick('btnUnsentSend', async () => {
     const targets = getSelectedUnsentBatchTargets();
@@ -3962,15 +4045,15 @@ function setupEventHandlers() {
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
 
-      box.textContent = formatUnsentBatchSendResult(data);
+      const resultText = formatUnsentBatchSendResult(data);
+      const summary = `ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`;
 
       if (data.dryRun) showAppInfo('DryRun: SOAP ساخته شد؛ POST واقعی زده نشد.');
-      else if (data.failed > 0) {
-        showAppWarning(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
-      } else {
-        showAppSuccess(`ارسال دسته‌ای تمام شد — موفق: ${data.succeeded}، ناموفق: ${data.failed}، رد: ${data.skipped}`);
-        if (!data.dryRun) resetMainTabPanelState('unsent');
-      }
+      else if (hasUpdateProblems(data)) showAppWarning(summary);
+      else showAppSuccess(summary);
+      // انتخاب‌ها پاک می‌شوند تا فیش‌های ارسال‌شده دوباره ارسال نشوند؛ گزارش هر فیش باقی می‌ماند.
+      if (!data.dryRun && (data.succeeded || 0) > 0) resetMainTabPanelState('unsent');
+      showResultBox(box, resultText);
     } catch (e) {
       box.textContent = e.message;
       showAppError(e.message);
@@ -4021,8 +4104,9 @@ function setupEventHandlers() {
     const checkDateError = shamsiDateError([[newPaymentDate, 'تاریخ پرداخت جدید']]);
     if (checkDateError) return showAppWarning(checkDateError);
 
-    const trackingNo = normalizeSearchId($('checkDateTrackingNo')?.value)
-      || checkDateSelectedRow.trackingNo;
+    // همان ردیفی که جستجو و انتخاب شد — نه مقدار فعلی کادر که ممکن است پس از جستجو عوض شده باشد.
+    const trackingNo = normalizeSearchId(checkDateSelectedRow.trackingNo)
+      || normalizeSearchId($('checkDateTrackingNo')?.value);
     const dry = config?.installmentCheckDate?.dryRun ?? config?.installment?.dryRun ?? config?.dryRun ?? false;
     const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';
     if (!confirm(`${dryNote ? dryNote + '\n\n' : ''}تاریخ چک به ${newPaymentDate} تغییر کند؟`)) return;
@@ -4123,6 +4207,7 @@ function setupEventHandlers() {
     const btn = $('btnInstallmentUpdate');
     const box = $('installmentResultBox');
     btn.disabled = true;
+    let applied = false;
     if (box) {
       box.hidden = false;
       box.textContent = 'در حال اعمال…';
@@ -4135,18 +4220,22 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      if (box) box.textContent = formatInstallmentUpdateResult(data);
+      const resultText = formatInstallmentUpdateResult(data);
       if (data.dryRun) {
         showAppInfo(`${data.wouldUpdate || 0} ردیف — تغییری روی سرور اعمال نشد.`);
       } else {
-        showAppSuccess(`UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`);
+        applied = true;
         resetMainTabPanelState('installment');
+        const msg = `UPDATE تمام شد — ${data.updated} ردیف به‌روز، ${data.notFound} بدون نتیجه`;
+        if (hasUpdateProblems(data)) showAppWarning(`${msg} — جزئیات خطاها را در گزارش ببینید`);
+        else showAppSuccess(msg);
       }
+      showResultBox(box, resultText);
     } catch (e) {
-      if (box) box.textContent = e.message;
+      showResultBox(box, e.message);
       showAppError(e.message);
     } finally {
-      btn.disabled = false;
+      btn.disabled = applied;
     }
   });
 
@@ -4225,13 +4314,16 @@ function setupEventHandlers() {
       });
       const data = await parseJsonResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
-      if (box) box.textContent = formatFicheDateUpdateResult(data);
+      const resultText = formatFicheDateUpdateResult(data);
       if (data.dryRun) {
         showAppInfo(`${data.wouldUpdate || 0} فیش — تغییری روی سرور اعمال نشد (DryRun).`);
       } else {
-        showAppSuccess(`UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`);
+        const msg = `UPDATE تمام شد — ${data.updated} فیش به‌روز، ${data.notFound} بدون نتیجه`;
+        if (hasUpdateProblems(data)) showAppWarning(`${msg} — جزئیات خطاها را در گزارش ببینید`);
+        else showAppSuccess(msg);
         resetMainTabPanelState('ficheDate');
       }
+      showResultBox(box, resultText);
     } catch (e) {
       if (box) box.textContent = e.message;
       showAppError(e.message);
@@ -4311,8 +4403,11 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('مرکز هزینه — DryRun؛ تغییری در دیتابیس اعمال نشد.');
       } else if (data.success && (data.updated || 0) > 0) {
-        showAppSuccess(data.message || `${data.updated} فیش به‌روز شد`);
+        const partial = hasUpdateProblems(data) || (data.results || []).some((r) => !r.success);
+        if (partial) showAppWarning(data.message || `${data.updated} فیش به‌روز شد`);
+        else showAppSuccess(data.message || `${data.updated} فیش به‌روز شد`);
         resetMainTabPanelState('costCenter');
+        if (box) box.hidden = false;
       } else {
         showAppError(data.message || 'به‌روزرسانی ناموفق بود');
       }
@@ -4401,8 +4496,11 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('شاهکار — DryRun؛ تغییری در دیتابیس اعمال نشد.');
       } else if (data.success && (data.updated || 0) > 0) {
-        showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
+        const partial = hasUpdateProblems(data) || (data.results || []).some((r) => !r.success);
+        if (partial) showAppWarning(data.message || `${data.updated} کاربر به‌روز شد`);
+        else showAppSuccess(data.message || `${data.updated} کاربر به‌روز شد`);
         resetMainTabPanelState('shahkar');
+        if (box) box.hidden = false;
       } else {
         showAppError(data.message || 'به‌روزرسانی ناموفق بود');
       }
@@ -4445,8 +4543,11 @@ function setupEventHandlers() {
       if (data.dryRun) {
         showAppInfo('تغییر تاریخ پرداخت — تغییری روی سرور اعمال نشد (DryRun).');
       } else if (data.success && (data.updated || 0) > 0) {
-        showAppSuccess(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
+        const partial = hasUpdateProblems(data) || (data.results || []).some((r) => !r.success);
+        if (partial) showAppWarning(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
+        else showAppSuccess(data.message || `تایید ثبت شد — ${data.updated} فیش به‌روز`);
         resetMainTabPanelState('bankInquiry');
+        if (box) box.hidden = false;
       } else {
         const firstFail = (data.results || []).find((r) => !r.success);
         const detail = data.message || firstFail?.message || firstFail?.bankInquiryMessage || 'استعلام بانک یا به‌روزرسانی ناموفق بود';
@@ -4473,34 +4574,34 @@ function setupAuthAndAdminHandlers() {
     window.location.href = '/login.html';
   });
 
-  bindClick('btnCreateUser', createUserFromForm);
+  bindClick('btnCreateUser', () => runWithButtonBusy($('btnCreateUser'), createUserFromForm));
   bindClick('btnRefreshUsers', async () => {
     await loadGroupsTable();
     await loadUsersTable();
   });
-  bindClick('btnCreateGroup', async () => {
+  bindClick('btnCreateGroup', () => runWithButtonBusy($('btnCreateGroup'), async () => {
     try {
       await saveGroupFromForm();
     } catch (e) {
       alert(e.message);
     }
-  });
+  }));
   bindClick('btnCancelGroupEdit', () => resetGroupForm());
   bindClick('btnRefreshGroups', loadGroupsTable);
-  bindClick('btnSaveUserEdit', async () => {
+  bindClick('btnSaveUserEdit', () => runWithButtonBusy($('btnSaveUserEdit'), async () => {
     try {
       await saveUserEdit();
     } catch (e) {
       alert(e.message);
     }
-  });
-  bindClick('btnResetUserPassword', async () => {
+  }));
+  bindClick('btnResetUserPassword', () => runWithButtonBusy($('btnResetUserPassword'), async () => {
     try {
       await resetUserPassword();
     } catch (e) {
       alert(e.message);
     }
-  });
+  }));
   bindClick('btnCancelUserEdit', closeUserEdit);
 }
 

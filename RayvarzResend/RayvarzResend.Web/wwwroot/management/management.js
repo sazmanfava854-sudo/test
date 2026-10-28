@@ -94,28 +94,12 @@ function isAdminUser(user) {
   return readIsAdminFlag(user ?? currentUser);
 }
 
-function hasAnyModulePermission(user) {
-  if (isAdminUser(user)) return true;
-  return !!(
-    user?.canAccessUnsentFiches
-    || user?.canAccessInstallment
-    || user?.canAccessInstallmentCheckDate
-    || user?.canAccessFicheDateChange
-    || user?.canAccessBankInquiryConfirm
-    || user?.canAccessCostCenter
-    || user?.canAccessShahkar
-    || user?.canManageUsers
-  );
-}
-
 function canAccessUnsent(user) {
   return isAdminUser(user) || !!user?.canAccessUnsentFiches;
 }
 
 function canAccessRayvarzModule(user) {
-  if (isAdminUser(user)) return true;
-  if (canAccessUnsent(user)) return true;
-  return !hasAnyModulePermission(user);
+  return canAccessUnsent(user);
 }
 
 async function loadAuthMode() {

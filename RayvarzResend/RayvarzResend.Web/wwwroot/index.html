@@ -159,7 +159,7 @@
       <div class="actions">
         <button id="btnUnsentSearch" class="btn primary" type="button">جستجو</button>
         <input id="unsentExcelFile" type="file" accept=".xlsx,.xls" hidden />
-        <label for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
+        <label id="btnUnsentExcel" for="unsentExcelFile" class="btn secondary">ورود از اکسل</label>
         <a id="unsentTemplateDownload" class="btn secondary" href="templates/unsent-bill-pay-template.xlsx" download="unsent-bill-pay-template.xlsx">دانلود تمپلیت</a>
         <button id="btnUnsentSend" class="btn danger" type="button" disabled>ارسال انتخاب‌شده‌ها</button>
       </div>
@@ -191,17 +191,7 @@
           </table>
         </div>
         <div class="unsent-pagination" id="unsentPagination" hidden>
-          <button id="btnUnsentPrevPage" class="btn secondary btn-page" type="button" disabled>قبلی</button>
           <span id="unsentPageLabel" class="unsent-page-label"></span>
-          <button id="btnUnsentNextPage" class="btn secondary btn-page" type="button" disabled>بعدی</button>
-          <label class="unsent-page-size">
-            <span>در هر صفحه</span>
-            <select id="unsentPageSize">
-              <option value="25" selected>۲۵</option>
-              <option value="50">۵۰</option>
-              <option value="100">۱۰۰</option>
-            </select>
-          </label>
         </div>
       </div>
       <pre id="unsentResultBox" class="result-log" hidden></pre>
@@ -256,7 +246,7 @@
         <div class="installment-single-row">
           <label class="field field-required installment-values-field">
             <span class="field-label">شماره سند / کد پیگیری</span>
-            <input id="installmentValues" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+            <input id="installmentValues" type="text" inputmode="numeric" autocomplete="off" />
           </label>
           <label class="field installment-odooat-check check-field" id="installmentEndStateWrap">
             <input id="installmentApplyEndState" type="checkbox" />

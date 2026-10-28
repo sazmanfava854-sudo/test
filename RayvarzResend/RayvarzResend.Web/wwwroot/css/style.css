@@ -82,6 +82,7 @@ body {
   box-shadow: 0 8px 20px rgba(29, 78, 216, 0.22);
 }
 
+[hidden],
 .tab-panel[hidden] {
   display: none !important;
 }
@@ -218,6 +219,10 @@ jdp-overlay {
   color: var(--text);
   min-width: 180px;
   text-align: center;
+}
+
+.unsent-page-label.unsent-truncated {
+  color: var(--warn);
 }
 
 .btn-page {
@@ -542,7 +547,8 @@ input:focus, select:focus {
   transform: translateY(0);
 }
 
-.btn:disabled {
+.btn:disabled,
+.btn.is-disabled {
   opacity: 0.42;
   cursor: not-allowed;
   transform: none;
