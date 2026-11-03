@@ -41,7 +41,9 @@ public static class BankInquiryResponseParser
 
     public static bool LooksLikeServiceFailure(string? message) => ContainsAny(message, ServiceFailureHints);
 
-    public static bool LooksLikePaidMessage(string? message) => ContainsAny(message, PaidMessageHints);
+    /// <summary>«ناموفق»، «نشده» و … حتی اگر کلمهٔ مثبت داشته باشند پرداخت حساب نمی‌شوند.</summary>
+    public static bool LooksLikePaidMessage(string? message) =>
+        !ContainsAny(message, NegativeMessageHints) && ContainsAny(message, PaidMessageHints);
 
     public static bool LooksLikePermissionDenied(string? message) =>
         ContainsAny(message, PermissionDeniedHints);
@@ -49,8 +51,24 @@ public static class BankInquiryResponseParser
     [
         "پرداخت شده",
         "پرداخت موفق",
-        "تایید شد",
-        "موفق"
+        "تایید شد"
+    ];
+
+    private static readonly string[] NegativeMessageHints =
+    [
+        "ناموفق",
+        "نشده",
+        "نشد",
+        "نگردیده",
+        "نگردید",
+        "عدم",
+        "خطا",
+        "لغو",
+        "برگشت",
+        "unsuccessful",
+        "failed",
+        "not paid",
+        "unpaid"
     ];
 
     private static readonly string[] UnpaidMessageHints =
@@ -96,13 +114,17 @@ public static class BankInquiryResponseParser
             if (isPay == 1)
                 return PaidStep(paymentDate, message);
 
+            // سرویس epay گاهی با isPay=0 پیام «پرداخت شده است» برمی‌گرداند؛ ولی تاریخ/«یافت شد» به‌تنهایی کافی نیست.
             if (LooksLikePaidMessage(message))
                 return PaidStep(paymentDate, message);
 
-            if (intResult == 0 && !string.IsNullOrWhiteSpace(paymentDate))
+            var explicitUnpaid = isPay == 0;
+
+            if (!explicitUnpaid && intResult == 0 && !string.IsNullOrWhiteSpace(paymentDate))
                 return PaidStep(paymentDate, message);
 
-            if (intResult == 0
+            if (!explicitUnpaid
+                && intResult == 0
                 && ContainsAny(message, ["یافت شد", "found"])
                 && (ReadInt(root, "amount", "Amount") is > 0 || HasBillOrPayId(root)))
                 return PaidStep(paymentDate, message);
@@ -501,7 +523,7 @@ public static class BankInquiryResponseParser
         if (ContainsAny(message, UnpaidMessageHints))
             return BankInquiryApiResult.NotPaid(message);
 
-        if (ContainsAny(message, PaidMessageHints) || !string.IsNullOrWhiteSpace(paymentDate))
+        if (LooksLikePaidMessage(message) || !string.IsNullOrWhiteSpace(paymentDate))
             return BankInquiryApiResult.Paid(paymentDate, message);
 
         if (TryReadNumericSuccess(root, out var numericPaid))

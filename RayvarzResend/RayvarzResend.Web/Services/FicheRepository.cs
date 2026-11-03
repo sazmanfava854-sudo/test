@@ -27,15 +27,15 @@ public class FicheRepository
 
     private const string DutyBnkAcntNoSelect = """
         COALESCE(
-            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
-            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""حوزه""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""بلوک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ملک""]/Value)[1]', 'nvarchar(20)'))) + '-' +
-            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""ساختمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
-            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""آپارتمان""]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
-            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""واحد صنفی""]/Value)[1]', 'nvarchar(20)'))), ''), '0')
+            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="کد نوسازی"]/Value)[1]', 'nvarchar(100)'))), ''),
+            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="کد نوسازي"]/Value)[1]', 'nvarchar(100)'))), ''),
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="منطقه"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="حوزه"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="بلوک"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="ملک"]/Value)[1]', 'nvarchar(20)'))) + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="ساختمان"]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="آپارتمان"]/Value)[1]', 'nvarchar(20)'))), ''), '0') + '-' +
+            ISNULL(NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="واحد صنفی"]/Value)[1]', 'nvarchar(20)'))), ''), '0')
         ) AS BnkAcntNo
         """;
 
@@ -180,6 +180,7 @@ SELECT f.FicheNo, f.BillID, f.PaymentID, f.Payable, f.NidFiche, f.NidIncome,
        f.PaymentDate,
        f.BankPaymentDate,
        f.EumFicheStatus, f.CI_IncomeAccountGroup,
+       {FicheAbortionGuard.SelectCanceledDateSql("f", isDuty: false)},
        CAST(r.NidWorkItem AS nvarchar(50)) AS RefReconstructionNo,
        ISNULL(
          NULLIF(LTRIM(RTRIM({NosaziNickSql})), '-'),
@@ -190,7 +191,8 @@ FROM dbo.Income_Fiche f
 JOIN dbo.Income i ON i.NidIncome = f.NidIncome
 LEFT JOIN dbo.Sh_RequestInfo r ON r.NidProc = i.NidProc
 LEFT JOIN dbo.Base_NosaziCode b ON b.NidNosaziCode = r.NidNosaziCode
-WHERE {where}";
+WHERE {where}
+{(type == IdentifierType.FicheNo ? InClauseOrderBy("f.FicheNo", "fn", ficheKeys) : "")}";
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
@@ -245,6 +247,9 @@ WHERE {where}";
             CheckNo = reader.IsDBNull(reader.GetOrdinal("CheckNo")) ? null : reader.GetString(reader.GetOrdinal("CheckNo")),
             RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = ReadInt32(reader, "EumFicheStatus"),
+            CanceledDate = reader.IsDBNull(reader.GetOrdinal("CanceledDate"))
+                ? null
+                : reader.GetString(reader.GetOrdinal("CanceledDate")).Trim(),
             IncomeAccountGroup = group,
             RefReconstructionNo = reader.IsDBNull(reader.GetOrdinal("RefReconstructionNo")) ? null : reader.GetString(reader.GetOrdinal("RefReconstructionNo")),
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
@@ -269,7 +274,13 @@ WHERE {where}";
         if (isTahatorAmount)
             TahatorRowBuilder.ApplyTahatorAmountRows(dto);
         else if (isTahatorIncome)
-            TahatorRowBuilder.ApplyTahatorIncomeRows(dto);
+        {
+            // VB Tahator(): TmpDT از Income_Calculation — WrapperAccountNo = CI_IncomeCalculation (نه IncomeCode).
+            dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct, mapRayvarzIncmNo: false);
+
+            await IncomeFicheSupplementLoader.EnrichAsync(dto, _saraCs, LoadIncomeRowsAsync, ct);
+            IncomeMember1388RowBuilder.Apply(dto);
+        }
         else
         {
             dto.Rows = await LoadIncomeRowsAsync(dto.NidIncome!.Value, ct);
@@ -285,15 +296,25 @@ WHERE {where}";
         return dto;
     }
 
-    private async Task<List<IncmRowDto>> LoadIncomeRowsAsync(Guid nidIncome, CancellationToken ct)
+    private Task<List<IncmRowDto>> LoadIncomeRowsAsync(Guid nidIncome, CancellationToken ct) =>
+        LoadIncomeRowsAsync(nidIncome, ct, mapRayvarzIncmNo: false);
+
+    private async Task<List<IncmRowDto>> LoadIncomeRowsAsync(
+        Guid nidIncome,
+        CancellationToken ct,
+        bool mapRayvarzIncmNo,
+        Dictionary<int, string>? incomeCodeByCalculation = null,
+        HashSet<int>? allowedCalculationIds = null)
     {
-        const string sql = @"
-SELECT ic.CI_IncomeCalculation AS IncmNo,
-       COALESCE(ic.SysValue, ic.Value) AS Val,
-       ISNULL(c.Title, '') AS IncmRowDsc
-FROM dbo.Income_Calculation ic
-LEFT JOIN dbo.CI_IncomeCalculation c ON c.ID = ic.CI_IncomeCalculation
-WHERE ic.NidIncome = @nid";
+        const string sql = """
+            SELECT ic.CI_IncomeCalculation AS CalcId,
+                   COALESCE(ic.SysValue, ic.Value) AS Val,
+                   ISNULL(c.Title, '') AS IncmRowDsc,
+                   ISNULL(LTRIM(RTRIM(CAST(c.IncomeCode AS nvarchar(30)))), '') AS IncomeCode
+            FROM dbo.Income_Calculation ic
+            LEFT JOIN dbo.CI_IncomeCalculation c ON c.ID = ic.CI_IncomeCalculation
+            WHERE ic.NidIncome = @nid
+            """;
 
         var rows = new List<IncmRowDto>();
         await using var conn = new SqlConnection(_saraCs);
@@ -303,8 +324,22 @@ WHERE ic.NidIncome = @nid";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var incmNo = ReadInt32(reader, "IncmNo");
-            if (IncomeExcludedCodes.Codes.Contains(incmNo)) continue;
+            var calcId = ReadInt32(reader, "CalcId");
+            if (allowedCalculationIds is { Count: > 0 } && !allowedCalculationIds.Contains(calcId))
+                continue;
+
+            var incomeCode = reader.IsDBNull(reader.GetOrdinal("IncomeCode"))
+                ? ""
+                : reader.GetString(reader.GetOrdinal("IncomeCode"));
+            if (incomeCodeByCalculation != null)
+                incomeCodeByCalculation[calcId] = incomeCode;
+
+            var incmNo = mapRayvarzIncmNo
+                ? IncomeRayvarzIncmNoResolver.Resolve(calcId, incomeCode)
+                : calcId;
+            if (incmNo <= 0 || IncomeExcludedCodes.Codes.Contains(calcId))
+                continue;
+
             var val = ReadDecimal(reader, "Val");
             if (val == 0) continue;
             rows.Add(new IncmRowDto
@@ -338,6 +373,7 @@ SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
        d.PrintDate,
        d.ExportDate,
        d.EumDutyFicheStatus, d.CI_DutyFicheExportType,
+       {FicheAbortionGuard.SelectCanceledDateSql("d", isDuty: true)},
        COALESCE(
            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازی""]/Value)[1]', 'nvarchar(100)'))), ''),
            NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""کد نوسازي""]/Value)[1]', 'nvarchar(100)'))), ''),
@@ -351,7 +387,8 @@ SELECT d.FicheNo, d.BillID, d.PaymentID, d.PayablePrice AS Payable, d.NidFiche,
        ) AS BnkAcntNo,
        NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS DutyRegion
 FROM dbo.Duty_Fiche d
-WHERE {where}";
+WHERE {where}
+{(type == IdentifierType.FicheNo ? InClauseOrderBy("d.FicheNo", "fn", ficheKeys) : "")}";
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
@@ -392,6 +429,9 @@ WHERE {where}";
             BankCode = bankCode,
             RowDate = ReadRowDate(reader, "RowDate"),
             CurrentStatus = dutyStatus,
+            CanceledDate = reader.IsDBNull(reader.GetOrdinal("CanceledDate"))
+                ? null
+                : reader.GetString(reader.GetOrdinal("CanceledDate")).Trim(),
             DutyExportType = exportType,
             BnkAcntNo = reader.IsDBNull(reader.GetOrdinal("BnkAcntNo")) ? "" : reader.GetString(reader.GetOrdinal("BnkAcntNo")),
             BnkAcntNoSource = "کد نوسازی — از Duty_Fiche.OtherFields (XML فیش)",
@@ -513,6 +553,15 @@ ORDER BY fs.CI_DutyFormula, fs.CI_DutyFormulaFiche";
         if (keys.Count == 0)
             return "1 = 0";
         return $"{column} IN ({string.Join(", ", keys.Select((_, i) => $"@{prefix}{i}"))})";
+    }
+
+    /// <summary>کلید اول همان شمارهٔ واردشده است — تطبیق دقیق قبل از نسخه‌های بدون صفر ابتدایی.</summary>
+    private static string InClauseOrderBy(string column, string prefix, IReadOnlyList<string> keys)
+    {
+        if (keys.Count <= 1)
+            return "";
+        var whens = string.Join(" ", keys.Select((_, i) => $"WHEN @{prefix}{i} THEN {i}"));
+        return $"ORDER BY CASE {column} {whens} ELSE {keys.Count} END";
     }
 
     private static void BindInClause(SqlCommand cmd, string prefix, IReadOnlyList<string> keys)
@@ -965,11 +1014,12 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
-                AND f.EumFicheStatus <> 4
+                AND {FicheAbortionGuard.IncomeNotAbortedSql}
                 {dateClause}
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
+                AND (@restrictAg IS NULL OR f.CI_IncomeAccountGroup = @restrictAg)
                 AND CAST(b.District AS nvarchar(20)) = @district
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               """
@@ -986,11 +1036,12 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = f.NidFiche)
-                AND f.EumFicheStatus <> 4
+                AND {FicheAbortionGuard.IncomeNotAbortedSql}
                 {dateClause}
                 AND (@ficheNo = '' OR f.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR f.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR f.PaymentID LIKE @paymentIdPat)
+                AND (@restrictAg IS NULL OR f.CI_IncomeAccountGroup = @restrictAg)
               ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               """;
 
@@ -1019,18 +1070,18 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                      d.FicheNo, d.NidFiche, d.BillID, d.PaymentID, d.PayablePrice AS Payable,
                      d.PaymentDate, d.BankPaymentDate, d.EumDutyFicheStatus AS EumFicheStatus,
                      '' AS NidWorkItem,
-                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))), '') AS District,
+                     NULLIF(LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="منطقه"]/Value)[1]', 'nvarchar(20)'))), '') AS District,
                      {DutyBnkAcntNoSelect}
               FROM dbo.Duty_Fiche d WITH (NOLOCK)
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)
-                AND d.EumDutyFicheStatus <> 2
+                AND {FicheAbortionGuard.DutyNotAbortedSql}
                 {dateClause}
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
                 AND (@paymentId = '' OR d.PaymentID LIKE @paymentIdPat)
-                AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject=""منطقه""]/Value)[1]', 'nvarchar(20)'))) = @district
+                AND LTRIM(RTRIM(d.OtherFields.value('(//ClsLog[Subject="منطقه"]/Value)[1]', 'nvarchar(20)'))) = @district
               ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
               """
             : $"""
@@ -1044,7 +1095,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
               WHERE NOT EXISTS (
                     SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                     WHERE h.NidFiche = d.NidFiche)
-                AND d.EumDutyFicheStatus <> 2
+                AND {FicheAbortionGuard.DutyNotAbortedSql}
                 {dateClause}
                 AND (@ficheNo = '' OR d.FicheNo LIKE @ficheNoPat)
                 AND (@billId = '' OR d.BillID LIKE @billIdPat)
@@ -1272,8 +1323,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         string.Join(", ", Enumerable.Range(0, count).Select(i => $"(@b{i}, @p{i}, @bt{i}, @pt{i})"));
 
     private static string UnsentIncomeFilter(bool unsentOnly) => unsentOnly
-        ? """
-          AND f.EumFicheStatus <> 4
+        ? $"""
+          AND {FicheAbortionGuard.IncomeNotAbortedSql}
           AND NOT EXISTS (
                 SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                 WHERE h.NidFiche = f.NidFiche)
@@ -1281,8 +1332,8 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         : "";
 
     private static string UnsentDutyFilter(bool unsentOnly) => unsentOnly
-        ? """
-          AND d.EumDutyFicheStatus <> 2
+        ? $"""
+          AND {FicheAbortionGuard.DutyNotAbortedSql}
           AND NOT EXISTS (
                 SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                 WHERE h.NidFiche = d.NidFiche)
@@ -1354,7 +1405,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
     private static string BuildFicheNoDiagnoseSql(int count, bool isDuty)
     {
         var values = Values3(count);
-        var status = isDuty ? "d.EumDutyFicheStatus = 2" : "f.EumFicheStatus = 4";
+        var abortedCase = isDuty ? FicheAbortionGuard.DutyAbortedCaseSql : FicheAbortionGuard.IncomeAbortedCaseSql;
         var table = isDuty ? "dbo.Duty_Fiche d" : "dbo.Income_Fiche f";
         var alias = isDuty ? "d" : "f";
         return $"""
@@ -1362,7 +1413,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                    CASE WHEN EXISTS (
                          SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                          WHERE h.NidFiche = {alias}.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                   CASE WHEN {status} THEN 1 ELSE 0 END AS Cancelled,
+                   {abortedCase} AS Cancelled,
                    0 AS Swapped
             FROM (VALUES {values}) AS k(PairBill, PairPay, KeyNo)
             INNER JOIN {table} WITH (NOLOCK) ON {alias}.FicheNo = k.KeyNo
@@ -1374,7 +1425,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         var values = Values4(count);
         var alias = isDuty ? "d" : "f";
         var table = isDuty ? "dbo.Duty_Fiche d" : "dbo.Income_Fiche f";
-        var status = isDuty ? "d.EumDutyFicheStatus = 2" : "f.EumFicheStatus = 4";
+        var abortedCase = isDuty ? FicheAbortionGuard.DutyAbortedCaseSql : FicheAbortionGuard.IncomeAbortedCaseSql;
         var on = swapped
             ? $"{alias}.BillID = k.KeyPay AND {alias}.PaymentID = k.KeyBill"
             : $"{alias}.BillID = k.KeyBill AND {alias}.PaymentID = k.KeyPay";
@@ -1384,7 +1435,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                    CASE WHEN EXISTS (
                          SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                          WHERE h.NidFiche = {alias}.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                   CASE WHEN {status} THEN 1 ELSE 0 END AS Cancelled,
+                   {abortedCase} AS Cancelled,
                    {swappedFlag} AS Swapped
             FROM (VALUES {values}) AS k(PairBill, PairPay, KeyBill, KeyPay)
             INNER JOIN {table} WITH (NOLOCK) ON {on}
@@ -1490,7 +1541,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                            CASE WHEN EXISTS (
                                  SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                                  WHERE h.NidFiche = x.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                           CASE WHEN x.EumFicheStatus = 4 THEN 1 ELSE 0 END AS Cancelled,
+                           {FicheAbortionGuard.IncomeAbortedCaseSqlAliasX} AS Cancelled,
                            {BillPayIdSqlHelper.SwappedColumnsCaseSql("x.BillID", "x.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
                     FROM dbo.Income_Fiche x WITH (NOLOCK)
                     WHERE {match}
@@ -1519,7 +1570,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                            CASE WHEN EXISTS (
                                  SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                                  WHERE h.NidFiche = x.NidFiche) THEN 1 ELSE 0 END AS Sent,
-                           CASE WHEN x.EumDutyFicheStatus = 2 THEN 1 ELSE 0 END AS Cancelled,
+                           {FicheAbortionGuard.DutyAbortedCaseSqlAliasX} AS Cancelled,
                            {BillPayIdSqlHelper.SwappedColumnsCaseSql("x.BillID", "x.PaymentID", "p.BillId", "p.PaymentId")} AS Swapped
                     FROM dbo.Duty_Fiche x WITH (NOLOCK)
                     WHERE {match}
@@ -1552,7 +1603,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     AND NOT EXISTS (
                           SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                           WHERE h.NidFiche = f.NidFiche)
-                    AND f.EumFicheStatus <> 4
+                    AND {FicheAbortionGuard.IncomeNotAbortedSql}
                   ORDER BY COALESCE(f.BankPaymentDate, f.PaymentDate) DESC, f.FicheNo
               ) x
               """;
@@ -1580,7 +1631,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
                     AND NOT EXISTS (
                           SELECT 1 FROM dbo.Accounting_DocHeader h WITH (NOLOCK)
                           WHERE h.NidFiche = d.NidFiche)
-                    AND d.EumDutyFicheStatus <> 2
+                    AND {FicheAbortionGuard.DutyNotAbortedSql}
                   ORDER BY COALESCE(d.BankPaymentDate, d.PaymentDate) DESC, d.FicheNo
               ) x
               """;
@@ -1647,6 +1698,7 @@ WHERE FicheNo = @f ORDER BY Uptime DESC";
         cmd.Parameters.AddWithValue("@billIdPat", string.IsNullOrEmpty(billId) ? "%" : $"%{billId}%");
         cmd.Parameters.AddWithValue("@paymentIdPat", string.IsNullOrEmpty(paymentId) ? "%" : $"%{paymentId}%");
         cmd.Parameters.AddWithValue("@district", (req.District ?? "").Trim());
+        cmd.Parameters.AddWithValue("@restrictAg", (object?)req.RestrictIncomeAccountGroup ?? DBNull.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))

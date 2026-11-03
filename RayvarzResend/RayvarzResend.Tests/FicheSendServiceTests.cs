@@ -32,6 +32,22 @@ public class FicheSendServiceTests
     }
 
     [Fact]
+    public void ApplySendStatus_BlocksDuplicateInAccountingDocHeader()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            ExistsInAccountingDocHeader = true,
+            IncomeRegion = "7",
+            BankCode = "18",
+            Payable = 500_000m,
+            Rows = { new IncmRowDto { IncmNo = 1, Val = 500_000m } }
+        };
+        FicheSendService.ApplySendStatus(fiche);
+        Assert.False(fiche.CanSend);
+        Assert.Contains("Accounting_DocHeader", fiche.BlockReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ApplySendStatus_BlocksDuplicateInRayvarz()
     {
         var fiche = new FicheHeaderDto

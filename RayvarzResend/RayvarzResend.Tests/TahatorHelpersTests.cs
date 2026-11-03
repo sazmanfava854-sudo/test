@@ -164,20 +164,21 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void ApplyTahatorIncomeRows_DocTyp17_single_row_positive_payable()
+    public void ApplyTahatorIncomeRows_DocTyp17_keeps_calculation_dtl_rows()
     {
         var fiche = new FicheHeaderDto
         {
             Category = FicheCategory.Income,
             IncomeAccountGroup = 158,
             BankCode = "4",
+            DepositId = 1946,
             Payable = 1_500_000m,
             CreditorPapers = 5510918,
             BnkAcntNo = "9-3-161-2-1-0-0",
             Rows =
             {
-                new IncmRowDto { IncmNo = 1278, Val = 1_000_000m },
-                new IncmRowDto { IncmNo = 100116, Val = 500_000m }
+                new IncmRowDto { IncmNo = 1278, Val = 1_000_000m, IncmRowDsc = "عوارض آتشنشاني" },
+                new IncmRowDto { IncmNo = 100116, Val = 500_000m, IncmRowDsc = "ماده 9" }
             }
         };
 
@@ -189,11 +190,13 @@ public class TahatorHelpersTests
         Assert.Equal(0, fiche.Center);
         Assert.Equal(209, fiche.ResolvedDistrictBranch);
         Assert.Equal(39, fiche.SuggestedFund);
-        Assert.Single(fiche.Rows);
-        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
-        Assert.Equal(1_500_000m, fiche.Rows[0].Val);
-        Assert.Equal("عوارض تهاتر درامد", fiche.Rows[0].IncmRowDsc);
-        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+        Assert.Equal(2, fiche.Rows.Count);
+        Assert.DoesNotContain(fiche.Rows, r => r.IncmNo is TahatorRowBuilder.IncmNoBank4 or TahatorRowBuilder.IncmNoOther);
+        Assert.Equal(1_500_000m, fiche.Rows.Sum(r => r.Val));
+        Assert.All(fiche.Rows, r => Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1));
+        Assert.All(fiche.Rows, r => Assert.Equal("4", r.Ref));
+        Assert.All(fiche.Rows, r => Assert.Equal("1946", r.Num));
+        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
         Assert.True(TahatorRowBuilder.RowSumMatchesPayable(fiche, fiche.Rows.Sum(r => r.Val)));
     }
 
@@ -214,8 +217,8 @@ public class TahatorHelpersTests
         Assert.Equal(5510918, fiche.Center);
         Assert.Equal(205, fiche.ResolvedDistrictBranch);
         Assert.Equal(35, fiche.SuggestedFund);
-        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
-        Assert.Equal(100m, fiche.Rows[0].Val);
+        // DTL از Income_Calculation / Accounting_DocDetails — بدون ردیف مبدأ خالی می‌ماند.
+        Assert.Empty(fiche.Rows);
     }
 
     [Fact]
@@ -292,7 +295,8 @@ public class TahatorHelpersTests
             BankCode = "4",
             DepositId = 19684,
             Payable = 100m,
-            BnkAcntNo = "9-3-1-0-0-0-0"
+            BnkAcntNo = "9-3-1-0-0-0-0",
+            Rows = { new IncmRowDto { IncmNo = 1270, Val = 100m } }
         };
         TahatorRowBuilder.ApplyTahatorRows(fiche);
         Assert.Equal("4", fiche.Rows[0].Ref); // VB: iif(CI_Bank=4,4,2)
@@ -402,7 +406,7 @@ public class TahatorHelpersTests
     }
 
     [Fact]
-    public void IsTahatorIncomeRowsPrepared_false_for_calculation_rows()
+    public void IsTahatorIncomeRowsPrepared_true_for_dtl_rows_with_center1()
     {
         var fiche = new FicheHeaderDto
         {
@@ -415,11 +419,11 @@ public class TahatorHelpersTests
             }
         };
         TahatorRowBuilder.ApplyTahatorDocTyp(fiche);
-        Assert.False(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
+        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
     }
 
     [Fact]
-    public void ApplyTahatorIncomeRows_replaces_calculation_rows_with_single_tahator_row()
+    public void ApplyTahatorIncomeRows_scales_calculation_rows_to_payable()
     {
         var fiche = new FicheHeaderDto
         {
@@ -435,14 +439,13 @@ public class TahatorHelpersTests
             }
         };
         TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
-        Assert.Single(fiche.Rows);
-        Assert.Equal(TahatorRowBuilder.IncmNoBank4, fiche.Rows[0].IncmNo);
-        Assert.Equal(1_000_000m, fiche.Rows[0].Val);
-        Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, fiche.Rows[0].Center1);
+        Assert.Equal(2, fiche.Rows.Count);
+        Assert.Equal(1_000_000m, fiche.Rows.Sum(r => r.Val));
+        Assert.All(fiche.Rows, r => Assert.Equal(TahatorRowBuilder.TahatorIncomeCenter1, r.Center1));
     }
 
     [Fact]
-    public void IsTahatorIncomeRowsPrepared_detects_single_prepared_row()
+    public void IsTahatorIncomeRowsPrepared_false_for_legacy_single_200098_row()
     {
         var fiche = new FicheHeaderDto
         {
@@ -458,22 +461,24 @@ public class TahatorHelpersTests
                 }
             }
         };
-        Assert.True(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
+        Assert.False(TahatorRowBuilder.IsTahatorIncomeRowsPrepared(fiche));
     }
 
     [Fact]
-    public void TahatorSendPolicy_resend_when_in_doc_header_but_not_rayvarz()
+    public void TahatorSendPolicy_blocks_when_in_doc_header_or_rayvarz()
     {
-        Assert.True(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: false));
-        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false));
-        Assert.False(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: true));
+        Assert.True(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: false, inAccountingDocHeader: false));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: false));
+        Assert.False(TahatorSendPolicy.ShouldSendMember(force: true, inRayvarz: false, inAccountingDocHeader: true));
+        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: true));
+        Assert.False(TahatorSendPolicy.ShouldSendMember(force: false, inRayvarz: true, inAccountingDocHeader: false));
     }
 
     [Fact]
     public void TahatorSendPolicy_rayvarz_check_failure_does_not_imply_needs_send()
     {
-        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, rayvarzCheckFailed: true));
-        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, rayvarzCheckFailed: false));
+        Assert.False(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: false, rayvarzCheckFailed: true));
+        Assert.True(TahatorSendPolicy.NeedsSend(inRayvarz: false, inAccountingDocHeader: false, rayvarzCheckFailed: false));
     }
 
     [Fact]

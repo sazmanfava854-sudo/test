@@ -8,6 +8,7 @@ internal sealed class AppUserGroupRecord
     public string Name { get; set; } = "";
     public bool CanAccessUnsentFiches { get; set; }
     public bool CanAccessInstallment { get; set; }
+    public bool CanAccessInstallmentCheckDate { get; set; }
     public bool CanAccessFicheDateChange { get; set; }
     public bool CanAccessBankInquiryConfirm { get; set; }
     public bool CanAccessShahkar { get; set; }

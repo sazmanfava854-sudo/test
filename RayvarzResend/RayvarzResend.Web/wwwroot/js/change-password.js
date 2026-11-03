@@ -13,6 +13,21 @@ function validatePasswordPolicy(password) {
   return null;
 }
 
+window.validatePasswordPolicy = validatePasswordPolicy;
+
+async function parseChangePasswordResponse(res) {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    if (res.ok) return {};
+    throw new Error(`خطا (HTTP ${res.status})`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(text.slice(0, 200) || `خطا (HTTP ${res.status})`);
+  }
+}
+
 function setupChangePasswordDialog() {
   const dialog = document.getElementById('changePasswordDialog');
   const btnOpen = document.getElementById('btnChangePassword');
@@ -22,13 +37,16 @@ function setupChangePasswordDialog() {
   if (!dialog || !btnOpen || !btnSubmit) return;
 
   const resetForm = () => {
-    ['changePasswordCurrent', 'changePasswordNew', 'changePasswordConfirm'].forEach((id) => {
+    ['changePasswordNew', 'changePasswordConfirm'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
     if (errorEl) {
       errorEl.hidden = true;
       errorEl.textContent = '';
+    }
+    if (typeof setupPasswordVisibilityToggles === 'function') {
+      setupPasswordVisibilityToggles(dialog);
     }
   };
 
@@ -48,16 +66,8 @@ function setupChangePasswordDialog() {
   });
 
   btnSubmit.addEventListener('click', async () => {
-    const current = document.getElementById('changePasswordCurrent')?.value || '';
-    const next = document.getElementById('changePasswordNew')?.value || '';
-    const confirm = document.getElementById('changePasswordConfirm')?.value || '';
-    if (!current) {
-      if (errorEl) {
-        errorEl.hidden = false;
-        errorEl.textContent = 'رمز عبور فعلی را وارد کنید';
-      }
-      return;
-    }
+    const next = (document.getElementById('changePasswordNew')?.value || '').trim();
+    const confirm = (document.getElementById('changePasswordConfirm')?.value || '').trim();
     const policyError = validatePasswordPolicy(next);
     if (policyError) {
       if (errorEl) {
@@ -80,15 +90,16 @@ function setupChangePasswordDialog() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword: current, newPassword: next })
+        body: JSON.stringify({ newPassword: next })
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await parseChangePasswordResponse(res);
       if (!res.ok) throw new Error(data.error || `خطا (HTTP ${res.status})`);
       closeDialog();
+      const msg = data.message || 'رمز عبور با موفقیت تغییر کرد';
       if (typeof window.showAppSuccess === 'function') {
-        window.showAppSuccess(data.message || 'رمز عبور با موفقیت تغییر کرد');
+        window.showAppSuccess(msg);
       } else {
-        window.alert(data.message || 'رمز عبور با موفقیت تغییر کرد');
+        window.alert(msg);
       }
     } catch (err) {
       if (errorEl) {

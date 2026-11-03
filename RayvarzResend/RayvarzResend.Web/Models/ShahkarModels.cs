@@ -18,6 +18,7 @@ public sealed class ShahkarSearchResult
 {
     public bool Success { get; set; }
     public string? Error { get; set; }
+    public string? Hint { get; set; }
     public List<ShahkarUserRowDto> Items { get; set; } = [];
     public int Total { get; set; }
 }
@@ -32,6 +33,7 @@ public sealed class ShahkarConfirmResult
     public bool Success { get; set; }
     public bool DryRun { get; set; }
     public string? Error { get; set; }
+    public string? Hint { get; set; }
     public string? Message { get; set; }
     public int Updated { get; set; }
     public List<ShahkarConfirmRowResult> Results { get; set; } = [];

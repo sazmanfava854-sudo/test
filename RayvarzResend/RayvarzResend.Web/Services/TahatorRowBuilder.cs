@@ -253,14 +253,13 @@ public static class TahatorRowBuilder
     }
 
     /// <summary>
-    /// Tahator — درآمدی تهاتر — ارسال به منطقه:
-    /// یک ردیف با Val=+Payable؛ IncmNo=iif(CI_Bank=4,200098,200099) — مثل Tahator1 ولی مثبت.
+    /// Tahator — درآمدی تهاتر — ردیف‌های DTL از Income_Calculation (مثل VB Tahator + TmpDT).
     /// </summary>
     public static void ApplyTahatorIncomeRows(FicheHeaderDto fiche) =>
-        ApplyTahatorIncomeCenters(fiche);
+        Member1388IncomeRowProfiles.ApplyTahatorIncome(fiche);
 
-    /// <summary>یک ردیف تهاتر درآمدی — نه Income_Calculation (آتش‌نشانی/ماده۹/زیربنا).</summary>
-    public static void ApplyTahatorIncomeCenters(FicheHeaderDto fiche)
+    /// <summary>هدر SOAP تهاتر درآمدی — DocTyp، Center، Fund، منطقه.</summary>
+    public static void ApplyTahatorIncomeHeader(FicheHeaderDto fiche)
     {
         fiche.IncomeAccountGroup = IncomeAccountGroupTahatorIncome;
         ApplyTahatorDocTyp(fiche);
@@ -271,29 +270,24 @@ public static class TahatorRowBuilder
             : 0;
 
         ApplyDistrictAndFund(fiche, amountPath: false);
+    }
 
-        if (fiche.Payable <= 0)
-        {
-            fiche.Rows.Clear();
-            return;
-        }
-
-        var incmNo = bank == "4" ? IncmNoBank4 : IncmNoOther;
+    /// <summary>Center1/Ref/Num هر ردیف DTL — parity VB Tahator (ListRefP + FileNo=DepositID).</summary>
+    public static void ApplyTahatorIncomeRowSoapMetadata(FicheHeaderDto fiche)
+    {
+        var bank = (fiche.BankCode ?? "").Trim();
         var refVal = bank == "4" ? "4" : "2";
-        fiche.Rows =
-        [
-            new IncmRowDto
-            {
-                IncmNo = incmNo,
-                Val = Math.Abs(fiche.Payable),
-                IncmRowDsc = "عوارض تهاتر درامد",
-                Center1 = TahatorIncomeCenter1,
-                Center2 = null,
-                Center3 = null,
-                Ref = refVal,
-                Num = fiche.DepositId?.ToString()
-            }
-        ];
+        var num = fiche.DepositId is > 0
+            ? fiche.DepositId.Value.ToString()
+            : null;
+
+        foreach (var row in fiche.Rows.Where(r => r.Val != 0))
+        {
+            row.Center1 = TahatorIncomeCenter1;
+            row.Ref = refVal;
+            if (num is not null)
+                row.Num = num;
+        }
     }
 
     private static void ApplyDistrictAndFund(FicheHeaderDto fiche, bool amountPath)
@@ -333,11 +327,17 @@ public static class TahatorRowBuilder
         && fiche.Rows[0].IncmNo is IncmNoBank4 or IncmNoOther
         && fiche.Rows[0].Val <= 0;
 
-    /// <summary>ردیف درآمد تهاتر از TahatorRowBuilder آماده شده — یک ردیف 200098/200099.</summary>
-    public static bool IsTahatorIncomeRowsPrepared(FicheHeaderDto fiche) =>
-        IsTahatorIncomeFiche(fiche)
-        && fiche.Rows.Count == 1
-        && fiche.Rows[0].IncmNo is IncmNoBank4 or IncmNoOther
-        && fiche.Rows[0].Center1 == TahatorIncomeCenter1
-        && fiche.Rows[0].Val > 0;
+    /// <summary>ردیف‌های DTL تهاتر درآمد از Income_Calculation آماده شده‌اند.</summary>
+    public static bool IsTahatorIncomeRowsPrepared(FicheHeaderDto fiche)
+    {
+        if (!IsTahatorIncomeFiche(fiche) || fiche.Rows.Count == 0)
+            return false;
+
+        if (fiche.Rows.Any(r => r.IncmNo is IncmNoBank4 or IncmNoOther))
+            return false;
+
+        return fiche.Rows
+            .Where(r => r.Val != 0)
+            .All(r => r.Center1 == TahatorIncomeCenter1);
+    }
 }

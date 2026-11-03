@@ -146,6 +146,8 @@ public static class InstallmentExcelMatcher
 
 public sealed class InstallmentRowSnapshot
 {
+  public Guid NidInstallment { get; set; }
+  public Guid NidInsList { get; set; }
   public string NoDocument { get; set; } = "";
   public string TrackingNo { get; set; } = "";
   public decimal? PaymentCost { get; set; }

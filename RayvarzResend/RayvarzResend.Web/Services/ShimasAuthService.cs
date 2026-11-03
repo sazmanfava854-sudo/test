@@ -391,7 +391,7 @@ public sealed class ShimasAuthService
 
     private string ResolveLoginState(HttpContext? http)
     {
-        if (!string.IsNullOrWhiteSpace(_options.LoginState))
+        if (_options.UseFixedLoginState && !string.IsNullOrWhiteSpace(_options.LoginState))
             return _options.LoginState.Trim();
 
         return Guid.NewGuid().ToString("N");
@@ -588,8 +588,16 @@ public sealed class ShimasAuthService
         if (!string.IsNullOrWhiteSpace(_options.ValidateTokenUrl))
             return await ValidateRemoteAsync(normalizedUsername, normalizedToken, ct);
 
+        if (!_options.AllowUnverifiedRefreshToken)
+        {
+            _logger.LogError(
+                "SSO login rejected for {Username}: no ClientSecret/ApiName (Mashhad API) and no ValidateTokenUrl — refresh_token cannot be verified",
+                MaskUsername(normalizedUsername));
+            return Fail("اعتبارسنجی SSO پیکربندی نشده است (ClientSecret/ApiName یا ValidateTokenUrl) — ورود پذیرفته نشد");
+        }
+
         _logger.LogWarning(
-            "Shimas ValidateTokenUrl تنظیم نشده — فقط بررسی اولیه refresh_token انجام شد برای {Username}",
+            "Shimas ValidateTokenUrl تنظیم نشده — فقط بررسی اولیه refresh_token انجام شد برای {Username} (AllowUnverifiedRefreshToken=true)",
             MaskUsername(normalizedUsername));
 
         return new ShimasValidationResult

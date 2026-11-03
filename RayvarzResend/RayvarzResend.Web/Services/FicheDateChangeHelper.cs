@@ -5,27 +5,37 @@ namespace RayvarzResend.Web.Services;
 /// <summary>تب «تغییر تاریخ فیش» — dbo.Income_Fiche (بدون رایورز).</summary>
 public static class FicheDateChangeHelper
 {
+    /// <summary>Income_Fiche.EumFicheStatus — مطابق سامانه درآمد.</summary>
     public static readonly IReadOnlyDictionary<int, string> FicheStatusLabels = new Dictionary<int, string>
     {
-        [0] = "صدورموقت",
-        [1] = "صدوردایم",
-        [2] = "چاپ",
-        [3] = "تایید دستی/لحظه‌ای بانک",
+        [0] = "صدور موقتی",
+        [1] = "صدور قطعی",
+        [2] = "چاپ فیش",
+        [3] = "تائید",
         [4] = "ابطال",
-        [5] = "تایید بانک"
+        [5] = "تائید بانک"
     };
+
+    /// <summary>Duty_Fiche.EumDutyFicheStatus — نوسازی/صنفی.</summary>
+    public static readonly IReadOnlyDictionary<int, string> DutyFicheStatusLabels = new Dictionary<int, string>
+    {
+        [0] = "صدور",
+        [1] = "تائید",
+        [2] = "ابطال",
+        [3] = "صدور موقت",
+        [4] = "تائید بانک"
+    };
+
+    public static string DutyStatusLabel(int status) =>
+        DutyFicheStatusLabels.TryGetValue(status, out var label) ? label : status.ToString();
 
     public const int DefaultFicheStatus = 1;
 
     public static string StatusLabel(int status) =>
         FicheStatusLabels.TryGetValue(status, out var label) ? label : status.ToString();
 
-    public static string NormalizeSlashDate(string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return "";
-        var rayvarz = DateHelper.ToRayvarzDate(input);
-        return rayvarz.Length >= 8 ? DateHelper.ToShamsiSlashDate(rayvarz) : "";
-    }
+    public static string NormalizeSlashDate(string? input) =>
+        DateHelper.TryParseStrictShamsiSlash(input, out var slash) ? slash : "";
 
     public static bool TryNormalizeSlashDate(string? input, out string slashDate)
     {
@@ -33,17 +43,69 @@ public static class FicheDateChangeHelper
         return !string.IsNullOrEmpty(slashDate);
     }
 
-    public static string BuildCommentPrefix(string performedByUser)
+    public static string BuildCommentPrefix(
+        string performedByUser,
+        bool applyExportPermanentDate,
+        string? newExportPermanentDate,
+        bool applyExportTemporaryDate,
+        string? newExportTemporaryDate,
+        bool applyPaymentBreakDate,
+        string? newPaymentBreakDate,
+        bool applyEumFicheStatus,
+        int? previousEumFicheStatus,
+        int? newEumFicheStatus)
     {
         var today = DateHelper.CurrentShamsiSlashDate();
-        var user = (performedByUser ?? "").Trim();
-        var actor = string.IsNullOrEmpty(user) ? "کاربر" : user;
-        return $"تاریخ مهلت پرداخت و تاریخ صدور و وضعیت فیش توسط {actor} در مورخ {today} — ";
+        var actor = string.IsNullOrWhiteSpace(performedByUser) ? "کاربر" : performedByUser.Trim();
+        var changeParts = new List<string>();
+
+        if (applyExportPermanentDate && !string.IsNullOrWhiteSpace(newExportPermanentDate))
+            changeParts.Add($"تغییر تاریخ صدور دایم به {newExportPermanentDate.Trim()}");
+
+        if (applyExportTemporaryDate && !string.IsNullOrWhiteSpace(newExportTemporaryDate))
+            changeParts.Add($"تغییر تاریخ صدور موقت به {newExportTemporaryDate.Trim()}");
+
+        if (applyPaymentBreakDate && !string.IsNullOrWhiteSpace(newPaymentBreakDate))
+            changeParts.Add($"تغییر تاریخ مهلت پرداخت به {newPaymentBreakDate.Trim()}");
+
+        if (applyEumFicheStatus && newEumFicheStatus.HasValue)
+        {
+            var newLabel = StatusLabel(newEumFicheStatus.Value);
+            if (previousEumFicheStatus.HasValue)
+            {
+                var oldLabel = StatusLabel(previousEumFicheStatus.Value);
+                changeParts.Add($"تغییر وضعیت از {oldLabel} به {newLabel}");
+            }
+            else
+                changeParts.Add($"تغییر وضعیت به {newLabel}");
+        }
+
+        if (changeParts.Count == 0)
+            return $"ویرایش فیش توسط {actor} مورخ {today} — ";
+
+        return $"{string.Join(" و ", changeParts)} توسط {actor} مورخ {today} — ";
     }
 
-    public static string BuildNewComments(string performedByUser, string? existingComments)
+    public static string BuildNewComments(
+        string performedByUser,
+        string? existingComments,
+        FicheDateChangeUpdateRequest? changeContext = null,
+        int? previousEumFicheStatus = null)
     {
-        var prefix = BuildCommentPrefix(performedByUser);
+        var prefix = changeContext == null
+            ? $"ویرایش فیش توسط {(string.IsNullOrWhiteSpace(performedByUser) ? "کاربر" : performedByUser.Trim())} مورخ {DateHelper.CurrentShamsiSlashDate()} — "
+            : BuildCommentPrefix(
+                performedByUser,
+                changeContext.ApplyExportPermanentDate,
+                changeContext.NewExportPermanentDate,
+                changeContext.ApplyExportTemporaryDate,
+                changeContext.NewExportTemporaryDate,
+                changeContext.ApplyPaymentBreakDate,
+                changeContext.NewPaymentBreakDate,
+                changeContext.ApplyEumFicheStatus,
+                previousEumFicheStatus,
+                changeContext.NewEumFicheStatus);
+
         if (string.IsNullOrWhiteSpace(existingComments))
             return prefix.TrimEnd();
         return prefix + existingComments.Trim();

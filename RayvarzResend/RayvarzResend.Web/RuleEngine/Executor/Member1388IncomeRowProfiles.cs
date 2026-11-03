@@ -86,9 +86,21 @@ public static class Member1388IncomeRowProfiles
     public static void ApplyBazAfarineOld(FicheHeaderDto fiche) =>
         Member1388BazAfarineOldRowBuilder.Apply(fiche);
 
-    /// <summary>تهاتر درآمدی — یک ردیف در TahatorRowBuilder.</summary>
-    public static void ApplyTahatorIncome(FicheHeaderDto fiche) =>
-        TahatorRowBuilder.ApplyTahatorIncomeRows(fiche);
+    /// <summary>تهاتر درآمدی — DTL از Income_Calculation + مقیاس به Payable (VB Tahator).</summary>
+    public static void ApplyTahatorIncome(FicheHeaderDto fiche)
+    {
+        TahatorRowBuilder.ApplyTahatorIncomeHeader(fiche);
+
+        if (fiche.Payable <= 0)
+        {
+            fiche.Rows.Clear();
+            return;
+        }
+
+        TahatorIncomeCalculationBuilder.Apply(fiche);
+
+        TahatorRowBuilder.ApplyTahatorIncomeRowSoapMetadata(fiche);
+    }
 
     private static bool HasPrimaryCalculationRow(FicheHeaderDto fiche, int incmNo) =>
         fiche.Rows.Any(r => r.IncmNo == incmNo && r.Val != 0);
