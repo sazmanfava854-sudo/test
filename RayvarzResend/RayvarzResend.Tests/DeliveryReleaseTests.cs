@@ -262,7 +262,8 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=111", html);
+        Assert.Contains("id=\"installmentSelectAll\"", html);
+        Assert.Contains("js/app.js?v=112", html);
         Assert.Contains("css/style.css?v=53", html);
         Assert.Contains("id=\"btnUnsentExcel\"", html);
         Assert.DoesNotContain("btnUnsentNextPage", html);
@@ -289,6 +290,9 @@ public class DeliveryReleaseTests
         Assert.True(File.Exists(WebFile("wwwroot", "templates", "unsent-bill-pay-template.xlsx")));
 
         var js = File.ReadAllText(WebFile("wwwroot", "js", "app.js"));
+        Assert.Contains("validateInstallmentGridBeforeSend", js);
+        Assert.Contains("selectedTrackingNos", js);
+        Assert.Contains("InstallmentSendGridHelper", File.ReadAllText(WebFile("Services", "InstallmentSendGridHelper.cs")));
         Assert.Contains("function parseUnsentExcelFile(", js);
         Assert.Contains("function mapUnsentExcelHeaderIndex(", js);
         Assert.Contains("function setUnsentExcelStatus(", js);

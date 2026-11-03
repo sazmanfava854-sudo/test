@@ -353,6 +353,8 @@ function resetMainTabPanelState(tabKey) {
       clearFieldValue('installmentApplyEndStateExcel');
       clearFieldValue('installmentExcelFile');
       installmentExcelRows = [];
+      installmentPreviewItems = [];
+      installmentSelectedTrackingKeys.clear();
       if ($('installmentExcelStatus')) $('installmentExcelStatus').textContent = 'فایلی انتخاب نشده';
       hideEl('installmentPreviewSection');
       hideEl('installmentResultBox');
@@ -524,6 +526,126 @@ let installmentMode = 'single';
 let checkDateItems = [];
 let checkDateSelectedRow = null;
 let installmentExcelRows = [];
+/** گرید نهایی پس از پیش‌نمایش — اعتبارسنجی و ارسال فقط روی این داده. */
+let installmentPreviewItems = [];
+const installmentSelectedTrackingKeys = new Set();
+
+function normalizeInstallmentTrackingKey(trackingNo) {
+  const digits = String(trackingNo ?? '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 15) return `0${digits}`;
+  return digits;
+}
+
+function normalizeInstallmentNoDocument(noDocument) {
+  const t = String(noDocument ?? '').trim();
+  return t || '—';
+}
+
+function isInstallmentRowEligible(row) {
+  return !!(row?.found && row.dataMatches && normalizeInstallmentTrackingKey(row.trackingNo));
+}
+
+function findDuplicateInstallmentTrackingInGrid(items) {
+  const seen = new Set();
+  for (const row of items || []) {
+    const key = normalizeInstallmentTrackingKey(row.trackingNo);
+    if (!key) continue;
+    if (seen.has(key)) return key;
+    seen.add(key);
+  }
+  return null;
+}
+
+function buildInstallmentDocSendWarnings(items, selectedKeys) {
+  const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
+  const byDoc = new Map();
+  (items || []).forEach((row) => {
+    if (!row.found || !row.noDocument) return;
+    const doc = normalizeInstallmentNoDocument(row.noDocument);
+    if (!byDoc.has(doc)) byDoc.set(doc, []);
+    byDoc.get(doc).push(row);
+  });
+  const warnings = [];
+  byDoc.forEach((members, doc) => {
+    if (members.length <= 1) return;
+    const selectedCount = members.filter((m) =>
+      selected.has(normalizeInstallmentTrackingKey(m.trackingNo))).length;
+    if (selectedCount > 1) {
+      warnings.push({ noDocument: doc, totalInGrid: members.length, selectedCount });
+    }
+  });
+  return warnings;
+}
+
+function formatInstallmentDocWarningConfirm(warnings) {
+  if (!warnings?.length) return '';
+  const lines = warnings.map((w) =>
+    `برای شماره سند ${w.noDocument} تعداد ${w.totalInGrid} فیش وجود دارد که ${w.selectedCount} فیش از آن‌ها انتخاب شده است.`);
+  lines.push('معمولاً فقط یک فیش باید ارسال شود. آیا از ارسال فیش‌های انتخاب‌شده اطمینان دارید؟');
+  return lines.join('\n\n');
+}
+
+function getInstallmentDocGroupClass(noDocument, groupIndexByDoc) {
+  const doc = normalizeInstallmentNoDocument(noDocument);
+  if (!groupIndexByDoc.has(doc)) {
+    groupIndexByDoc.set(doc, groupIndexByDoc.size);
+  }
+  const idx = groupIndexByDoc.get(doc) % 3;
+  return ['installment-doc-group-a', 'installment-doc-group-b', 'installment-doc-group-c'][idx];
+}
+
+function syncInstallmentSelectAllCheckbox() {
+  const selectAll = $('installmentSelectAll');
+  if (!selectAll) return;
+  const eligible = (installmentPreviewItems || []).filter(isInstallmentRowEligible);
+  if (!eligible.length) {
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    selectAll.disabled = true;
+    return;
+  }
+  selectAll.disabled = false;
+  const selectedEligible = eligible.filter((r) =>
+    installmentSelectedTrackingKeys.has(normalizeInstallmentTrackingKey(r.trackingNo))).length;
+  selectAll.checked = selectedEligible === eligible.length;
+  selectAll.indeterminate = selectedEligible > 0 && selectedEligible < eligible.length;
+}
+
+function updateInstallmentApplyButton() {
+  const updateBtn = $('btnInstallmentUpdate');
+  if (!updateBtn) return;
+  const dup = findDuplicateInstallmentTrackingInGrid(installmentPreviewItems);
+  const hasSelection = installmentSelectedTrackingKeys.size > 0;
+  const previewVisible = !$('installmentPreviewSection')?.hidden;
+  updateBtn.disabled = !previewVisible || !!dup || !hasSelection;
+}
+
+function validateInstallmentGridBeforeSend() {
+  if (!installmentPreviewItems.length) {
+    return { ok: false, error: 'ابتدا پیش‌نمایش بگیرید' };
+  }
+  const dup = findDuplicateInstallmentTrackingInGrid(installmentPreviewItems);
+  if (dup) {
+    return {
+      ok: false,
+      error: `کد پیگیری تکراری در گرید (${toPersianDigits(dup)}) — هر کد پیگیری فقط یک‌بار مجاز است`
+    };
+  }
+  if (installmentSelectedTrackingKeys.size === 0) {
+    return { ok: false, error: 'حداقل یک فیش از گرید انتخاب کنید' };
+  }
+  const selectedList = [...installmentSelectedTrackingKeys];
+  const seenSel = new Set();
+  for (const key of selectedList) {
+    if (seenSel.has(key)) {
+      return { ok: false, error: 'کد پیگیری تکراری در انتخاب‌ها — ارسال مجاز نیست' };
+    }
+    seenSel.add(key);
+  }
+  const warnings = buildInstallmentDocSendWarnings(installmentPreviewItems, installmentSelectedTrackingKeys);
+  return { ok: true, warnings };
+}
 
 /** Income_Fiche.EumFicheStatus — مطابق سامانه درآمد. */
 const ficheDateStatusLabels = {
@@ -1130,8 +1252,10 @@ function showResultBox(box, text) {
 
 /** پیش‌نمایش برای همان ورودی‌ها معتبر است؛ تغییر ورودی یعنی «اعمال» باید دوباره پیش‌نمایش بگیرد. */
 function invalidateInstallmentPreview() {
-  const updateBtn = $('btnInstallmentUpdate');
-  if (updateBtn) updateBtn.disabled = true;
+  installmentPreviewItems = [];
+  installmentSelectedTrackingKeys.clear();
+  syncInstallmentSelectAllCheckbox();
+  updateInstallmentApplyButton();
   hideEl('installmentPreviewSection');
 }
 
@@ -1174,26 +1298,43 @@ function renderInstallmentPreview(data) {
   const section = $('installmentPreviewSection');
   const tbody = $('installmentPreviewTable')?.querySelector('tbody');
   const summary = $('installmentPreviewSummary');
-  const updateBtn = $('btnInstallmentUpdate');
   if (!section || !tbody) return;
 
-  const items = data.items || [];
+  installmentPreviewItems = data.items || [];
+  installmentSelectedTrackingKeys.clear();
   section.hidden = false;
+
+  const dup = findDuplicateInstallmentTrackingInGrid(installmentPreviewItems);
   if (summary) {
-    summary.textContent = `ردیف یافت شد: ${data.foundCount || 0} | بدون نتیجه: ${data.notFoundCount || 0} | تطابق کامل: ${data.matchedCount || 0} | عدم تطابق: ${data.mismatchCount || 0}`;
+    let text = `ردیف یافت شد: ${data.foundCount || 0} | بدون نتیجه: ${data.notFoundCount || 0} | تطابق کامل: ${data.matchedCount || 0} | عدم تطابق: ${data.mismatchCount || 0}`;
+    if (dup) {
+      text += ` | کد پیگیری تکراری: ${toPersianDigits(dup)}`;
+    }
+    summary.textContent = text;
   }
+
+  const groupIndexByDoc = new Map();
   tbody.innerHTML = '';
-  items.forEach((row, idx) => {
+  installmentPreviewItems.forEach((row, idx) => {
     const tr = document.createElement('tr');
     if (!row.found) tr.classList.add('row-not-found');
     else if (row.found && row.dataMatches === false) tr.classList.add('row-mismatch');
+    else if (row.found && row.noDocument) {
+      tr.classList.add(getInstallmentDocGroupClass(row.noDocument, groupIndexByDoc));
+    }
+
     const kind = row.detectedLookupKind || '';
     const rowNum = row.rowIndex || idx + 1;
     const status = !row.found
       ? (row.validationMessage || 'یافت نشد')
       : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
+    const eligible = isInstallmentRowEligible(row);
+    const trackingKey = normalizeInstallmentTrackingKey(row.trackingNo);
 
     tr.innerHTML = `
+      <td class="col-installment-check">${eligible
+        ? `<input type="checkbox" class="installment-row-check" aria-label="انتخاب کد پیگیری ${escapeHtml(toPersianDigits(row.trackingNo || ''))}" />`
+        : ''}</td>
       <td class="col-installment-row">${escapeHtml(toPersianDigits(rowNum))}</td>
       <td class="col-installment-detect">${escapeHtml(installmentLookupLabels[kind] || kind || '—')}</td>
       <td class="col-installment-nodoc">${escapeHtml(toPersianDigits(row.noDocument || '-'))}</td>
@@ -1206,12 +1347,32 @@ function renderInstallmentPreview(data) {
       <td class="col-installment-status">${escapeHtml(status)}</td>
       <td class="col-installment-comments">${escapeHtml(row.proposedComments || '-')}</td>
     `;
+
+    const checkbox = tr.querySelector('.installment-row-check');
+    checkbox?.addEventListener('change', () => {
+      if (!trackingKey) return;
+      if (checkbox.checked) installmentSelectedTrackingKeys.add(trackingKey);
+      else installmentSelectedTrackingKeys.delete(trackingKey);
+      syncInstallmentSelectAllCheckbox();
+      updateInstallmentApplyButton();
+    });
+
     tbody.appendChild(tr);
   });
-  if (updateBtn) {
-    updateBtn.disabled = !(data.matchedCount > 0);
-    updateBtn.textContent = 'اعمال';
+
+  const eligibleRows = installmentPreviewItems.filter(isInstallmentRowEligible);
+  if (eligibleRows.length === 1 && !dup) {
+    const key = normalizeInstallmentTrackingKey(eligibleRows[0].trackingNo);
+    if (key) installmentSelectedTrackingKeys.add(key);
+    tbody.querySelectorAll('.installment-row-check').forEach((cb) => {
+      cb.checked = true;
+    });
   }
+
+  syncInstallmentSelectAllCheckbox();
+  updateInstallmentApplyButton();
+  const updateBtn = $('btnInstallmentUpdate');
+  if (updateBtn) updateBtn.textContent = 'اعمال';
 }
 
 function isInstallmentListKeyEmpty(id) {
@@ -3864,6 +4025,24 @@ async function init() {
   });
   setInstallmentMode('single');
 
+  $('installmentSelectAll')?.addEventListener('change', (ev) => {
+    const selectAll = ev.target;
+    const eligible = (installmentPreviewItems || []).filter(isInstallmentRowEligible);
+    installmentSelectedTrackingKeys.clear();
+    if (selectAll.checked) {
+      eligible.forEach((row) => {
+        const key = normalizeInstallmentTrackingKey(row.trackingNo);
+        if (key) installmentSelectedTrackingKeys.add(key);
+      });
+    }
+    const tbody = $('installmentPreviewTable')?.querySelector('tbody');
+    tbody?.querySelectorAll('.installment-row-check').forEach((cb) => {
+      cb.checked = selectAll.checked;
+    });
+    syncInstallmentSelectAllCheckbox();
+    updateInstallmentApplyButton();
+  });
+
   const excelInput = $('installmentExcelFile');
   if (excelInput) {
     excelInput.addEventListener('change', async () => {
@@ -4331,17 +4510,25 @@ function setupEventHandlers() {
   });
 
   bindClick('btnInstallmentUpdate', async () => {
-    const payload = getInstallmentPayload();
-    if (installmentMode === 'excel') {
-      if (!payload.excelRows?.length) return showAppWarning('فایل اکسل را انتخاب کنید');
-    } else if (!payload.valuesText) {
-      return showAppWarning('حداقل یک شماره سند یا کد پیگیری وارد کنید');
+    const gridCheck = validateInstallmentGridBeforeSend();
+    if (!gridCheck.ok) return showAppWarning(gridCheck.error);
+
+    const dupAgain = findDuplicateInstallmentTrackingInGrid(installmentPreviewItems);
+    if (dupAgain) {
+      return showAppWarning(`کد پیگیری تکراری در گرید (${toPersianDigits(dupAgain)}) — ارسال مجاز نیست`);
     }
+
+    const confirmBody = formatInstallmentDocWarningConfirm(gridCheck.warnings);
+    if (confirmBody && !confirm(confirmBody)) return;
+
+    const payload = {
+      applyEndState: getInstallmentApplyEndState(),
+      selectedTrackingNos: [...installmentSelectedTrackingKeys]
+    };
 
     const dry = config?.installment?.dryRun ?? config?.dryRun ?? false;
     const dryNote = dry ? 'در حالت DryRun تغییری روی سرور اعمال نمی‌شود.' : '';
     if (dryNote && !confirm(`${dryNote}\n\nادامه؟`)) return;
-    if (!dryNote && !confirm('ادامه؟')) return;
 
     const btn = $('btnInstallmentUpdate');
     const box = $('installmentResultBox');

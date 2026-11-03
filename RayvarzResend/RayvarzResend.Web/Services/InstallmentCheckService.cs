@@ -49,33 +49,15 @@ public class InstallmentCheckService
             var kind = InstallmentIdentifierDetector.Detect(value);
             var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
 
-            var item = new InstallmentCheckPreviewItem
-            {
-                RowIndex = i + 1,
-                LookupValue = value,
-                DetectedLookupKind = kind,
-                WillApplyEndState = willApplyEndState
-            };
-
             var rows = await LoadRowsForExcelAsync(conn, kind, value, ct);
-            if (rows.Count == 0)
-            {
-                item.ValidationMessage = "در دیتابیس یافت نشد";
-                result.Items.Add(item);
-                continue;
-            }
-
-            if (rows.Count > 1)
-            {
-                item.Found = true;
-                item.ValidationMessage = $"بیش از یک ردیف ({rows.Count}) در دیتابیس یافت شد";
-                result.Items.Add(item);
-                continue;
-            }
-
-            var mapped = MapPreviewItem(value, kind, rows[0], parsed.PerformedByUser, willApplyEndState, i + 1);
-            mapped.DataMatches = true;
-            result.Items.Add(mapped);
+            AppendPreviewRowsForDbLookup(
+                result,
+                rows,
+                kind,
+                value,
+                parsed.PerformedByUser,
+                willApplyEndState,
+                inputRowIndex: i + 1);
         }
 
         result.FoundCount = result.Items.Count(i => i.Found);
@@ -98,79 +80,18 @@ public class InstallmentCheckService
             DryRun = dryRun
         };
 
-        if (parsed.IsExcelMode)
-            return await UpdateExcelAsync(req, parsed, result, ct);
-
-        if (parsed.Values.Count == 0)
+        var (trackingKeys, selectionError) = InstallmentSendGridHelper.ParseSelectedTrackingNos(req.SelectedTrackingNos);
+        if (selectionError != null)
         {
-            result.Error = "حداقل یک شماره سند یا کد پیگیری وارد کنید";
+            result.Error = selectionError;
             return result;
         }
 
-        if (dryRun)
-            return await SimulateUpdateAsync(req, parsed, result, ct);
-
-        var commentPrefix = InstallmentCheckHelper.BuildCommentPrefix(parsed.PerformedByUser);
-
-        await using var conn = new SqlConnection(_saraCs);
-        await conn.OpenAsync(ct);
-
-        foreach (var rawValue in parsed.Values)
-        {
-            var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
-            var kind = InstallmentIdentifierDetector.Detect(value);
-            var willApplyEndState = InstallmentIdentifierDetector.WillApplyEndState(kind, parsed.ApplyEndStateRequested);
-            var item = new InstallmentCheckUpdateItemResult
-            {
-                LookupValue = value,
-                DetectedLookupKind = kind
-            };
-
-            try
-            {
-                // Same rule as preview: refuse ambiguous identifiers instead of updating every match.
-                var matches = await LoadRowsForExcelAsync(conn, kind, value, ct);
-                if (matches.Count != 1)
-                {
-                    item.Found = matches.Count > 0;
-                    item.Success = false;
-                    item.Message = matches.Count == 0
-                        ? $"ردیفی با {InstallmentIdentifierDetector.Describe(kind)} یافت نشد"
-                        : $"بیش از یک ردیف ({matches.Count}) با این {InstallmentIdentifierDetector.Describe(kind)} — به‌روز نشد";
-                    AppendUpdateItemResult(result, item);
-                    continue;
-                }
-
-                var sql = BuildUpdateSql(kind, willApplyEndState);
-
-                await using var cmd = new SqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@prefix", commentPrefix);
-                cmd.Parameters.AddWithValue("@status", InstallmentCheckHelper.TreasuryStatus);
-                cmd.Parameters.AddWithValue("@v", TrackingNoLookupParameter(kind, value));
-                if (willApplyEndState)
-                {
-                    cmd.Parameters.AddWithValue("@endDesc", InstallmentCheckHelper.EndStateDescOdooat);
-                    cmd.Parameters.AddWithValue("@endCode", InstallmentCheckHelper.EndStateCodeOdooat);
-                }
-
-                var affected = await cmd.ExecuteNonQueryAsync(ct);
-                item.RowsAffected = affected;
-                item.Found = affected > 0;
-                item.Success = affected > 0;
-                item.Message = affected > 0
-                    ? $"{affected} ردیف به‌روز شد ({InstallmentIdentifierDetector.Describe(kind)})"
-                    : $"ردیفی با {InstallmentIdentifierDetector.Describe(kind)} یافت نشد";
-            }
-            catch (Exception ex)
-            {
-                item.Success = false;
-                item.Message = ex.Message;
-            }
-
-            AppendUpdateItemResult(result, item);
-        }
-
-        return result;
+        return await UpdateSelectedTrackingAsync(
+            parsed,
+            trackingKeys,
+            result,
+            ct);
     }
 
     private async Task<InstallmentCheckPreviewResult> PreviewExcelAsync(
@@ -224,53 +145,50 @@ public class InstallmentCheckService
                 continue;
             }
 
-            if (rows.Count > 1)
+            if (kind == InstallmentLookupKind.TrackingNo)
             {
-                item.Found = true;
-                item.ValidationMessage = $"بیش از یک ردیف ({rows.Count}) در دیتابیس یافت شد";
-                result.Items.Add(item);
+                if (rows.Count > 1)
+                {
+                    item.Found = true;
+                    item.ValidationMessage = $"بیش از یک ردیف ({rows.Count}) با این کد پیگیری در دیتابیس";
+                    result.Items.Add(item);
+                    continue;
+                }
+
+                AppendExcelMatchedPreviewItem(
+                    result,
+                    item,
+                    excelRow,
+                    kind,
+                    lookupValue,
+                    rows[0],
+                    parsed.PerformedByUser,
+                    willApplyEndState);
                 continue;
             }
 
-            var dbRow = rows[0];
-            if (kind == InstallmentLookupKind.TrackingNo)
+            foreach (var dbRow in rows)
             {
-                lookupValue = InstallmentIdentifierDetector.ExtractDigits(dbRow.TrackingNo);
-                item.LookupValue = lookupValue;
+                var expanded = new InstallmentCheckPreviewItem
+                {
+                    RowIndex = result.Items.Count + 1,
+                    LookupValue = lookupValue,
+                    DetectedLookupKind = kind,
+                    ExcelIdentifier = item.ExcelIdentifier,
+                    ExcelPaymentCost = item.ExcelPaymentCost,
+                    ExcelPaymentDate = item.ExcelPaymentDate,
+                    WillApplyEndState = willApplyEndState
+                };
+                AppendExcelMatchedPreviewItem(
+                    result,
+                    expanded,
+                    excelRow,
+                    kind,
+                    lookupValue,
+                    dbRow,
+                    parsed.PerformedByUser,
+                    willApplyEndState);
             }
-
-            item.Found = true;
-            item.NoDocument = dbRow.NoDocument;
-            item.TrackingNo = dbRow.TrackingNo;
-            item.PaymentCost = FormatCost(dbRow.PaymentCost);
-            item.PaymentDate = dbRow.PaymentDate;
-            item.NidWorkItem = dbRow.NidWorkItem;
-            item.NosaziCode = dbRow.NosaziCode;
-            item.CI_InstallmentStatus = dbRow.CI_InstallmentStatus;
-            item.EndStateDesc = dbRow.EndStateDesc;
-            item.EndStateCode = dbRow.EndStateCode;
-            item.Comments = dbRow.Comments;
-            item.ProposedComments = InstallmentCheckHelper.BuildNewComments(parsed.PerformedByUser, dbRow.Comments);
-            item.ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus;
-            item.ProposedEndStateDesc = willApplyEndState
-                ? InstallmentCheckHelper.EndStateDescOdooat
-                : dbRow.EndStateDesc;
-            item.ProposedEndStateCode = willApplyEndState
-                ? InstallmentCheckHelper.EndStateCodeOdooat
-                : dbRow.EndStateCode;
-
-            var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow, kind, lookupValue);
-            if (mismatch == null)
-            {
-                item.DataMatches = true;
-            }
-            else
-            {
-                item.DataMatches = false;
-                item.ValidationMessage = mismatch;
-            }
-
-            result.Items.Add(item);
         }
 
         result.FoundCount = result.Items.Count(i => i.Found);
@@ -280,101 +198,61 @@ public class InstallmentCheckService
         return result;
     }
 
-    private async Task<InstallmentCheckUpdateResult> UpdateExcelAsync(
-        InstallmentCheckRequest req,
+    private async Task<InstallmentCheckUpdateResult> UpdateSelectedTrackingAsync(
         ParsedInstallmentRequest parsed,
+        List<string> trackingKeys,
         InstallmentCheckUpdateResult result,
         CancellationToken ct)
     {
-        var preview = await PreviewExcelAsync(req, parsed, new InstallmentCheckPreviewResult
-        {
-            ExcelMode = true,
-            ApplyEndState = parsed.ApplyEndStateRequested
-        }, ct);
-
-        if (!string.IsNullOrWhiteSpace(preview.Error))
-        {
-            result.Error = preview.Error;
-            return result;
-        }
-
-        var eligible = preview.Items
-            .Where(i => i.Found && i.DataMatches)
-            .ToList();
-
-        if (eligible.Count == 0)
-        {
-            result.Error = "هیچ ردیف معتبری برای اعمال یافت نشد — ابتدا پیش‌نمایش را بررسی کنید";
-            return result;
-        }
-
-        if (result.DryRun)
-        {
-            foreach (var row in eligible)
-            {
-                var item = new InstallmentCheckUpdateItemResult
-                {
-                    LookupValue = row.LookupValue,
-                    DetectedLookupKind = row.DetectedLookupKind,
-                    Found = true,
-                    Success = true,
-                    WouldUpdate = 1,
-                    Message = $"DryRun — ردیف {row.RowIndex} UPDATE نمی‌شود (Installment:DryRun=true)"
-                };
-                AppendUpdateItemResult(result, item);
-            }
-
-            foreach (var row in preview.Items.Where(i => !i.Found))
-            {
-                var item = new InstallmentCheckUpdateItemResult
-                {
-                    LookupValue = row.LookupValue,
-                    DetectedLookupKind = row.DetectedLookupKind,
-                    Found = false,
-                    Success = false,
-                    Message = $"ردیف {row.RowIndex}: {row.ValidationMessage ?? "یافت نشد"}"
-                };
-                AppendUpdateItemResult(result, item);
-            }
-
-            foreach (var row in preview.Items.Where(i => i.Found && !i.DataMatches))
-            {
-                result.SkippedMismatch++;
-                var item = new InstallmentCheckUpdateItemResult
-                {
-                    LookupValue = row.LookupValue,
-                    DetectedLookupKind = row.DetectedLookupKind,
-                    Found = true,
-                    Success = false,
-                    Message = $"ردیف {row.RowIndex}: {row.ValidationMessage ?? "عدم تطابق با دیتابیس"}"
-                };
-                AppendUpdateItemResult(result, item);
-            }
-
-            return result;
-        }
-
+        var willApplyEndState = parsed.ApplyEndStateRequested;
         var commentPrefix = InstallmentCheckHelper.BuildCommentPrefix(parsed.PerformedByUser);
 
         await using var conn = new SqlConnection(_saraCs);
         await conn.OpenAsync(ct);
 
-        foreach (var row in eligible)
+        foreach (var key in trackingKeys)
         {
-            var willApplyEndState = row.WillApplyEndState;
             var item = new InstallmentCheckUpdateItemResult
             {
-                LookupValue = row.LookupValue,
-                DetectedLookupKind = row.DetectedLookupKind
+                LookupValue = key,
+                DetectedLookupKind = InstallmentLookupKind.TrackingNo
             };
 
             try
             {
-                var sql = BuildUpdateSql(row.DetectedLookupKind, willApplyEndState);
+                var matches = await LoadRowsForExcelAsync(
+                    conn,
+                    InstallmentLookupKind.TrackingNo,
+                    key,
+                    ct);
+
+                if (matches.Count != 1)
+                {
+                    item.Found = matches.Count > 0;
+                    item.Success = false;
+                    item.Message = matches.Count == 0
+                        ? "کد پیگیری در دیتابیس یافت نشد"
+                        : $"کد پیگیری مبهم — {matches.Count} ردیف با این شناسه";
+                    AppendUpdateItemResult(result, item);
+                    continue;
+                }
+
+                if (result.DryRun)
+                {
+                    item.Found = true;
+                    item.Success = true;
+                    item.WouldUpdate = 1;
+                    item.Message =
+                        $"DryRun — ردیف با کد پیگیری {key} UPDATE نمی‌شود (Installment:DryRun=true)";
+                    AppendUpdateItemResult(result, item);
+                    continue;
+                }
+
+                var sql = BuildUpdateSql(InstallmentLookupKind.TrackingNo, willApplyEndState);
                 await using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@prefix", commentPrefix);
                 cmd.Parameters.AddWithValue("@status", InstallmentCheckHelper.TreasuryStatus);
-                cmd.Parameters.AddWithValue("@v", row.LookupValue);
+                cmd.Parameters.AddWithValue("@v", key);
                 if (willApplyEndState)
                 {
                     cmd.Parameters.AddWithValue("@endDesc", InstallmentCheckHelper.EndStateDescOdooat);
@@ -386,83 +264,127 @@ public class InstallmentCheckService
                 item.Found = affected > 0;
                 item.Success = affected > 0;
                 item.Message = affected > 0
-                    ? $"ردیف {row.RowIndex}: {affected} ردیف به‌روز شد"
-                    : $"ردیف {row.RowIndex}: یافت نشد";
+                    ? $"{affected} ردیف به‌روز شد (کد پیگیری {key})"
+                    : "کد پیگیری در دیتابیس یافت نشد";
             }
             catch (Exception ex)
             {
                 item.Success = false;
-                item.Message = $"ردیف {row.RowIndex}: {ex.Message}";
+                item.Message = ex.Message;
             }
 
-            AppendUpdateItemResult(result, item);
-        }
-
-        foreach (var row in preview.Items.Where(i => !i.Found || !i.DataMatches))
-        {
-            if (row.Found && !row.DataMatches)
-                result.SkippedMismatch++;
-
-            var item = new InstallmentCheckUpdateItemResult
-            {
-                LookupValue = row.LookupValue,
-                DetectedLookupKind = row.DetectedLookupKind,
-                Found = row.Found,
-                Success = false,
-                Message = $"ردیف {row.RowIndex}: {row.ValidationMessage ?? (row.Found ? "عدم تطابق" : "یافت نشد")}"
-            };
             AppendUpdateItemResult(result, item);
         }
 
         return result;
     }
 
-    private async Task<InstallmentCheckUpdateResult> SimulateUpdateAsync(
-        InstallmentCheckRequest req,
-        ParsedInstallmentRequest parsed,
-        InstallmentCheckUpdateResult result,
-        CancellationToken ct)
+    private static void AppendPreviewRowsForDbLookup(
+        InstallmentCheckPreviewResult result,
+        List<InstallmentRowSnapshot> rows,
+        InstallmentLookupKind kind,
+        string lookupValue,
+        string performedByUser,
+        bool willApplyEndState,
+        int inputRowIndex)
     {
-        var preview = await PreviewAsync(req, ct);
-        if (!string.IsNullOrWhiteSpace(preview.Error))
+        if (rows.Count == 0)
         {
-            result.Error = preview.Error;
-            return result;
+            result.Items.Add(new InstallmentCheckPreviewItem
+            {
+                RowIndex = result.Items.Count + 1,
+                LookupValue = lookupValue,
+                DetectedLookupKind = kind,
+                ValidationMessage = "در دیتابیس یافت نشد"
+            });
+            return;
         }
 
-        foreach (var rawValue in parsed.Values)
+        if (kind == InstallmentLookupKind.TrackingNo)
         {
-            var value = InstallmentIdentifierDetector.NormalizeLookupValue(rawValue);
-            var kind = InstallmentIdentifierDetector.Detect(value);
-            var matches = preview.Items
-                .Where(i => i.Found && i.DataMatches && string.Equals(i.LookupValue, value, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            var item = new InstallmentCheckUpdateItemResult
+            if (rows.Count > 1)
             {
-                LookupValue = value,
-                DetectedLookupKind = kind
-            };
-
-            if (matches.Count == 0)
-            {
-                item.Found = false;
-                item.Success = false;
-                item.Message = $"DryRun — ردیفی یافت نشد ({InstallmentIdentifierDetector.Describe(kind)})";
-            }
-            else
-            {
-                item.Found = true;
-                item.Success = true;
-                item.WouldUpdate = matches.Count;
-                item.Message =
-                    $"DryRun — {matches.Count} ردیف UPDATE نمی‌شود (Installment:DryRun=true)";
+                result.Items.Add(new InstallmentCheckPreviewItem
+                {
+                    RowIndex = result.Items.Count + 1,
+                    LookupValue = lookupValue,
+                    DetectedLookupKind = kind,
+                    Found = true,
+                    ValidationMessage = $"بیش از یک ردیف ({rows.Count}) با این کد پیگیری در دیتابیس"
+                });
+                return;
             }
 
-            AppendUpdateItemResult(result, item);
+            result.Items.Add(MapPreviewItem(
+                lookupValue,
+                kind,
+                rows[0],
+                performedByUser,
+                willApplyEndState,
+                result.Items.Count + 1));
+            return;
         }
 
-        return result;
+        foreach (var row in rows)
+        {
+            result.Items.Add(MapPreviewItem(
+                lookupValue,
+                kind,
+                row,
+                performedByUser,
+                willApplyEndState,
+                result.Items.Count + 1));
+        }
+    }
+
+    private static void AppendExcelMatchedPreviewItem(
+        InstallmentCheckPreviewResult result,
+        InstallmentCheckPreviewItem item,
+        InstallmentExcelRowInput excelRow,
+        InstallmentLookupKind kind,
+        string lookupValue,
+        InstallmentRowSnapshot dbRow,
+        string performedByUser,
+        bool willApplyEndState)
+    {
+        if (item.RowIndex <= 0)
+            item.RowIndex = result.Items.Count + 1;
+
+        item.LookupValue = kind == InstallmentLookupKind.TrackingNo
+            ? InstallmentIdentifierDetector.ExtractDigits(dbRow.TrackingNo)
+            : lookupValue;
+        item.DetectedLookupKind = kind;
+        item.Found = true;
+        item.NoDocument = dbRow.NoDocument;
+        item.TrackingNo = dbRow.TrackingNo;
+        item.PaymentCost = FormatCost(dbRow.PaymentCost);
+        item.PaymentDate = dbRow.PaymentDate;
+        item.NidWorkItem = dbRow.NidWorkItem;
+        item.NosaziCode = dbRow.NosaziCode;
+        item.CI_InstallmentStatus = dbRow.CI_InstallmentStatus;
+        item.EndStateDesc = dbRow.EndStateDesc;
+        item.EndStateCode = dbRow.EndStateCode;
+        item.Comments = dbRow.Comments;
+        item.ProposedComments = InstallmentCheckHelper.BuildNewComments(performedByUser, dbRow.Comments);
+        item.ProposedCI_InstallmentStatus = InstallmentCheckHelper.TreasuryStatus;
+        item.ProposedEndStateDesc = willApplyEndState
+            ? InstallmentCheckHelper.EndStateDescOdooat
+            : dbRow.EndStateDesc;
+        item.ProposedEndStateCode = willApplyEndState
+            ? InstallmentCheckHelper.EndStateCodeOdooat
+            : dbRow.EndStateCode;
+        item.WillApplyEndState = willApplyEndState;
+
+        var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow, kind, lookupValue);
+        if (mismatch == null)
+            item.DataMatches = true;
+        else
+        {
+            item.DataMatches = false;
+            item.ValidationMessage = mismatch;
+        }
+
+        result.Items.Add(item);
     }
 
     private static InstallmentCheckPreviewItem MapPreviewItem(

@@ -516,6 +516,8 @@ public class InstallmentCheckRequest
     public string PerformedByUser { get; set; } = "";
     /// <summary>در صورت true — EndStateDesc=عودت و EndStateCode=17 برای همه ردیف‌ها.</summary>
     public bool ApplyEndState { get; set; }
+    /// <summary>کدهای پیگیری انتخاب‌شده در گرید — تنها مسیر اعمال/ارسال.</summary>
+    public List<string>? SelectedTrackingNos { get; set; }
 }
 
 public class InstallmentCheckPreviewItem
