@@ -16,8 +16,10 @@ public static class InstallmentListQuery
             : $"il.{installmentListColumn} = @v";
 
         return $"""
-        SELECT il.NoDocument,
-               il.TrackingNo AS trackingno,
+        SELECT il.NidInstallment,
+               il.NidInsList,
+               il.NoDocument,
+               {InstallmentListTrackingSql.EffectiveTrackingSelect},
                il.PaymentCost,
                CAST(il.PaymentDate AS varchar(20)) AS PaymentDate,
                CAST(r.NidWorkItem AS nvarchar(50)) AS nidworkitem,

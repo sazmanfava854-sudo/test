@@ -528,7 +528,8 @@ public class InstallmentCheckPreviewItem
     public bool Found { get; set; }
     public bool DataMatches { get; set; }
     public string? ValidationMessage { get; set; }
-    public long? NidInstallmentList { get; set; }
+    public Guid NidInstallment { get; set; }
+    public Guid NidInsList { get; set; }
     public string NoDocument { get; set; } = "";
     public string TrackingNo { get; set; } = "";
     public string? PaymentCost { get; set; }

@@ -17,7 +17,9 @@ public class InstallmentListQueryTests
         Assert.Contains("INNER JOIN dbo.Sh_RequestInfo r", sql);
         Assert.Contains("INNER JOIN dbo.Base_NosaziCode b", sql);
         Assert.Contains("CAST(r.NidWorkItem AS nvarchar(50)) AS nidworkitem", sql);
-        Assert.Contains("il.TrackingNo AS trackingno", sql);
+        Assert.Contains("AS trackingno", sql);
+        Assert.Contains("il.NidInsList", sql);
+        Assert.Contains("il.NidInstallment", sql);
         Assert.Contains("'0' + '-' + '-'", sql);
         Assert.Contains("WHERE il.NoDocument = @v", sql);
     }

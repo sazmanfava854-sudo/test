@@ -542,16 +542,26 @@ function normalizeInstallmentNoDocument(noDocument) {
   return t || '—';
 }
 
+function buildInstallmentRowSelectionKey(row) {
+  const tracking = normalizeInstallmentTrackingKey(row?.trackingNo);
+  if (tracking) return tracking;
+  const ins = (row?.nidInsList || '').trim();
+  if (ins) return `ins:${ins}`;
+  const nid = (row?.nidInstallment || '').trim();
+  if (nid) return `nid:${nid}`;
+  return '';
+}
+
 function isInstallmentRowEligible(row) {
   return !!(row?.found
     && (row.dataMatches || row.docSibling)
-    && normalizeInstallmentTrackingKey(row.trackingNo));
+    && buildInstallmentRowSelectionKey(row));
 }
 
 function findDuplicateInstallmentTrackingInGrid(items) {
   const seen = new Set();
   for (const row of items || []) {
-    const key = normalizeInstallmentTrackingKey(row.trackingNo);
+    const key = buildInstallmentRowSelectionKey(row);
     if (!key) continue;
     if (seen.has(key)) return key;
     seen.add(key);
@@ -572,7 +582,7 @@ function buildInstallmentDocSendWarnings(items, selectedKeys) {
   byDoc.forEach((members, doc) => {
     if (members.length <= 1) return;
     const selectedCount = members.filter((m) =>
-      selected.has(normalizeInstallmentTrackingKey(m.trackingNo))).length;
+      selected.has(buildInstallmentRowSelectionKey(m))).length;
     if (selectedCount > 1) {
       warnings.push({ noDocument: doc, totalInGrid: members.length, selectedCount });
     }
@@ -616,7 +626,7 @@ function syncInstallmentSelectAllCheckbox() {
   }
   selectAll.disabled = false;
   const selectedEligible = eligible.filter((r) =>
-    installmentSelectedTrackingKeys.has(normalizeInstallmentTrackingKey(r.trackingNo))).length;
+    installmentSelectedTrackingKeys.has(buildInstallmentRowSelectionKey(r))).length;
   selectAll.checked = selectedEligible === eligible.length;
   selectAll.indeterminate = selectedEligible > 0 && selectedEligible < eligible.length;
 }
@@ -1341,7 +1351,7 @@ function renderInstallmentPreview(data) {
         ? (row.validationMessage || 'تطابق کامل')
         : (row.validationMessage || 'عدم تطابق'));
     const eligible = isInstallmentRowEligible(row);
-    const trackingKey = normalizeInstallmentTrackingKey(row.trackingNo);
+    const rowKey = buildInstallmentRowSelectionKey(row);
 
     tr.innerHTML = `
       <td class="col-installment-check">${eligible
@@ -1362,9 +1372,9 @@ function renderInstallmentPreview(data) {
 
     const checkbox = tr.querySelector('.installment-row-check');
     checkbox?.addEventListener('change', () => {
-      if (!trackingKey) return;
-      if (checkbox.checked) installmentSelectedTrackingKeys.add(trackingKey);
-      else installmentSelectedTrackingKeys.delete(trackingKey);
+      if (!rowKey) return;
+      if (checkbox.checked) installmentSelectedTrackingKeys.add(rowKey);
+      else installmentSelectedTrackingKeys.delete(rowKey);
       syncInstallmentSelectAllCheckbox();
       updateInstallmentApplyButton();
     });
@@ -1374,7 +1384,7 @@ function renderInstallmentPreview(data) {
 
   const eligibleRows = installmentPreviewItems.filter(isInstallmentRowEligible);
   if (eligibleRows.length === 1 && !dup) {
-    const key = normalizeInstallmentTrackingKey(eligibleRows[0].trackingNo);
+    const key = buildInstallmentRowSelectionKey(eligibleRows[0]);
     if (key) installmentSelectedTrackingKeys.add(key);
     tbody.querySelectorAll('.installment-row-check').forEach((cb) => {
       cb.checked = true;
@@ -4043,7 +4053,7 @@ async function init() {
     installmentSelectedTrackingKeys.clear();
     if (selectAll.checked) {
       eligible.forEach((row) => {
-        const key = normalizeInstallmentTrackingKey(row.trackingNo);
+        const key = buildInstallmentRowSelectionKey(row);
         if (key) installmentSelectedTrackingKeys.add(key);
       });
     }

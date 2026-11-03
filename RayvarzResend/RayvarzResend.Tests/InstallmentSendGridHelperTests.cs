@@ -104,7 +104,17 @@ public class InstallmentSendGridHelperTests
     }
 
     [Fact]
-    public void Row_without_tracking_is_never_selectable()
+    public void Doc_sibling_without_tracking_but_with_NidInsList_is_selectable()
+    {
+        var sibling = Preview("502267", "", found: true, matches: false);
+        sibling.DocSibling = true;
+        sibling.NidInsList = Guid.Parse("AF7792CB-C123-4BAE-B948-9DDDA01605D3");
+        Assert.True(InstallmentSendGridHelper.IsRowEligibleForSend(sibling));
+        Assert.StartsWith("ins:", InstallmentSendGridHelper.BuildRowSelectionKey(sibling));
+    }
+
+    [Fact]
+    public void Row_without_tracking_or_row_id_is_never_selectable()
     {
         var row = Preview("502267", "", found: true, matches: true);
         row.DocSibling = true;
@@ -140,6 +150,7 @@ public class InstallmentSendGridHelperTests
             Found = found,
             DataMatches = matches,
             NoDocument = noDocument,
-            TrackingNo = trackingNo
+            TrackingNo = trackingNo,
+            DocSibling = false
         };
 }

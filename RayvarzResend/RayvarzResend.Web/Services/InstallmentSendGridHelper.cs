@@ -6,14 +6,20 @@ namespace RayvarzResend.Web.Services;
 public static class InstallmentSendGridHelper
 {
     public const string DuplicateTrackingGridError =
-        "کد پیگیری تکراری در گرید — هر کد پیگیری فقط یک‌بار مجاز است";
+        "ردیف تکراری در گرید — هر کد پیگیری/ردیف فقط یک‌بار مجاز است";
 
     public const string DuplicateTrackingSelectionError =
-        "کد پیگیری تکراری در انتخاب‌ها — ارسال مجاز نیست";
+        "انتخاب تکراری — ارسال مجاز نیست";
 
     public const string NoSelectionError = "حداقل یک فیش از گرید انتخاب کنید";
 
     public const string MissingTrackingMessage = "بدون کد پیگیری — قابل انتخاب/ارسال نیست";
+
+    public const string InsListKeyPrefix = "ins:";
+    public const string NidInstallmentKeyPrefix = "nid:";
+
+    public const string DocSiblingHint =
+        "فیش دیگر همان شماره سند — مبلغ/تاریخ اکسل مربوط به ردیف دیگر است";
 
     public sealed record DocSendWarning(string NoDocument, int TotalInGrid, int SelectedCount);
 
@@ -35,18 +41,29 @@ public static class InstallmentSendGridHelper
         return string.IsNullOrEmpty(t) ? "—" : t;
     }
 
+    public static string BuildRowSelectionKey(InstallmentCheckPreviewItem row)
+    {
+        var tracking = NormalizeTrackingKey(row.TrackingNo);
+        if (tracking.Length > 0)
+            return tracking;
+        if (row.NidInsList != Guid.Empty)
+            return InsListKeyPrefix + row.NidInsList.ToString("D");
+        if (row.NidInstallment != Guid.Empty)
+            return NidInstallmentKeyPrefix + row.NidInstallment.ToString("D");
+        return "";
+    }
+
     public static bool IsRowEligibleForSend(InstallmentCheckPreviewItem row) =>
         row.Found
-        && (row.DataMatches || row.DocSibling)
-        && NormalizeTrackingKey(row.TrackingNo).Length > 0;
+        && BuildRowSelectionKey(row).Length > 0
+        && (row.DataMatches || row.DocSibling);
 
-    /// <summary>اولین کد پیگیری تکراری در کل گرید (یا null).</summary>
     public static string? FindDuplicateTrackingInGrid(IEnumerable<InstallmentCheckPreviewItem> gridItems)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in gridItems)
         {
-            var key = NormalizeTrackingKey(row.TrackingNo);
+            var key = BuildRowSelectionKey(row);
             if (key.Length == 0)
                 continue;
             if (!seen.Add(key))
@@ -62,12 +79,26 @@ public static class InstallmentSendGridHelper
             return ([], NoSelectionError);
 
         var keys = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in raw)
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in raw ?? [])
         {
-            var key = NormalizeTrackingKey(item);
-            if (key.Length == 0)
+            var token = (item ?? "").Trim();
+            if (token.Length == 0)
                 continue;
+
+            string key;
+            if (token.StartsWith(InsListKeyPrefix, StringComparison.OrdinalIgnoreCase)
+                || token.StartsWith(NidInstallmentKeyPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                key = token;
+            }
+            else
+            {
+                key = NormalizeTrackingKey(token);
+                if (key.Length == 0)
+                    continue;
+            }
+
             if (!seen.Add(key))
                 return ([], DuplicateTrackingSelectionError);
             keys.Add(key);
@@ -81,7 +112,7 @@ public static class InstallmentSendGridHelper
 
     public static IReadOnlyList<DocSendWarning> BuildDocNumberWarnings(
         IEnumerable<InstallmentCheckPreviewItem> gridItems,
-        IReadOnlySet<string> selectedTrackingKeys)
+        IReadOnlySet<string> selectedRowKeys)
     {
         var warnings = new List<DocSendWarning>();
         var groups = gridItems
@@ -95,7 +126,7 @@ public static class InstallmentSendGridHelper
                 continue;
 
             var selected = members.Count(m =>
-                selectedTrackingKeys.Contains(NormalizeTrackingKey(m.TrackingNo)));
+                selectedRowKeys.Contains(BuildRowSelectionKey(m)));
 
             if (selected > 1)
             {

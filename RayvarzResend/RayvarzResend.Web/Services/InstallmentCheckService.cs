@@ -199,7 +199,7 @@ public class InstallmentCheckService
         {
             var item = result.Items[i];
             item.RowIndex = i + 1;
-            if (item.Found && InstallmentSendGridHelper.NormalizeTrackingKey(item.TrackingNo).Length == 0)
+            if (item.Found && InstallmentSendGridHelper.BuildRowSelectionKey(item).Length == 0)
             {
                 item.ValidationMessage = string.IsNullOrWhiteSpace(item.ValidationMessage)
                     ? InstallmentSendGridHelper.MissingTrackingMessage
@@ -235,39 +235,22 @@ public class InstallmentCheckService
 
             try
             {
-                var matches = await LoadRowsForExcelAsync(
-                    conn,
-                    InstallmentLookupKind.TrackingNo,
-                    key,
-                    ct);
-
-                if (matches.Count != 1)
-                {
-                    item.Found = matches.Count > 0;
-                    item.Success = false;
-                    item.Message = matches.Count == 0
-                        ? "کد پیگیری در دیتابیس یافت نشد"
-                        : $"کد پیگیری مبهم — {matches.Count} ردیف با این شناسه";
-                    AppendUpdateItemResult(result, item);
-                    continue;
-                }
-
                 if (result.DryRun)
                 {
                     item.Found = true;
                     item.Success = true;
                     item.WouldUpdate = 1;
                     item.Message =
-                        $"DryRun — ردیف با کد پیگیری {key} UPDATE نمی‌شود (Installment:DryRun=true)";
+                        $"DryRun — ردیف {key} UPDATE نمی‌شود (Installment:DryRun=true)";
                     AppendUpdateItemResult(result, item);
                     continue;
                 }
 
-                var sql = BuildUpdateSql(InstallmentLookupKind.TrackingNo, willApplyEndState);
+                var sql = ResolveUpdateSql(key, willApplyEndState, out var bind);
                 await using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@prefix", commentPrefix);
                 cmd.Parameters.AddWithValue("@status", InstallmentCheckHelper.TreasuryStatus);
-                cmd.Parameters.AddWithValue("@v", key);
+                bind(cmd);
                 if (willApplyEndState)
                 {
                     cmd.Parameters.AddWithValue("@endDesc", InstallmentCheckHelper.EndStateDescOdooat);
@@ -279,8 +262,8 @@ public class InstallmentCheckService
                 item.Found = affected > 0;
                 item.Success = affected > 0;
                 item.Message = affected > 0
-                    ? $"{affected} ردیف به‌روز شد (کد پیگیری {key})"
-                    : "کد پیگیری در دیتابیس یافت نشد";
+                    ? $"{affected} ردیف به‌روز شد ({key})"
+                    : "ردیف در دیتابیس یافت نشد";
             }
             catch (Exception ex)
             {
@@ -372,6 +355,8 @@ public class InstallmentCheckService
             : lookupValue;
         item.DetectedLookupKind = kind;
         item.Found = true;
+        item.NidInstallment = dbRow.NidInstallment;
+        item.NidInsList = dbRow.NidInsList;
         item.NoDocument = dbRow.NoDocument;
         item.TrackingNo = dbRow.TrackingNo;
         item.PaymentCost = FormatCost(dbRow.PaymentCost);
@@ -392,13 +377,23 @@ public class InstallmentCheckService
             : dbRow.EndStateCode;
         item.WillApplyEndState = willApplyEndState;
 
-        var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow, kind, lookupValue);
-        if (mismatch == null)
-            item.DataMatches = true;
+        if (item.DocSibling)
+        {
+            item.DataMatches = InstallmentSendGridHelper.BuildRowSelectionKey(item).Length > 0;
+            item.ValidationMessage = item.DataMatches
+                ? InstallmentSendGridHelper.DocSiblingHint
+                : InstallmentSendGridHelper.MissingTrackingMessage;
+        }
         else
         {
-            item.DataMatches = false;
-            item.ValidationMessage = mismatch;
+            var mismatch = InstallmentExcelMatcher.ValidateAgainstDb(excelRow, dbRow, kind, lookupValue);
+            if (mismatch == null)
+                item.DataMatches = true;
+            else
+            {
+                item.DataMatches = false;
+                item.ValidationMessage = mismatch;
+            }
         }
 
         result.Items.Add(item);
@@ -424,6 +419,8 @@ public class InstallmentCheckService
             Found = true,
             DataMatches = true,
             WillApplyEndState = willApplyEndState,
+            NidInstallment = row.NidInstallment,
+            NidInsList = row.NidInsList,
             NoDocument = row.NoDocument,
             TrackingNo = row.TrackingNo,
             PaymentCost = FormatCost(row.PaymentCost),
@@ -518,8 +515,59 @@ public class InstallmentCheckService
         return rows;
     }
 
+    private static string ResolveUpdateSql(
+        string selectionKey,
+        bool willApplyEndState,
+        out Action<SqlCommand> bindParameters)
+    {
+        if (selectionKey.StartsWith(InstallmentSendGridHelper.InsListKeyPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var id = Guid.Parse(selectionKey[InstallmentSendGridHelper.InsListKeyPrefix.Length..]);
+            bindParameters = cmd => cmd.Parameters.AddWithValue("@id", id);
+            return BuildUpdateSqlByInsList(willApplyEndState);
+        }
+
+        if (selectionKey.StartsWith(InstallmentSendGridHelper.NidInstallmentKeyPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var id = Guid.Parse(selectionKey[InstallmentSendGridHelper.NidInstallmentKeyPrefix.Length..]);
+            bindParameters = cmd => cmd.Parameters.AddWithValue("@id", id);
+            return BuildUpdateSqlByNidInstallment(willApplyEndState);
+        }
+
+        bindParameters = cmd => cmd.Parameters.AddWithValue("@v", selectionKey);
+        return BuildUpdateSql(InstallmentLookupKind.TrackingNo, willApplyEndState);
+    }
+
+    private static string BuildUpdateSqlByInsList(bool withEndState)
+    {
+        var endStateSql = withEndState
+            ? ", EndStateDesc = @endDesc, EndStateCode = @endCode"
+            : "";
+        return $"""
+            UPDATE dbo.Installment_List
+            SET Comments = @prefix + ISNULL(Comments, ''),
+                CI_InstallmentStatus = @status{endStateSql}
+            WHERE NidInsList = @id
+            """;
+    }
+
+    private static string BuildUpdateSqlByNidInstallment(bool withEndState)
+    {
+        var endStateSql = withEndState
+            ? ", EndStateDesc = @endDesc, EndStateCode = @endCode"
+            : "";
+        return $"""
+            UPDATE dbo.Installment_List
+            SET Comments = @prefix + ISNULL(Comments, ''),
+                CI_InstallmentStatus = @status{endStateSql}
+            WHERE NidInstallment = @id
+            """;
+    }
+
     private static InstallmentRowSnapshot MapExcelInstallmentRow(SqlDataReader reader) => new()
     {
+        NidInstallment = InstallmentListKeyReader.ReadNidInstallment(reader, "NidInstallment"),
+        NidInsList = InstallmentListKeyReader.ReadNidInstallment(reader, "NidInsList"),
         NoDocument = reader["NoDocument"]?.ToString() ?? "",
         TrackingNo = reader["trackingno"]?.ToString() ?? reader["TrackingNo"]?.ToString() ?? "",
         PaymentCost = reader["PaymentCost"] is DBNull ? null : Convert.ToDecimal(reader["PaymentCost"]),
