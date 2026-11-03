@@ -22,7 +22,7 @@ public class FicheDateChangeHelperTests
             previousEumFicheStatus: 5,
             newEumFicheStatus: 4);
 
-        Assert.Contains("تغییر وضعیت از تایید بانک به ابطال", prefix);
+        Assert.Contains("تغییر وضعیت از تائید بانک به ابطال", prefix);
         Assert.Contains("شادی امینی", prefix);
         Assert.Contains($"مورخ {today}", prefix);
         Assert.DoesNotContain("صدور دایم", prefix);
@@ -61,8 +61,10 @@ public class FicheDateChangeHelperTests
     [Fact]
     public void StatusLabel_returns_persian_label()
     {
-        Assert.Equal("صدوردایم", FicheDateChangeHelper.StatusLabel(1));
+        Assert.Equal("صدور قطعی", FicheDateChangeHelper.StatusLabel(1));
         Assert.Equal("ابطال", FicheDateChangeHelper.StatusLabel(4));
+        Assert.Equal("ابطال", FicheDateChangeHelper.DutyStatusLabel(2));
+        Assert.Equal("تائید بانک", FicheDateChangeHelper.DutyStatusLabel(4));
     }
 
     [Fact]

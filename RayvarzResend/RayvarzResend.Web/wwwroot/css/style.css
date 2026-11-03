@@ -1888,6 +1888,21 @@ tbody tr:last-child td {
   color: var(--warn);
 }
 
+.app-toast-persistent {
+  border-right-width: 4px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+}
+
+.app-toast-persistent .app-toast-text::before {
+  content: '… ';
+  animation: app-toast-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes app-toast-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
 .app-toast-info {
   border-color: #93c5fd;
   background: var(--primary-soft);

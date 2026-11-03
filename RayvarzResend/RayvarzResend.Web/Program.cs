@@ -830,7 +830,8 @@ app.MapGet("/api/config", (IConfiguration config, HttpContext http, ShimasAuthSe
         database = "Sara8M03",
         table = "dbo.Income_Fiche",
         defaultStatus = 1,
-        statusLabels = FicheDateChangeHelper.FicheStatusLabels
+        statusLabels = FicheDateChangeHelper.FicheStatusLabels,
+        dutyStatusLabels = FicheDateChangeHelper.DutyFicheStatusLabels
     },
     costCenter = new
     {

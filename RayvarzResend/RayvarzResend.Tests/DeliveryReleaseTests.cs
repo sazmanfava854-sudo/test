@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v53_release()
+    public void ReleaseInfo_is_v54_release()
     {
-        Assert.Equal(53, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v53", ReleaseInfo.Tag);
+        Assert.Equal(54, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v54", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,16 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v53_doc_lists_current_release()
+    public void DELIVERY_v54_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v53.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v54.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 53", doc);
-        Assert.Contains("EumDutyFicheStatus", doc);
-        Assert.Contains("ابطال", doc);
-        Assert.Contains("RayvarzResend-53.zip", doc);
+        Assert.Contains("releaseVersion: 54", doc);
+        Assert.Contains("محو نمی‌شود", doc);
+        Assert.Contains("EumFicheStatus", doc);
+        Assert.Contains("RayvarzResend-54.zip", doc);
     }
 
     [Fact]
@@ -173,7 +173,9 @@ public class DeliveryReleaseTests
         Assert.Contains("field: 'منبع'", js);
         Assert.DoesNotContain("field: 'صندوق'", js);
         Assert.Contains("function showTahatorSendResult(", js);
-        Assert.Contains("showAppInfo(`در حال ارسال فیش", js);
+        Assert.Contains("function showAppProgress(", js);
+        Assert.Contains("showAppProgress(`در حال ارسال فیش", js);
+        Assert.Contains("app-toast-persistent", js);
         Assert.DoesNotContain("function fillSourceIdDisplay(", js);
         Assert.DoesNotContain("جفت مرجع", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
         Assert.DoesNotContain("جزئیات فیش", js.Split("function showTahatorSendResult")[1].Split("function formatTahatorCheck")[0]);
@@ -260,8 +262,8 @@ public class DeliveryReleaseTests
         Assert.Contains("Vazirmatn", File.ReadAllText(WebFile("wwwroot", "css", "style.css")));
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
-        Assert.Contains("js/app.js?v=110", html);
-        Assert.Contains("css/style.css?v=52", html);
+        Assert.Contains("js/app.js?v=111", html);
+        Assert.Contains("css/style.css?v=53", html);
         Assert.Contains("id=\"btnUnsentExcel\"", html);
         Assert.DoesNotContain("btnUnsentNextPage", html);
         Assert.DoesNotContain("unsent-excel-hint", html);

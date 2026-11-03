@@ -5,15 +5,29 @@ namespace RayvarzResend.Web.Services;
 /// <summary>تب «تغییر تاریخ فیش» — dbo.Income_Fiche (بدون رایورز).</summary>
 public static class FicheDateChangeHelper
 {
+    /// <summary>Income_Fiche.EumFicheStatus — مطابق سامانه درآمد.</summary>
     public static readonly IReadOnlyDictionary<int, string> FicheStatusLabels = new Dictionary<int, string>
     {
-        [0] = "صدورموقت",
-        [1] = "صدوردایم",
-        [2] = "چاپ",
-        [3] = "تایید دستی/لحظه‌ای بانک",
+        [0] = "صدور موقتی",
+        [1] = "صدور قطعی",
+        [2] = "چاپ فیش",
+        [3] = "تائید",
         [4] = "ابطال",
-        [5] = "تایید بانک"
+        [5] = "تائید بانک"
     };
+
+    /// <summary>Duty_Fiche.EumDutyFicheStatus — نوسازی/صنفی.</summary>
+    public static readonly IReadOnlyDictionary<int, string> DutyFicheStatusLabels = new Dictionary<int, string>
+    {
+        [0] = "صدور",
+        [1] = "تائید",
+        [2] = "ابطال",
+        [3] = "صدور موقت",
+        [4] = "تائید بانک"
+    };
+
+    public static string DutyStatusLabel(int status) =>
+        DutyFicheStatusLabels.TryGetValue(status, out var label) ? label : status.ToString();
 
     public const int DefaultFicheStatus = 1;
 

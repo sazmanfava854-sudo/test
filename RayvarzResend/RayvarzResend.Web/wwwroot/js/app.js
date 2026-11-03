@@ -47,7 +47,7 @@ function showAppMessage(message, type = 'info', { timeout = 9000 } = {}) {
   hideAppMessage();
 
   const toast = document.createElement('div');
-  toast.className = `app-toast app-toast-${type}`;
+  toast.className = `app-toast app-toast-${type}${timeout === 0 ? ' app-toast-persistent' : ''}`;
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
   const text = document.createElement('span');
@@ -86,7 +86,13 @@ function showAppInfo(message, options) {
   showAppMessage(message, 'info', options);
 }
 
+/** تا پایان عملیات (مثلاً ارسال رایورز) — بدون محو خودکار. */
+function showAppProgress(message) {
+  showAppMessage(message, 'info', { timeout: 0 });
+}
+
 window.showAppSuccess = showAppSuccess;
+window.showAppProgress = showAppProgress;
 window.showAppError = showAppError;
 window.showAppWarning = showAppWarning;
 
@@ -519,13 +525,23 @@ let checkDateItems = [];
 let checkDateSelectedRow = null;
 let installmentExcelRows = [];
 
+/** Income_Fiche.EumFicheStatus — مطابق سامانه درآمد. */
 const ficheDateStatusLabels = {
-  0: 'صدورموقت',
-  1: 'صدوردایم',
-  2: 'چاپ',
-  3: 'تایید دستی/لحظه‌ای بانک',
+  0: 'صدور موقتی',
+  1: 'صدور قطعی',
+  2: 'چاپ فیش',
+  3: 'تائید',
   4: 'ابطال',
-  5: 'تایید بانک'
+  5: 'تائید بانک'
+};
+
+/** Duty_Fiche.EumDutyFicheStatus — نوسازی/صنفی. */
+const dutyFicheStatusLabels = {
+  0: 'صدور',
+  1: 'تائید',
+  2: 'ابطال',
+  3: 'صدور موقت',
+  4: 'تائید بانک'
 };
 
 const ficheDateStatusOrder = [0, 1, 2, 3, 4, 5];
@@ -3966,7 +3982,7 @@ function setupEventHandlers() {
   let sent = false;
   if (isTahatorIncomeFiche(currentFiche)) {
     $('btnSend').disabled = true;
-    showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
+    showAppProgress(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
     try {
       const res = await apiFetch('/api/tahator/send', {
         method: 'POST',
@@ -4001,7 +4017,7 @@ function setupEventHandlers() {
   if (sendDateError) return showAppWarning(sendDateError);
 
   $('btnSend').disabled = true;
-  showAppInfo(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
+  showAppProgress(`در حال ارسال فیش ${currentFiche.ficheNo}…`);
   try {
     const res = await apiFetch('/api/fiche/send', {
       method: 'POST',
@@ -4151,7 +4167,7 @@ function setupEventHandlers() {
     if (!targets.length) return showAppWarning('حداقل یک فیش انتخاب کنید');
 
     const dry = config?.dryRun;
-    showAppInfo(dry
+    showAppProgress(dry
       ? `در حال ارسال آزمایشی ${targets.length} فیش انتخاب‌شده…`
       : `در حال ارسال ${targets.length} فیش انتخاب‌شده به رایورز…`);
 
@@ -4165,6 +4181,7 @@ function setupEventHandlers() {
     try {
       const data = await sendUnsentBatchInChunks(targets, (msg) => {
         box.textContent = msg;
+        showAppProgress(msg);
       });
 
       const resultText = formatUnsentBatchSendResult(data);
