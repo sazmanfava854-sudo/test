@@ -538,6 +538,8 @@ public class InstallmentCheckPreviewItem
     public string? ExcelPaymentDate { get; set; }
     public string? ExcelOdooat { get; set; }
     public bool WillApplyEndState { get; set; }
+    /// <summary>یکی از چند فیش همان شماره سند — عدم تطابق مبلغ/تاریخ اکسل مانع انتخاب نیست.</summary>
+    public bool DocSibling { get; set; }
     public string? NidWorkItem { get; set; }
     public string? NosaziCode { get; set; }
     public string CI_InstallmentStatus { get; set; } = "";

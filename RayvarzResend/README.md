@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۵۶ — رفع CanceledDate در اکسل رایورز)** — شامل v55 و قبل.
+**نسخه آخر (تحویل: ۵۷ — گرید چک خزانه: رنگ گروه سند و ردیف پیوسته)** — شامل v56 و قبل.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v56` |
-| **دانلود Zip** | [**RayvarzResend-56.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-56.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v57` |
+| **دانلود Zip** | [**RayvarzResend-57.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-57.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v56.md`](DELIVERY-v56.md) |
+| جزئیات | [`DELIVERY-v57.md`](DELIVERY-v57.md) |
+| v56 قبلی | [`DELIVERY-v56.md`](DELIVERY-v56.md) |
 | v55 قبلی | [`DELIVERY-v55.md`](DELIVERY-v55.md) |
 | v54 قبلی | [`DELIVERY-v54.md`](DELIVERY-v54.md) |
 | v53 قبلی | [`DELIVERY-v53.md`](DELIVERY-v53.md) |

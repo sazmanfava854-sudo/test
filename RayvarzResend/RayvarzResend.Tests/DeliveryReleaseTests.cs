@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v56_release()
+    public void ReleaseInfo_is_v57_release()
     {
-        Assert.Equal(56, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v56", ReleaseInfo.Tag);
+        Assert.Equal(57, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v57", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,15 +23,15 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v56_doc_lists_current_release()
+    public void DELIVERY_v57_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v56.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v57.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 56", doc);
-        Assert.Contains("FicheSchema", doc);
-        Assert.Contains("RayvarzResend-56.zip", doc);
+        Assert.Contains("releaseVersion: 57", doc);
+        Assert.Contains("شماره سند", doc);
+        Assert.Contains("RayvarzResend-57.zip", doc);
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public class DeliveryReleaseTests
         Assert.Contains("result-log", html);
         Assert.Contains("installment-preview-table", html.Split("id=\"unsentTable\"")[1]);
         Assert.Contains("id=\"installmentSelectAll\"", html);
-        Assert.Contains("js/app.js?v=112", html);
+        Assert.Contains("js/app.js?v=113", html);
         Assert.Contains("css/style.css?v=53", html);
         Assert.Contains("id=\"btnUnsentExcel\"", html);
         Assert.DoesNotContain("btnUnsentNextPage", html);

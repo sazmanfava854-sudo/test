@@ -13,6 +13,8 @@ public static class InstallmentSendGridHelper
 
     public const string NoSelectionError = "حداقل یک فیش از گرید انتخاب کنید";
 
+    public const string MissingTrackingMessage = "بدون کد پیگیری — قابل انتخاب/ارسال نیست";
+
     public sealed record DocSendWarning(string NoDocument, int TotalInGrid, int SelectedCount);
 
     public static string NormalizeTrackingKey(string? trackingNo)
@@ -34,7 +36,9 @@ public static class InstallmentSendGridHelper
     }
 
     public static bool IsRowEligibleForSend(InstallmentCheckPreviewItem row) =>
-        row.Found && row.DataMatches && NormalizeTrackingKey(row.TrackingNo).Length > 0;
+        row.Found
+        && (row.DataMatches || row.DocSibling)
+        && NormalizeTrackingKey(row.TrackingNo).Length > 0;
 
     /// <summary>اولین کد پیگیری تکراری در کل گرید (یا null).</summary>
     public static string? FindDuplicateTrackingInGrid(IEnumerable<InstallmentCheckPreviewItem> gridItems)

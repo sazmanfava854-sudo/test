@@ -96,6 +96,29 @@ public class InstallmentSendGridHelperTests
     }
 
     [Fact]
+    public void Doc_sibling_with_excel_mismatch_is_selectable_when_tracking_present()
+    {
+        var sibling = Preview("502267", "0410150614003999", found: true, matches: false);
+        sibling.DocSibling = true;
+        Assert.True(InstallmentSendGridHelper.IsRowEligibleForSend(sibling));
+    }
+
+    [Fact]
+    public void Row_without_tracking_is_never_selectable()
+    {
+        var row = Preview("502267", "", found: true, matches: true);
+        row.DocSibling = true;
+        Assert.False(InstallmentSendGridHelper.IsRowEligibleForSend(row));
+    }
+
+    [Fact]
+    public void Single_row_excel_mismatch_is_not_selectable()
+    {
+        var row = Preview("809552", "0502090614002610", found: true, matches: false);
+        Assert.False(InstallmentSendGridHelper.IsRowEligibleForSend(row));
+    }
+
+    [Fact]
     public void FormatDocWarningConfirmBody_joins_multiple_groups()
     {
         var body = InstallmentSendGridHelper.FormatDocWarningConfirmBody([

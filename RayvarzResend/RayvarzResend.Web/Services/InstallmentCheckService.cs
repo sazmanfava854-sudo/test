@@ -60,10 +60,7 @@ public class InstallmentCheckService
                 inputRowIndex: i + 1);
         }
 
-        result.FoundCount = result.Items.Count(i => i.Found);
-        result.NotFoundCount = result.Items.Count(i => !i.Found);
-        result.MatchedCount = result.Items.Count(i => i.Found && i.DataMatches);
-        result.MismatchCount = result.Items.Count(i => i.Found && !i.DataMatches);
+        FinalizePreview(result);
         return result;
     }
 
@@ -177,7 +174,8 @@ public class InstallmentCheckService
                     ExcelIdentifier = item.ExcelIdentifier,
                     ExcelPaymentCost = item.ExcelPaymentCost,
                     ExcelPaymentDate = item.ExcelPaymentDate,
-                    WillApplyEndState = willApplyEndState
+                    WillApplyEndState = willApplyEndState,
+                    DocSibling = rows.Count > 1
                 };
                 AppendExcelMatchedPreviewItem(
                     result,
@@ -191,11 +189,28 @@ public class InstallmentCheckService
             }
         }
 
+        FinalizePreview(result);
+        return result;
+    }
+
+    private static void FinalizePreview(InstallmentCheckPreviewResult result)
+    {
+        for (var i = 0; i < result.Items.Count; i++)
+        {
+            var item = result.Items[i];
+            item.RowIndex = i + 1;
+            if (item.Found && InstallmentSendGridHelper.NormalizeTrackingKey(item.TrackingNo).Length == 0)
+            {
+                item.ValidationMessage = string.IsNullOrWhiteSpace(item.ValidationMessage)
+                    ? InstallmentSendGridHelper.MissingTrackingMessage
+                    : $"{item.ValidationMessage} — {InstallmentSendGridHelper.MissingTrackingMessage}";
+            }
+        }
+
         result.FoundCount = result.Items.Count(i => i.Found);
         result.NotFoundCount = result.Items.Count(i => !i.Found);
         result.MatchedCount = result.Items.Count(i => i.Found && i.DataMatches);
         result.MismatchCount = result.Items.Count(i => i.Found && !i.DataMatches);
-        return result;
     }
 
     private async Task<InstallmentCheckUpdateResult> UpdateSelectedTrackingAsync(
@@ -327,13 +342,15 @@ public class InstallmentCheckService
 
         foreach (var row in rows)
         {
-            result.Items.Add(MapPreviewItem(
+            var mapped = MapPreviewItem(
                 lookupValue,
                 kind,
                 row,
                 performedByUser,
                 willApplyEndState,
-                result.Items.Count + 1));
+                result.Items.Count + 1);
+            mapped.DocSibling = rows.Count > 1;
+            result.Items.Add(mapped);
         }
     }
 

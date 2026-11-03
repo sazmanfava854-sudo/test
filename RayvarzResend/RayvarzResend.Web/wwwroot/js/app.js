@@ -543,7 +543,9 @@ function normalizeInstallmentNoDocument(noDocument) {
 }
 
 function isInstallmentRowEligible(row) {
-  return !!(row?.found && row.dataMatches && normalizeInstallmentTrackingKey(row.trackingNo));
+  return !!(row?.found
+    && (row.dataMatches || row.docSibling)
+    && normalizeInstallmentTrackingKey(row.trackingNo));
 }
 
 function findDuplicateInstallmentTrackingInGrid(items) {
@@ -586,13 +588,20 @@ function formatInstallmentDocWarningConfirm(warnings) {
   return lines.join('\n\n');
 }
 
-function getInstallmentDocGroupClass(noDocument, groupIndexByDoc) {
-  const doc = normalizeInstallmentNoDocument(noDocument);
-  if (!groupIndexByDoc.has(doc)) {
-    groupIndexByDoc.set(doc, groupIndexByDoc.size);
-  }
-  const idx = groupIndexByDoc.get(doc) % 3;
-  return ['installment-doc-group-a', 'installment-doc-group-b', 'installment-doc-group-c'][idx];
+/** فقط شماره سندهایی که بیش از یک فیش در گرید دارند رنگ گروه می‌گیرند؛ سندهای یکتا بدون رنگ. */
+function buildInstallmentDocGroupClassMap(items) {
+  const counts = new Map();
+  (items || []).forEach((row) => {
+    if (!row.found || !row.noDocument) return;
+    const doc = normalizeInstallmentNoDocument(row.noDocument);
+    counts.set(doc, (counts.get(doc) || 0) + 1);
+  });
+  const palette = ['installment-doc-group-a', 'installment-doc-group-b', 'installment-doc-group-c'];
+  const map = new Map();
+  counts.forEach((count, doc) => {
+    if (count > 1) map.set(doc, palette[map.size % palette.length]);
+  });
+  return map;
 }
 
 function syncInstallmentSelectAllCheckbox() {
@@ -1313,21 +1322,24 @@ function renderInstallmentPreview(data) {
     summary.textContent = text;
   }
 
-  const groupIndexByDoc = new Map();
+  const docGroupClass = buildInstallmentDocGroupClassMap(installmentPreviewItems);
   tbody.innerHTML = '';
   installmentPreviewItems.forEach((row, idx) => {
     const tr = document.createElement('tr');
+    const groupClass = row.found && row.noDocument
+      ? docGroupClass.get(normalizeInstallmentNoDocument(row.noDocument))
+      : null;
     if (!row.found) tr.classList.add('row-not-found');
-    else if (row.found && row.dataMatches === false) tr.classList.add('row-mismatch');
-    else if (row.found && row.noDocument) {
-      tr.classList.add(getInstallmentDocGroupClass(row.noDocument, groupIndexByDoc));
-    }
+    else if (groupClass) tr.classList.add(groupClass);
+    else if (row.dataMatches === false) tr.classList.add('row-mismatch');
 
     const kind = row.detectedLookupKind || '';
-    const rowNum = row.rowIndex || idx + 1;
+    const rowNum = idx + 1;
     const status = !row.found
       ? (row.validationMessage || 'یافت نشد')
-      : (row.dataMatches ? 'تطابق کامل' : (row.validationMessage || 'عدم تطابق'));
+      : (row.dataMatches
+        ? (row.validationMessage || 'تطابق کامل')
+        : (row.validationMessage || 'عدم تطابق'));
     const eligible = isInstallmentRowEligible(row);
     const trackingKey = normalizeInstallmentTrackingKey(row.trackingNo);
 
