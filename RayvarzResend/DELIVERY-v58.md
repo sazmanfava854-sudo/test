@@ -4,7 +4,7 @@ Tag: `rayvarzresend-tahator-dtl-v58` — `releaseVersion: 58`
 
 **[دانلود RayvarzResend-58.zip](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-58.zip)**
 
-**[دانلود راهنمای کاربر (Word — v58)](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend/docs/RayvarzResend-UserManual-fa-v58.docx)** — بدون «مدیریت کاربران» و «شاهکار»؛ فصل‌های ورود/رابط عمومی حذف شده.
+**[دانلود راهنمای کاربر (Word — v58، همراه تصویر)](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend/docs/RayvarzResend-UserManual-fa-v58.docx)** — بدون «مدیریت کاربران» و «شاهکار»؛ شامل اسکرین‌شات هر صفحه/تب.
 
 ## تب خزانه — چند فیش یک شماره سند (مثلاً 502267)
 

@@ -2,11 +2,26 @@
 # -*- coding: utf-8 -*-
 """Generate Persian RTL user manual for دستیار مالی — excludes users + shahkar."""
 
+from pathlib import Path
+
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt, Cm
+from docx.shared import Pt, Cm, Inches
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+
+SCREENSHOT_DIRS = [
+    Path("/opt/cursor/artifacts/manual-screenshots"),
+    Path(__file__).resolve().parent / "manual-screenshots",
+]
+
+
+def resolve_screenshot(name: str) -> Path | None:
+    for d in SCREENSHOT_DIRS:
+        p = d / name
+        if p.is_file():
+            return p
+    return None
 
 
 def set_rtl_paragraph(paragraph):
@@ -47,6 +62,24 @@ def add_bullets(doc, items):
         set_rtl_paragraph(p)
 
 
+def add_figure(doc, filename: str, caption: str):
+    path = resolve_screenshot(filename)
+    if not path:
+        add_para(doc, f"تصویر {filename} یافت نشد.", bold=True)
+        return
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run()
+    run.add_picture(str(path), width=Inches(6.3))
+    cap = doc.add_paragraph()
+    cr = cap.add_run(caption)
+    cr.italic = True
+    cr.font.size = Pt(11)
+    cr.font.name = "B Nazanin"
+    cr._element.rPr.rFonts.set(qn("w:cs"), "B Nazanin")
+    set_rtl_paragraph(cap)
+
+
 def build():
     doc = Document()
     section = doc.sections[0]
@@ -77,6 +110,16 @@ def build():
         "«دستیار مالی» برنامهٔ تحت وب برای کار با فیش و چک در سارا و انجام عملیات مرتبط با رایورز است. "
         "بعد از ورود، از صفحهٔ مدیریت کارت هر کار را انتخاب می‌کنید. در خود برنامه، کارها در تب‌های بالای صفحه جدا شده‌اند. "
         "اگر تب یا دکمه‌ای را نمی‌بینید، یعنی برای حساب شما مجوز آن تعریف نشده — با مسئول سامانه هماهنگ کنید.",
+    )
+    add_figure(
+        doc,
+        "01-login.png",
+        "شکل ۱ — صفحهٔ ورود: دامین و رمز سامانه، یا در صورت فعال بودن SSO دکمهٔ ورود سازمانی.",
+    )
+    add_figure(
+        doc,
+        "02-management-hub.png",
+        "شکل ۲ — صفحهٔ مدیریت: کارت هر ماژول؛ با «ورود به فرم» وارد همان بخش می‌شوید.",
     )
 
     add_heading(doc, "۲. نحوه کار با سامانه", 1)
@@ -129,6 +172,11 @@ def build():
             "۷. «ارسال به رایورز» را بزنید و منتظر پایان ارسال بمانید. نتیجه در کارت «نتیجه ارسال» و پیام بالای صفحه است.",
         ],
     )
+    add_figure(
+        doc,
+        "03-rayvarz-single.png",
+        "شکل ۳ — ارسال تکی: نوع فیش، شناسه، منطقه و منبع، تاریخ‌ها، سپس «دریافت فیش» و «ارسال به رایورز».",
+    )
 
     add_heading(doc, "۳.۲ فیش تهاتر", 2)
     add_para(
@@ -160,6 +208,11 @@ def build():
             "۶. اگر ارتباط قطع شد، ممکن است بخشی از فیش‌ها قبلاً ارسال شده باشند؛ قبل از ارسال دوباره وضعیت را در رایورز کنترل کنید.",
         ],
     )
+    add_figure(
+        doc,
+        "04-rayvarz-bulk.png",
+        "شکل ۴ — ارسال جمعی: سوییچ «جمعی»، فیلتر تاریخ و شناسه‌ها، جستجو، اکسل و «ارسال انتخاب‌شده‌ها».",
+    )
 
     add_heading(doc, "۴. چک خزانه — تغییر وضعیت چک به خزانه", 1)
     add_para(
@@ -179,6 +232,11 @@ def build():
             "۶. «اعمال» — فقط ردیف‌های انتخاب‌شده به‌روز می‌شوند.",
         ],
     )
+    add_figure(
+        doc,
+        "05-installment-single.png",
+        "شکل ۵ — چک خزانه تکی: شماره سند یا کد پیگیری، گزینهٔ عودت، «پیش‌نمایش» و «اعمال».",
+    )
 
     add_heading(doc, "۴.۲ حالت اکسل", 2)
     add_bullets(
@@ -190,6 +248,11 @@ def build():
             "۴. «پیش‌نمایش» — جدول یکپارچه برای همهٔ خطوط فایل.",
             "۵. ردیف‌های درست را انتخاب و «اعمال» کنید.",
         ],
+    )
+    add_figure(
+        doc,
+        "06-installment-excel.png",
+        "شکل ۶ — چک خزانه با اکسل: قالب سه ستون، انتخاب فایل، تمپلیت، پیش‌نمایش و اعمال.",
     )
 
     add_heading(doc, "۴.۳ کار با جدول پیش‌نمایش", 2)
@@ -218,6 +281,11 @@ def build():
             "۵. «اعمال» — نتیجه در پایین صفحه و پیام بالا.",
         ],
     )
+    add_figure(
+        doc,
+        "07-check-date.png",
+        "شکل ۷ — تغییر تاریخ چک: جستجو با کد پیگیری، انتخاب ردیف، تاریخ جدید و «اعمال».",
+    )
 
     add_heading(doc, "۶. تغییر تاریخ فیش درآمد", 1)
     add_heading(doc, "۶.۱ جستجو", 2)
@@ -240,6 +308,11 @@ def build():
             "«اعمال روی انتخاب‌شده‌ها» — در پنجرهٔ تأیید «بله» بزنید.",
         ],
     )
+    add_figure(
+        doc,
+        "08-fiche-date.png",
+        "شکل ۸ — تغییر تاریخ فیش: فیلترها، جدول نتایج و بخش «مقادیر جدید» در پایین.",
+    )
 
     add_heading(doc, "۷. خدمات الکترونیک", 1)
     add_bullets(
@@ -250,6 +323,11 @@ def build():
             "۳. برای اصلاح تاریخ پرداخت: ردیف‌ها را انتخاب کنید، تاریخ جدید را بزنید، «ثبت تغییر تاریخ».",
             "دکمهٔ «تست سرویس‌های استعلام» فقط برای عیب‌یابی فنی است و در دیتابیس تغییری ایجاد نمی‌کند.",
         ],
+    )
+    add_figure(
+        doc,
+        "09-bank-inquiry.png",
+        "شکل ۹ — خدمات الکترونیک: جستجوی فیش، جدول فرآیند پرداخت و ثبت تاریخ پرداخت جدید.",
     )
 
     add_heading(doc, "۸. مرکز هزینه", 1)
@@ -262,6 +340,11 @@ def build():
             "۴. «مرکز یک» و «مرکز دو» جدید را وارد کنید.",
             "۵. «به‌روزرسانی فیش‌های انتخاب‌شده».",
         ],
+    )
+    add_figure(
+        doc,
+        "10-cost-center.png",
+        "شکل ۱۰ — مرکز هزینه: جستجو با شماره فیش، جدول مراکز فعلی و ثبت مرکز یک و دو.",
     )
 
     add_heading(doc, "۹. خطاهای رایج", 1)
