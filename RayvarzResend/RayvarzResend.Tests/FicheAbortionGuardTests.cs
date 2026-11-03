@@ -80,14 +80,32 @@ public class FicheAbortionGuardTests
     [Fact]
     public void Repository_sql_uses_duty_status_2_and_canceled_date()
     {
+        FicheAbortionGuard.Configure(new FicheSchemaOptions
+        {
+            IncomeFicheCanceledDateColumn = "",
+            DutyFicheCanceledDateColumn = "CanceledDate"
+        });
+
         var repo = File.ReadAllText(Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..",
             "RayvarzResend.Web", "Services", "FicheRepository.cs")));
 
         Assert.Contains("FicheAbortionGuard.DutyNotAbortedSql", repo);
         Assert.Contains("FicheAbortionGuard.IncomeNotAbortedSql", repo);
+        Assert.Contains("FicheAbortionGuard.SelectCanceledDateSql", repo);
         Assert.Contains("EumDutyFicheStatus <> 2", FicheAbortionGuard.DutyNotAbortedSql);
         Assert.Contains("EumFicheStatus <> 4", FicheAbortionGuard.IncomeNotAbortedSql);
         Assert.Contains("EumDutyFicheStatus = 2", FicheAbortionGuard.DutyAbortedCaseSql);
+        Assert.Contains("CanceledDate", FicheAbortionGuard.DutyNotAbortedSql);
+        Assert.DoesNotContain("CanceledDate", FicheAbortionGuard.IncomeNotAbortedSql);
+    }
+
+    [Fact]
+    public void Income_aborted_sql_omits_missing_canceled_date_column()
+    {
+        FicheAbortionGuard.Configure(new FicheSchemaOptions { IncomeFicheCanceledDateColumn = "" });
+        Assert.DoesNotContain("CanceledDate", FicheAbortionGuard.IncomeAbortedCaseSqlAliasX);
+        Assert.Equal("CAST(NULL AS nvarchar(30)) AS CanceledDate",
+            FicheAbortionGuard.SelectCanceledDateSql("f", isDuty: false));
     }
 }

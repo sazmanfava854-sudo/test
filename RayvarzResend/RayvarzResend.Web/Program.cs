@@ -40,6 +40,8 @@ builder.Services.PostConfigure<ShimasAuthOptions>(o =>
 builder.Services.Configure<BankInquiryConfirmOptions>(builder.Configuration.GetSection(BankInquiryConfirmOptions.SectionName));
 builder.Services.Configure<ShahkarOptions>(builder.Configuration.GetSection(ShahkarOptions.SectionName));
 builder.Services.Configure<RuleEngineSyncOptions>(builder.Configuration.GetSection(RuleEngineSyncOptions.SectionName));
+builder.Services.Configure<FicheSchemaOptions>(builder.Configuration.GetSection("FicheSchema"));
+FicheAbortionGuard.Configure(builder.Configuration.GetSection("FicheSchema").Get<FicheSchemaOptions>());
 builder.Services.AddHttpClient(BankInquiryApiClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(sp =>
     {
