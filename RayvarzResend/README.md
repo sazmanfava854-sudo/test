@@ -6,6 +6,7 @@
 |--------|------|
 | **Tag نسخه** | `rayvarzresend-tahator-dtl-v58` |
 | **دانلود Zip** | [**RayvarzResend-58.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-58.zip) |
+| **راهنمای کاربر (Word)** | [**RayvarzResend-UserManual-fa-v58.docx**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend/docs/RayvarzResend-UserManual-fa-v58.docx) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
 | جزئیات | [`DELIVERY-v58.md`](DELIVERY-v58.md) |
