@@ -67,6 +67,34 @@ public class InstallmentSendGridHelperTests
         Assert.Equal(InstallmentSendGridHelper.DuplicateTrackingSelectionError, error);
     }
 
+    /// <summary>داده واقعی تست: NoDocument=502267 — دو ردیف Installment_List (یکی با TrackingNo).</summary>
+    [Fact]
+    public void Doc502267_one_trackable_row_selected_no_doc_warning()
+    {
+        var items = new[]
+        {
+            Preview("502267", "0410150614003053", found: true, matches: true),
+            Preview("502267", "", found: true, matches: true)
+        };
+        var selected = new HashSet<string> { "0410150614003053" };
+        Assert.Empty(InstallmentSendGridHelper.BuildDocNumberWarnings(items, selected));
+    }
+
+    [Fact]
+    public void Doc502267_two_trackable_selected_shows_warning()
+    {
+        var items = new[]
+        {
+            Preview("502267", "0410150614003053", found: true, matches: true),
+            Preview("502267", "0410150614003999", found: true, matches: true)
+        };
+        var selected = new HashSet<string> { "0410150614003053", "0410150614003999" };
+        var warnings = InstallmentSendGridHelper.BuildDocNumberWarnings(items, selected);
+        Assert.Single(warnings);
+        Assert.Equal("502267", warnings[0].NoDocument);
+        Assert.Equal(2, warnings[0].SelectedCount);
+    }
+
     [Fact]
     public void FormatDocWarningConfirmBody_joins_multiple_groups()
     {
