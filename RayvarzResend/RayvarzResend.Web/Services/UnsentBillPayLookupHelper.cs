@@ -183,7 +183,7 @@ public static class UnsentBillPayLookupHelper
             return $"فیش {diagnostic.FicheNo}: قبلاً ارسال شده{idSuffix}";
 
         if (diagnostic.Cancelled)
-            return $"فیش {diagnostic.FicheNo}: لغو شده{idSuffix}";
+            return $"فیش {diagnostic.FicheNo}: ابطال شده{idSuffix}";
 
         if (diagnostic.SwappedColumns && !IsSameBillAndPayment(displayBillId, displayPaymentId))
             return $"قابل ارسال نیست — شناسه قبض و پرداخت در اکسل جابه‌جا شده{idSuffix}";

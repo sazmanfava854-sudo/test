@@ -161,6 +161,10 @@ public class FicheSendService
 
     public static string? ValidateSendable(FicheHeaderDto fiche)
     {
+        var abortionBlock = FicheAbortionGuard.BuildBlockReason(fiche);
+        if (abortionBlock != null)
+            return abortionBlock;
+
         var duplicateBlock = FicheSendEligibility.BuildBlockReason(new FicheSendEligibility.Result(
             fiche.ExistsInRayvarz,
             fiche.ExistsInAccountingDocHeader,

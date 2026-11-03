@@ -201,6 +201,10 @@ public sealed class TahatorResendService
         if (!TahatorRowBuilder.IsTahatorFiche(loaded))
             return Fail(ficheNo, dryRun, steps, $"فیش {ficheNo} تهاتر (۱۵۷/۱۵۸) نیست.");
 
+        var abortionBlock = FicheAbortionGuard.BuildBlockReason(loaded);
+        if (abortionBlock != null)
+            return Fail(ficheNo, dryRun, steps, abortionBlock);
+
         var pair = await _fiches.ResolveTahatorPairAsync(ficheNo, ct);
         var targetFiche = ResolveRequestedTahatorFiche(pair, ficheNo) ?? loaded;
         steps.Add(

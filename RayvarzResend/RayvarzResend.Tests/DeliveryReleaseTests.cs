@@ -6,10 +6,10 @@ namespace RayvarzResend.Tests;
 public class DeliveryReleaseTests
 {
     [Fact]
-    public void ReleaseInfo_is_v51_release()
+    public void ReleaseInfo_is_v52_release()
     {
-        Assert.Equal(51, ReleaseInfo.Number);
-        Assert.Equal("rayvarzresend-tahator-dtl-v51", ReleaseInfo.Tag);
+        Assert.Equal(52, ReleaseInfo.Number);
+        Assert.Equal("rayvarzresend-tahator-dtl-v52", ReleaseInfo.Tag);
         Assert.Equal("نسخه آخر", ReleaseInfo.DisplayName);
     }
 
@@ -23,16 +23,16 @@ public class DeliveryReleaseTests
     }
 
     [Fact]
-    public void DELIVERY_v51_doc_lists_current_release()
+    public void DELIVERY_v52_doc_lists_current_release()
     {
         var path = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v51.md"));
+            AppContext.BaseDirectory, "..", "..", "..", "..", "DELIVERY-v52.md"));
         Assert.True(File.Exists(path), path);
         var doc = File.ReadAllText(path);
-        Assert.Contains("releaseVersion: 51", doc);
-        Assert.Contains("504", doc);
-        Assert.Contains("UnsentBatchChunkSize", doc);
-        Assert.Contains("RayvarzResend-51.zip", doc);
+        Assert.Contains("releaseVersion: 52", doc);
+        Assert.Contains("CanceledDate", doc);
+        Assert.Contains("ابطال", doc);
+        Assert.Contains("RayvarzResend-52.zip", doc);
     }
 
     [Fact]
@@ -299,6 +299,7 @@ public class DeliveryReleaseTests
         Assert.Contains("MAIN_TAB_ACCESS_ORDER", js);
         Assert.Contains("function formatUnsentBatchSendResult(", js);
         Assert.Contains("function sendUnsentBatchInChunks(", js);
+        Assert.Contains("FicheAbortionGuard", File.ReadAllText(WebFile("Services", "FicheAbortionGuard.cs")));
         Assert.Contains("<th>شناسه قبض</th>", html);
         Assert.Contains("<th>شناسه پرداخت</th>", html);
 

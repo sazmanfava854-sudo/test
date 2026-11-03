@@ -2,7 +2,7 @@
 # یک Zip تحویل: فقط پوشه RayvarzResend با exe خودکفا + یک appsettings.json
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT_ZIP="${1:-$ROOT/../RayvarzResend-51.zip}"
+OUT_ZIP="${1:-$ROOT/../RayvarzResend-52.zip}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -27,14 +27,14 @@ cp "$ROOT/scripts/run-sso-loginkey-curl-only.cmd" "$STAGE/RayvarzResend/run-sso-
 cat > "$STAGE/RayvarzResend/start.bat" << 'EOF'
 @echo off
 cd /d "%~dp0"
-echo RayvarzResend v51 — ارسال جمعی تکه‌ای (504)
+echo RayvarzResend v52 — ابطال CanceledDate
 echo Settings: %cd%\appsettings.json
 echo.
 RayvarzResend.Web.exe --urls http://0.0.0.0:5088
 EOF
 
 cat > "$STAGE/RayvarzResend/README.txt" << 'EOF'
-RayvarzResend v51 — ارسال جمعی تکه‌ای + v50
+RayvarzResend v52 — ابطال CanceledDate + v51
 
 نصب روی سرور ویندوز
 --------------------
@@ -47,7 +47,7 @@ RayvarzResend v51 — ارسال جمعی تکه‌ای + v50
 4) start.bat را اجرا کنید (یا RayvarzResend.Web.exe)
 5) مرورگر: http://localhost:5088
 6) GET /api/config
-     releaseVersion = 51
+     releaseVersion = 52
      shahkar.dataSource = 172.16.8.138\sql2012
      accountingDoc.dryRun = false
      dryRun = false

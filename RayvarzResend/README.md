@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۵۱ — ارسال جمعی تکه‌ای، رفع 504 درگاه)** — شامل v50 و قبل.
+**نسخه آخر (تحویل: ۵۲ — ابطال با CanceledDate + مسدود ارسال تکی)** — شامل v51 و قبل.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v51` |
-| **دانلود Zip** | [**RayvarzResend-51.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-51.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v52` |
+| **دانلود Zip** | [**RayvarzResend-52.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-52.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v51.md`](DELIVERY-v51.md) |
+| جزئیات | [`DELIVERY-v52.md`](DELIVERY-v52.md) |
+| v51 قبلی | [`DELIVERY-v51.md`](DELIVERY-v51.md) |
 | v50 قبلی | [`DELIVERY-v50.md`](DELIVERY-v50.md) |
 | v49 قبلی | [`DELIVERY-v49.md`](DELIVERY-v49.md) |
 | v48 قبلی | [`DELIVERY-v48.md`](DELIVERY-v48.md) |

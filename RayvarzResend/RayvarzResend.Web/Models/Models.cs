@@ -76,6 +76,8 @@ public class FicheHeaderDto
     public PriorIncomeFicheDto? PriorIncomeFiche { get; set; }
     public int? DutyExportType { get; set; }
     public int CurrentStatus { get; set; }
+    /// <summary>تاریخ ابطال Sara (Income_Fiche / Duty_Fiche — CanceledDate).</summary>
+    public string? CanceledDate { get; set; }
     public bool ExistsInRayvarz { get; set; }
     public bool ExistsInAccountingDocHeader { get; set; }
     /// <summary>آیا فیش از نظر اعتبارسنجی قابل ارسال است.</summary>

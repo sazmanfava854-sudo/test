@@ -423,6 +423,14 @@ public class UnsentFicheService
             return item;
         }
 
+        var abortionBlock = FicheAbortionGuard.BuildBlockReason(fiche);
+        if (abortionBlock != null)
+        {
+            item.SendPath = "Skip";
+            item.BlockReason = abortionBlock;
+            return item;
+        }
+
         item.BillId = fiche.BillIdRaw;
         item.PaymentId = fiche.PaymentIdRaw;
         if (string.IsNullOrWhiteSpace(item.BillId))
