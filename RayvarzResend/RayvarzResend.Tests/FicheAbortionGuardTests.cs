@@ -11,11 +11,43 @@ public class FicheAbortionGuardTests
     [InlineData("", false)]
     [InlineData("   ", false)]
     [InlineData("1405/07/15", true)]
-    public void IsAborted_uses_canceled_date_only(string? date, bool expected) =>
-        Assert.Equal(expected, FicheAbortionGuard.IsAborted(date));
+    public void HasCanceledDate_detects_non_empty(string? date, bool expected) =>
+        Assert.Equal(expected, FicheAbortionGuard.HasCanceledDate(date));
 
     [Fact]
-    public void ValidateSendable_blocks_aborted_fiche()
+    public void Duty_status_2_is_aborted_even_without_canceled_date()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.DutyNosazi,
+            FicheNo = "051205/20581975",
+            CurrentStatus = FicheAbortionGuard.DutyAbortedStatus,
+            Payable = 1000,
+            Rows = [new IncmRowDto { Val = 1000 }]
+        };
+
+        Assert.True(FicheAbortionGuard.IsFicheAborted(fiche));
+        Assert.Equal(FicheAbortionGuard.SingleSendBlockMessage, FicheSendService.ValidateSendable(fiche));
+    }
+
+    [Fact]
+    public void Duty_sendable_when_status_not_2_and_no_canceled_date()
+    {
+        var fiche = new FicheHeaderDto
+        {
+            Category = FicheCategory.DutySenfi,
+            FicheNo = "101104/9881711",
+            CurrentStatus = 4,
+            Payable = 1000,
+            BnkAcntNo = "5-8-26-2-2-0-1",
+            Rows = [new IncmRowDto { Val = 1000 }]
+        };
+
+        Assert.False(FicheAbortionGuard.IsFicheAborted(fiche));
+    }
+
+    [Fact]
+    public void ValidateSendable_blocks_when_canceled_date_set()
     {
         var fiche = new FicheHeaderDto
         {
@@ -46,7 +78,7 @@ public class FicheAbortionGuardTests
     }
 
     [Fact]
-    public void Repository_sql_uses_canceled_date_not_status_only()
+    public void Repository_sql_uses_duty_status_2_and_canceled_date()
     {
         var repo = File.ReadAllText(Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..",
@@ -54,9 +86,8 @@ public class FicheAbortionGuardTests
 
         Assert.Contains("FicheAbortionGuard.DutyNotAbortedSql", repo);
         Assert.Contains("FicheAbortionGuard.IncomeNotAbortedSql", repo);
-        Assert.DoesNotContain("EumDutyFicheStatus <> 2", repo);
-        Assert.DoesNotContain("EumFicheStatus <> 4", repo);
-        Assert.DoesNotContain("EumDutyFicheStatus = 2 THEN 1", repo);
-        Assert.DoesNotContain("EumFicheStatus = 4 THEN 1", repo);
+        Assert.Contains("EumDutyFicheStatus <> 2", FicheAbortionGuard.DutyNotAbortedSql);
+        Assert.Contains("EumFicheStatus <> 4", FicheAbortionGuard.IncomeNotAbortedSql);
+        Assert.Contains("EumDutyFicheStatus = 2", FicheAbortionGuard.DutyAbortedCaseSql);
     }
 }
