@@ -1,14 +1,15 @@
 # RayvarzResend — فرم تست ارسال مجدد به رایورز
 
-**نسخه آخر (تحویل: ۵۴ — پیام ماندگار ارسال رایورز + برچسب وضعیت فیش)** — شامل v53 و قبل.
+**نسخه آخر (تحویل: ۵۵ — گرید یکپارچه چک خزانه)** — شامل v54 و قبل.
 
 | دریافت | آدرس |
 |--------|------|
-| **Tag نسخه** | `rayvarzresend-tahator-dtl-v54` |
-| **دانلود Zip** | [**RayvarzResend-54.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-54.zip) |
+| **Tag نسخه** | `rayvarzresend-tahator-dtl-v55` |
+| **دانلود Zip** | [**RayvarzResend-55.zip**](https://github.com/sazmanfava854-sudo/test/raw/cursor/tahator-income-dtl-84f2/RayvarzResend-55.zip) |
 | Zip سورس | `RayvarzResend-source.zip` |
 | شاخه | [`cursor/tahator-income-dtl-84f2`](https://github.com/sazmanfava854-sudo/test/tree/cursor/tahator-income-dtl-84f2) |
-| جزئیات | [`DELIVERY-v54.md`](DELIVERY-v54.md) |
+| جزئیات | [`DELIVERY-v55.md`](DELIVERY-v55.md) |
+| v54 قبلی | [`DELIVERY-v54.md`](DELIVERY-v54.md) |
 | v53 قبلی | [`DELIVERY-v53.md`](DELIVERY-v53.md) |
 | v52 قبلی | [`DELIVERY-v52.md`](DELIVERY-v52.md) |
 | v51 قبلی | [`DELIVERY-v51.md`](DELIVERY-v51.md) |
